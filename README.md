@@ -2,6 +2,21 @@
 
 Booking management for music agencies and their artists, modelled on [Overture](https://bookingwithoverture.com/features), with one big addition: **musicians mark when they've arrived at a gig, and the agency can see it live and track punctuality over time.**
 
+## Built for regular venue work
+
+Most agency work is weekly slots at the same venues, so Gigsaw is built around them:
+
+- **Weekly music schedules** on each venue (e.g. Mon–Thu 19:00–21:00 Solo, Fri 16:00–19:00 and 19:00–22:00), with fee, who pays, act type and an optional regular artist. Add the same slot to several days at once.
+- **Rota**: a week grid of every venue's slots, showing who's booked and what's empty (amber). Fill a slot by picking an artist; **Book regulars** books every slot's regular artist for 1–12 weeks, skipping anything already booked.
+- **Change a slot, change its gigs**: new times or fee on a slot can be applied to every upcoming gig in it, and each artist is told.
+- **Change several gigs at once**: tick gigs on Bookings, then set new times, move them by some minutes, or set a new fee.
+- **Artists are told about changes**: an email and text showing old → new for date, times, venue and their fee, and when a gig is confirmed or cancelled; one message listing new gigs when they're booked.
+- **Who's on where**: the search bar on every page (press `/`) finds tonight's and this week's gigs by town, venue or artist, with a tap-to-call number.
+- **Calendar**: Day, Week (default) and Month views, coloured by venue (or artist), filter by town.
+- **Phone calendars**: artists tap once in their app to add their gigs to Apple, Google or Outlook calendar; it updates by itself.
+- **Branded emails** in the agency's name; replies go to the agent or agency, not a no-reply address.
+- **Double-booking check** looks at overlapping times, so an early and a late gig on the same evening are fine.
+
 ## Owner area and agencies
 
 Gigsaw runs many agencies on one site. Each agency only ever sees its own artists, bookings, contacts, venues, reports and settings.
@@ -10,6 +25,8 @@ Gigsaw runs many agencies on one site. Each agency only ever sees its own artist
 - **Billing:** each agency pays its own price per gig, counted in the month the gig happens (venue's local date). A gig is billable if it's confirmed or settled, if the artist checked in, or if it was left on hold or pending after its date. Cancelled gigs, enquiries and demo data are free. Past gigs never confirmed or cancelled are flagged to the agency (dashboard) and to the owner (agencies list). Once a month is over, **Billing → Issue statements** freezes each agency's count, price and booking references; mark statements paid as money comes in. Re-issuing updates unpaid statements and never touches paid ones. CSV export per month.
 - Agency admins see their price and this month's billable gigs under **Settings → Your Gigsaw plan**.
 
+
+## What's in it
 
 | Area | What it does |
 | --- | --- |
