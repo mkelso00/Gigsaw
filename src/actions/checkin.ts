@@ -26,8 +26,8 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
   const user = await requireUser(["ARTIST"]);
   if (!CHECK_IN_KINDS.includes(payload.kind)) return { ok: false, message: "Unknown check-in type." };
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, agencyId: user.agencyId },
     include: { venue: true, checkIns: { select: { kind: true } } },
   });
   // Artists can only check in to their own gigs.
@@ -69,7 +69,7 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
       note: (payload.note ?? "").slice(0, 500),
     },
   });
-  await logActivity(user.id, "BOOKING", bookingId, "artist checked in", payload.kind.toLowerCase().replaceAll("_", " "));
+  await logActivity(user, "BOOKING", bookingId, "artist checked in", payload.kind.toLowerCase().replaceAll("_", " "));
   revalidatePath("/", "layout");
 
   const messages: Record<CheckInKind, string> = {

@@ -10,12 +10,12 @@ import { bookingFormOptions } from "@/lib/options";
 export const metadata: Metadata = { title: "Edit booking" };
 
 export default async function EditBookingPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [booking, settings, options] = await Promise.all([
-    prisma.booking.findUnique({ where: { id } }),
-    getSettings(),
-    bookingFormOptions(),
+    prisma.booking.findFirst({ where: { id, agencyId: user.agencyId } }),
+    getSettings(user.agencyId),
+    bookingFormOptions(user.agencyId),
   ]);
   if (!booking) notFound();
   return (

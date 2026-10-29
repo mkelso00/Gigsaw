@@ -13,12 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function ArtistHome() {
   const user = await requireUser(["ARTIST"]);
   if (!user.artistId) return <p className="text-sm text-slate-600">Your login isn&apos;t linked to an artist. Ask your agent to check it.</p>;
-  const settings = await getSettings();
+  const settings = await getSettings(user.agencyId);
   const now = new Date();
 
   const bookings = await prisma.booking.findMany({
     // Artists don't see early-stage enquiries.
-    where: { artistId: user.artistId, status: { notIn: ["ENQUIRY"] } },
+    where: { agencyId: user.agencyId, artistId: user.artistId, status: { notIn: ["ENQUIRY"] } },
     include: { venue: true, checkIns: true },
     orderBy: { arriveBy: "asc" },
   });

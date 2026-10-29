@@ -6,6 +6,9 @@ import { Field, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { CURRENCIES, TIMEZONES } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { monthLabel } from "@/lib/billing";
+import { formatMoney } from "@/lib/money";
+import { usageForMonth } from "@/lib/usage";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -13,10 +16,13 @@ export default async function SettingsPage() {
   const user = await requireStaff();
   const isAdmin = user.role === "ADMIN";
   const [settings, team, demoBookings] = await Promise.all([
-    getSettings(),
-    prisma.user.findMany({ where: { role: { in: ["ADMIN", "AGENT"] }, demo: false }, orderBy: { name: "asc" } }),
-    prisma.booking.count({ where: { demo: true } }),
+    getSettings(user.agencyId),
+    prisma.user.findMany({ where: { agencyId: user.agencyId, role: { in: ["ADMIN", "AGENT"] }, demo: false }, orderBy: { name: "asc" } }),
+    prisma.booking.count({ where: { agencyId: user.agencyId, demo: true } }),
   ]);
+  const month = new Date().toISOString().slice(0, 7);
+  const gigsThisMonth = isAdmin ? ((await usageForMonth(month, user.agencyId)).get(user.agencyId)?.count ?? 0) : 0;
+  const agency = user.agency!;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -28,6 +34,20 @@ export default async function SettingsPage() {
           </form>
         }
       />
+
+      {isAdmin && (
+        <section className="card card-pad">
+          <h2 className="section-title">Your Gigsaw plan</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            <strong>{formatMoney(agency.pricePerGigMinor, agency.billingCurrency)}</strong> for each confirmed or settled gig, counted in the
+            month the gig happens. Holds, enquiries, cancelled gigs and demo data are free.
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            {monthLabel(month)} so far: <strong>{gigsThisMonth}</strong> billable gig{gigsThisMonth === 1 ? "" : "s"} (
+            {formatMoney(gigsThisMonth * agency.pricePerGigMinor, agency.billingCurrency)}).
+          </p>
+        </section>
+      )}
 
       {isAdmin && (
         <ActionForm action={saveSettings} className="card card-pad space-y-4">

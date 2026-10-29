@@ -12,14 +12,14 @@ import { formatDate } from "@/lib/time";
 export const metadata: Metadata = { title: "Venue" };
 
 export default async function VenuePage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [venue, settings] = await Promise.all([
-    prisma.venue.findUnique({
-      where: { id },
+    prisma.venue.findFirst({
+      where: { id, agencyId: user.agencyId },
       include: { bookings: { orderBy: { setStart: "desc" }, take: 50, include: { artist: { select: { name: true } } } } },
     }),
-    getSettings(),
+    getSettings(user.agencyId),
   ]);
   if (!venue) notFound();
   return (

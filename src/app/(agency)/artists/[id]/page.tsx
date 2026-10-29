@@ -16,16 +16,17 @@ import { formatDate, formatMinutes, localTime } from "@/lib/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const a = await prisma.artist.findUnique({ where: { id }, select: { name: true } });
+  const user = await requireStaff();
+  const a = await prisma.artist.findFirst({ where: { id, agencyId: user.agencyId }, select: { name: true } });
   return { title: a?.name ?? "Artist" };
 }
 
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [artist, settings] = await Promise.all([
-    prisma.artist.findUnique({
-      where: { id },
+    prisma.artist.findFirst({
+      where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
         login: { select: { email: true } },
@@ -38,7 +39,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         },
       },
     }),
-    getSettings(),
+    getSettings(user.agencyId),
   ]);
   if (!artist) notFound();
 

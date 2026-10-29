@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { ArtistDot, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { gigDateKey } from "@/lib/bookings";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 
@@ -13,9 +13,9 @@ export const metadata: Metadata = { title: "Calendar" };
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const sp = await searchParams;
-  const settings = await getSettings();
+  const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const todayKey = localDateKey(new Date(), tz);
 
@@ -32,6 +32,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
 
   const where: Prisma.BookingWhereInput = {
+    agencyId: user.agencyId,
     // Pad by a day either side so gigs in other time zones near the edges are included.
     arriveBy: { gte: zonedToUtc(addDaysToKey(gridStart, -1), "00:00", tz), lt: zonedToUtc(addDaysToKey(gridEnd, 1), "00:00", tz) },
   };
@@ -45,7 +46,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       include: { artist: { select: { name: true, colour: true } }, venue: { select: { name: true, city: true } } },
       orderBy: { arriveBy: "asc" },
     }),
-    prisma.artist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, calendarToken: true } }),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, calendarToken: true } }),
   ]);
 
   const byDay = new Map<string, typeof bookings>();
@@ -139,7 +140,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     <Link
                       key={b.id}
                       href={`/bookings/${b.id}`}
-                      title={`${b.artist.name} · ${b.venue?.name ?? "No venue"} · ${BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}`}
+                      title={`${b.artist.name} · ${eventTypeLabel(b.eventType)} · ${b.venue?.name ?? "No venue"} · ${BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}`}
                       className={`block truncate rounded px-1.5 py-1 text-xs leading-tight hover:brightness-95 ${b.status === "HOLD" || b.status === "ENQUIRY" ? "border border-dashed" : ""} ${b.status === "CANCELLED" ? "line-through opacity-60" : ""}`}
                       style={{ backgroundColor: `${b.artist.colour}1f`, borderColor: b.artist.colour }}
                     >

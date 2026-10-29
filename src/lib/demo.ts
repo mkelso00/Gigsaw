@@ -12,15 +12,16 @@ import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 const MIN = 60_000;
 const DAY = 86_400_000;
 
-export async function hasDemoData(prisma: PrismaClient) {
-  return (await prisma.artist.count({ where: { demo: true } })) > 0;
+export async function hasDemoData(prisma: PrismaClient, agencyId: string) {
+  return (await prisma.artist.count({ where: { agencyId, demo: true } })) > 0;
 }
 
 /**
  * Add the sample data. `leadAgentId` looks after some of the artists. If `secondAgentId` is
  * not given, a demo agent who cannot sign in is created to look after the rest.
  */
-export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: string; secondAgentId?: string }) {
+export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string; leadAgentId: string; secondAgentId?: string }) {
+  const agencyId = opts.agencyId;
   // Seeded random numbers so the demo looks the same each time.
   let seed = 42;
   const rand = () => {
@@ -38,6 +39,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
           email: `sam.patel.${randomBytes(4).toString("hex")}@demo.invalid`,
           name: "Sam Patel (demo)",
           role: "AGENT",
+          agencyId,
           demo: true,
           // Random password nobody knows, so this demo agent can never sign in.
           passwordHash: await bcrypt.hash(randomBytes(24).toString("hex"), 10),
@@ -55,7 +57,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
   const artists: Artist[] = [];
   for (const a of artistSeed) {
     const slug = a.name.toLowerCase().replace(/[^a-z]+/g, ".").replace(/^\.|\.$/g, "");
-    artists.push(await prisma.artist.create({ data: { ...a, email: `${slug}@example.com`, demo: true } }));
+    artists.push(await prisma.artist.create({ data: { ...a, agencyId, email: `${slug}@example.com`, demo: true } }));
   }
 
   const venueSeed = [
@@ -70,7 +72,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
     { name: "The Village Hall", city: "Hebden Bridge", country: "UK", latitude: null, longitude: null, capacity: 120, address: "Market Street" },
   ];
   const venues: Venue[] = [];
-  for (const v of venueSeed) venues.push(await prisma.venue.create({ data: { timezone: "Europe/London", ...v, demo: true } }));
+  for (const v of venueSeed) venues.push(await prisma.venue.create({ data: { timezone: "Europe/London", ...v, agencyId, demo: true } }));
 
   const promoterSeed = [
     { name: "Priya Shah", company: "Lantern Live", tags: "uk, jazz", email: "priya@lantern.example", phone: "07700 900111" },
@@ -83,15 +85,15 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
   for (const p of promoterSeed) {
     promoters.push(
       await prisma.contact.create({
-        data: { ...p, type: p.company === "Private client" ? "CLIENT" : "PROMOTER", address: "1 Example Road\nExample Town", demo: true },
+        data: { ...p, type: p.company === "Private client" ? "CLIENT" : "PROMOTER", address: "1 Example Road\nExample Town", agencyId, demo: true },
       }),
     );
   }
-  await prisma.contact.create({ data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", demo: true } });
+  await prisma.contact.create({ data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", agencyId, demo: true } });
   await prisma.contactNote.create({ data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." } });
 
   // Carry on numbering after any real bookings.
-  const last = await prisma.booking.findFirst({ orderBy: { reference: "desc" }, select: { reference: true } });
+  const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });
   let refN = last ? Number(last.reference.replace(/\D/g, "")) : 0;
   const nextRef = () => `GS-${String(++refN).padStart(4, "0")}`;
 
@@ -115,10 +117,14 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
     const setStart = o.arriveAt ? new Date(arriveBy.getTime() + 180 * MIN) : zonedToUtc(localDateKey(arriveBy, tz), o.set!, tz);
     const setEnd = new Date(setStart.getTime() + 90 * MIN);
     const promoter = pick(promoters);
+    const festival = rand() > 0.7;
+    const eventType =
+      promoter.type === "CLIENT" ? pick(["WEDDING", "PRIVATE_PARTY", "CORPORATE"]) : o.artist.genre === "House" ? "CLUB_NIGHT" : festival ? "FESTIVAL" : "GIG";
     const commissionPct = o.artist.defaultCommission ?? 15;
     const b = await prisma.booking.create({
       data: {
         reference: nextRef(),
+        agencyId,
         demo: true,
         artistId: o.artist.id,
         venueId: o.venue.id,
@@ -126,6 +132,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
         agentId: o.artist.agentId,
         createdById: o.artist.agentId,
         status: o.status,
+        eventType,
         timezone: tz,
         arriveBy,
         soundcheckAt: new Date(arriveBy.getTime() + 60 * MIN),
@@ -140,7 +147,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
         accommodation: rand() > 0.5 ? "Premier Inn, 5 minutes' walk. Booked under the artist's name." : "",
         dayContact: `${promoter.name} · ${promoter.phone}`,
         hospitality: "Rider: hot meal for the band, 12 bottles of water, 1 bottle of red.",
-        tags: rand() > 0.7 ? "festival" : "",
+        tags: eventType === "FESTIVAL" ? "festival" : "",
       },
     });
 
@@ -240,23 +247,23 @@ export async function addDemoData(prisma: PrismaClient, opts: { leadAgentId: str
   await book({ artist: artists[0], venue: venues[1], date: addDaysToKey(todayKey, 1), arrive: "17:00", set: "20:30", status: "CONFIRMED", fee: 2000 });
   await book({ artist: artists[2], venue: venues[7], date: addDaysToKey(todayKey, 20), arrive: "22:00", set: "23:59", status: "CANCELLED", fee: 2500 });
 
-  return { artists, venues: venues.length, bookings: await prisma.booking.count({ where: { demo: true } }) };
+  return { artists, venues: venues.length, bookings: await prisma.booking.count({ where: { agencyId, demo: true } }) };
 }
 
 /** Remove every demo record, plus anything hanging off the demo artists. Real data is left alone. */
-export async function removeDemoData(prisma: PrismaClient) {
-  const artistIds = (await prisma.artist.findMany({ where: { demo: true }, select: { id: true } })).map((a) => a.id);
+export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
+  const artistIds = (await prisma.artist.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((a) => a.id);
   const bookingIds = (
-    await prisma.booking.findMany({ where: { OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })
+    await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })
   ).map((b) => b.id);
-  const contactIds = (await prisma.contact.findMany({ where: { demo: true }, select: { id: true } })).map((c) => c.id);
-  const venueIds = (await prisma.venue.findMany({ where: { demo: true }, select: { id: true } })).map((v) => v.id);
+  const contactIds = (await prisma.contact.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((c) => c.id);
+  const venueIds = (await prisma.venue.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((v) => v.id);
 
   await prisma.$transaction([
     // Payments and check-ins go with their bookings.
     prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }),
     // Demo agents, and any app logins made for demo artists.
-    prisma.user.deleteMany({ where: { OR: [{ demo: true }, { artistId: { in: artistIds } }] } }),
+    prisma.user.deleteMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] } }),
     prisma.artist.deleteMany({ where: { id: { in: artistIds } } }),
     prisma.contact.deleteMany({ where: { id: { in: contactIds } } }),
     prisma.venue.deleteMany({ where: { id: { in: venueIds } } }),

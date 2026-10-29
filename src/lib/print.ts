@@ -7,11 +7,11 @@ import { getSettings, prisma } from "./db";
 export async function loadPrintable(id: string, allowArtist = false) {
   const user = await requireUser(allowArtist ? undefined : ["ADMIN", "AGENT"]);
   const [booking, settings] = await Promise.all([
-    prisma.booking.findUnique({
-      where: { id },
+    prisma.booking.findFirst({
+      where: { id, agencyId: user.agencyId },
       include: { artist: true, venue: true, promoter: true, agent: true, payments: true },
     }),
-    getSettings(),
+    getSettings(user.agencyId),
   ]);
   if (!booking) notFound();
   if (user.role === "ARTIST" && booking.artistId !== user.artistId) notFound();

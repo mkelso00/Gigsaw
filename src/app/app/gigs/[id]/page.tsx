@@ -6,7 +6,7 @@ import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
-import { CHECK_IN_KIND_LABELS, type CheckInKind } from "@/lib/constants";
+import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
@@ -17,8 +17,8 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
   const user = await requireUser(["ARTIST"]);
   const { id } = await params;
   const [b, settings] = await Promise.all([
-    prisma.booking.findUnique({ where: { id }, include: { venue: true, promoter: true, agent: true, checkIns: { orderBy: { at: "asc" } } } }),
-    getSettings(),
+    prisma.booking.findFirst({ where: { id, agencyId: user.agencyId }, include: { venue: true, promoter: true, agent: true, checkIns: { orderBy: { at: "asc" } } } }),
+    getSettings(user.agencyId),
   ]);
   if (!b || b.artistId !== user.artistId || b.status === "ENQUIRY") notFound();
 
@@ -47,7 +47,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
         </div>
         <h1 className="mt-2 text-2xl font-bold">{v?.name ?? "Venue to be confirmed"}</h1>
         <p className="text-slate-600">
-          {formatDate(b.arriveBy, tz)}
+          {formatDate(b.arriveBy, tz)} · {eventTypeLabel(b.eventType)}
           {b.eventName ? ` · ${b.eventName}` : ""}
         </p>
       </div>

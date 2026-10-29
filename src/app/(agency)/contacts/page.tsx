@@ -10,9 +10,9 @@ import { splitTags } from "@/lib/forms";
 export const metadata: Metadata = { title: "Contacts" };
 
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const sp = await searchParams;
-  const where: Prisma.ContactWhereInput = {};
+  const where: Prisma.ContactWhereInput = { agencyId: user.agencyId };
   if (sp.type && (CONTACT_TYPES as readonly string[]).includes(sp.type)) where.type = sp.type;
   if (sp.tag) where.tags = { contains: sp.tag, mode: "insensitive" };
   if (sp.q) {
@@ -28,7 +28,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   }
   const [contacts, allTags] = await Promise.all([
     prisma.contact.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { bookings: true } } } }),
-    prisma.contact.findMany({ select: { tags: true } }),
+    prisma.contact.findMany({ where: { agencyId: user.agencyId }, select: { tags: true } }),
   ]);
   const tags = [...new Set(allTags.flatMap((c) => splitTags(c.tags)))].sort();
 

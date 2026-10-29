@@ -6,11 +6,11 @@ import { localTime } from "@/lib/time";
 // Private calendar feed for one artist, addressed by a secret token.
 export async function GET(_: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const artist = await prisma.artist.findUnique({ where: { calendarToken: token.replace(/\.ics$/, "") } });
-  if (!artist) return new Response("Not found", { status: 404 });
+  const artist = await prisma.artist.findUnique({ where: { calendarToken: token.replace(/\.ics$/, "") }, include: { agency: true } });
+  if (!artist || artist.agency.status !== "ACTIVE") return new Response("Not found", { status: 404 });
 
   const bookings = await prisma.booking.findMany({
-    where: { artistId: artist.id, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { not: "ENQUIRY" } },
+    where: { agencyId: artist.agencyId, artistId: artist.id, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { not: "ENQUIRY" } },
     include: { venue: true },
     orderBy: { setStart: "asc" },
   });

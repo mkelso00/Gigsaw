@@ -8,8 +8,8 @@ import { getSettings } from "@/lib/db";
 export const metadata: Metadata = { title: "Add venue" };
 
 export default async function NewVenuePage() {
-  await requireStaff();
-  const settings = await getSettings();
+  const user = await requireStaff();
+  const settings = await getSettings(user.agencyId);
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Add venue" />

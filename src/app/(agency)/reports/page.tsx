@@ -12,8 +12,8 @@ type Totals = { gigs: number; gross: number; agency: number; artist: number; rec
 const empty = (): Totals => ({ gigs: 0, gross: 0, agency: 0, artist: 0, received: 0, owed: 0, owedArtist: 0 });
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireStaff();
-  const settings = await getSettings();
+  const user = await requireStaff();
+  const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const sp = await searchParams;
   const today = localDateKey(new Date(), tz);
@@ -23,6 +23,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const bookings = await prisma.booking.findMany({
     where: {
+      agencyId: user.agencyId,
       status: { in: ["CONFIRMED", "SETTLED"] },
       arriveBy: { gte: zonedToUtc(from, "00:00", tz), lte: zonedToUtc(to, "23:59", tz) },
     },

@@ -11,8 +11,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// A company using Gigsaw. Every artist, contact, venue and booking belongs to one agency,
+// and agency staff only ever see their own agency's records.
+model Agency {
+  id               String   @id @default(cuid())
+  name             String
+  status           String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  // What the platform owner charges this agency for each billable gig.
+  pricePerGigMinor Int      @default(0)
+  billingCurrency  String   @default("GBP")
+  billingEmail     String   @default("")
+  ownerNotes       String   @default("") // only the platform owner sees this
+  createdAt        DateTime @default(now())
+
+  settings   Settings?
+  users      User[]
+  artists    Artist[]
+  contacts   Contact[]
+  venues     Venue[]
+  bookings   Booking[]
+  activity   Activity[]
+  statements BillingStatement[]
+}
+
+// A month's bill for one agency, frozen when the owner issues it.
+model BillingStatement {
+  id               String    @id @default(cuid())
+  agencyId         String
+  agency           Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  month            String // "YYYY-MM"
+  gigCount         Int
+  pricePerGigMinor Int
+  amountMinor      Int
+  currency         String
+  // Booking references counted, so a bill can be checked later.
+  references       String    @default("")
+  status           String    @default("ISSUED") // ISSUED | PAID
+  issuedAt         DateTime  @default(now())
+  paidAt           DateTime?
+
+  @@unique([agencyId, month])
+}
+
 model Settings {
-  id                Int    @id @default(1)
+  agencyId          String @id
+  agency            Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   agencyName        String @default("My Agency")
   agencyEmail       String @default("")
   agencyAddress     String @default("")
@@ -32,7 +75,11 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
-  role         String   @default("AGENT") // ADMIN | AGENT | ARTIST
+  role         String   @default("AGENT") // ADMIN | AGENT | ARTIST (within their agency)
+  // The platform owner runs the Owner area. They may also belong to an agency.
+  isOwner      Boolean  @default(false)
+  agencyId     String?
+  agency       Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   artistId     String?  @unique
   artist       Artist?  @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
@@ -58,6 +105,8 @@ model Session {
 
 model Artist {
   id                String   @id @default(cuid())
+  agencyId          String
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   name              String
   genre             String   @default("")
   email             String   @default("")
@@ -75,10 +124,14 @@ model Artist {
   login    User?     @relation("ArtistLogin")
   bookings Booking[]
   checkIns CheckIn[]
+
+  @@index([agencyId])
 }
 
 model Contact {
   id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   type      String   @default("PROMOTER") // PROMOTER | CLIENT | VENUE_CONTACT | COLLABORATOR | OTHER
   name      String
   company   String   @default("")
@@ -92,6 +145,8 @@ model Contact {
 
   notes    ContactNote[]
   bookings Booking[]
+
+  @@index([agencyId])
 }
 
 model ContactNote {
@@ -106,6 +161,8 @@ model ContactNote {
 
 model Venue {
   id        String   @id @default(cuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   name      String
   address   String   @default("")
   city      String   @default("")
@@ -119,14 +176,19 @@ model Venue {
   demo      Boolean  @default(false) // sample data, removable from Settings
 
   bookings Booking[]
+
+  @@index([agencyId])
 }
 
 model Booking {
   id          String   @id @default(cuid())
-  reference   String   @unique
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  reference   String
   eventName   String   @default("")
   status      String   @default("HOLD") // ENQUIRY | HOLD | PENDING | CONFIRMED | SETTLED | CANCELLED
   dealType    String   @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
+  eventType   String   @default("GIG") // GIG | FESTIVAL | CLUB_NIGHT | WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
   artistId    String
   artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Restrict)
   venueId     String?
@@ -174,8 +236,9 @@ model Booking {
   payments Payment[]
   checkIns CheckIn[]
 
+  @@unique([agencyId, reference])
+  @@index([agencyId, setStart])
   @@index([artistId, setStart])
-  @@index([setStart])
 }
 
 model Payment {
@@ -215,6 +278,8 @@ model CheckIn {
 
 model Activity {
   id        String   @id @default(cuid())
+  agencyId  String?
+  agency    Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   entity    String // BOOKING | CONTACT | ARTIST | VENUE | SETTINGS | USER

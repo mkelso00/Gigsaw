@@ -10,11 +10,11 @@ import { prisma } from "@/lib/db";
 export const metadata: Metadata = { title: "Edit artist" };
 
 export default async function EditArtistPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [artist, agents] = await Promise.all([
-    prisma.artist.findUnique({ where: { id } }),
-    prisma.user.findMany({ where: { role: { in: ["ADMIN", "AGENT"] } }, select: { id: true, name: true } }),
+    prisma.artist.findFirst({ where: { id, agencyId: user.agencyId } }),
+    prisma.user.findMany({ where: { agencyId: user.agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true, name: true } }),
   ]);
   if (!artist) notFound();
   return (

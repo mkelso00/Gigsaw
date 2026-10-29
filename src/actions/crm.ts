@@ -3,18 +3,25 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { hashPassword, requireStaff } from "@/lib/auth";
+import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { CONTACT_TYPES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { isValidTimeZone } from "@/lib/time";
 
+// Every lookup below includes the user's agencyId, so one agency can never read or change
+// another agency's records, even by guessing an id.
+
 // ---------- Artists ----------
 
-function artistData(form: FormData) {
+async function artistData(form: FormData, agencyId: string) {
   const colour = str(form, "colour");
   const commission = num(form, "defaultCommission");
   if (commission !== null && (commission < 0 || commission > 100)) throw new FormError("Commission must be between 0 and 100%");
+  const agentId = optStr(form, "agentId");
+  if (agentId && !(await prisma.user.findFirst({ where: { id: agentId, agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))) {
+    throw new FormError("That agent is not part of your agency");
+  }
   return {
     name: required(form, "name", "Name"),
     genre: str(form, "genre"),
@@ -23,16 +30,22 @@ function artistData(form: FormData) {
     colour: /^#[0-9a-f]{6}$/i.test(colour) ? colour : "#6d28d9",
     notes: str(form, "notes"),
     defaultCommission: commission,
-    agentId: optStr(form, "agentId"),
+    agentId,
   };
+}
+
+async function ownArtist(user: AgencyUser, artistId: string) {
+  const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId }, include: { login: true } });
+  if (!artist) throw new FormError("Artist not found");
+  return artist;
 }
 
 export async function createArtist(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   let id = "";
   const res = await handleForm(async () => {
-    const artist = await prisma.artist.create({ data: artistData(form) });
-    await logActivity(user.id, "ARTIST", artist.id, "added artist", artist.name);
+    const artist = await prisma.artist.create({ data: { ...(await artistData(form, user.agencyId)), agencyId: user.agencyId } });
+    await logActivity(user, "ARTIST", artist.id, "added artist", artist.name);
     id = artist.id;
   });
   if (res?.error) return res;
@@ -42,8 +55,9 @@ export async function createArtist(_: FormState, form: FormData): Promise<FormSt
 export async function updateArtist(artistId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   const res = await handleForm(async () => {
-    await prisma.artist.update({ where: { id: artistId }, data: artistData(form) });
-    await logActivity(user.id, "ARTIST", artistId, "updated artist");
+    await ownArtist(user, artistId);
+    await prisma.artist.update({ where: { id: artistId }, data: await artistData(form, user.agencyId) });
+    await logActivity(user, "ARTIST", artistId, "updated artist");
   });
   if (res?.error) return res;
   revalidatePath("/", "layout");
@@ -52,11 +66,15 @@ export async function updateArtist(artistId: string, _: FormState, form: FormDat
 
 export async function deleteArtist(artistId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
-  const bookings = await prisma.booking.count({ where: { artistId } });
-  if (bookings > 0) return { error: `This artist has ${bookings} booking(s). Delete or reassign them first.` };
-  await prisma.user.deleteMany({ where: { artistId, role: "ARTIST" } });
-  await prisma.artist.delete({ where: { id: artistId } });
-  await logActivity(user.id, "ARTIST", artistId, "deleted artist");
+  const res = await handleForm(async () => {
+    await ownArtist(user, artistId);
+    const bookings = await prisma.booking.count({ where: { artistId } });
+    if (bookings > 0) throw new FormError(`This artist has ${bookings} booking(s). Delete or reassign them first.`);
+    await prisma.user.deleteMany({ where: { artistId, role: "ARTIST" } });
+    await prisma.artist.delete({ where: { id: artistId } });
+    await logActivity(user, "ARTIST", artistId, "deleted artist");
+  });
+  if (res?.error) return res;
   redirect("/artists");
 }
 
@@ -67,7 +85,7 @@ export async function setArtistLogin(artistId: string, _: FormState, form: FormD
     const email = required(form, "email", "Email").toLowerCase();
     const password = required(form, "password", "Password");
     if (password.length < 8) throw new FormError("Password must be at least 8 characters");
-    const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, include: { login: true } });
+    const artist = await ownArtist(user, artistId);
     const clash = await prisma.user.findUnique({ where: { email } });
     if (clash && clash.id !== artist.login?.id) throw new FormError("That email is already used by another login");
     const passwordHash = await hashPassword(password);
@@ -75,17 +93,17 @@ export async function setArtistLogin(artistId: string, _: FormState, form: FormD
       await prisma.user.update({ where: { id: artist.login.id }, data: { email, passwordHash } });
       await prisma.session.deleteMany({ where: { userId: artist.login.id } });
     } else {
-      await prisma.user.create({ data: { email, name: artist.name, passwordHash, role: "ARTIST", artistId } });
+      await prisma.user.create({ data: { email, name: artist.name, passwordHash, role: "ARTIST", artistId, agencyId: user.agencyId } });
     }
-    await logActivity(user.id, "ARTIST", artistId, artist.login ? "reset artist login" : "created artist login", email);
+    await logActivity(user, "ARTIST", artistId, artist.login ? "reset artist login" : "created artist login", email);
     revalidatePath(`/artists/${artistId}`);
     return { ok: `Login saved. Share the email and password with ${artist.name} so they can sign in on their phone.` };
   });
 }
 
 export async function resetCalendarToken(artistId: string) {
-  await requireStaff();
-  await prisma.artist.update({ where: { id: artistId }, data: { calendarToken: randomUUID() } });
+  const user = await requireStaff();
+  await prisma.artist.updateMany({ where: { id: artistId, agencyId: user.agencyId }, data: { calendarToken: randomUUID() } });
   revalidatePath(`/artists/${artistId}`);
 }
 
@@ -103,12 +121,18 @@ function contactData(form: FormData) {
   };
 }
 
+async function ownContact(user: AgencyUser, contactId: string) {
+  const c = await prisma.contact.findFirst({ where: { id: contactId, agencyId: user.agencyId } });
+  if (!c) throw new FormError("Contact not found");
+  return c;
+}
+
 export async function createContact(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   let id = "";
   const res = await handleForm(async () => {
-    const c = await prisma.contact.create({ data: contactData(form) });
-    await logActivity(user.id, "CONTACT", c.id, "added contact", c.name);
+    const c = await prisma.contact.create({ data: { ...contactData(form), agencyId: user.agencyId } });
+    await logActivity(user, "CONTACT", c.id, "added contact", c.name);
     id = c.id;
   });
   if (res?.error) return res;
@@ -118,8 +142,9 @@ export async function createContact(_: FormState, form: FormData): Promise<FormS
 export async function updateContact(contactId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   const res = await handleForm(async () => {
+    await ownContact(user, contactId);
     await prisma.contact.update({ where: { id: contactId }, data: contactData(form) });
-    await logActivity(user.id, "CONTACT", contactId, "updated contact");
+    await logActivity(user, "CONTACT", contactId, "updated contact");
   });
   if (res?.error) return res;
   redirect(`/contacts/${contactId}`);
@@ -127,8 +152,8 @@ export async function updateContact(contactId: string, _: FormState, form: FormD
 
 export async function deleteContact(contactId: string) {
   const user = await requireStaff();
-  await prisma.contact.delete({ where: { id: contactId } });
-  await logActivity(user.id, "CONTACT", contactId, "deleted contact");
+  const { count } = await prisma.contact.deleteMany({ where: { id: contactId, agencyId: user.agencyId } });
+  if (count) await logActivity(user, "CONTACT", contactId, "deleted contact");
   redirect("/contacts");
 }
 
@@ -136,6 +161,7 @@ export async function addContactNote(contactId: string, _: FormState, form: Form
   const user = await requireStaff();
   return handleForm(async () => {
     const body = required(form, "body", "Note");
+    await ownContact(user, contactId);
     await prisma.contactNote.create({ data: { contactId, body, authorId: user.id } });
     revalidatePath(`/contacts/${contactId}`);
     return { ok: "Note added." };
@@ -143,8 +169,10 @@ export async function addContactNote(contactId: string, _: FormState, form: Form
 }
 
 export async function deleteContactNote(noteId: string) {
-  await requireStaff();
-  const n = await prisma.contactNote.delete({ where: { id: noteId } });
+  const user = await requireStaff();
+  const n = await prisma.contactNote.findFirst({ where: { id: noteId, contact: { agencyId: user.agencyId } } });
+  if (!n) return;
+  await prisma.contactNote.delete({ where: { id: n.id } });
   revalidatePath(`/contacts/${n.contactId}`);
 }
 
@@ -176,8 +204,8 @@ export async function createVenue(_: FormState, form: FormData): Promise<FormSta
   const user = await requireStaff();
   let id = "";
   const res = await handleForm(async () => {
-    const v = await prisma.venue.create({ data: venueData(form) });
-    await logActivity(user.id, "VENUE", v.id, "added venue", v.name);
+    const v = await prisma.venue.create({ data: { ...venueData(form), agencyId: user.agencyId } });
+    await logActivity(user, "VENUE", v.id, "added venue", v.name);
     id = v.id;
   });
   if (res?.error) return res;
@@ -188,16 +216,20 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
   const user = await requireStaff();
   return handleForm(async () => {
     const data = venueData(form);
-    const before = await prisma.venue.findUniqueOrThrow({ where: { id: venueId } });
+    const before = await prisma.venue.findFirst({ where: { id: venueId, agencyId: user.agencyId } });
+    if (!before) throw new FormError("Venue not found");
     await prisma.venue.update({ where: { id: venueId }, data });
     let note = "";
     if (before.timezone !== data.timezone) {
       // Keep future bookings on the venue's clock. Their stored UTC times stay as they are,
       // so the agency should check the times on those bookings.
-      const n = await prisma.booking.updateMany({ where: { venueId, setStart: { gte: new Date() } }, data: { timezone: data.timezone } });
+      const n = await prisma.booking.updateMany({
+        where: { venueId, agencyId: user.agencyId, setStart: { gte: new Date() } },
+        data: { timezone: data.timezone },
+      });
       note = ` Time zone changed: check the times on ${n.count} upcoming booking(s).`;
     }
-    await logActivity(user.id, "VENUE", venueId, "updated venue");
+    await logActivity(user, "VENUE", venueId, "updated venue");
     revalidatePath("/", "layout");
     return { ok: `Venue saved.${note}` };
   });
@@ -205,7 +237,7 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
 
 export async function deleteVenue(venueId: string) {
   const user = await requireStaff();
-  await prisma.venue.delete({ where: { id: venueId } });
-  await logActivity(user.id, "VENUE", venueId, "deleted venue");
+  const { count } = await prisma.venue.deleteMany({ where: { id: venueId, agencyId: user.agencyId } });
+  if (count) await logActivity(user, "VENUE", venueId, "deleted venue");
   redirect("/venues");
 }

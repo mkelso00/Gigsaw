@@ -39,25 +39,40 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
-/** The signed-in user, or null. Cached per request. */
+/** The signed-in user (with their agency), or null. Cached per request. */
 export const currentUser = cache(async () => {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } });
+  const session = await prisma.session.findUnique({ where: { token }, include: { user: { include: { agency: true } } } });
   if (!session || session.expiresAt < new Date()) return null;
   return session.user;
 });
 
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof currentUser>>>;
+/** A user who belongs to an agency. Every agency query must filter on `agencyId`. */
+export type AgencyUser = CurrentUser & { agencyId: string };
 
-export async function requireUser(roles?: Role[]): Promise<CurrentUser> {
+/** Where a user lands after signing in. */
+export function homePath(user: { role: string; agencyId: string | null; isOwner: boolean }) {
+  if (!user.agencyId) return user.isOwner ? "/owner" : "/login";
+  return user.role === "ARTIST" ? "/app" : "/dashboard";
+}
+
+/** Any signed-in user, including an owner who doesn't belong to an agency. */
+export async function requireSignedIn(): Promise<CurrentUser> {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (roles && !roles.includes(user.role as Role)) {
-    redirect(user.role === "ARTIST" ? "/app" : "/dashboard");
-  }
   return user;
+}
+
+/** A signed-in member of an active agency, optionally limited to some roles. */
+export async function requireUser(roles?: Role[]): Promise<AgencyUser> {
+  const user = await requireSignedIn();
+  if (!user.agencyId || !user.agency) redirect(user.isOwner ? "/owner" : "/login");
+  if (user.agency.status !== "ACTIVE") redirect("/suspended");
+  if (roles && !roles.includes(user.role as Role)) redirect(homePath(user));
+  return user as AgencyUser;
 }
 
 /** Agency staff only (admins and agents). */
@@ -67,4 +82,11 @@ export function requireStaff() {
 
 export function requireAdmin() {
   return requireUser(["ADMIN"]);
+}
+
+/** The platform owner: runs the Owner area, creates agencies and bills them. */
+export async function requireOwner(): Promise<CurrentUser> {
+  const user = await requireSignedIn();
+  if (!user.isOwner) redirect(homePath(user));
+  return user;
 }

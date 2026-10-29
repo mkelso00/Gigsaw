@@ -7,7 +7,8 @@ import { getSettings } from "@/lib/db";
 export const metadata: Metadata = { title: { default: "My gigs", template: "%s · Gigsaw" } };
 
 export default async function ArtistAppLayout({ children }: { children: React.ReactNode }) {
-  const [user, settings] = await Promise.all([requireUser(["ARTIST"]), getSettings()]);
+  const user = await requireUser(["ARTIST"]);
+  const settings = await getSettings(user.agencyId);
   return (
     <div className="mx-auto min-h-screen max-w-lg bg-slate-50">
       <header className="sticky top-0 z-10 flex items-center justify-between bg-brand-700 px-4 py-3 text-white">

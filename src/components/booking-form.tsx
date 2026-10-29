@@ -1,7 +1,7 @@
 import type { Booking, Settings } from "@prisma/client";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CURRENCIES, DEAL_TYPES, DEAL_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CURRENCIES, DEAL_TYPES, DEAL_TYPE_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
 import type { FormState } from "@/lib/forms";
 import { minorToInput } from "@/lib/money";
 import { localDateKey, localTime } from "@/lib/time";
@@ -48,7 +48,16 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Event name" hint="Optional, e.g. a festival or tour name">
+          <Field label="Booking type">
+            <select name="eventType" defaultValue={booking?.eventType ?? "GIG"} className="input">
+              {EVENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {EVENT_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Event name" hint="Optional, e.g. a festival, tour or the couple's names">
             <input name="eventName" defaultValue={booking?.eventName} className="input" />
           </Field>
           <Field label="Status">

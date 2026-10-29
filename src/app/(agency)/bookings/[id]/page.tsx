@@ -21,6 +21,7 @@ import {
   CHECK_IN_KINDS,
   CHECK_IN_KIND_LABELS,
   DEAL_TYPE_LABELS,
+  eventTypeLabel,
   PAYMENT_KINDS,
   PAYMENT_KIND_LABELS,
   type DealType,
@@ -32,16 +33,17 @@ import { formatDate, formatDateTime, localDateKey, localTime, zoneLabel } from "
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const b = await prisma.booking.findUnique({ where: { id }, select: { reference: true } });
+  const user = await requireStaff();
+  const b = await prisma.booking.findFirst({ where: { id, agencyId: user.agencyId }, select: { reference: true } });
   return { title: b?.reference ?? "Booking" };
 }
 
 export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [booking, settings] = await Promise.all([
-    prisma.booking.findUnique({
-      where: { id },
+    prisma.booking.findFirst({
+      where: { id, agencyId: user.agencyId },
       include: {
         artist: true,
         venue: true,
@@ -51,7 +53,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         checkIns: { orderBy: { at: "asc" }, include: { user: { select: { name: true } } } },
       },
     }),
-    getSettings(),
+    getSettings(user.agencyId),
   ]);
   if (!booking) notFound();
 
@@ -61,7 +63,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const windowEnd = new Date(booking.setStart.getTime() + 400 * 86_400_000);
   const [others, activity] = await Promise.all([
     prisma.booking.findMany({
-      where: { artistId: booking.artistId, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
+      where: { agencyId: user.agencyId, artistId: booking.artistId, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
       select: {
         id: true,
         reference: true,
@@ -74,7 +76,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       },
     }),
     prisma.activity.findMany({
-      where: { entity: "BOOKING", entityId: booking.id },
+      where: { agencyId: user.agencyId, entity: "BOOKING", entityId: booking.id },
       orderBy: { createdAt: "desc" },
       take: 25,
       include: { user: { select: { name: true } } },
@@ -102,7 +104,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         }
         subtitle={
           <>
-            {booking.reference} · {formatDate(booking.arriveBy, tz)}
+            {booking.reference} · {eventTypeLabel(booking.eventType)} · {formatDate(booking.arriveBy, tz)}
             {booking.venue ? ` · ${booking.venue.name}${booking.venue.city ? `, ${booking.venue.city}` : ""}` : ""}
             {booking.eventName ? ` · ${booking.eventName}` : ""}
           </>
@@ -213,6 +215,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                     ""
                   ),
                 ],
+                ["Booking type", eventTypeLabel(booking.eventType)],
                 ["Agent", booking.agent?.name ?? ""],
                 ["Tags", booking.tags],
                 ["Travel", booking.travel],

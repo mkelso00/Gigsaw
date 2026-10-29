@@ -8,8 +8,8 @@ import { prisma } from "@/lib/db";
 export const metadata: Metadata = { title: "Add artist" };
 
 export default async function NewArtistPage() {
-  await requireStaff();
-  const agents = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "AGENT"] } }, select: { id: true, name: true } });
+  const user = await requireStaff();
+  const agents = await prisma.user.findMany({ where: { agencyId: user.agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true, name: true } });
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Add artist" />

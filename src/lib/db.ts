@@ -7,16 +7,17 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-export async function getSettings() {
-  return prisma.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
+/** An agency's settings, created with defaults the first time they're needed. */
+export async function getSettings(agencyId: string) {
+  return prisma.settings.upsert({ where: { agencyId }, update: {}, create: { agencyId } });
 }
 
 export async function logActivity(
-  userId: string | null,
+  user: { id: string; agencyId: string | null } | null,
   entity: string,
   entityId: string,
   action: string,
   detail = "",
 ) {
-  await prisma.activity.create({ data: { userId, entity, entityId, action, detail } });
+  await prisma.activity.create({ data: { userId: user?.id ?? null, agencyId: user?.agencyId ?? null, entity, entityId, action, detail } });
 }

@@ -14,9 +14,9 @@ const LINKS = [
   { href: "/reports", label: "Reports" },
 ];
 
-export function NavLinks({ isAdmin }: { isAdmin: boolean }) {
+export function NavLinks({ isAdmin, isOwner }: { isAdmin: boolean; isOwner: boolean }) {
   const path = usePathname();
-  const links = [...LINKS, { href: "/settings", label: isAdmin ? "Settings" : "My account" }];
+  const links = [...LINKS, { href: "/settings", label: isAdmin ? "Settings" : "My account" }, ...(isOwner ? [{ href: "/owner", label: "Owner area →" }] : [])];
   return (
     <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0">
       {links.map((l) => {

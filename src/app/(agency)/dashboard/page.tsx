@@ -14,30 +14,30 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireStaff();
-  const settings = await getSettings();
+  const settings = await getSettings(user.agencyId);
   const now = new Date();
   const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
 
   const [upcoming, today, holds, money, activity] = await Promise.all([
     prisma.booking.findMany({
-      where: { status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
+      where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: bookingListInclude,
       orderBy: { setStart: "asc" },
       take: 10,
     }),
     prisma.booking.findMany({
-      where: { status: { in: LIVE_STATUSES }, arriveBy: { gte: new Date(now.getTime() - 12 * 3_600_000), lte: new Date(now.getTime() + 24 * 3_600_000) } },
+      where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, arriveBy: { gte: new Date(now.getTime() - 12 * 3_600_000), lte: new Date(now.getTime() + 24 * 3_600_000) } },
       include: bookingListInclude,
       orderBy: { arriveBy: "asc" },
     }),
-    prisma.booking.count({ where: { status: "HOLD", setStart: { gte: now } } }),
+    prisma.booking.count({ where: { agencyId: user.agencyId, status: "HOLD", setStart: { gte: now } } }),
     // Bookings that still involve money moving: confirmed or settled, in the agency's main currency.
     prisma.booking.findMany({
-      where: { status: { in: ["CONFIRMED", "SETTLED", "PENDING"] }, currency: cur },
+      where: { agencyId: user.agencyId, status: { in: ["CONFIRMED", "SETTLED", "PENDING"] }, currency: cur },
       include: { payments: true, artist: { select: { name: true } }, promoter: { select: { name: true } } },
     }),
-    prisma.activity.findMany({ orderBy: { createdAt: "desc" }, take: 8, include: { user: { select: { name: true } } } }),
+    prisma.activity.findMany({ where: { agencyId: user.agencyId }, orderBy: { createdAt: "desc" }, take: 8, include: { user: { select: { name: true } } } }),
   ]);
 
   let owedByPromoters = 0;

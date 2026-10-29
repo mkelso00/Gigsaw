@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth";
+import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, PAYMENT_KINDS } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
@@ -10,13 +10,20 @@ import { FormError, handleForm, oneOf, required, str, type FormState } from "@/l
 import { formatMoney, toMinor } from "@/lib/money";
 import { localDateKey, zonedToUtc } from "@/lib/time";
 
+/** A booking that belongs to the user's agency. Anything else is treated as not found. */
+async function ownBooking(user: AgencyUser, bookingId: string) {
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, agencyId: user.agencyId } });
+  if (!booking) throw new FormError("Booking not found");
+  return booking;
+}
+
 export async function createBooking(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   let id = "";
   const result = await handleForm(async () => {
-    const data = await parseBookingForm(form, await getSettings());
-    const booking = await createBookingWithReference({ ...data, createdById: user.id, agentId: data.agentId ?? user.id });
-    await logActivity(user.id, "BOOKING", booking.id, "created", booking.reference);
+    const data = await parseBookingForm(form, await getSettings(user.agencyId), user.agencyId);
+    const booking = await createBookingWithReference(user.agencyId, { ...data, createdById: user.id, agentId: data.agentId ?? user.id });
+    await logActivity(user, "BOOKING", booking.id, "created", booking.reference);
     id = booking.id;
   });
   if (result?.error) return result;
@@ -27,9 +34,10 @@ export async function createBooking(_: FormState, form: FormData): Promise<FormS
 export async function updateBooking(bookingId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   const result = await handleForm(async () => {
-    const data = await parseBookingForm(form, await getSettings());
+    await ownBooking(user, bookingId);
+    const data = await parseBookingForm(form, await getSettings(user.agencyId), user.agencyId);
     await prisma.booking.update({ where: { id: bookingId }, data });
-    await logActivity(user.id, "BOOKING", bookingId, "updated");
+    await logActivity(user, "BOOKING", bookingId, "updated");
   });
   if (result?.error) return result;
   revalidatePath("/", "layout");
@@ -39,18 +47,19 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
 export async function setBookingStatus(bookingId: string, form: FormData) {
   const user = await requireStaff();
   const status = oneOf(str(form, "status"), BOOKING_STATUSES, "HOLD");
-  const before = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, select: { status: true } });
+  const before = await ownBooking(user, bookingId);
   if (before.status !== status) {
     await prisma.booking.update({ where: { id: bookingId }, data: { status } });
-    await logActivity(user.id, "BOOKING", bookingId, "status changed", `${BOOKING_STATUS_LABELS[before.status as keyof typeof BOOKING_STATUS_LABELS] ?? before.status} → ${BOOKING_STATUS_LABELS[status]}`);
+    await logActivity(user, "BOOKING", bookingId, "status changed", `${BOOKING_STATUS_LABELS[before.status as keyof typeof BOOKING_STATUS_LABELS] ?? before.status} → ${BOOKING_STATUS_LABELS[status]}`);
   }
   revalidatePath("/", "layout");
 }
 
 export async function deleteBooking(bookingId: string) {
   const user = await requireStaff();
-  const b = await prisma.booking.delete({ where: { id: bookingId } });
-  await logActivity(user.id, "BOOKING", bookingId, "deleted", b.reference);
+  const b = await ownBooking(user, bookingId);
+  await prisma.booking.delete({ where: { id: b.id } });
+  await logActivity(user, "BOOKING", bookingId, "deleted", b.reference);
   revalidatePath("/", "layout");
   redirect("/bookings");
 }
@@ -58,7 +67,7 @@ export async function deleteBooking(bookingId: string) {
 export async function addPayment(bookingId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
-    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    const booking = await ownBooking(user, bookingId);
     const direction = str(form, "direction") === "OUT" ? "OUT" : "IN";
     const kind = oneOf(str(form, "kind"), PAYMENT_KINDS, "BALANCE");
     let amountMinor: number;
@@ -73,7 +82,7 @@ export async function addPayment(bookingId: string, _: FormState, form: FormData
     await prisma.payment.create({
       data: { bookingId, direction, kind, amountMinor, paidAt: zonedToUtc(date, "12:00", booking.timezone), note: str(form, "note") },
     });
-    await logActivity(user.id, "BOOKING", bookingId, direction === "IN" ? "payment received" : "payment sent", `${kind.toLowerCase()} ${formatMoney(amountMinor, booking.currency)}`);
+    await logActivity(user, "BOOKING", bookingId, direction === "IN" ? "payment received" : "payment sent", `${kind.toLowerCase()} ${formatMoney(amountMinor, booking.currency)}`);
     revalidatePath(`/bookings/${bookingId}`);
     return { ok: "Payment logged." };
   });
@@ -81,8 +90,10 @@ export async function addPayment(bookingId: string, _: FormState, form: FormData
 
 export async function deletePayment(paymentId: string) {
   const user = await requireStaff();
-  const p = await prisma.payment.delete({ where: { id: paymentId } });
-  await logActivity(user.id, "BOOKING", p.bookingId, "payment removed");
+  const p = await prisma.payment.findFirst({ where: { id: paymentId, booking: { agencyId: user.agencyId } } });
+  if (!p) return;
+  await prisma.payment.delete({ where: { id: p.id } });
+  await logActivity(user, "BOOKING", p.bookingId, "payment removed");
   revalidatePath(`/bookings/${p.bookingId}`);
 }
 
@@ -90,7 +101,7 @@ export async function deletePayment(paymentId: string) {
 export async function logCheckInForArtist(bookingId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
-    const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
+    const booking = await ownBooking(user, bookingId);
     const kind = oneOf(str(form, "kind"), CHECK_IN_KINDS, "ARRIVED");
     const time = str(form, "time");
     let at = new Date();
@@ -102,7 +113,7 @@ export async function logCheckInForArtist(bookingId: string, _: FormState, form:
     await prisma.checkIn.create({
       data: { bookingId, artistId: booking.artistId, userId: user.id, kind, source: "AGENT", at, note: str(form, "note") },
     });
-    await logActivity(user.id, "BOOKING", bookingId, "check-in logged by agency", kind.toLowerCase().replaceAll("_", " "));
+    await logActivity(user, "BOOKING", bookingId, "check-in logged by agency", kind.toLowerCase().replaceAll("_", " "));
     revalidatePath("/", "layout");
     return { ok: "Check-in logged." };
   });
@@ -110,7 +121,9 @@ export async function logCheckInForArtist(bookingId: string, _: FormState, form:
 
 export async function deleteCheckIn(checkInId: string) {
   const user = await requireStaff();
-  const c = await prisma.checkIn.delete({ where: { id: checkInId } });
-  await logActivity(user.id, "BOOKING", c.bookingId, "check-in removed", c.kind.toLowerCase().replaceAll("_", " "));
+  const c = await prisma.checkIn.findFirst({ where: { id: checkInId, booking: { agencyId: user.agencyId } } });
+  if (!c) return;
+  await prisma.checkIn.delete({ where: { id: c.id } });
+  await logActivity(user, "BOOKING", c.bookingId, "check-in removed", c.kind.toLowerCase().replaceAll("_", " "));
   revalidatePath("/", "layout");
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { BOOKING_STATUS_LABELS, DEAL_TYPE_LABELS, type BookingStatus, type DealType } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, DEAL_TYPE_LABELS, eventTypeLabel, type BookingStatus, type DealType } from "@/lib/constants";
 import { csvResponse, toCsv } from "@/lib/csv";
 import { getSettings, prisma } from "@/lib/db";
 import { arrivalFor } from "@/lib/bookings";
@@ -10,8 +10,11 @@ import { localDateKey, localTime, zonedToUtc } from "@/lib/time";
 
 export async function GET(req: NextRequest) {
   const user = await currentUser();
-  if (!user || user.role === "ARTIST") return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  const settings = await getSettings();
+  if (!user || user.role === "ARTIST" || !user.agencyId || user.agency?.status !== "ACTIVE") {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  }
+  const agencyId = user.agencyId;
+  const settings = await getSettings(agencyId);
   const sp = req.nextUrl.searchParams;
   const from = sp.get("from");
   const to = sp.get("to");
@@ -19,6 +22,7 @@ export async function GET(req: NextRequest) {
 
   const bookings = await prisma.booking.findMany({
     where: {
+      agencyId,
       ...(artist ? { artistId: artist } : {}),
       arriveBy: {
         ...(from ? { gte: zonedToUtc(from, "00:00", settings.defaultTimezone) } : {}),
@@ -42,6 +46,7 @@ export async function GET(req: NextRequest) {
       localTime(b.setStart, b.timezone),
       b.timezone,
       b.artist.name,
+      eventTypeLabel(b.eventType),
       b.eventName,
       b.venue?.name,
       b.venue?.city,
@@ -65,7 +70,7 @@ export async function GET(req: NextRequest) {
   });
   const csv = toCsv(
     [
-      "Reference", "Date", "Arrive by", "On stage", "Time zone", "Artist", "Event", "Venue", "City", "Promoter", "Agent", "Status", "Deal",
+      "Reference", "Date", "Arrive by", "On stage", "Time zone", "Artist", "Type", "Event", "Venue", "City", "Promoter", "Agent", "Status", "Deal",
       "Currency", "Fee", "VAT", "Agency commission", "Artist earnings", "Received", "Owed by promoter", "Paid to artist",
       "Arrival", "Arrived at", "Minutes late", "Tags",
     ],

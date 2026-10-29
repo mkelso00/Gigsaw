@@ -14,17 +14,17 @@ import { formatDate, formatDateTime } from "@/lib/time";
 export const metadata: Metadata = { title: "Contact" };
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
   const [contact, settings] = await Promise.all([
-    prisma.contact.findUnique({
-      where: { id },
+    prisma.contact.findFirst({
+      where: { id, agencyId: user.agencyId },
       include: {
         notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
         bookings: { orderBy: { setStart: "desc" }, include: { artist: { select: { name: true } }, venue: { select: { name: true } } } },
       },
     }),
-    getSettings(),
+    getSettings(user.agencyId),
   ]);
   if (!contact) notFound();
 

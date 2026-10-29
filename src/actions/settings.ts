@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
+import { hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
@@ -19,10 +19,13 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     if (grace < 0 || grace > 240) throw new FormError("Grace period must be between 0 and 240 minutes");
     const geofence = int(form, "geofenceMetres") ?? 500;
     if (geofence < 25 || geofence > 50_000) throw new FormError("Venue radius must be between 25 m and 50 km");
-    await prisma.settings.update({
-      where: { id: 1 },
-      data: {
-        agencyName: required(form, "agencyName", "Agency name"),
+    const agencyName = required(form, "agencyName", "Agency name");
+    await prisma.agency.update({ where: { id: user.agencyId }, data: { name: agencyName } });
+    await prisma.settings.upsert({
+      where: { agencyId: user.agencyId },
+      create: { agencyId: user.agencyId },
+      update: {
+        agencyName,
         agencyEmail: str(form, "agencyEmail"),
         agencyAddress: str(form, "agencyAddress"),
         defaultTimezone: tz,
@@ -34,7 +37,7 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         contractTerms: str(form, "contractTerms"),
       },
     });
-    await logActivity(user.id, "SETTINGS", "1", "updated agency settings");
+    await logActivity(user, "SETTINGS", user.agencyId, "updated agency settings");
     revalidatePath("/", "layout");
     return { ok: "Settings saved." };
   });
@@ -49,9 +52,9 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
     if (await prisma.user.findUnique({ where: { email } })) throw new FormError("That email already has a login");
     const role = str(form, "role") === "ADMIN" ? "ADMIN" : "AGENT";
     const u = await prisma.user.create({
-      data: { email, name: required(form, "name", "Name"), role, passwordHash: await hashPassword(password) },
+      data: { email, name: required(form, "name", "Name"), role, agencyId: admin.agencyId, passwordHash: await hashPassword(password) },
     });
-    await logActivity(admin.id, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
+    await logActivity(admin, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
     revalidatePath("/settings");
     return { ok: `${u.name} can now sign in.` };
   });
@@ -60,13 +63,15 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
 export async function removeStaffUser(userId: string) {
   const admin = await requireAdmin();
   if (userId === admin.id) return;
-  const u = await prisma.user.delete({ where: { id: userId } });
-  await logActivity(admin.id, "USER", userId, "removed team member", u.name);
+  const u = await prisma.user.findFirst({ where: { id: userId, agencyId: admin.agencyId, role: { in: ["ADMIN", "AGENT"] }, isOwner: false } });
+  if (!u) return;
+  await prisma.user.delete({ where: { id: u.id } });
+  await logActivity(admin, "USER", userId, "removed team member", u.name);
   revalidatePath("/settings");
 }
 
 export async function changePassword(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireUser();
+  const user = await requireSignedIn();
   return handleForm(async () => {
     const current = required(form, "current", "Current password");
     const next = required(form, "next", "New password");
@@ -79,17 +84,17 @@ export async function changePassword(_: FormState, form: FormData): Promise<Form
 
 export async function loadDemoData(_: FormState): Promise<FormState> {
   const admin = await requireAdmin();
-  if (await hasDemoData(prisma)) return { error: "Demo data is already loaded." };
-  const res = await addDemoData(prisma, { leadAgentId: admin.id });
-  await logActivity(admin.id, "SETTINGS", "1", "loaded demo data", `${res.bookings} bookings`);
+  if (await hasDemoData(prisma, admin.agencyId)) return { error: "Demo data is already loaded." };
+  const res = await addDemoData(prisma, { agencyId: admin.agencyId, leadAgentId: admin.id });
+  await logActivity(admin, "SETTINGS", admin.agencyId, "loaded demo data", `${res.bookings} bookings`);
   revalidatePath("/", "layout");
   return { ok: `Added ${res.artists.length} artists, ${res.venues} venues and ${res.bookings} bookings. Have a look at Arrivals and the Dashboard.` };
 }
 
 export async function clearDemoData(_: FormState): Promise<FormState> {
   const admin = await requireAdmin();
-  const res = await removeDemoData(prisma);
-  await logActivity(admin.id, "SETTINGS", "1", "removed demo data", `${res.bookings} bookings`);
+  const res = await removeDemoData(prisma, admin.agencyId);
+  await logActivity(admin, "SETTINGS", admin.agencyId, "removed demo data", `${res.bookings} bookings`);
   revalidatePath("/", "layout");
   return { ok: `Removed ${res.artists} demo artists and ${res.bookings} bookings. Your own data is untouched.` };
 }

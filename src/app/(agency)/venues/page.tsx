@@ -7,10 +7,10 @@ import { prisma } from "@/lib/db";
 export const metadata: Metadata = { title: "Venues" };
 
 export default async function VenuesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { q } = await searchParams;
   const venues = await prisma.venue.findMany({
-    where: q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }, { country: { contains: q, mode: "insensitive" } }] } : undefined,
+    where: { agencyId: user.agencyId, ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }, { country: { contains: q, mode: "insensitive" } }] } : {}) },
     orderBy: { name: "asc" },
     include: { _count: { select: { bookings: true } } },
   });

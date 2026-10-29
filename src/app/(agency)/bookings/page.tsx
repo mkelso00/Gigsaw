@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
@@ -12,15 +12,16 @@ import { formatDate, localTime } from "@/lib/time";
 export const metadata: Metadata = { title: "Bookings" };
 
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const sp = await searchParams;
   const when = sp.when === "past" ? "past" : sp.when === "all" ? "all" : "upcoming";
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 86_400_000);
 
-  const where: Prisma.BookingWhereInput = {};
+  const where: Prisma.BookingWhereInput = { agencyId: user.agencyId };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   if (sp.artist) where.artistId = sp.artist;
+  if (sp.type && (EVENT_TYPES as readonly string[]).includes(sp.type)) where.eventType = sp.type;
   if (when === "upcoming") where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
@@ -42,8 +43,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       orderBy: { setStart: when === "past" ? "desc" : "asc" },
       take: 300,
     }),
-    prisma.artist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    getSettings(),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    getSettings(user.agencyId),
   ]);
 
   return (
@@ -86,6 +87,17 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             {BOOKING_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {BOOKING_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="label">Type</span>
+          <select name="type" defaultValue={sp.type ?? ""} className="input">
+            <option value="">Any type</option>
+            {EVENT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {EVENT_TYPE_LABELS[t]}
               </option>
             ))}
           </select>
@@ -134,7 +146,10 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                         <ArtistDot colour={b.artist.colour} />
                         {b.artist.name}
                       </span>
-                      {b.eventName && <div className="text-xs text-slate-500">{b.eventName}</div>}
+                      <div className="text-xs text-slate-500">
+                        {eventTypeLabel(b.eventType)}
+                        {b.eventName ? ` · ${b.eventName}` : ""}
+                      </div>
                     </td>
                     <td>
                       {b.venue ? b.venue.name : <span className="text-slate-400">No venue</span>}

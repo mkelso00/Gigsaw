@@ -10,9 +10,9 @@ import { prisma } from "@/lib/db";
 export const metadata: Metadata = { title: "Edit contact" };
 
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const user = await requireStaff();
   const { id } = await params;
-  const contact = await prisma.contact.findUnique({ where: { id } });
+  const contact = await prisma.contact.findFirst({ where: { id, agencyId: user.agencyId } });
   if (!contact) notFound();
   return (
     <div className="mx-auto max-w-3xl space-y-6">

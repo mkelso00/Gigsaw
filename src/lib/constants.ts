@@ -33,6 +33,23 @@ export const DEAL_TYPE_LABELS: Record<DealType, string> = {
   FLAT: "Flat fee (no commission)",
 };
 
+export const EVENT_TYPES = ["GIG", "FESTIVAL", "CLUB_NIGHT", "WEDDING", "CORPORATE", "PRIVATE_PARTY", "OTHER"] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  GIG: "Gig / concert",
+  FESTIVAL: "Festival",
+  CLUB_NIGHT: "Club night",
+  WEDDING: "Wedding",
+  CORPORATE: "Corporate event",
+  PRIVATE_PARTY: "Private party",
+  OTHER: "Other",
+};
+
+export function eventTypeLabel(t: string) {
+  return EVENT_TYPE_LABELS[t as EventType] ?? t;
+}
+
 export const CONTACT_TYPES = ["PROMOTER", "CLIENT", "VENUE_CONTACT", "COLLABORATOR", "OTHER"] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 

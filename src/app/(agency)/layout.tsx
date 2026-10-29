@@ -5,7 +5,8 @@ import { requireStaff } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
-  const [user, settings] = await Promise.all([requireStaff(), getSettings()]);
+  const user = await requireStaff();
+  const settings = await getSettings(user.agencyId);
   return (
     <div className="min-h-screen lg:flex">
       <aside className="no-print border-b border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0">
@@ -18,7 +19,7 @@ export default async function AgencyLayout({ children }: { children: React.React
             </span>
           </Link>
         </div>
-        <NavLinks isAdmin={user.role === "ADMIN"} />
+        <NavLinks isAdmin={user.role === "ADMIN"} isOwner={user.isOwner} />
         <div className="mt-auto hidden border-t border-slate-200 p-4 text-sm lg:block">
           <div className="font-medium">{user.name}</div>
           <div className="text-xs text-slate-500">{user.role === "ADMIN" ? "Admin" : "Agent"}</div>

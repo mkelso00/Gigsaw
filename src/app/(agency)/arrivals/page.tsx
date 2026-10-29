@@ -26,14 +26,15 @@ const ORDER: Record<ArrivalState, number> = {
 };
 
 export default async function ArrivalsPage() {
-  await requireStaff();
-  const settings = await getSettings();
+  const user = await requireStaff();
+  const settings = await getSettings(user.agencyId);
   const now = new Date();
   const HOUR = 3_600_000;
 
   // Gigs with a call time from 12 hours ago to 24 hours ahead.
   const live = await prisma.booking.findMany({
     where: {
+      agencyId: user.agencyId,
       status: { in: LIVE_STATUSES },
       arriveBy: { gte: new Date(now.getTime() - 12 * HOUR), lte: new Date(now.getTime() + 24 * HOUR) },
     },
@@ -48,6 +49,7 @@ export default async function ArrivalsPage() {
 
   const [recent, artists, stats] = await Promise.all([
     prisma.checkIn.findMany({
+      where: { booking: { agencyId: user.agencyId } },
       orderBy: { at: "desc" },
       take: 20,
       include: {
@@ -55,7 +57,7 @@ export default async function ArrivalsPage() {
         booking: { select: { id: true, reference: true, timezone: true, venue: { select: { name: true } } } },
       },
     }),
-    prisma.artist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, colour: true } }),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, colour: true } }),
     punctualityByArtist(settings, yearAgo),
   ]);
 

@@ -8,11 +8,12 @@ import { getSettings, prisma } from "@/lib/db";
 export const metadata: Metadata = { title: "Artists" };
 
 export default async function ArtistsPage() {
-  await requireStaff();
-  const settings = await getSettings();
+  const user = await requireStaff();
+  const settings = await getSettings(user.agencyId);
   const now = new Date();
   const [artists, stats] = await Promise.all([
     prisma.artist.findMany({
+      where: { agencyId: user.agencyId },
       orderBy: { name: "asc" },
       include: {
         agent: { select: { name: true } },

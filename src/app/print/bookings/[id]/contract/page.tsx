@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DocTable, DocumentShell } from "@/components/document";
-import { DEAL_TYPE_LABELS, type DealType } from "@/lib/constants";
+import { DEAL_TYPE_LABELS, eventTypeLabel, type DealType } from "@/lib/constants";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { loadPrintable } from "@/lib/print";
 import { formatDate, formatDateTime, localTime, zoneLabel } from "@/lib/time";
@@ -26,6 +26,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
       <DocTable
         rows={[
           ["Artist", b.artist.name],
+          ["Type of engagement", eventTypeLabel(b.eventType)],
           ["Event", b.eventName],
           ["Venue", venue],
           ["Date", formatDate(b.arriveBy, tz)],

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { createSession, destroySession, verifyPassword } from "@/lib/auth";
+import { createSession, destroySession, homePath, verifyPassword } from "@/lib/auth";
 import { str, type FormState } from "@/lib/forms";
 
 export async function login(_: FormState, form: FormData): Promise<FormState> {
@@ -15,7 +15,7 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
     return { error: "That email and password don't match." };
   }
   await createSession(user.id);
-  redirect(user.role === "ARTIST" ? "/app" : "/dashboard");
+  redirect(homePath(user));
 }
 
 export async function logout() {

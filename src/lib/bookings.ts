@@ -1,7 +1,7 @@
 import "server-only";
 import type { Prisma, Settings } from "@prisma/client";
 import { punctuality, summariseArrival, type ArrivalSummary } from "./arrival";
-import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES } from "./constants";
+import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES } from "./constants";
 import { prisma } from "./db";
 import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from "./forms";
 import { toMinor } from "./money";
@@ -45,17 +45,17 @@ export function gigDateKey(b: { arriveBy: Date; timezone: string }) {
   return localDateKey(b.arriveBy, b.timezone);
 }
 
-async function nextReference(): Promise<string> {
-  const last = await prisma.booking.findFirst({ orderBy: { reference: "desc" }, select: { reference: true } });
+async function nextReference(agencyId: string): Promise<string> {
+  const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });
   const n = last ? Number(last.reference.replace(/\D/g, "")) + 1 : 1;
   return `GS-${String(n).padStart(4, "0")}`;
 }
 
-export async function createBookingWithReference(data: Omit<Prisma.BookingUncheckedCreateInput, "reference">) {
+export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">) {
   // Retry if two people create a booking at the same moment and grab the same number.
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await prisma.booking.create({ data: { ...data, reference: await nextReference() } });
+      return await prisma.booking.create({ data: { ...data, agencyId, reference: await nextReference(agencyId) } });
     } catch (e) {
       if ((e as { code?: string }).code !== "P2002") throw e;
     }
@@ -68,15 +68,25 @@ export async function createBookingWithReference(data: Omit<Prisma.BookingUnchec
  * Times are entered as wall-clock times in the venue's time zone. The date is the day of the
  * call time. Each later time that is earlier on the clock than the one before it rolls into
  * the next day (e.g. arrive 22:00, on stage 01:00).
+ * Every linked record (artist, venue, promoter, agent) must belong to the same agency.
  */
-export async function parseBookingForm(form: FormData, settings: Settings) {
+export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string) {
   const artistId = required(form, "artistId", "Artist");
-  const artist = await prisma.artist.findUnique({ where: { id: artistId } });
+  const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId } });
   if (!artist) throw new FormError("Choose an artist");
 
   const venueId = optStr(form, "venueId");
-  const venue = venueId ? await prisma.venue.findUnique({ where: { id: venueId } }) : null;
+  const venue = venueId ? await prisma.venue.findFirst({ where: { id: venueId, agencyId } }) : null;
   if (venueId && !venue) throw new FormError("That venue no longer exists");
+
+  const promoterId = optStr(form, "promoterId");
+  if (promoterId && !(await prisma.contact.findFirst({ where: { id: promoterId, agencyId }, select: { id: true } }))) {
+    throw new FormError("That promoter no longer exists");
+  }
+  const agentId = optStr(form, "agentId");
+  if (agentId && !(await prisma.user.findFirst({ where: { id: agentId, agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))) {
+    throw new FormError("That agent is not part of your agency");
+  }
 
   const timezone = venue?.timezone ?? (str(form, "timezone") || settings.defaultTimezone);
   if (!isValidTimeZone(timezone)) throw new FormError("Unknown time zone");
@@ -133,9 +143,10 @@ export async function parseBookingForm(form: FormData, settings: Settings) {
   return {
     artistId,
     venueId: venue?.id ?? null,
-    promoterId: optStr(form, "promoterId"),
-    agentId: optStr(form, "agentId"),
+    promoterId,
+    agentId,
     eventName: str(form, "eventName"),
+    eventType: oneOf(str(form, "eventType"), EVENT_TYPES, "GIG"),
     status: oneOf(str(form, "status"), BOOKING_STATUSES, "HOLD"),
     dealType,
     timezone,
@@ -163,11 +174,11 @@ export async function parseBookingForm(form: FormData, settings: Settings) {
 }
 
 
-/** Punctuality for each artist over their gigs between `from` and now. */
+/** Punctuality for each of the agency's artists over their gigs between `from` and now. */
 export async function punctualityByArtist(settings: Settings, from: Date, artistId?: string) {
   const now = new Date();
   const bookings = await prisma.booking.findMany({
-    where: { arriveBy: { gte: from, lte: now }, status: { not: "CANCELLED" }, ...(artistId ? { artistId } : {}) },
+    where: { agencyId: settings.agencyId, arriveBy: { gte: from, lte: now }, status: { not: "CANCELLED" }, ...(artistId ? { artistId } : {}) },
     select: {
       artistId: true,
       status: true,

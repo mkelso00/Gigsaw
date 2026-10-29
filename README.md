@@ -2,14 +2,21 @@
 
 Booking management for music agencies and their artists, modelled on [Overture](https://bookingwithoverture.com/features), with one big addition: **musicians mark when they've arrived at a gig, and the agency can see it live and track punctuality over time.**
 
-## What's in it
+## Owner area and agencies
+
+Gigsaw runs many agencies on one site. Each agency only ever sees its own artists, bookings, contacts, venues, reports and settings.
+
+- **Owner area** (`/owner`, owner account only): create an agency and its first admin login, set its price per gig, add admins, reset passwords, suspend or reactivate an agency (suspended agencies can't sign in; their data is kept).
+- **Billing:** each agency pays its own price per gig for every **confirmed or settled** booking, counted in the month the gig happens (venue's local date). Holds, enquiries, cancellations and demo data are free. Once a month is over, **Billing → Issue statements** freezes each agency's count, price and booking references; mark statements paid as money comes in. Re-issuing updates unpaid statements and never touches paid ones. CSV export per month.
+- Agency admins see their price and this month's billable gigs under **Settings → Your Gigsaw plan**.
+
 
 | Area | What it does |
 | --- | --- |
 | **Arrivals (new)** | Live board of every gig with a call time in the last 12 or next 24 hours: overdue, on the way (with ETA), arrived on time, arrived late. Punctuality table per artist for the last 12 months. Latest check-ins feed. CSV export. Refreshes every 30 seconds. |
 | **Artist app** | Phone-friendly pages at `/app` (can be added to the home screen). Artists see their gigs, schedule, venue directions and itinerary, and tap **I'm on the way**, **I've arrived** and **I've left the venue**. |
 | Dashboard | Today's arrivals, shows in the next 30 days, open holds, money owed, overdue deposits, recent activity. |
-| Bookings | Enquiry → hold → pending → confirmed → settled (or cancelled). Deal types: standard commission, buy/sell, guarantee vs %, guarantee plus bonus, flat fee. Fee, VAT, deposit, radius clause, itinerary, tags, notes. |
+| Bookings | Booking type (gig, festival, club night, wedding, corporate, private party, other). Enquiry → hold → pending → confirmed → settled (or cancelled). Deal types: standard commission, buy/sell, guarantee vs %, guarantee plus bonus, flat fee. Fee, VAT, deposit, radius clause, itinerary, tags, notes. |
 | Checklist | On every booking: double bookings, radius clause breaches, missing venue/promoter/fee, overdue deposits, missing itinerary details. |
 | Calendar | Month view filtered by artist and status. Each artist has a private calendar feed (ICS) for Google, Apple or Outlook calendar. |
 | Contacts | Promoters, clients, venue staff and collaborators with tags, search (including the notes archive) and conversation notes. |
@@ -40,7 +47,9 @@ The grace period and venue radius are set in **Settings**. The rules live in `sr
 3. In the Gigsaw service, open **Variables** and add `DATABASE_URL` with the value `${{Postgres.DATABASE_URL}}` (Railway offers this as a reference variable).
 4. In **Settings → Networking**, click **Generate Domain** to get a public web address.
 5. Redeploy. On each start, Gigsaw creates or updates its database tables automatically (`prisma migrate deploy`).
-6. Open the web address. The first visit shows a setup page where you name the agency and create the admin login. It only appears once.
+6. Open the web address. On a brand new database, the first visit shows a setup page that creates the owner account. It only appears once. Then use the Owner area to add agencies.
+
+Upgrading an existing single-agency install: the migration moves all existing data into one agency (named from its settings) and makes the first admin the owner. Nothing is deleted.
 
 Railway runs `npm run build` and `npm start` on its own and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
 
@@ -76,9 +85,10 @@ Open http://localhost:3000. `npm run setup` creates the tables and fills them wi
 
 Demo logins (password `gigsaw123` for all):
 
-- `admin@gigsaw.test`: agency admin
-- `agent@gigsaw.test`: agent
-- `maya@gigsaw.test`: artist app (open it on a phone-sized window)
+- `admin@gigsaw.test`: owner (Owner area) and admin of Northern Lights Agency
+- `agent@gigsaw.test`: agent at Northern Lights
+- `maya@gigsaw.test`: artist app for Northern Lights (open it on a phone-sized window)
+- `harbour@gigsaw.test`: admin of Harbour Music, a second agency that can't see Northern Lights' data
 
 `npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.
 

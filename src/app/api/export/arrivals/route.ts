@@ -9,11 +9,14 @@ import { localDateKey, localTime } from "@/lib/time";
 // One row per past or current gig, with how and when the artist arrived.
 export async function GET() {
   const user = await currentUser();
-  if (!user || user.role === "ARTIST") return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  const settings = await getSettings();
+  if (!user || user.role === "ARTIST" || !user.agencyId || user.agency?.status !== "ACTIVE") {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  }
+  const agencyId = user.agencyId;
+  const settings = await getSettings(agencyId);
   const now = new Date();
   const bookings = await prisma.booking.findMany({
-    where: { arriveBy: { lte: new Date(now.getTime() + 86_400_000) }, status: { not: "CANCELLED" } },
+    where: { agencyId, arriveBy: { lte: new Date(now.getTime() + 86_400_000) }, status: { not: "CANCELLED" } },
     include: { artist: true, venue: true, checkIns: true },
     orderBy: { arriveBy: "desc" },
   });
