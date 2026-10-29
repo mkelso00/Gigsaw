@@ -149,6 +149,8 @@ model Artist {
   id                String   @id @default(cuid())
   agencyId          String
   agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
+  importRef         String?
   name              String
   genre             String   @default("")
   email             String   @default("")
@@ -188,6 +190,7 @@ model Artist {
   partActs ActLink[]   @relation("ActParent")
   partOf   ActLink[]   @relation("ActChild")
 
+  @@index([agencyId, importRef])
   @@index([agencyId])
 }
 
@@ -195,6 +198,8 @@ model Contact {
   id        String   @id @default(cuid())
   agencyId  String
   agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
+  importRef String?
   type      String   @default("PROMOTER") // PROMOTER | CLIENT | VENUE_CONTACT | COLLABORATOR | OTHER
   name      String
   company   String   @default("")
@@ -212,6 +217,7 @@ model Contact {
   people   Person[]
   events   Event[]
 
+  @@index([agencyId, importRef])
   @@index([agencyId])
 }
 
@@ -229,6 +235,8 @@ model Venue {
   id         String   @id @default(cuid())
   agencyId   String
   agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
+  importRef  String?
   name       String
   address    String   @default("")
   city       String   @default("")
@@ -249,6 +257,7 @@ model Venue {
   people   Person[]
   events   Event[]
 
+  @@index([agencyId, importRef])
   @@index([agencyId])
 }
 
@@ -489,6 +498,8 @@ model Person {
   id            String      @id @default(cuid())
   agencyId      String
   agency        Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
+  importRef     String?
   firstName     String
   surname       String      @default("")
   alias         String      @default("") // stage or known-as name
@@ -510,6 +521,7 @@ model Person {
   acts          PersonAct[]
   login         User?       @relation("PersonLogin")
 
+  @@index([agencyId, importRef])
   @@index([agencyId])
   @@index([venueId])
 }

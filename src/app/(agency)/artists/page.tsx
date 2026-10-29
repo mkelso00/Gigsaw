@@ -77,6 +77,9 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         subtitle="Your roster: solo singers, duos and bands. A band can be made up of other acts."
         actions={
           <>
+            <Link href="/artists/import" className="btn">
+              Import
+            </Link>
             <Link href="/artists/applications" className="btn">
               New acts{newActs ? <span className="badge ml-1.5 bg-amber-400 text-ink-950">{newActs}</span> : null}
             </Link>
