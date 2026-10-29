@@ -3,10 +3,9 @@ import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { QuickBooking } from "@/components/quick-booking";
 import { QuickSearch } from "@/components/quick-search";
-import { logout } from "@/actions/auth";
 import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
-import { NavLinks } from "@/components/nav";
+import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { localDateKey } from "@/lib/time";
@@ -26,6 +25,12 @@ export default async function AgencyLayout({ children }: { children: React.React
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
+  const navProps = {
+    isAdmin: user.role === "ADMIN",
+    isOwner: user.isOwner,
+    badges: { "/rota": unfilledThisWeek, "/artists": newActs },
+    business: { name: settings.agencyName || user.agency?.name || "Your business", email: settings.agencyEmail },
+  };
   const initials = user.name
     .split(" ")
     .map((w) => w[0])
@@ -39,16 +44,10 @@ export default async function AgencyLayout({ children }: { children: React.React
           <Link href="/dashboard">
             <Logo sub={settings.agencyName} />
           </Link>
-          <form action={logout} className="lg:hidden">
-            <button className="text-xs text-ink-400 hover:text-white">Sign out</button>
-          </form>
+          <MobileMenu {...navProps} logo={<Logo sub={settings.agencyName} />} user={{ name: user.name, email: user.email }} />
         </div>
-        <NavLinks
-          isAdmin={user.role === "ADMIN"}
-          isOwner={user.isOwner}
-          badges={{ "/rota": unfilledThisWeek, "/artists": newActs }}
-          business={{ name: settings.agencyName || user.agency?.name || "Your business", email: settings.agencyEmail }}
-        />
+        {/* Computers: the full sidebar. Phones: only Settings' scrolling strip shows here; the main menu is behind the menu button. */}
+        <NavLinks {...navProps} />
         <div className="mt-auto hidden space-y-1 p-3 lg:block">
           {user.isOwner && (
             <Link

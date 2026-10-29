@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { logout } from "@/actions/auth";
 import { Icon } from "@/components/icons";
 import { SETTINGS_PAGES } from "@/components/settings-ui";
 
@@ -105,18 +106,21 @@ export function NavLinks({
   isOwner,
   badges = {},
   business,
+  drawer = false,
 }: {
   isAdmin: boolean;
   isOwner: boolean;
   badges?: Record<string, number>;
   business: { name: string; email: string };
+  /** The phone menu: always a full list, even in Settings. */
+  drawer?: boolean;
 }) {
   const path = usePathname();
-  if (isAdmin && path.startsWith("/settings")) return <SettingsNav business={business} />;
+  if (!drawer && isAdmin && path.startsWith("/settings")) return <SettingsNav business={business} />;
   const sections: { title?: string; links: NavItem[] }[] = [
     ...SECTIONS,
     {
-      // On phones the sidebar is a scrolling strip, so these sit at its end; on a computer they're at the bottom.
+      // In the phone menu these sit at the end; on a computer they're at the bottom of the sidebar.
       links: [
         ...(isAdmin ? [{ href: "/settings", label: "Settings", icon: "settings", mobileOnly: true }] : []),
         { href: "/profile", label: "Profile", icon: "user", mobileOnly: true },
@@ -125,10 +129,10 @@ export function NavLinks({
     },
   ];
   return (
-    <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:min-h-0 lg:flex-col lg:gap-0 lg:overflow-y-auto lg:pb-4">
+    <nav className={`${drawer ? "flex" : "hidden lg:flex"} min-h-0 flex-col overflow-y-auto px-3 pb-4`}>
       {sections.map((section, i) => (
-        <div key={section.title ?? i} className={`flex gap-1 lg:flex-col lg:gap-0.5 ${i > 0 ? "lg:mt-5" : ""}`}>
-          {section.title && <div className="hidden px-3 pb-1 text-xs font-medium text-ink-500 lg:block">{section.title}</div>}
+        <div key={section.title ?? i} className={`flex flex-col gap-0.5 ${i > 0 ? "mt-5" : ""}`}>
+          {section.title && <div className="px-3 pb-1 text-xs font-medium text-ink-500">{section.title}</div>}
           {section.links.map((l) => {
             // The most specific link wins, so /reports/venues doesn't also light up Reports.
             const matches = (href: string) => path === href || path.startsWith(`${href}/`);
@@ -138,11 +142,11 @@ export function NavLinks({
               <Link
                 key={l.href}
                 href={l.href}
-                className={`group relative ${l.mobileOnly ? "flex lg:hidden" : "flex"} items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${
+                className={`group relative ${l.mobileOnly && !drawer ? "hidden" : "flex"} items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${
                   active ? "bg-white/[0.08] font-medium text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white"
                 }`}
               >
-                {active && <span className="absolute top-2 bottom-2 left-0 hidden w-[3px] rounded-full bg-volt-400 lg:block" />}
+                {active && <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-volt-400" />}
                 <Icon name={l.icon} className={`h-[18px] w-[18px] ${active ? "text-volt-400" : "text-ink-500 group-hover:text-ink-300"}`} />
                 {l.label}
                 {badges[l.href] ? (
@@ -168,5 +172,50 @@ export function NavLinks({
         </div>
       ))}
     </nav>
+  );
+}
+
+/** Phones: a menu button that opens the full menu as a panel over the page. */
+export function MobileMenu(props: Parameters<typeof NavLinks>[0] & { logo: React.ReactNode; user: { name: string; email: string } }) {
+  const [open, setOpen] = useState(false);
+  const path = usePathname();
+  // Close it after moving to another page.
+  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="rounded-lg p-2 text-white hover:bg-white/[0.06] lg:hidden" aria-label="Open menu" aria-expanded={open}>
+        <Icon name="menu" className="h-6 w-6" />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+          <button className="absolute inset-0 bg-black/60" aria-label="Close menu" onClick={() => setOpen(false)} />
+          <div className="absolute inset-y-0 left-0 flex w-[84%] max-w-xs flex-col bg-[#060606] shadow-2xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4">
+              {props.logo}
+              <button onClick={() => setOpen(false)} className="rounded-lg p-2 text-ink-400 hover:bg-white/[0.06] hover:text-white" aria-label="Close menu">
+                <Icon name="close" className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Tapping a link closes the menu straight away. */}
+            <div className="flex min-h-0 flex-col" onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}>
+              <NavLinks {...props} drawer />
+            </div>
+            <div className="mt-auto border-t border-white/[0.06] px-5 py-4">
+              <div className="truncate text-sm font-medium text-white">{props.user.name}</div>
+              <div className="truncate text-xs text-ink-500">{props.user.email}</div>
+              <form action={logout} className="mt-3">
+                <button className="text-sm text-ink-400 hover:text-white">Sign out</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
