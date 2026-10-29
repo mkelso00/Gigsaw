@@ -7,13 +7,16 @@ import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { internalUserCounts } from "@/lib/seat-counts";
 import { userCharge } from "@/lib/seats";
+import { billingState } from "@/lib/subscription";
 import { usageForMonth } from "@/lib/usage";
+import { SubscriptionPlan } from "./subscription";
 
 export const metadata: Metadata = { title: "Plan" };
 export const dynamic = "force-dynamic";
 
-export default async function PlanSettings() {
+export default async function PlanSettings({ searchParams }: { searchParams: Promise<{ subscribed?: string }> }) {
   const user = await requireAdmin();
+  const sp = await searchParams;
   const agencyId = user.agencyId!;
   const agency = user.agency!;
   const month = new Date().toISOString().slice(0, 7);
@@ -26,6 +29,8 @@ export default async function PlanSettings() {
   const gigs = usage.get(agencyId)?.count ?? 0;
   const seats = userCharge(agency, users.get(agencyId) ?? 0);
   const price = (m: number) => formatMoney(m, agency.billingCurrency);
+  const billing = billingState(agency);
+  if (billing.mode === "STRIPE") return <SubscriptionPlan agency={agency} gigs={gigs} users={seats.users} subscribed={sp.subscribed === "1"} />;
   return (
     <SettingsPage title="Plan">
       <section className="rounded-[var(--radius-card)] bg-ink-950 p-6 text-white">

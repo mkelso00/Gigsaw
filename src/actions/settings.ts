@@ -12,6 +12,16 @@ import { isHhmm } from "@/lib/reminder-time";
 import { toMinor } from "@/lib/money";
 import { TEMPLATES } from "@/lib/message-templates";
 import { prefsFromForm } from "@/lib/notify-prefs";
+import { syncExtraUsers } from "@/lib/subscription-sync";
+
+/** Keep a subscription's extra-user charge in step; a Stripe hiccup mustn't stop adding a user. */
+async function syncExtraUsersQuietly(agencyId: string) {
+  try {
+    await syncExtraUsers(agencyId);
+  } catch (e) {
+    console.error("Couldn't update extra users in Stripe", e);
+  }
+}
 import { isValidTimeZone } from "@/lib/time";
 
 /**
@@ -111,6 +121,7 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
       },
     });
     await logActivity(admin, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
+    await syncExtraUsersQuietly(admin.agencyId!);
     revalidatePath("/settings");
     return { ok: `${u.name} can now sign in.` };
   });
@@ -130,6 +141,7 @@ export async function removeStaffUser(userId: string) {
   if (!u) return;
   await prisma.user.delete({ where: { id: u.id } });
   await logActivity(admin, "USER", userId, "removed team member", u.name);
+  await syncExtraUsersQuietly(admin.agencyId!);
   revalidatePath("/settings");
 }
 

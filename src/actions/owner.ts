@@ -97,6 +97,8 @@ export async function updateAgency(agencyId: string, _: FormState, form: FormDat
         status: str(form, "status") === "SUSPENDED" ? "SUSPENDED" : "ACTIVE",
         pricePerGigMinor: priceFrom(form, currency),
         ...seatsFrom(form, currency),
+        billingMode: str(form, "billingMode") === "STRIPE" ? "STRIPE" : "INVOICE",
+        ...(str(form, "trialEndsAt") ? { trialEndsAt: new Date(`${str(form, "trialEndsAt")}T23:59:00Z`) } : {}),
         billingCurrency: currency,
         billingEmail: str(form, "billingEmail"),
         ownerNotes: str(form, "ownerNotes"),
@@ -144,7 +146,10 @@ export async function issueStatements(month: string, _: FormState): Promise<Form
   if (!monthIsOver(month)) return { error: "You can issue statements once the month is over." };
   const usage = await usageForMonth(month);
   // Businesses with billable gigs, or paying for extra internal users.
-  const agencies = await prisma.agency.findMany({ where: { OR: [{ id: { in: [...usage.keys()] } }, { status: "ACTIVE", extraUserYearlyMinor: { gt: 0 } }] } });
+  // Card-paying businesses are billed by Stripe, so only invoiced ones get statements.
+  const agencies = await prisma.agency.findMany({
+    where: { billingMode: "INVOICE", OR: [{ id: { in: [...usage.keys()] } }, { status: "ACTIVE", extraUserYearlyMinor: { gt: 0 } }] },
+  });
   const users = await internalUserCounts(agencies.map((a) => a.id));
   let issued = 0;
   let skipped = 0;

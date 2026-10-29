@@ -14,18 +14,29 @@ datasource db {
 // A company using Gigsaw. Every artist, contact, venue and booking belongs to one agency,
 // and agency staff only ever see their own agency's records.
 model Agency {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   name                 String
-  status               String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  status               String    @default("ACTIVE") // ACTIVE | SUSPENDED
   // What the platform owner charges this agency for each billable gig.
-  pricePerGigMinor     Int      @default(0)
-  billingCurrency      String   @default("GBP")
+  pricePerGigMinor     Int       @default(0)
+  billingCurrency      String    @default("GBP")
   // Internal users (admins and agents): this many are included, each extra one costs this a year.
-  includedUsers        Int      @default(2)
-  extraUserYearlyMinor Int      @default(0)
-  billingEmail         String   @default("")
-  ownerNotes           String   @default("") // only the platform owner sees this
-  createdAt            DateTime @default(now())
+  includedUsers        Int       @default(2)
+  extraUserYearlyMinor Int       @default(0)
+  billingEmail         String    @default("")
+  ownerNotes           String    @default("") // only the platform owner sees this
+  // How this business pays: INVOICE (the owner bills per gig from the Owner area) or STRIPE
+  // (a self-service subscription chosen on sign-up: a plan by gigs a month, after a free trial).
+  billingMode          String    @default("INVOICE")
+  plan                 String? // STARTER | GROWTH | AGENCY (see src/lib/plans.ts)
+  billingInterval      String    @default("month") // month | year
+  trialEndsAt          DateTime?
+  // NONE | TRIALING | ACTIVE | PAST_DUE | CANCELED, kept in step with Stripe by its webhook
+  subscriptionStatus   String    @default("NONE")
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
 
   settings     Settings?
   users        User[]

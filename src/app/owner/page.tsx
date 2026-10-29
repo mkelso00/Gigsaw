@@ -5,6 +5,7 @@ import { monthLabel, unresolvedPastWhere } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { userCharge } from "@/lib/seats";
+import { billingState } from "@/lib/subscription";
 import { usageForMonth } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export default async function OwnerHome() {
                 <th>Status</th>
                 <th className="text-right">Internal users</th>
                 <th className="text-right">Acts</th>
-                <th className="text-right">Price per gig</th>
+                <th className="text-right">Price or plan</th>
                 <th className="text-right">Gigs this month</th>
                 <th className="text-right">Bill so far</th>
                 <th className="text-right">Never confirmed</th>
@@ -96,7 +97,15 @@ export default async function OwnerHome() {
                       <span className="text-xs text-slate-500"> / {a.includedUsers} incl.</span>
                     </td>
                     <td className="text-right">{a._count.artists}</td>
-                    <td className="text-right">{formatMoney(a.pricePerGigMinor, a.billingCurrency)}</td>
+                    <td className="text-right">
+                      {a.billingMode === "STRIPE" ? (
+                        <span className="text-xs">
+                          {a.plan ?? "No plan"} · {billingState(a).label}
+                        </span>
+                      ) : (
+                        formatMoney(a.pricePerGigMinor, a.billingCurrency)
+                      )}
+                    </td>
                     <td className="text-right">{gigs}</td>
                     <td className="text-right font-medium">
                       {formatMoney(gigs * a.pricePerGigMinor + userCharge(a, a._count.users).monthlyMinor, a.billingCurrency)}

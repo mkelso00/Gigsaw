@@ -9,6 +9,7 @@ import { CURRENCIES } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatMoney, minorToInput } from "@/lib/money";
 import { userCharge } from "@/lib/seats";
+import { billingState } from "@/lib/subscription";
 import { usageForMonth } from "@/lib/usage";
 
 export const metadata: Metadata = { title: "Business" };
@@ -36,6 +37,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
   const staff = agency.users.filter((u) => u.role !== "ARTIST");
   const artists = agency.users.filter((u) => u.role === "ARTIST");
   const seats = userCharge(agency, staff.length);
+  const billing = billingState(agency);
 
   return (
     <div className="space-y-6">
@@ -103,6 +105,27 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                 ))}
               </select>
             </Field>
+            <Field label="How they pay" hint={billing.mode === "STRIPE" ? billing.label : "You send statements from Billing"}>
+              <select name="billingMode" defaultValue={agency.billingMode} className="input">
+                <option value="INVOICE">By invoice (per gig, from Billing)</option>
+                <option value="STRIPE">By card (Stripe subscription)</option>
+              </select>
+            </Field>
+            <Field
+              label="Free trial ends"
+              hint={agency.plan ? `Plan: ${agency.plan.toLowerCase()}, ${agency.billingInterval}ly` : "Only for card-paying businesses"}
+            >
+              <input name="trialEndsAt" type="date" defaultValue={agency.trialEndsAt ? agency.trialEndsAt.toISOString().slice(0, 10) : ""} className="input" />
+            </Field>
+            {agency.stripeCustomerId && (
+              <p className="text-xs text-slate-500 sm:col-span-2">
+                Stripe customer{" "}
+                <a href={`https://dashboard.stripe.com/customers/${agency.stripeCustomerId}`} target="_blank" rel="noreferrer" className="link">
+                  {agency.stripeCustomerId}
+                </a>
+                {agency.stripeSubscriptionId ? ` · subscription ${agency.stripeSubscriptionId}` : ""}
+              </p>
+            )}
             <Field label="Billing email" className="sm:col-span-2">
               <input name="billingEmail" type="email" defaultValue={agency.billingEmail} className="input" />
             </Field>

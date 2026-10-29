@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Suspense } from "react";
 import { QuickBooking } from "@/components/quick-booking";
 import { QuickSearch } from "@/components/quick-search";
@@ -8,6 +8,7 @@ import { Logo } from "@/components/logo";
 import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
+import { OPEN_WHEN_LOCKED, billingState } from "@/lib/subscription";
 import { localDateKey } from "@/lib/time";
 import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
@@ -25,6 +26,10 @@ export default async function AgencyLayout({ children }: { children: React.React
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
+  // A self-service business whose trial has ended (or subscription stopped) can only reach Plan and Profile.
+  const billing = billingState(user.agency!);
+  const path = (await headers()).get("x-pathname") ?? "";
+  const locked = billing.locked && !OPEN_WHEN_LOCKED.some((p) => path.startsWith(p));
   const navProps = {
     isAdmin: user.role === "ADMIN",
     isOwner: user.isOwner,
@@ -109,7 +114,43 @@ export default async function AgencyLayout({ children }: { children: React.React
                 />
               </div>
             </div>
-            {children}
+            {billing.mode === "STRIPE" && !billing.subscribed && !billing.locked && billing.trialDaysLeft !== null && billing.trialDaysLeft <= 7 && (
+              <Link
+                href="/settings/plan"
+                className="no-print mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+              >
+                <span>
+                  Your free trial ends in {billing.trialDaysLeft} day{billing.trialDaysLeft === 1 ? "" : "s"}. Add a card to keep going.
+                </span>
+                <span className="font-medium">Choose a plan →</span>
+              </Link>
+            )}
+            {billing.mode === "STRIPE" && billing.status === "PAST_DUE" && (
+              <Link
+                href="/settings/plan"
+                className="no-print mb-6 flex items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+              >
+                <span>Your last payment didn&apos;t go through. Please update your card.</span>
+                <span className="font-medium">Update card →</span>
+              </Link>
+            )}
+            {locked ? (
+              <div className="mx-auto max-w-xl py-16 text-center">
+                <h1 className="text-3xl font-semibold tracking-tight">{billing.label}</h1>
+                <p className="mt-3 text-ink-600">
+                  Choose a plan and add a card to carry on. Everything you&apos;ve set up is safe, and your acts&apos; app keeps working in the meantime.
+                </p>
+                {user.role === "ADMIN" ? (
+                  <Link href="/settings/plan" className="btn btn-primary mt-6">
+                    Choose a plan
+                  </Link>
+                ) : (
+                  <p className="mt-6 text-sm text-ink-500">Ask an admin at your business to choose a plan.</p>
+                )}
+              </div>
+            ) : (
+              children
+            )}
           </div>
         </main>
       </div>

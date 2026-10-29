@@ -18,6 +18,8 @@ const PUBLIC = [
   "/icon.svg",
   "/apple-icon",
   "/sw.js",
+  "/signup",
+  "/api/stripe/webhook",
 ];
 
 export function middleware(req: NextRequest) {
@@ -29,7 +31,10 @@ export function middleware(req: NextRequest) {
     url.search = "";
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  // Layouts can't see the path, so pass it on (used to keep Plan open when a trial has ended).
+  const headers = new Headers(req.headers);
+  headers.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {
