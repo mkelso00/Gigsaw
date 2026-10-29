@@ -37,7 +37,7 @@ Most agency work is weekly slots at the same venues, so Gigsaw is built around t
   - **Checklist** per wedding (contract, deposit, details from the couple, balance, final details to the acts, thank-you); several tick themselves.
   - **Planner link** for the couple (`/w/…`, no login): running order, contact on the day, parking and load-in, dress code, food for the acts, song requests. The acts see it on their gig page with who else is performing, but never any prices.
   - **Automatic emails** (Settings → Weddings and events, or per event): planner link 8 weeks before and a reminder at 3 weeks if it isn't filled in, a balance reminder in the last 2 weeks while money is owed, final details to the acts a week before, and a thank-you with your review link the day after. Sent between 9am and 8pm, each once.
-- **Sale and cost**: alongside commission deals, any gig, weekly slot, rota gig or quick booking can have a sale (what the venue or customer pays) and a cost (the act's fee). The agency sees both; acts only see the cost.
+- **Sale and cost**: every booking has what the venue or client pays (the sale), what the act is paid (the cost) and what we make (the difference), worked out as you type. Older commission deals still show correctly and turn into sale and cost when edited. The agency sees everything; acts only see their own pay.
 - **Bands made of acts**: on a band's page, add its members by searching your existing acts (e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo). The solo acts see the band's gigs, and the band's gigs are checked against their solo gigs for clashes. The Acts page has List, Cards and Bands views.
 - **Acts only see their own pay**: the artist app shows the act's fee after commission, never what the venue or customer pays, the deal or deposits. Contracts, invoices and exports are agency-only.
 - **Calendar**: a gig that runs past midnight stays on the day it starts, with a ☾ moon. Hover a gig for its details: times, total fee, received, outstanding, the act's pay, act, venue, who booked it and the act's contact.
@@ -60,14 +60,14 @@ Gigsaw runs many agencies on one site. Each agency only ever sees its own artist
 | **Arrivals (new)** | Live board of every gig with a call time in the last 12 or next 24 hours: overdue, on the way (with ETA), arrived on time, arrived late. Punctuality table per artist for the last 12 months. Latest check-ins feed. CSV export. Refreshes every 30 seconds. |
 | **Artist app** | Phone-friendly pages at `/app` (can be added to the home screen). Artists see their gigs, schedule, venue directions and itinerary, and tap **I'm on the way**, **I've arrived** and **I've left the venue**. **Turn on reminders** enables phone notifications on that phone (on iPhone, add Gigsaw to the Home Screen first; the app shows how). Each act's page shows whether their phone reminders are on. |
 | Dashboard | Today's arrivals, shows in the next 30 days, open holds, money owed, overdue deposits, recent activity. |
-| Bookings | Booking type (gig, festival, club night, wedding, corporate, private party, other). Enquiry → hold → pending → confirmed → settled (or cancelled). Deal types: standard commission, buy/sell, guarantee vs %, guarantee plus bonus, flat fee. Fee, VAT, deposit, radius clause, itinerary, tags, notes. |
-| Checklist | On every booking: double bookings, radius clause breaches, missing venue/promoter/fee, overdue deposits, missing itinerary details. |
+| Bookings | Booking type (gig, festival, club night, wedding, corporate, private party, other). Enquiry → hold → pending → confirmed → settled (or cancelled). Venue or client pays, act is paid, we make. VAT, deposit, radius clause, itinerary, tags, notes. |
+| Checklist | On every booking: double bookings, radius clause breaches, missing venue, client (weddings and parties) or price, act's pay not entered, overdue deposits, missing itinerary details. |
 | Calendar | Month view filtered by artist and status. Each artist has a private calendar feed (ICS) for Google, Apple or Outlook calendar. |
 | Contacts | Promoters, private customers (e.g. weddings), venue staff and collaborators, with type tabs, tags, search (including the notes archive) and conversation notes. |
 | Venues | Address, capacity, time zone and the map pin used to verify arrivals. |
-| Money | Payments in from promoters and out to artists. Commission and artist earnings worked out per deal type. |
+| Money | Payments in from venues and clients and out to acts. What's still owed each way. |
 | Documents | Printable contract, invoice and day sheet (print or save as PDF). |
-| Reports | Gross, commission, artist earnings, received and owed, by artist and by agent, kept separate per currency. CSV exports. |
+| Reports | Pick a week, month or year (arrows and a date picker) or any dates. What venues and clients paid, what each act earned, what we made, broken down day by day, week by week or month by month. A table per act, per venue (what they paid for live music, with a link to their statement) and per wedding or private client. CSV export. |
 | Team | Admin and agent roles, artist logins, activity log on every booking. |
 
 ## How arrival tracking works
@@ -87,7 +87,7 @@ The grace period and venue radius are set in **Settings**. The rules live in `sr
 ## Emails, texts and alerts
 
 - **Late alerts:** once a minute, Gigsaw checks for gigs whose call time (plus the grace period) has passed with no check-in, and emails and texts the booking's agent plus an optional on-call email and mobile (Settings → Arrivals and alerts). Each gig is alerted once.
-- **Client arrival messages:** when an artist checks in, the booking's promoter or client gets a short email and text. Switch off per agency or per booking.
+- **Client arrival messages:** when an artist checks in, the booking's client gets a short email and text. Switch off per agency or per booking.
 - **Password reset:** "Forgot password?" on the sign-in page emails a one-hour, single-use link.
 - **Gig reminders** for acts: weekly and on the day (see above). Phone notifications need no extra account or provider.
 - Demo data never sends anything.

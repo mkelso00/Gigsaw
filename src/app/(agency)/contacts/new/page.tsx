@@ -15,7 +15,7 @@ export default async function NewContactPage({ searchParams }: { searchParams: P
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title={valid === "CLIENT" ? "Add a private customer" : "Add contact"}
-        subtitle={valid === "CLIENT" ? "Someone booking for a wedding, party or private event." : "Promoters, private customers, venue staff and collaborators."}
+        subtitle={valid === "CLIENT" ? "Someone booking for a wedding, party or private event." : "Venue companies, private customers, venue staff and collaborators."}
       />
       <ContactForm action={createContact} defaultType={valid} />
     </div>

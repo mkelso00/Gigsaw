@@ -37,7 +37,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Contacts"
-        subtitle="Companies, promoters and private customers (weddings and parties). People who work at them are under People."
+        subtitle="Companies (venue owners) and private customers (weddings and parties). People who work at them are under People."
         actions={
           <>
             <Link href="/contacts/new?type=CLIENT" className="btn">

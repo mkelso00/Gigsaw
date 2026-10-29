@@ -232,7 +232,7 @@ model Booking {
   // ENQUIRY | PENDING (being set up, maybe no act yet) | AWAITING (offered to the act) |
   // HOLD | CONFIRMED (the act has accepted: the gig is on) | SETTLED | CANCELLED
   status      String   @default("PENDING")
-  dealType    String   @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
+  dealType    String   @default("BUY_SELL") // BUY_SELL (sale and cost, the normal case) | STANDARD_COMMISSION | VERSUS | PLUS | FLAT
   eventType   String   @default("GIG") // GIG | FESTIVAL | CLUB_NIGHT | WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
   // The act. Empty while the gig is being set up ("Needs an act").
   artistId    String?

@@ -241,7 +241,7 @@ export default async function SettingsPage() {
                     name="clientArrivalMessages"
                     defaultChecked={settings.clientArrivalMessages}
                     label="Tell clients when the artist arrives"
-                    hint="Messages the booking's promoter or client. Can be switched off per booking."
+                    hint="Messages the booking's client. Can be switched off per booking."
                   />
                   <Field label="Also alert this email" hint="Optional on-call address, e.g. a shared inbox">
                     <input name="alertEmail" type="email" defaultValue={settings.alertEmail} className="input" />

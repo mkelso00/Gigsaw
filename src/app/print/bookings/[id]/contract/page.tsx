@@ -19,8 +19,8 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
     <DocumentShell title="Performance contract" reference={b.reference} settings={settings}>
       <p className="mb-6">
         This agreement is made between{" "}
-        <strong>{b.promoter ? `${b.promoter.name}${b.promoter.company ? ` of ${b.promoter.company}` : ""}` : "the Promoter"}</strong> (&ldquo;the
-        Promoter&rdquo;) and <strong>{settings.agencyName}</strong> acting as agent for <strong>{actName(b)}</strong> (&ldquo;the Artist&rdquo;).
+        <strong>{b.promoter ? `${b.promoter.name}${b.promoter.company ? ` of ${b.promoter.company}` : ""}` : "the Client"}</strong> (&ldquo;the Client&rdquo;)
+        and <strong>{settings.agencyName}</strong> acting as agent for <strong>{actName(b)}</strong> (&ldquo;the Artist&rdquo;).
       </p>
       <h2 className="mb-2 font-semibold">1. Engagement</h2>
       <DocTable
@@ -33,13 +33,13 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           ["Arrival / load-in", `${localTime(b.arriveBy, tz)} ${zoneLabel(b.arriveBy, tz)}`],
           ["Soundcheck", b.soundcheckAt ? localTime(b.soundcheckAt, tz) : ""],
           ["Performance", `${localTime(b.setStart, tz)}${b.setEnd ? ` to ${localTime(b.setEnd, tz)}` : ""}`],
-          ["Promoter address", b.promoter?.address ?? ""],
+          ["Client address", b.promoter?.address ?? ""],
         ]}
       />
       <h2 className="mt-6 mb-2 font-semibold">2. Fee</h2>
       <DocTable
         rows={[
-          ["Deal", DEAL_TYPE_LABELS[b.dealType as DealType] ?? b.dealType],
+          ["Deal", b.dealType === "BUY_SELL" ? "" : (DEAL_TYPE_LABELS[b.dealType as DealType] ?? b.dealType)],
           ["Fee", money(d.grossMinor)],
           ["VAT", d.vatMinor ? `${money(d.vatMinor)} (${b.vatPct}%)` : ""],
           ["Total payable", money(d.totalDueMinor)],
@@ -49,7 +49,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           [
             "Radius clause",
             b.radiusKm !== null
-              ? `The Promoter agrees the Artist may not perform within ${b.radiusKm} km for ${b.radiusDays} days either side of the engagement without consent.`
+              ? `The Client agrees the Artist may not perform within ${b.radiusKm} km for ${b.radiusDays} days either side of the engagement without consent.`
               : "",
           ],
         ]}
@@ -68,7 +68,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         </>
       )}
       <div className="mt-12 grid grid-cols-2 gap-10 text-sm">
-        {["For the Promoter", `For ${settings.agencyName}, on behalf of the Artist`].map((who) => (
+        {["For the Client", `For ${settings.agencyName}, on behalf of the Artist`].map((who) => (
           <div key={who}>
             <div className="h-16 border-b border-slate-400" />
             <div className="mt-2">{who}</div>

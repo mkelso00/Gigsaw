@@ -97,6 +97,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   );
   const arrival = arrivalFor(booking, settings, now);
   const money = (m: number) => formatMoney(m, booking.currency);
+  // Bar gigs are paid by the venue; weddings and parties by the client.
+  const payerShort = booking.eventType === "GIG" && booking.venue ? "Venue" : "Client";
+  const payerLabel = `${payerShort} pays`;
   const zone = zoneLabel(booking.arriveBy, tz);
 
   return (
@@ -258,7 +261,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                   ),
                 ],
                 [
-                  "Promoter",
+                  "Who pays",
                   booking.promoter ? (
                     <Link href={`/contacts/${booking.promoter.id}`} className="link">
                       {booking.promoter.name}
@@ -419,12 +422,21 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <h2 className="section-title mb-3">Money</h2>
             <dl className="space-y-2 text-sm">
-              <Row label="Deal">{DEAL_TYPE_LABELS[booking.dealType as DealType] ?? booking.dealType}</Row>
-              <Row label={booking.dealType === "BUY_SELL" ? "Sale" : "Fee"}>{money(deal.grossMinor)}</Row>
-              {deal.vatMinor > 0 && <Row label={`VAT (${booking.vatPct}%)`}>{money(deal.vatMinor)}</Row>}
-              <Row label="Promoter pays">{money(deal.totalDueMinor)}</Row>
-              <Row label={booking.dealType === "BUY_SELL" ? "Agency margin" : `Commission (${booking.commissionPct}%)`}>{money(deal.agencyMinor)}</Row>
-              <Row label={booking.dealType === "BUY_SELL" ? "Cost (act's fee)" : "Act earns"}>{money(deal.artistMinor)}</Row>
+              {booking.dealType !== "BUY_SELL" && <Row label="Deal">{DEAL_TYPE_LABELS[booking.dealType as DealType] ?? booking.dealType}</Row>}
+              <Row label={payerLabel}>
+                {money(deal.grossMinor)}
+                {deal.vatMinor > 0 && (
+                  <span className="block text-xs text-slate-500">
+                    + {money(deal.vatMinor)} VAT ({booking.vatPct}%)
+                  </span>
+                )}
+              </Row>
+              <Row label="Act is paid">
+                {booking.dealType === "BUY_SELL" && booking.artistFeeMinor === null ? <span className="text-amber-500">Not set</span> : money(deal.artistMinor)}
+              </Row>
+              <Row label="We make">
+                <strong className={deal.agencyMinor < 0 ? "text-rose-500" : "text-emerald-500"}>{money(deal.agencyMinor)}</strong>
+              </Row>
               <hr className="border-slate-100" />
               {booking.depositMinor > 0 && (
                 <Row label="Deposit">
@@ -432,12 +444,16 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                   {booking.depositDueDate && <span className="block text-xs text-slate-500">due {formatDate(booking.depositDueDate, tz)}</span>}
                 </Row>
               )}
-              <Row label="Received">{money(totals.receivedMinor)}</Row>
-              <Row label="Still owed by promoter">
+              <Row label={`${payerShort} has paid`}>
+                {money(totals.receivedMinor)} of {money(deal.totalDueMinor)}
+              </Row>
+              <Row label={`${payerShort} still owes`}>
                 <strong>{money(Math.max(0, deal.totalDueMinor - totals.receivedMinor))}</strong>
               </Row>
-              <Row label="Paid to artist">{money(totals.paidOutMinor)}</Row>
-              <Row label="Still owed to artist">
+              <Row label="Paid to act">
+                {money(totals.paidOutMinor)} of {money(deal.artistMinor)}
+              </Row>
+              <Row label="Still to pay act">
                 <strong>{money(Math.max(0, deal.artistMinor - totals.paidOutMinor))}</strong>
               </Row>
             </dl>

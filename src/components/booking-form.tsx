@@ -1,9 +1,10 @@
 import type { Booking, Settings } from "@prisma/client";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CURRENCIES, DEAL_TYPES, DEAL_TYPE_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
+import { MoneyFields } from "@/components/money-fields";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CURRENCIES, EVENT_TYPES, EVENT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
 import type { FormState } from "@/lib/forms";
-import { minorToInput } from "@/lib/money";
+import { dealBreakdown, minorToInput } from "@/lib/money";
 import { localDateKey, localTime } from "@/lib/time";
 
 type Option = { id: string; name: string };
@@ -89,10 +90,10 @@ export function BookingForm({
             </select>
           </Field>
           <Field
-            label="Booked by"
+            label="Who pays"
             hint={
               <>
-                Promoter or private customer.{" "}
+                The venue&apos;s company, or the couple or client for weddings and parties.{" "}
                 <a href="/contacts/new?type=CLIENT" target="_blank" className="underline">
                   Add a private customer
                 </a>
@@ -118,7 +119,7 @@ export function BookingForm({
             className="mt-0.5 h-4 w-4 accent-ink-950"
           />
           <span>
-            <span className="block text-sm font-medium">Tell the promoter or client when the artist arrives</span>
+            <span className="block text-sm font-medium">Tell the client when the act arrives</span>
             <span className="block text-xs text-ink-500">
               Sends them a short email and text when the artist checks in. Good for weddings and private events.
             </span>
@@ -163,42 +164,15 @@ export function BookingForm({
       </section>
 
       <section className="card card-pad space-y-4">
-        <h2 className="section-title">Deal and money</h2>
+        <h2 className="section-title">Money</h2>
+        <MoneyFields
+          currency={cur}
+          currencies={CURRENCIES}
+          sale={minorToInput(booking?.feeMinor, cur)}
+          cost={booking ? minorToInput(booking.dealType === "BUY_SELL" ? booking.artistFeeMinor : dealBreakdown(booking).artistMinor, cur) : ""}
+          vatPct={booking?.vatPct ?? 0}
+        />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Deal type">
-            <select name="dealType" defaultValue={booking?.dealType ?? "STANDARD_COMMISSION"} className="input">
-              {DEAL_TYPES.map((d) => (
-                <option key={d} value={d}>
-                  {DEAL_TYPE_LABELS[d]}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Currency">
-            <select name="currency" defaultValue={cur} className="input">
-              {CURRENCIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Fee (sale)" hint="What the venue, promoter or customer pays, before VAT">
-            <input name="fee" inputMode="decimal" defaultValue={minorToInput(booking?.feeMinor, cur)} placeholder="0.00" className="input" />
-          </Field>
-          <Field label="Cost (act's fee)" hint="Sale and cost deals: what the act is paid. The act only ever sees this.">
-            <input name="artistFee" inputMode="decimal" defaultValue={minorToInput(booking?.artistFeeMinor, cur)} className="input" />
-          </Field>
-          <Field label="Commission %">
-            <input
-              name="commissionPct"
-              inputMode="decimal"
-              defaultValue={booking?.commissionPct ?? ""}
-              placeholder={`Artist or agency default (${settings.defaultCommission}%)`}
-              className="input"
-            />
-          </Field>
-          <Field label="VAT %">
-            <input name="vatPct" inputMode="decimal" defaultValue={booking?.vatPct ?? 0} className="input" />
-          </Field>
           <Field label="Deposit">
             <input name="deposit" inputMode="decimal" defaultValue={minorToInput(booking?.depositMinor, cur)} placeholder="0.00" className="input" />
           </Field>
@@ -206,7 +180,7 @@ export function BookingForm({
             <input type="date" name="depositDueDate" defaultValue={booking?.depositDueDate ? localDateKey(booking.depositDueDate, tz) : ""} className="input" />
           </Field>
         </div>
-        <Field label="Deal notes" hint="Door split, bonuses, buyouts and so on">
+        <Field label="Money notes" hint="Anything extra agreed, e.g. food, parking, extra set">
           <textarea name="dealNotes" rows={2} defaultValue={booking?.dealNotes} className="input" />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

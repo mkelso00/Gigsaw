@@ -190,7 +190,7 @@ export default async function DashboardPage() {
           hint={`${holds} open hold${holds === 1 ? "" : "s"}`}
           href="/calendar"
         />
-        <Stat label="Owed by promoters" value={formatMoney(owedByPromoters, cur)} hint={`${cur} bookings`} href="/reports" />
+        <Stat label="Owed by venues and clients" value={formatMoney(owedByPromoters, cur)} hint={`${cur} bookings`} href="/reports" />
         <Stat
           label={`Commission ${now.getUTCFullYear()}`}
           value={formatMoney(commissionThisYear, cur)}
@@ -268,7 +268,7 @@ export default async function DashboardPage() {
                     <Link href={`/bookings/${b.id}`} className="block px-4 py-3 hover:bg-slate-50">
                       <strong>{b.reference}</strong> · {actName(b)}
                       <div className="text-xs text-slate-500">
-                        {formatMoney(b.depositMinor, b.currency)} from {b.promoter?.name ?? "promoter"}, due {formatDate(b.depositDueDate!, b.timezone)}
+                        {formatMoney(b.depositMinor, b.currency)} from {b.promoter?.name ?? "the client"}, due {formatDate(b.depositDueDate!, b.timezone)}
                       </div>
                     </Link>
                   </li>

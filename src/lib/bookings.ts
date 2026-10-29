@@ -111,7 +111,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   if (setEnd && setEnd.getTime() === setStart.getTime()) throw new FormError("Set end must be after set start");
 
   const currency = oneOf(str(form, "currency"), CURRENCIES, settings.defaultCurrency as (typeof CURRENCIES)[number]);
-  const dealType = oneOf(str(form, "dealType"), DEAL_TYPES, "STANDARD_COMMISSION");
+  const dealType = oneOf(str(form, "dealType"), DEAL_TYPES, "BUY_SELL");
   const commissionPct = num(form, "commissionPct") ?? artist?.defaultCommission ?? settings.defaultCommission;
   if (commissionPct < 0 || commissionPct > 100) throw new FormError("Commission must be between 0 and 100%");
   const vatPct = num(form, "vatPct") ?? 0;

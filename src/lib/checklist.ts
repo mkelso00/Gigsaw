@@ -23,6 +23,8 @@ export type ChecklistBooking = {
   setEnd: Date | null;
   venue: VenueLike;
   promoterId: string | null;
+  /** Bar gigs are paid for by the venue, so they don't need a separate payer. */
+  eventType?: string;
   feeMinor: number;
   dealType: string;
   artistFeeMinor: number | null;
@@ -131,10 +133,14 @@ export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depo
       detail: "Arrival check-ins cannot be verified against the venue location.",
     });
   }
-  items.push(b.promoterId ? { level: "ok", label: "Promoter set" } : { level: "warning", label: "No promoter set" });
-  items.push(b.feeMinor > 0 ? { level: "ok", label: "Fee agreed" } : { level: "warning", label: "No fee entered" });
+  const venuePays = !!b.venue && (b.eventType ?? "GIG") === "GIG";
+  if (!venuePays)
+    items.push(b.promoterId ? { level: "ok", label: "Client set" } : { level: "warning", label: "No client set", detail: "Who is paying for this one?" });
+  items.push(
+    b.feeMinor > 0 ? { level: "ok", label: "Price agreed" } : { level: "warning", label: "No price entered", detail: "What the venue or client pays." },
+  );
   if (b.dealType === "BUY_SELL" && !b.artistFeeMinor) {
-    items.push({ level: "warning", label: "Buy / sell deal has no artist fee" });
+    items.push({ level: "warning", label: "Act's pay not entered" });
   }
 
   if (b.depositMinor > 0) {
