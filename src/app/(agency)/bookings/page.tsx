@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { SelectAll } from "@/components/client-bits";
+import { deleteBookings } from "@/actions/bookings";
+import { DeleteSelected, SelectAll } from "@/components/client-bits";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
@@ -130,8 +131,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       ) : (
         <form action="/bookings/bulk" method="get" className="card overflow-x-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
-            <span className="text-sm text-ink-500">Tick gigs to change their times or fee together, and tell the artists.</span>
-            <button className="btn btn-sm">Change selected gigs</button>
+            <span className="text-sm text-ink-500">Tick gigs to change their times or fee together and tell the acts, or to delete them.</span>
+            <span className="flex gap-2">
+              <button className="btn btn-sm">Change selected gigs</button>
+              <DeleteSelected name="ids" action={deleteBookings} />
+            </span>
           </div>
           <table className="table">
             <thead>

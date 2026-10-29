@@ -151,6 +151,17 @@ export async function deleteBooking(bookingId: string) {
   redirect("/bookings");
 }
 
+/** Delete the ticked bookings from the bookings list. Their payments and check-ins go with them. */
+export async function deleteBookings(form: FormData) {
+  const user = await requireStaff();
+  const ids = form.getAll("ids").map(String).slice(0, 500);
+  if (!ids.length) return;
+  const gigs = await prisma.booking.findMany({ where: { id: { in: ids }, agencyId: user.agencyId }, select: { id: true, reference: true } });
+  await prisma.booking.deleteMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId } });
+  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "deleted", g.reference);
+  revalidatePath("/", "layout");
+}
+
 export async function addPayment(bookingId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {

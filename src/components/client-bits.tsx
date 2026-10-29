@@ -95,3 +95,26 @@ export function SelectAll({ name }: { name: string }) {
     />
   );
 }
+
+/** "Delete selected" for a list of ticked rows: asks first, and does nothing if none are ticked. */
+export function DeleteSelected({ name, action }: { name: string; action: (form: FormData) => Promise<void> }) {
+  return (
+    <button
+      formAction={action}
+      formMethod="post"
+      className="btn btn-sm btn-danger"
+      onClick={(e) => {
+        const n = e.currentTarget.form?.querySelectorAll(`input[type=checkbox][name="${name}"]:checked`).length ?? 0;
+        if (!n) {
+          e.preventDefault();
+          window.alert("Tick the bookings you want to delete first.");
+          return;
+        }
+        if (!window.confirm(`Delete ${n} booking${n === 1 ? "" : "s"}? Their payments and check-ins go too, and acts aren't told. This can't be undone.`))
+          e.preventDefault();
+      }}
+    >
+      Delete selected
+    </button>
+  );
+}
