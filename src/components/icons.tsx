@@ -15,6 +15,7 @@ const paths: Record<string, string> = {
   owner: "M3 7l4 3 5-6 5 6 4-3-2 12H5zM5 19h14",
   messages: "M4 5h16v12H8l-4 3z",
   billing: "M3 6h18v12H3zM3 10h18M7 15h4",
+  payments: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM14.5 8.5a2.5 2.5 0 0 0-4.5 1.5v5M8.5 12.5h5M8.5 15.5h7",
   out: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11",
   plus: "M12 5v14M5 12h14",
   heart: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z",
