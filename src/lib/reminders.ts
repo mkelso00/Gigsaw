@@ -37,6 +37,19 @@ export async function claimReminder(kind: string, recipient: string, key: string
   }
 }
 
+/**
+ * Which of these reminders have already been claimed, as "kind|recipient|key", in one query. Runs
+ * use it to skip them rather than trying (and failing) to claim each one again every minute.
+ */
+export async function claimedReminders(kinds: string[], recipients: string[], keys: string[]) {
+  if (!recipients.length) return new Set<string>();
+  const rows = await prisma.reminder.findMany({
+    where: { kind: { in: kinds }, recipient: { in: [...new Set(recipients)] }, key: { in: [...new Set(keys)] } },
+    select: { kind: true, recipient: true, key: true },
+  });
+  return new Set(rows.map((r) => `${r.kind}|${r.recipient}|${r.key}`));
+}
+
 const where = (b: Gig) => b.venue?.name ?? "Venue to be confirmed";
 const times = (b: Gig) =>
   `arrive ${localTime(b.arriveBy, b.timezone)}, on ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`;
@@ -139,8 +152,14 @@ export async function runReminders(now = new Date()) {
         include: gigInclude,
         orderBy: { arriveBy: "asc" },
       });
-      for (const { to: who, gigs: list } of await byRecipient(gigs)) {
-        if (!(await claimReminder("WEEK", who.key, week))) continue;
+      const groups = await byRecipient(gigs);
+      const sent = await claimedReminders(
+        ["WEEK"],
+        groups.map((g) => g.to.key),
+        [week],
+      );
+      for (const { to: who, gigs: list } of groups) {
+        if (sent.has(`WEEK|${who.key}|${week}`) || !(await claimReminder("WEEK", who.key, week))) continue;
         const n = list.length;
         const thisWeek = week === localDateKey(now, s.defaultTimezone);
         await deliver({
@@ -166,35 +185,43 @@ export async function runReminders(now = new Date()) {
         include: gigInclude,
         orderBy: { arriveBy: "asc" },
       });
-      for (const { to: who, gigs } of await byRecipient(soon)) {
+      // Due once the first gig's reminder time has passed, unless it was booked after that
+      // time (they've just been told about it).
+      const isDue = (g: Gig) => {
+        const at = dayReminderAt(g.arriveBy, g.timezone, s.dayReminderTime);
+        return at <= now && g.createdAt <= at;
+      };
+      // Most minutes nothing is due, so there's nobody to look up.
+      const due: { who: Recipient; day: string; list: Gig[] }[] = [];
+      for (const { to: who, gigs } of soon.some(isDue) ? await byRecipient(soon) : []) {
         const days = new Map<string, Gig[]>();
         for (const g of gigs) {
           const day = localDateKey(g.arriveBy, g.timezone);
           days.set(day, [...(days.get(day) ?? []), g]);
         }
-        for (const [day, list] of days) {
-          // Due once the first gig's reminder time has passed, unless it was booked after that
-          // time (they've just been told about it).
-          const due = list.some((g) => {
-            const at = dayReminderAt(g.arriveBy, g.timezone, s.dayReminderTime);
-            return at <= now && g.createdAt <= at;
-          });
-          if (!due || !(await claimReminder("DAY", who.key, day))) continue;
-          const first = list[0];
-          await deliver({
-            to: who,
-            kind: "DAY",
-            gigs: list,
-            agencyName,
-            agencyEmail: s.agencyEmail,
-            templates: s.messageTemplates,
-            title: list.length > 1 ? `Don't forget: ${list.length} gigs today` : `Don't forget your gig ${partOfDay(first.arriveBy, first.timezone)}`,
-            intro: `Hi ${who.firstName}, a reminder about ${list.length > 1 ? "your gigs" : "your gig"} today. Remember to tap "I've arrived" in the app when you get there.`,
-            url: list.length > 1 ? "/app" : `/app/gigs/${first.id}`,
-            ttlSeconds: Math.max(600, Math.round((first.arriveBy.getTime() - now.getTime()) / 1000)),
-          });
-          daily++;
-        }
+        for (const [day, list] of days) if (list.some(isDue)) due.push({ who, day, list });
+      }
+      const sent = await claimedReminders(
+        ["DAY"],
+        due.map((d) => d.who.key),
+        due.map((d) => d.day),
+      );
+      for (const { who, day, list } of due) {
+        if (sent.has(`DAY|${who.key}|${day}`) || !(await claimReminder("DAY", who.key, day))) continue;
+        const first = list[0];
+        await deliver({
+          to: who,
+          kind: "DAY",
+          gigs: list,
+          agencyName,
+          agencyEmail: s.agencyEmail,
+          templates: s.messageTemplates,
+          title: list.length > 1 ? `Don't forget: ${list.length} gigs today` : `Don't forget your gig ${partOfDay(first.arriveBy, first.timezone)}`,
+          intro: `Hi ${who.firstName}, a reminder about ${list.length > 1 ? "your gigs" : "your gig"} today. Remember to tap "I've arrived" in the app when you get there.`,
+          url: list.length > 1 ? "/app" : `/app/gigs/${first.id}`,
+          ttlSeconds: Math.max(600, Math.round((first.arriveBy.getTime() - now.getTime()) / 1000)),
+        });
+        daily++;
       }
     }
   }
