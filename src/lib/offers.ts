@@ -36,12 +36,14 @@ export async function sendOffers(bookingIds: string[]) {
     orderBy: { arriveBy: "asc" },
   });
   if (!gigs.length) return 0;
-  // A fresh link and a clean answer for each offer.
-  for (const g of gigs) {
-    const offerToken = g.offerToken ?? randomBytes(18).toString("base64url");
-    await prisma.booking.update({ where: { id: g.id }, data: { offerToken, offeredAt: new Date(), offerResponse: null, respondedAt: null } });
-    g.offerToken = offerToken;
-  }
+  // A fresh link and a clean answer for each offer, saved in one transaction.
+  const offeredAt = new Date();
+  await prisma.$transaction(
+    gigs.map((g) => {
+      g.offerToken ??= randomBytes(18).toString("base64url");
+      return prisma.booking.update({ where: { id: g.id }, data: { offerToken: g.offerToken, offeredAt, offerResponse: null, respondedAt: null } });
+    }),
+  );
   const live = gigs.filter((g) => !g.demo); // demo data never sends anything
   const recipients = await recipientsForActs(live.map((g) => g.artistId!));
   const byPerson = groupByRecipient(live, recipients);

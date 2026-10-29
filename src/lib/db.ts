@@ -42,3 +42,16 @@ export async function getSettings(agencyId: string) {
 export async function logActivity(user: { id: string; agencyId: string | null } | null, entity: string, entityId: string, action: string, detail = "") {
   await prisma.activity.create({ data: { userId: user?.id ?? null, agencyId: user?.agencyId ?? null, entity, entityId, action, detail } });
 }
+
+/** Log several entries in one insert, e.g. for bookings changed together. They keep their order in the log. */
+export async function logActivities(
+  user: { id: string; agencyId: string | null } | null,
+  entity: string,
+  entries: { entityId: string; action: string; detail?: string }[],
+) {
+  if (!entries.length) return;
+  const at = Date.now();
+  await prisma.activity.createMany({
+    data: entries.map((e, i) => ({ userId: user?.id ?? null, agencyId: user?.agencyId ?? null, entity, ...e, createdAt: new Date(at + i) })),
+  });
+}

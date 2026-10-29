@@ -30,7 +30,12 @@ export function snapshotOf(b: Booking & { venue: Pick<Venue, "name"> | null }): 
 export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: string): Promise<Change[]> {
   const b = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { venue: true, artist: { include: { login: true } }, agent: true, agency: { include: { settings: true } } },
+    include: {
+      venue: { select: { name: true } },
+      artist: { select: { name: true } },
+      agent: { select: { email: true, name: true } },
+      agency: { include: { settings: true } },
+    },
   });
   if (!b) return [];
   const all = describeChanges(before, snapshotOf(b));
@@ -120,7 +125,12 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
   const bookings = await prisma.booking.findMany({
     // Offers (awaiting confirmation) go out separately; pending gigs aren't the act's business yet.
     where: { id: { in: bookingIds }, demo: false, artistId: { not: null }, status: { in: ["HOLD", "CONFIRMED", "SETTLED"] } },
-    include: { venue: true, artist: { include: { login: true } }, agent: true, agency: { include: { settings: true } } },
+    include: {
+      venue: { select: { name: true } },
+      artist: { select: { name: true } },
+      agent: { select: { email: true, name: true } },
+      agency: { include: { settings: true } },
+    },
     orderBy: { arriveBy: "asc" },
   });
   const recipients = await recipientsForActs(bookings.map((b) => b.artistId!));

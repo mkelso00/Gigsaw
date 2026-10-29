@@ -10,7 +10,7 @@ import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES,
 import { onConfirmed } from "@/lib/confirmations";
 import { sendOffers } from "@/lib/offers";
 import { findClashes } from "@/lib/clash-check";
-import { getSettings, logActivity, prisma } from "@/lib/db";
+import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { formatMoney, toMinor } from "@/lib/money";
 import { formatDate, localDateKey, localTime, zonedToUtc } from "@/lib/time";
@@ -162,7 +162,11 @@ export async function archiveBookings(form: FormData) {
   if (!ids.length) return;
   const gigs = await prisma.booking.findMany({ where: { id: { in: ids }, agencyId: user.agencyId }, select: { id: true, reference: true } });
   await prisma.booking.updateMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId }, data: { archivedAt: new Date() } });
-  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "archived", g.reference);
+  await logActivities(
+    user,
+    "BOOKING",
+    gigs.map((g) => ({ entityId: g.id, action: "archived", detail: g.reference })),
+  );
   revalidatePath("/", "layout");
 }
 
@@ -174,7 +178,11 @@ export async function restoreBookings(form: FormData) {
   const where = { id: { in: ids }, agencyId: user.agencyId, archivedAt: { not: null } };
   const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
   await prisma.booking.updateMany({ where, data: { archivedAt: null } });
-  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "restored from the archive", g.reference);
+  await logActivities(
+    user,
+    "BOOKING",
+    gigs.map((g) => ({ entityId: g.id, action: "restored from the archive", detail: g.reference })),
+  );
   revalidatePath("/", "layout");
 }
 
@@ -186,7 +194,11 @@ export async function deleteBookings(form: FormData) {
   const where = { id: { in: ids }, agencyId: user.agencyId!, archivedAt: { not: null } };
   const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
   await prisma.booking.deleteMany({ where });
-  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "deleted", g.reference);
+  await logActivities(
+    user,
+    "BOOKING",
+    gigs.map((g) => ({ entityId: g.id, action: "deleted", detail: g.reference })),
+  );
   revalidatePath("/", "layout");
 }
 

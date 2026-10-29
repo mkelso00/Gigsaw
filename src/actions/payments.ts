@@ -1,8 +1,9 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
-import { logActivity, prisma } from "@/lib/db";
+import { logActivities, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import { outstanding } from "@/lib/payments";
@@ -26,31 +27,38 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
     let count = 0;
     let total = 0;
     const currency = gigs[0]?.currency ?? "GBP";
+    const now = new Date();
+    // Worked out gig by gig, then saved in a few queries rather than several per gig.
+    const payments: Prisma.PaymentCreateManyInput[] = [];
+    const settled: string[] = [];
+    const log: { entityId: string; action: string; detail: string }[] = [];
     for (const b of gigs) {
       const o = outstanding(b);
       const amount = direction === "IN" ? o.toCollect : o.toPay;
       if (amount <= 0) continue;
-      const today = localDateKey(new Date(), b.timezone);
-      const payment = await prisma.payment.create({
-        data: {
-          bookingId: b.id,
-          direction,
-          kind: direction === "IN" ? "BALANCE" : "SETTLEMENT",
-          amountMinor: amount,
-          paidAt: zonedToUtc(today, "12:00", b.timezone),
-          note: "Marked paid from Payments",
-        },
-      });
+      const today = localDateKey(now, b.timezone);
+      const payment = {
+        bookingId: b.id,
+        direction,
+        kind: direction === "IN" ? "BALANCE" : "SETTLEMENT",
+        amountMinor: amount,
+        paidAt: zonedToUtc(today, "12:00", b.timezone),
+        note: "Marked paid from Payments",
+      };
+      payments.push(payment);
       count++;
       if (b.currency === currency) total += amount;
-      await logActivity(user, "BOOKING", b.id, direction === "IN" ? "payment received" : "payment sent", formatMoney(amount, b.currency));
+      log.push({ entityId: b.id, action: direction === "IN" ? "payment received" : "payment sent", detail: formatMoney(amount, b.currency) });
       // Paid both ways and the gig has happened: it's settled.
       const after = outstanding({ ...b, payments: [...b.payments, payment] });
-      if (b.status === "CONFIRMED" && b.setStart < new Date() && after.toCollect === 0 && after.toPay === 0) {
-        await prisma.booking.update({ where: { id: b.id }, data: { status: "SETTLED" } });
-        await logActivity(user, "BOOKING", b.id, "settled", "paid in and out");
+      if (b.status === "CONFIRMED" && b.setStart < now && after.toCollect === 0 && after.toPay === 0) {
+        settled.push(b.id);
+        log.push({ entityId: b.id, action: "settled", detail: "paid in and out" });
       }
     }
+    if (payments.length) await prisma.payment.createMany({ data: payments });
+    if (settled.length) await prisma.booking.updateMany({ where: { id: { in: settled } }, data: { status: "SETTLED" } });
+    await logActivities(user, "BOOKING", log);
     revalidatePath("/", "layout");
     if (!count) return { ok: "Already paid." };
     return { ok: `${count} gig${count === 1 ? "" : "s"} marked paid (${formatMoney(total, currency)} ${direction === "IN" ? "in" : "out"}).` };
