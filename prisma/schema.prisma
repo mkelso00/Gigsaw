@@ -32,6 +32,7 @@ model Agency {
   bookings   Booking[]
   activity   Activity[]
   statements BillingStatement[]
+  messages   Message[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -54,26 +55,33 @@ model BillingStatement {
 }
 
 model Settings {
-  agencyId          String @id
-  agency            Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  agencyName        String @default("My Agency")
-  agencyEmail       String @default("")
-  agencyAddress     String @default("")
-  defaultTimezone   String @default("Europe/London")
-  defaultCurrency   String @default("GBP")
-  defaultCommission Float  @default(15)
+  agencyId              String  @id
+  agency                Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agencyName            String  @default("My Agency")
+  agencyEmail           String  @default("")
+  agencyAddress         String  @default("")
+  defaultTimezone       String  @default("Europe/London")
+  defaultCurrency       String  @default("GBP")
+  defaultCommission     Float   @default(15)
   // Minutes after the call time before an arrival counts as late.
-  lateGraceMinutes  Int    @default(5)
+  lateGraceMinutes      Int     @default(5)
   // How close (in metres) a check-in must be to the venue to count as "on site".
-  geofenceMetres    Int    @default(500)
-  invoiceTerms      String @default("Payment due within 14 days of invoice date.")
-  contractTerms     String @default("")
+  geofenceMetres        Int     @default(500)
+  // Arrival alerts. The booking's agent is always alerted; these add an on-call contact.
+  overdueAlerts         Boolean @default(true)
+  alertEmail            String  @default("")
+  alertPhone            String  @default("")
+  // Tell the client (the booking's promoter or client contact) when the artist arrives.
+  clientArrivalMessages Boolean @default(true)
+  invoiceTerms          String  @default("Payment due within 14 days of invoice date.")
+  contractTerms         String  @default("")
 }
 
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   name         String
+  phone        String   @default("") // for overdue alert texts
   passwordHash String
   role         String   @default("AGENT") // ADMIN | AGENT | ARTIST (within their agency)
   // The platform owner runs the Owner area. They may also belong to an agency.
@@ -86,9 +94,10 @@ model User {
   demo         Boolean  @default(false) // sample data, removable from Settings
 
   sessions        Session[]
-  managedArtists  Artist[]      @relation("ArtistAgent")
-  bookingsCreated Booking[]     @relation("BookingCreator")
-  bookingsAgented Booking[]     @relation("BookingAgent")
+  passwordResets  PasswordReset[]
+  managedArtists  Artist[]        @relation("ArtistAgent")
+  bookingsCreated Booking[]       @relation("BookingCreator")
+  bookingsAgented Booking[]       @relation("BookingAgent")
   notes           ContactNote[]
   checkIns        CheckIn[]
   activity        Activity[]
@@ -229,6 +238,11 @@ model Booking {
   notes         String @default("")
   tags          String @default("")
 
+  // Messages: send the client an "artist has arrived" note; when alerts went out (sent once).
+  notifyClientOnArrival Boolean   @default(true)
+  overdueAlertSentAt    DateTime?
+  clientNotifiedAt      DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
@@ -289,4 +303,34 @@ model Activity {
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
+}
+
+// One-time password reset links. Only a hash of the token is stored.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// Every email or text Gigsaw sends (or would send, when no provider is set up).
+model Message {
+  id        String   @id @default(cuid())
+  agencyId  String?
+  agency    Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  bookingId String?
+  kind      String // PASSWORD_RESET | OVERDUE_ALERT | CLIENT_ARRIVAL | TEST
+  channel   String // EMAIL | SMS
+  to        String
+  subject   String   @default("")
+  body      String
+  status    String // SENT | FAILED | NOT_SENT (no provider set up)
+  provider  String   @default("")
+  error     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([agencyId, createdAt])
 }

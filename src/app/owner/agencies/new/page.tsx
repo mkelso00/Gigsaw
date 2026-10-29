@@ -22,7 +22,7 @@ export default async function NewAgencyPage() {
             <Field label="Billing email" hint="Where statements go. Defaults to the admin's email.">
               <input name="billingEmail" type="email" className="input" />
             </Field>
-            <Field label="Price per gig" hint="Charged for each confirmed or settled gig">
+            <Field label="Price per gig" hint="Charged for each gig that goes ahead">
               <input name="pricePerGig" inputMode="decimal" required placeholder="2.50" className="input" />
             </Field>
             <Field label="Currency">

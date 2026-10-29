@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { unresolvedPastWhere } from "@/lib/billing";
 import { formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
 
@@ -20,9 +21,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
 
   const where: Prisma.BookingWhereInput = { agencyId: user.agencyId };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
+  const unresolved = sp.status === "UNRESOLVED";
+  if (unresolved) Object.assign(where, unresolvedPastWhere());
   if (sp.artist) where.artistId = sp.artist;
   if (sp.type && (EVENT_TYPES as readonly string[]).includes(sp.type)) where.eventType = sp.type;
-  if (when === "upcoming") where.setStart = { gte: dayAgo };
+  if (when === "upcoming" && !unresolved) where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
     where.OR = [
@@ -84,6 +87,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           <span className="label">Status</span>
           <select name="status" defaultValue={sp.status ?? ""} className="input">
             <option value="">Any status</option>
+            <option value="UNRESOLVED">Past, never confirmed</option>
             {BOOKING_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {BOOKING_STATUS_LABELS[s]}

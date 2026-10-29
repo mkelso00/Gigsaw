@@ -6,6 +6,7 @@ import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
+import { emailConfigured, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
 import { isValidTimeZone } from "@/lib/time";
 
 export async function saveSettings(_: FormState, form: FormData): Promise<FormState> {
@@ -33,6 +34,10 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         defaultCommission: commission,
         lateGraceMinutes: grace,
         geofenceMetres: geofence,
+        overdueAlerts: str(form, "overdueAlerts") === "on",
+        alertEmail: str(form, "alertEmail").toLowerCase(),
+        alertPhone: str(form, "alertPhone"),
+        clientArrivalMessages: str(form, "clientArrivalMessages") === "on",
         invoiceTerms: str(form, "invoiceTerms"),
         contractTerms: str(form, "contractTerms"),
       },
@@ -52,7 +57,7 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
     if (await prisma.user.findUnique({ where: { email } })) throw new FormError("That email already has a login");
     const role = str(form, "role") === "ADMIN" ? "ADMIN" : "AGENT";
     const u = await prisma.user.create({
-      data: { email, name: required(form, "name", "Name"), role, agencyId: admin.agencyId, passwordHash: await hashPassword(password) },
+      data: { email, name: required(form, "name", "Name"), phone: str(form, "phone"), role, agencyId: admin.agencyId, passwordHash: await hashPassword(password) },
     });
     await logActivity(admin, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
     revalidatePath("/settings");
@@ -97,4 +102,28 @@ export async function clearDemoData(_: FormState): Promise<FormState> {
   await logActivity(admin, "SETTINGS", admin.agencyId, "removed demo data", `${res.bookings} bookings`);
   revalidatePath("/", "layout");
   return { ok: `Removed ${res.artists} demo artists and ${res.bookings} bookings. Your own data is untouched.` };
+}
+
+/** Your own name and mobile number (used for overdue alert texts). */
+export async function updateMyDetails(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireSignedIn();
+  return handleForm(async () => {
+    await prisma.user.update({ where: { id: user.id }, data: { name: required(form, "name", "Name"), phone: str(form, "phone") } });
+    revalidatePath("/", "layout");
+    return { ok: "Saved." };
+  });
+}
+
+/** Send a test email (and text, if you have a phone number) to yourself to check messages work. */
+export async function sendTestMessage(_: FormState): Promise<FormState> {
+  const user = await requireAdmin();
+  const text = `This is a test message from Gigsaw. If you can read this, ${user.phone ? "emails and texts are" : "emails are"} working.`;
+  const email = await sendEmail({ kind: "TEST", agencyId: user.agencyId, to: user.email, subject: "Gigsaw test message", text });
+  const sms = user.phone ? await sendSms({ kind: "TEST", agencyId: user.agencyId, to: user.phone, text }) : "SKIPPED";
+  revalidatePath("/settings");
+  const word = (s: string, configured: boolean) =>
+    s === "SENT" ? "sent" : s === "FAILED" ? "failed (see Recent messages)" : !configured ? "not sent: no provider set up yet, so it's saved in Recent messages" : "skipped";
+  return {
+    ok: `Email to ${user.email}: ${word(email, emailConfigured())}.${user.phone ? ` Text to ${user.phone}: ${word(sms, smsConfigured())}.` : " Add your mobile number above to test texts."}`,
+  };
 }

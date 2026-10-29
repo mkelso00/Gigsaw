@@ -1,15 +1,34 @@
-// Per-gig billing: agencies pay the platform owner for each billable gig in a month.
-// A gig is billable when its booking is confirmed or settled and isn't demo data.
-// It's counted in the month of the gig (the call time's date in the venue's time zone).
+// Per-gig billing: agencies pay the platform owner for each billable gig in a month,
+// counted in the month of the gig (the call time's date in the venue's time zone).
+//
+// A gig is billable when it isn't demo data or cancelled, and any of these is true:
+//  - it's confirmed or settled
+//  - the artist checked in as arrived (so it clearly happened)
+//  - it was a hold or pending booking and its date has passed (left unconfirmed after the event)
+// Enquiries that pass their date without an arrival aren't billed, but are flagged for tidying up.
 
 import { addDaysToKey, localDateKey } from "./time";
 
-export const BILLABLE_STATUSES = ["CONFIRMED", "SETTLED"];
+export const CONFIRMED_STATUSES = ["CONFIRMED", "SETTLED"];
+const UNRESOLVED_STATUSES = ["ENQUIRY", "HOLD", "PENDING"];
+const DAY = 86_400_000;
 
-export type BillableLike = { status: string; demo: boolean; arriveBy: Date; timezone: string; reference: string };
+export type BillableLike = { status: string; demo: boolean; arriveBy: Date; timezone: string; reference: string; arrived: boolean };
 
-export function isBillable(b: { status: string; demo: boolean }) {
-  return BILLABLE_STATUSES.includes(b.status) && !b.demo;
+export function isBillable(b: { status: string; demo: boolean; arriveBy: Date; arrived: boolean }, now = new Date()) {
+  if (b.demo || b.status === "CANCELLED") return false;
+  if (CONFIRMED_STATUSES.includes(b.status) || b.arrived) return true;
+  return (b.status === "HOLD" || b.status === "PENDING") && b.arriveBy < now;
+}
+
+/** A gig more than a day in the past that was never confirmed or cancelled. */
+export function isUnresolvedPast(b: { status: string; demo: boolean; arriveBy: Date }, now = new Date()) {
+  return !b.demo && UNRESOLVED_STATUSES.includes(b.status) && b.arriveBy.getTime() < now.getTime() - DAY;
+}
+
+/** Prisma filter for the same thing, for counting in the database. */
+export function unresolvedPastWhere(now = new Date()) {
+  return { demo: false, status: { in: UNRESOLVED_STATUSES }, arriveBy: { lt: new Date(now.getTime() - DAY) } };
 }
 
 /** "YYYY-MM" of the gig in the venue's time zone. */
@@ -18,8 +37,8 @@ export function gigMonth(b: { arriveBy: Date; timezone: string }) {
 }
 
 /** The billable gigs in a month, sorted by reference. */
-export function billableGigs<T extends BillableLike>(bookings: T[], month: string): T[] {
-  return bookings.filter((b) => isBillable(b) && gigMonth(b) === month).sort((a, b) => a.reference.localeCompare(b.reference));
+export function billableGigs<T extends BillableLike>(bookings: T[], month: string, now = new Date()): T[] {
+  return bookings.filter((b) => isBillable(b, now) && gigMonth(b) === month).sort((a, b) => a.reference.localeCompare(b.reference));
 }
 
 export function isMonthKey(s: string | undefined | null): s is string {

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { notifyClientOfArrival } from "@/lib/alerts";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, PAYMENT_KINDS } from "@/lib/constants";
@@ -114,6 +115,7 @@ export async function logCheckInForArtist(bookingId: string, _: FormState, form:
       data: { bookingId, artistId: booking.artistId, userId: user.id, kind, source: "AGENT", at, note: str(form, "note") },
     });
     await logActivity(user, "BOOKING", bookingId, "check-in logged by agency", kind.toLowerCase().replaceAll("_", " "));
+    if (kind === "ARRIVED") await notifyClientOfArrival(bookingId).catch((e) => console.error("[gigsaw] client arrival message failed", e));
     revalidatePath("/", "layout");
     return { ok: "Check-in logged." };
   });

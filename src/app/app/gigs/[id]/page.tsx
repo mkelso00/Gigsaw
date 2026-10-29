@@ -35,9 +35,10 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
     : null;
   const yourFee = dealBreakdown(b).artistMinor;
 
+  const panel = "rounded-2xl border border-white/[0.06] bg-ink-900 p-5";
   return (
     <div className="space-y-5">
-      <Link href="/app" className="text-sm text-slate-500">
+      <Link href="/app" className="text-sm text-ink-400 hover:text-white">
         ← All gigs
       </Link>
       <div>
@@ -45,16 +46,16 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           <StatusBadge status={b.status} />
           <ArrivalBadge state={a.state} />
         </div>
-        <h1 className="mt-2 text-2xl font-bold">{v?.name ?? "Venue to be confirmed"}</h1>
-        <p className="text-slate-600">
+        <h1 className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{v?.name ?? "Venue to be confirmed"}</h1>
+        <p className="mt-1 text-ink-400">
           {formatDate(b.arriveBy, tz)} · {eventTypeLabel(b.eventType)}
           {b.eventName ? ` · ${b.eventName}` : ""}
         </p>
       </div>
 
       {b.status !== "CANCELLED" && (
-        <section className="card card-pad space-y-3">
-          <h2 className="section-title">Check in</h2>
+        <section className={`${panel} space-y-3`}>
+          <h2 className="text-sm font-medium text-ink-400">Check in</h2>
           {arrivalDetail(a, tz) && <p className="text-sm">{arrivalDetail(a, tz)}</p>}
           <CheckInPanel
             bookingId={b.id}
@@ -68,7 +69,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
             }
           />
           {b.checkIns.length > 0 && (
-            <ul className="border-t border-slate-100 pt-3 text-sm text-slate-600">
+            <ul className="space-y-1 border-t border-white/[0.06] pt-3 text-sm text-ink-400">
               {b.checkIns.map((c) => (
                 <li key={c.id}>
                   {CHECK_IN_KIND_LABELS[c.kind as CheckInKind] ?? c.kind} at {localTime(c.at, tz)}
@@ -80,38 +81,38 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
         </section>
       )}
 
-      <section className="card card-pad">
-        <h2 className="section-title mb-3">Schedule ({zoneLabel(b.arriveBy, tz)})</h2>
-        <dl className="grid grid-cols-2 gap-3 text-sm">
+      <section className={panel}>
+        <h2 className="mb-3 text-sm font-medium text-ink-400">Schedule ({zoneLabel(b.arriveBy, tz)})</h2>
+        <dl className="grid grid-cols-2 gap-2 text-sm">
           {[
             ["Arrive by", localTime(b.arriveBy, tz)],
             ["Soundcheck", b.soundcheckAt ? localTime(b.soundcheckAt, tz) : "–"],
             ["On stage", localTime(b.setStart, tz)],
             ["Off stage", b.setEnd ? localTime(b.setEnd, tz) : "–"],
-          ].map(([k, val]) => (
-            <div key={k} className="rounded-lg bg-slate-50 p-3">
-              <dt className="text-xs text-slate-500 uppercase">{k}</dt>
-              <dd className="text-lg font-semibold">{val}</dd>
+          ].map(([k, val], i) => (
+            <div key={k} className="rounded-xl bg-white/[0.04] p-3">
+              <dt className="text-xs text-ink-400">{k}</dt>
+              <dd className={`mt-1 text-xl font-semibold tabular-nums ${i === 0 ? "text-volt-400" : ""}`}>{val}</dd>
             </div>
           ))}
         </dl>
       </section>
 
       {v && (
-        <section className="card card-pad space-y-2 text-sm">
-          <h2 className="section-title">Venue</h2>
+        <section className={`${panel} space-y-3 text-sm`}>
+          <h2 className="text-sm font-medium text-ink-400">Venue</h2>
           <p>{address}</p>
-          {v.notes && <p className="whitespace-pre-line text-slate-600">{v.notes}</p>}
+          {v.notes && <p className="whitespace-pre-line text-ink-400">{v.notes}</p>}
           {mapsUrl && (
-            <a href={mapsUrl} target="_blank" rel="noreferrer" className="btn w-full">
-              Directions
+            <a href={mapsUrl} target="_blank" rel="noreferrer" className="flex h-11 w-full items-center justify-center rounded-xl bg-white text-sm font-medium text-ink-950 hover:bg-ink-100">
+              Get directions
             </a>
           )}
         </section>
       )}
 
-      <section className="card card-pad space-y-3 text-sm">
-        <h2 className="section-title">Itinerary</h2>
+      <section className={`${panel} space-y-4 text-sm`}>
+        <h2 className="text-sm font-medium text-ink-400">Itinerary</h2>
         {[
           ["Travel", b.travel],
           ["Accommodation", b.accommodation],
@@ -124,11 +125,11 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           .filter(([, val]) => val)
           .map(([k, val]) => (
             <div key={k}>
-              <div className="text-xs font-medium text-slate-500 uppercase">{k}</div>
-              <div className="whitespace-pre-line">{val}</div>
+              <div className="text-xs text-ink-500">{k}</div>
+              <div className="mt-0.5 whitespace-pre-line">{val}</div>
             </div>
           ))}
-        <a href={`/print/bookings/${b.id}/itinerary`} target="_blank" className="link block pt-2">
+        <a href={`/print/bookings/${b.id}/itinerary`} target="_blank" className="block pt-1 text-volt-400 underline underline-offset-4">
           Open printable day sheet
         </a>
       </section>

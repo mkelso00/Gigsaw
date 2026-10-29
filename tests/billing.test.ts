@@ -1,35 +1,61 @@
 import { describe, expect, it } from "vitest";
-import { billableGigs, gigMonth, isMonthKey, monthIsOver, monthSearchWindow, shiftMonth } from "@/lib/billing";
+import { billableGigs, gigMonth, isMonthKey, isUnresolvedPast, monthIsOver, monthSearchWindow, shiftMonth } from "@/lib/billing";
 
-const gig = (reference: string, iso: string, status = "CONFIRMED", timezone = "Europe/London", demo = false) => ({
+const now = new Date("2026-10-20T12:00:00Z");
+const gig = (reference: string, iso: string, status = "CONFIRMED", extra: { timezone?: string; demo?: boolean; arrived?: boolean } = {}) => ({
   reference,
   arriveBy: new Date(iso),
   status,
-  timezone,
-  demo,
+  timezone: extra.timezone ?? "Europe/London",
+  demo: extra.demo ?? false,
+  arrived: extra.arrived ?? false,
 });
 
 describe("billableGigs", () => {
-  it("counts confirmed and settled gigs only, and never demo data", () => {
+  it("bills confirmed and settled gigs, whether past or future", () => {
+    const list = [gig("GS-1", "2026-10-05T18:00:00Z", "CONFIRMED"), gig("GS-2", "2026-10-28T18:00:00Z", "SETTLED")];
+    expect(billableGigs(list, "2026-10", now).map((g) => g.reference)).toEqual(["GS-1", "GS-2"]);
+  });
+
+  it("bills holds and pending bookings once their date has passed, but not before", () => {
     const list = [
-      gig("GS-1", "2026-10-05T18:00:00Z", "CONFIRMED"),
-      gig("GS-2", "2026-10-06T18:00:00Z", "SETTLED"),
       gig("GS-3", "2026-10-07T18:00:00Z", "HOLD"),
-      gig("GS-4", "2026-10-08T18:00:00Z", "CANCELLED"),
-      gig("GS-5", "2026-10-09T18:00:00Z", "ENQUIRY"),
-      gig("GS-6", "2026-10-10T18:00:00Z", "PENDING"),
-      gig("GS-7", "2026-10-11T18:00:00Z", "CONFIRMED", "Europe/London", true),
+      gig("GS-4", "2026-10-08T18:00:00Z", "PENDING"),
+      gig("GS-5", "2026-10-25T18:00:00Z", "HOLD"),
     ];
-    expect(billableGigs(list, "2026-10").map((g) => g.reference)).toEqual(["GS-1", "GS-2"]);
+    expect(billableGigs(list, "2026-10", now).map((g) => g.reference)).toEqual(["GS-3", "GS-4"]);
+  });
+
+  it("bills any gig the artist checked in to, even an enquiry", () => {
+    const list = [gig("GS-6", "2026-10-09T18:00:00Z", "ENQUIRY", { arrived: true }), gig("GS-7", "2026-10-10T18:00:00Z", "ENQUIRY")];
+    expect(billableGigs(list, "2026-10", now).map((g) => g.reference)).toEqual(["GS-6"]);
+  });
+
+  it("never bills cancelled gigs or demo data", () => {
+    const list = [
+      gig("GS-8", "2026-10-11T18:00:00Z", "CANCELLED", { arrived: true }),
+      gig("GS-9", "2026-10-12T18:00:00Z", "CONFIRMED", { demo: true }),
+    ];
+    expect(billableGigs(list, "2026-10", now)).toEqual([]);
   });
 
   it("uses the venue's local date to pick the month", () => {
     // 23:30 UTC on 31 Oct is already 1 Nov in Amsterdam, but still 31 Oct in New York.
-    const ams = gig("GS-A", "2026-10-31T23:30:00Z", "CONFIRMED", "Europe/Amsterdam");
-    const ny = gig("GS-N", "2026-10-31T23:30:00Z", "CONFIRMED", "America/New_York");
+    const ams = gig("GS-A", "2026-10-31T23:30:00Z", "CONFIRMED", { timezone: "Europe/Amsterdam" });
+    const ny = gig("GS-N", "2026-10-31T23:30:00Z", "CONFIRMED", { timezone: "America/New_York" });
     expect(gigMonth(ams)).toBe("2026-11");
     expect(gigMonth(ny)).toBe("2026-10");
-    expect(billableGigs([ams, ny], "2026-10").map((g) => g.reference)).toEqual(["GS-N"]);
+    expect(billableGigs([ams, ny], "2026-10", now).map((g) => g.reference)).toEqual(["GS-N"]);
+  });
+});
+
+describe("isUnresolvedPast", () => {
+  it("flags holds, pending and enquiries more than a day old", () => {
+    expect(isUnresolvedPast(gig("A", "2026-10-15T18:00:00Z", "HOLD"), now)).toBe(true);
+    expect(isUnresolvedPast(gig("B", "2026-10-15T18:00:00Z", "ENQUIRY"), now)).toBe(true);
+    expect(isUnresolvedPast(gig("C", "2026-10-20T08:00:00Z", "HOLD"), now)).toBe(false);
+    expect(isUnresolvedPast(gig("D", "2026-10-15T18:00:00Z", "CONFIRMED"), now)).toBe(false);
+    expect(isUnresolvedPast(gig("E", "2026-10-15T18:00:00Z", "HOLD", { demo: true }), now)).toBe(false);
   });
 });
 
@@ -49,7 +75,6 @@ describe("month helpers", () => {
     expect(w.lt.toISOString()).toBe("2026-11-03T00:00:00.000Z");
   });
   it("only treats past months as over", () => {
-    const now = new Date("2026-10-29T12:00:00Z");
     expect(monthIsOver("2026-09", now)).toBe(true);
     expect(monthIsOver("2026-10", now)).toBe(false);
   });

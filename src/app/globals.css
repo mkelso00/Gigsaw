@@ -1,65 +1,127 @@
 @import "tailwindcss";
 
+/*
+ * Gigsaw design tokens.
+ * Ink: warm near-black neutrals (they replace Tailwind's cool slate everywhere).
+ * Volt: the electric lime accent, used sparingly for focus, highlights and the brand mark.
+ */
 @theme {
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-500: #7c3aed;
-  --color-brand-600: #6d28d9;
-  --color-brand-700: #5b21b6;
-  --color-ink: #0f172a;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-ink-50: #f7f7f4;
+  --color-ink-100: #efefea;
+  --color-ink-200: #e3e3dc;
+  --color-ink-300: #cdccc4;
+  --color-ink-400: #a2a199;
+  --color-ink-500: #75746d;
+  --color-ink-600: #55544f;
+  --color-ink-700: #3b3a36;
+  --color-ink-800: #252522;
+  --color-ink-900: #171715;
+  --color-ink-950: #0d0d0c;
+
+  /* Slate is mapped onto ink so every existing grey picks up the warmer palette. */
+  --color-slate-50: #f7f7f4;
+  --color-slate-100: #efefea;
+  --color-slate-200: #e3e3dc;
+  --color-slate-300: #cdccc4;
+  --color-slate-400: #a2a199;
+  --color-slate-500: #75746d;
+  --color-slate-600: #55544f;
+  --color-slate-700: #3b3a36;
+  --color-slate-800: #252522;
+  --color-slate-900: #171715;
+
+  --color-volt-100: #f4ffcc;
+  --color-volt-200: #ebff9e;
+  --color-volt-300: #dcff5c;
+  --color-volt-400: #cdf72e;
+  --color-volt-500: #b5e010;
+  --color-volt-700: #5d7300;
+
+  /* "brand" now means ink, so older brand-* classes read as the new identity. */
+  --color-brand-50: #f4ffcc;
+  --color-brand-100: #ebff9e;
+  --color-brand-500: #252522;
+  --color-brand-600: #0d0d0c;
+  --color-brand-700: #000000;
+
+  --radius-card: 1rem;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: #f8fafc;
-  color: var(--color-ink);
+  background: var(--color-ink-50);
+  color: var(--color-ink-950);
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection {
+  background: var(--color-volt-300);
+  color: var(--color-ink-950);
 }
 
 @layer components {
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-[var(--radius-card)] border border-ink-200/80 bg-white;
   }
   .card-pad {
-    @apply p-5;
+    @apply p-5 sm:p-6;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 text-sm font-medium text-ink-900 transition-colors hover:border-ink-300 hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-volt-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-brand-600 bg-brand-600 text-white hover:bg-brand-700;
+    @apply border-ink-950 bg-ink-950 text-white hover:border-ink-800 hover:bg-ink-800;
+  }
+  .btn-volt {
+    @apply border-volt-400 bg-volt-400 text-ink-950 hover:border-volt-300 hover:bg-volt-300;
   }
   .btn-danger {
-    @apply border-rose-300 text-rose-700 hover:bg-rose-50;
+    @apply border-rose-200 text-rose-700 hover:border-rose-300 hover:bg-rose-50;
   }
   .btn-sm {
-    @apply px-2.5 py-1.5 text-xs;
+    @apply h-7 rounded-md px-2.5 text-xs;
   }
   .input {
-    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 focus:outline-none;
+    @apply block h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-950 transition placeholder:text-ink-400 hover:border-ink-300 focus:border-ink-950 focus:ring-4 focus:ring-volt-300/60 focus:outline-none;
+  }
+  textarea.input {
+    @apply h-auto py-2;
   }
   .label {
-    @apply mb-1 block text-sm font-medium text-slate-700;
+    @apply mb-1.5 block text-[13px] font-medium text-ink-700;
   }
   .hint {
-    @apply mt-1 text-xs text-slate-500;
+    @apply mt-1.5 text-xs text-ink-500;
   }
   .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap;
   }
   .table {
     @apply w-full text-left text-sm;
   }
   .table th {
-    @apply border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold tracking-wide text-slate-500 uppercase;
+    @apply border-b border-ink-200 px-4 py-3 text-xs font-medium text-ink-500;
   }
   .table td {
-    @apply border-b border-slate-100 px-4 py-3 align-top;
+    @apply border-b border-ink-100 px-4 py-3.5 align-top;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
   }
   .link {
-    @apply font-medium text-brand-600 hover:text-brand-700 hover:underline;
+    @apply font-medium text-ink-950 underline decoration-ink-300 underline-offset-4 transition hover:decoration-ink-950;
   }
   .section-title {
-    @apply text-base font-semibold text-slate-900;
+    @apply text-[15px] font-semibold tracking-tight text-ink-950;
+  }
+  .eyebrow {
+    @apply text-xs font-medium tracking-wide text-ink-500 uppercase;
   }
 }
 

@@ -7,7 +7,7 @@ Booking management for music agencies and their artists, modelled on [Overture](
 Gigsaw runs many agencies on one site. Each agency only ever sees its own artists, bookings, contacts, venues, reports and settings.
 
 - **Owner area** (`/owner`, owner account only): create an agency and its first admin login, set its price per gig, add admins, reset passwords, suspend or reactivate an agency (suspended agencies can't sign in; their data is kept).
-- **Billing:** each agency pays its own price per gig for every **confirmed or settled** booking, counted in the month the gig happens (venue's local date). Holds, enquiries, cancellations and demo data are free. Once a month is over, **Billing → Issue statements** freezes each agency's count, price and booking references; mark statements paid as money comes in. Re-issuing updates unpaid statements and never touches paid ones. CSV export per month.
+- **Billing:** each agency pays its own price per gig, counted in the month the gig happens (venue's local date). A gig is billable if it's confirmed or settled, if the artist checked in, or if it was left on hold or pending after its date. Cancelled gigs, enquiries and demo data are free. Past gigs never confirmed or cancelled are flagged to the agency (dashboard) and to the owner (agencies list). Once a month is over, **Billing → Issue statements** freezes each agency's count, price and booking references; mark statements paid as money comes in. Re-issuing updates unpaid statements and never touches paid ones. CSV export per month.
 - Agency admins see their price and this month's billable gigs under **Settings → Your Gigsaw plan**.
 
 
@@ -39,6 +39,24 @@ Gigsaw runs many agencies on one site. Each agency only ever sees its own artist
 6. If an artist can't use the app, an agent can log the arrival for them on the booking page. It's marked as logged by the agency.
 
 The grace period and venue radius are set in **Settings**. The rules live in `src/lib/arrival.ts` and are covered by unit tests.
+
+## Emails, texts and alerts
+
+- **Late alerts:** once a minute, Gigsaw checks for gigs whose call time (plus the grace period) has passed with no check-in, and emails and texts the booking's agent plus an optional on-call email and mobile (Settings → Arrival tracking and alerts). Each gig is alerted once.
+- **Client arrival messages:** when an artist checks in, the booking's promoter or client gets a short email and text. Switch off per agency or per booking.
+- **Password reset:** "Forgot password?" on the sign-in page emails a one-hour, single-use link.
+- Demo data never sends anything.
+
+Messages go out once these are set in Railway → Variables. Until then, every message is saved to the **Outbox** (Owner area) and the agency's **Settings → Messages**, so nothing is lost and you can check the wording.
+
+| Variable | What it's for |
+| --- | --- |
+| `RESEND_API_KEY`, `MAIL_FROM` | Email via [Resend](https://resend.com). `MAIL_FROM` like `Gigsaw <alerts@yourdomain.com>` (the domain must be verified in Resend). |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Texts via [Twilio](https://www.twilio.com). `TWILIO_FROM` is your Twilio number, e.g. `+447700900000`. |
+| `APP_URL` | Optional. The site address used in links. Railway's own domain is used if this isn't set. |
+| `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
+
+Settings → Messages → **Send me a test** checks both are working.
 
 ## Deploying on Railway
 

@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
 import { LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { unresolvedPastWhere } from "@/lib/billing";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { formatDate, formatDateTime, localTime } from "@/lib/time";
 
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
   const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
 
-  const [upcoming, today, holds, money, activity] = await Promise.all([
+  const [upcoming, today, holds, money, activity, unresolved] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: bookingListInclude,
@@ -38,6 +39,7 @@ export default async function DashboardPage() {
       include: { payments: true, artist: { select: { name: true } }, promoter: { select: { name: true } } },
     }),
     prisma.activity.findMany({ where: { agencyId: user.agencyId }, orderBy: { createdAt: "desc" }, take: 8, include: { user: { select: { name: true } } } }),
+    prisma.booking.count({ where: { agencyId: user.agencyId, ...unresolvedPastWhere(now) } }),
   ]);
 
   let owedByPromoters = 0;
@@ -64,8 +66,15 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader
+        eyebrow={formatDate(now, settings.defaultTimezone)}
         title={`Hello, ${user.name.split(" ")[0]}`}
-        subtitle={formatDate(now, settings.defaultTimezone)}
+        subtitle={
+          overdue > 0
+            ? `${overdue} artist${overdue === 1 ? " is" : "s are"} late right now.`
+            : todayRows.length
+              ? `${todayRows.length} call time${todayRows.length === 1 ? "" : "s"} in the next 24 hours.`
+              : "No call times in the next 24 hours."
+        }
         actions={
           <Link href="/bookings/new" className="btn btn-primary">
             New booking
@@ -73,9 +82,26 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Shows in next 30 days" value={upcoming.length >= 10 ? "10+" : upcoming.length} href="/calendar" />
-        <Stat label="Open holds" value={holds} href="/bookings?status=HOLD" />
+      {unresolved > 0 && (
+        <Link
+          href="/bookings?status=UNRESOLVED&when=all"
+          className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:border-amber-300"
+        >
+          <span className="badge bg-amber-400 text-ink-950">{unresolved}</span>
+          past gig{unresolved === 1 ? " is" : "s are"} still on enquiry, hold or pending. Confirm or cancel them so your records and bill are right.
+          <span className="ml-auto font-medium">Tidy up →</span>
+        </Link>
+      )}
+
+      <div className="mb-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Stat
+          tone={overdue > 0 ? "alert" : "dark"}
+          label="Arrivals today"
+          value={todayRows.filter((r) => r.a.state === "ARRIVED_ON_TIME" || r.a.state === "ARRIVED_LATE").length + ` / ${todayRows.length}`}
+          hint={overdue > 0 ? `${overdue} overdue` : "checked in"}
+          href="/arrivals"
+        />
+        <Stat label="Shows in next 30 days" value={upcoming.length >= 10 ? "10+" : upcoming.length} hint={`${holds} open hold${holds === 1 ? "" : "s"}`} href="/calendar" />
         <Stat label="Owed by promoters" value={formatMoney(owedByPromoters, cur)} hint={`${cur} bookings`} href="/reports" />
         <Stat label={`Commission ${now.getUTCFullYear()}`} value={formatMoney(commissionThisYear, cur)} hint={`Owed to artists ${formatMoney(owedToArtists, cur)}`} href="/reports" />
       </div>
@@ -83,9 +109,7 @@ export default async function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-3">
         <section className="xl:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="section-title">
-              Arrivals today {overdue > 0 && <span className="badge ml-2 bg-rose-600 text-white">{overdue} overdue</span>}
-            </h2>
+            <h2 className="section-title">Next 24 hours</h2>
             <Link href="/arrivals" className="link text-sm">
               Open live board
             </Link>

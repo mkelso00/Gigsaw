@@ -136,14 +136,14 @@ export const ARRIVAL_STATE_LABELS: Record<ArrivalState, string> = {
 };
 
 export const ARRIVAL_STATE_STYLES: Record<ArrivalState, string> = {
-  CANCELLED: "bg-slate-100 text-slate-500",
-  NOT_DUE: "bg-slate-100 text-slate-600",
-  AWAITING: "bg-sky-100 text-sky-800",
-  ON_THE_WAY: "bg-indigo-100 text-indigo-800",
-  OVERDUE: "bg-rose-600 text-white",
-  ARRIVED_ON_TIME: "bg-emerald-100 text-emerald-800",
-  ARRIVED_LATE: "bg-amber-100 text-amber-800",
-  NO_CHECK_IN: "bg-rose-100 text-rose-800",
+  CANCELLED: "bg-ink-100 text-ink-500 [--dot:var(--color-ink-300)]",
+  NOT_DUE: "bg-ink-100 text-ink-600 [--dot:var(--color-ink-400)]",
+  AWAITING: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
+  ON_THE_WAY: "bg-volt-100 text-volt-700 [--dot:var(--color-volt-500)]",
+  OVERDUE: "bg-rose-600 text-white [--dot:#fff]",
+  ARRIVED_ON_TIME: "bg-emerald-50 text-emerald-800 [--dot:var(--color-emerald-500)]",
+  ARRIVED_LATE: "bg-amber-50 text-amber-800 [--dot:var(--color-amber-500)]",
+  NO_CHECK_IN: "bg-rose-50 text-rose-800 [--dot:var(--color-rose-500)]",
 };
 
 export const LOCATION_LABELS: Record<LocationCheck, string> = {

@@ -61,7 +61,7 @@ export function CheckInPanel({
   };
 
   if (!windowOpen) {
-    return <p className="rounded-xl bg-slate-100 p-4 text-center text-sm text-slate-600">{windowMessage}</p>;
+    return <p className="rounded-xl bg-white/[0.04] p-4 text-center text-sm text-ink-400">{windowMessage}</p>;
   }
 
   const disabled = pending || busy !== null;
@@ -73,7 +73,7 @@ export function CheckInPanel({
             type="button"
             onClick={() => send("ARRIVED")}
             disabled={disabled}
-            className="w-full rounded-2xl bg-emerald-600 px-6 py-5 text-xl font-bold text-white shadow-lg shadow-emerald-600/30 transition active:scale-[0.98] disabled:opacity-60"
+            className="w-full rounded-2xl bg-volt-400 px-6 py-5 text-xl font-semibold tracking-tight text-ink-950 shadow-[0_10px_40px_-10px_rgb(205_247_46/0.6)] transition hover:bg-volt-300 active:scale-[0.98] disabled:opacity-60"
           >
             {busy === "ARRIVED" ? "Checking you in…" : "I've arrived"}
           </button>
@@ -82,7 +82,7 @@ export function CheckInPanel({
               aria-label="How long until you arrive"
               value={eta}
               onChange={(e) => setEta(Number(e.target.value))}
-              className="input w-auto"
+              className="h-12 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white focus:ring-2 focus:ring-volt-400 focus:outline-none"
               disabled={disabled}
             >
               {ETAS.map((m) => (
@@ -91,24 +91,34 @@ export function CheckInPanel({
                 </option>
               ))}
             </select>
-            <button type="button" onClick={() => send("ON_THE_WAY")} disabled={disabled} className="btn flex-1 py-3 text-base">
+            <button
+              type="button"
+              onClick={() => send("ON_THE_WAY")}
+              disabled={disabled}
+              className="h-12 flex-1 rounded-xl border border-white/10 bg-white/[0.06] text-[15px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-60"
+            >
               {busy === "ON_THE_WAY" ? "Sending…" : "I'm on the way"}
             </button>
           </div>
         </>
       )}
       {hasArrived && !hasDeparted && (
-        <button type="button" onClick={() => send("DEPARTED")} disabled={disabled} className="btn w-full py-3 text-base">
+        <button
+          type="button"
+          onClick={() => send("DEPARTED")}
+          disabled={disabled}
+          className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] text-[15px] font-medium text-white transition hover:bg-white/[0.1] disabled:opacity-60"
+        >
           {busy === "DEPARTED" ? "Sending…" : "I've left the venue"}
         </button>
       )}
-      {hasArrived && hasDeparted && <p className="text-center text-sm text-slate-500">All done for this gig. Thanks!</p>}
+      {hasArrived && hasDeparted && <p className="text-center text-sm text-ink-400">All done for this gig. Thanks!</p>}
       {result && (
-        <p role="status" className={`rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+        <p role="status" className={`rounded-xl px-3 py-2.5 text-sm ${result.ok ? "bg-volt-400/10 text-volt-300" : "bg-rose-500/15 text-rose-300"}`}>
           {result.text}
         </p>
       )}
-      <p className="text-center text-xs text-slate-400">Your location is only used to confirm you&apos;re at the venue.</p>
+      <p className="text-center text-xs text-ink-500">Your location is only used to confirm you&apos;re at the venue.</p>
     </div>
   );
 }

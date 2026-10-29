@@ -1,42 +1,44 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
+import { Logo } from "@/components/logo";
 import { requireOwner } from "@/lib/auth";
 
 export const metadata: Metadata = { title: { default: "Owner", template: "%s · Gigsaw owner" } };
+
+const LINKS = [
+  ["/owner", "Agencies"],
+  ["/owner/billing", "Billing"],
+  ["/owner/messages", "Outbox"],
+];
 
 export default async function OwnerLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOwner();
   return (
     <div className="min-h-screen">
-      <header className="no-print border-b border-slate-800 bg-slate-900 text-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
-          <Link href="/owner" className="flex items-center gap-2.5">
-            <img src="/icon.svg" alt="" className="h-8 w-8 rounded-lg" />
-            <span className="leading-tight">
-              <span className="block font-bold">Gigsaw</span>
-              <span className="block text-xs text-slate-400">Owner area</span>
-            </span>
+      <header className="no-print bg-ink-950">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-4 sm:px-8">
+          <Link href="/owner">
+            <Logo sub="Owner area" />
           </Link>
           <nav className="flex gap-1 text-sm">
-            <Link href="/owner" className="rounded-md px-3 py-1.5 hover:bg-white/10">
-              Agencies
-            </Link>
-            <Link href="/owner/billing" className="rounded-md px-3 py-1.5 hover:bg-white/10">
-              Billing
-            </Link>
+            {LINKS.map(([href, label]) => (
+              <Link key={href} href={href} className="rounded-lg px-3 py-1.5 text-ink-300 hover:bg-white/[0.06] hover:text-white">
+                {label}
+              </Link>
+            ))}
             {user.agencyId && (
-              <Link href="/dashboard" className="rounded-md px-3 py-1.5 text-slate-300 hover:bg-white/10">
+              <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-volt-400 hover:bg-white/[0.06]">
                 My agency →
               </Link>
             )}
           </nav>
           <form action={logout} className="ml-auto">
-            <button className="text-xs text-slate-400 hover:text-white">Sign out ({user.name.split(" ")[0]})</button>
+            <button className="text-xs text-ink-400 hover:text-white">Sign out ({user.name.split(" ")[0]})</button>
           </form>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-8">{children}</main>
     </div>
   );
 }

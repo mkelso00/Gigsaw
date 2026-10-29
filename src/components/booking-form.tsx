@@ -102,6 +102,13 @@ export function BookingForm({
             </select>
           </Field>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ink-200 p-4 hover:border-ink-300">
+          <input type="checkbox" name="notifyClientOnArrival" defaultChecked={booking?.notifyClientOnArrival ?? true} className="mt-0.5 h-4 w-4 accent-ink-950" />
+          <span>
+            <span className="block text-sm font-medium">Tell the promoter or client when the artist arrives</span>
+            <span className="block text-xs text-ink-500">Sends them a short email and text when the artist checks in. Good for weddings and private events.</span>
+          </span>
+        </label>
       </section>
 
       <section className="card card-pad space-y-4">

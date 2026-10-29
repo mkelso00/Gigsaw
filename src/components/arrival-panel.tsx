@@ -29,7 +29,15 @@ export function ArrivalPanel({
   arrival,
   settings,
 }: {
-  booking: { arriveBy: Date; timezone: string; venue: Venue | null; checkIns: CheckIn[] };
+  booking: {
+    arriveBy: Date;
+    timezone: string;
+    venue: Venue | null;
+    checkIns: CheckIn[];
+    overdueAlertSentAt?: Date | null;
+    clientNotifiedAt?: Date | null;
+    notifyClientOnArrival?: boolean;
+  };
   arrival: ArrivalSummary;
   settings: Settings;
 }) {
@@ -82,6 +90,13 @@ export function ArrivalPanel({
         </p>
       )}
       {arrival.departedAt && <p className="mt-2 text-sm text-slate-600">Left the venue at {localTime(arrival.departedAt, tz)}.</p>}
+      {(booking.overdueAlertSentAt || booking.clientNotifiedAt || booking.notifyClientOnArrival === false) && (
+        <ul className="mt-4 space-y-1 border-t border-ink-100 pt-3 text-xs text-ink-500">
+          {booking.overdueAlertSentAt && <li>Late alert sent to the team at {localTime(booking.overdueAlertSentAt, tz)}.</li>}
+          {booking.clientNotifiedAt && <li>Client told the artist had arrived at {localTime(booking.clientNotifiedAt, tz)}.</li>}
+          {booking.notifyClientOnArrival === false && <li>Client arrival message is switched off for this booking.</li>}
+        </ul>
+      )}
     </section>
   );
 }

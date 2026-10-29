@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Your gigs, itineraries and arrival check-ins.",
     start_url: "/app",
     display: "standalone",
-    background_color: "#f8fafc",
-    theme_color: "#6d28d9",
+    background_color: "#0d0d0c",
+    theme_color: "#0d0d0c",
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
   };
 }

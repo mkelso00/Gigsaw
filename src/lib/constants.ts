@@ -13,13 +13,14 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 };
 
 // Tailwind classes for status badges.
+// Tailwind classes for status badges: a soft fill, plus the colour of the leading dot.
 export const BOOKING_STATUS_STYLES: Record<BookingStatus, string> = {
-  ENQUIRY: "bg-slate-100 text-slate-700",
-  HOLD: "bg-amber-100 text-amber-800",
-  PENDING: "bg-sky-100 text-sky-800",
-  CONFIRMED: "bg-emerald-100 text-emerald-800",
-  SETTLED: "bg-violet-100 text-violet-800",
-  CANCELLED: "bg-rose-100 text-rose-700 line-through",
+  ENQUIRY: "bg-ink-100 text-ink-700 [--dot:var(--color-ink-400)]",
+  HOLD: "bg-amber-50 text-amber-800 [--dot:var(--color-amber-500)]",
+  PENDING: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
+  CONFIRMED: "bg-emerald-50 text-emerald-800 [--dot:var(--color-emerald-500)]",
+  SETTLED: "bg-ink-950 text-white [--dot:var(--color-volt-400)]",
+  CANCELLED: "bg-ink-100 text-ink-500 line-through [--dot:var(--color-ink-300)]",
 };
 
 export const DEAL_TYPES = ["STANDARD_COMMISSION", "BUY_SELL", "VERSUS", "PLUS", "FLAT"] as const;

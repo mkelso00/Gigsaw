@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { checkInWindow, distanceMetres } from "@/lib/arrival";
+import { notifyClientOfArrival } from "@/lib/alerts";
 import { requireUser } from "@/lib/auth";
 import { CHECK_IN_KINDS, type CheckInKind } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
@@ -70,6 +71,10 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
     },
   });
   await logActivity(user, "BOOKING", bookingId, "artist checked in", payload.kind.toLowerCase().replaceAll("_", " "));
+  if (payload.kind === "ARRIVED") {
+    // A failed message must never stop the check-in itself.
+    await notifyClientOfArrival(bookingId).catch((e) => console.error("[gigsaw] client arrival message failed", e));
+  }
   revalidatePath("/", "layout");
 
   const messages: Record<CheckInKind, string> = {

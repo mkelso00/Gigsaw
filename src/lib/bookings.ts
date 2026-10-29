@@ -170,6 +170,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
     hospitality: str(form, "hospitality"),
     notes: str(form, "notes"),
     tags: normaliseTags(str(form, "tags")),
+    notifyClientOnArrival: str(form, "notifyClientOnArrival") === "on",
   };
 }
 
