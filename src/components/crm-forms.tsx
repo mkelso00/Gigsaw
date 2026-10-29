@@ -3,6 +3,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { UseMyLocation } from "@/components/client-bits";
 import { Field } from "@/components/ui";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
+import { VENUE_PALETTE, venueColour } from "@/lib/rota";
 import type { FormState } from "@/lib/forms";
 
 type Action = (state: FormState, form: FormData) => Promise<FormState>;
@@ -89,7 +90,7 @@ export function ContactForm({ action, contact }: { action: Action; contact?: Con
   );
 }
 
-export function VenueForm({ action, venue, defaultTimezone }: { action: Action; venue?: Venue; defaultTimezone: string }) {
+export function VenueForm({ action, venue, defaultTimezone, suggestedColour }: { action: Action; venue?: Venue; defaultTimezone: string; suggestedColour?: string }) {
   const mapQuery = venue ? encodeURIComponent([venue.name, venue.address, venue.city, venue.country].filter(Boolean).join(", ")) : "";
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
@@ -108,6 +109,14 @@ export function VenueForm({ action, venue, defaultTimezone }: { action: Action; 
         </Field>
         <Field label="Country">
           <input name="country" defaultValue={venue?.country} className="input" />
+        </Field>
+        <Field label="Calendar colour" hint="How this venue shows on the calendar and rota">
+          <input
+            name="colour"
+            type="color"
+            defaultValue={venue ? venueColour(venue) : (suggestedColour ?? VENUE_PALETTE[0])}
+            className="h-10 w-20 cursor-pointer rounded-lg border border-ink-200"
+          />
         </Field>
         <Field label="Time zone" hint="Gig times at this venue are shown in this zone">
           <select name="timezone" defaultValue={venue?.timezone ?? defaultTimezone} className="input">

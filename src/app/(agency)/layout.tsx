@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { QuickSearch } from "@/components/quick-search";
 import { logout } from "@/actions/auth";
 import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
@@ -42,8 +44,15 @@ export default async function AgencyLayout({ children }: { children: React.React
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
-        <div className="mx-auto max-w-[1400px]">{children}</div>
+      <main className="min-w-0 flex-1 px-4 py-5 sm:px-8 lg:px-12 lg:py-6">
+        <div className="mx-auto max-w-[1400px]">
+          <div className="no-print mb-8 max-w-xl">
+            <Suspense>
+              <QuickSearch />
+            </Suspense>
+          </div>
+          {children}
+        </div>
       </main>
     </div>
   );

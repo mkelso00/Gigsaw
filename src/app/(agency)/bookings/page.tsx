@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
+import { SelectAll } from "@/components/client-bits";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
@@ -120,10 +121,17 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       {bookings.length === 0 ? (
         <Empty>No bookings match. <Link href="/bookings/new" className="link">Create one</Link></Empty>
       ) : (
-        <div className="card overflow-x-auto">
+        <form action="/bookings/bulk" method="get" className="card overflow-x-auto">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
+            <span className="text-sm text-ink-500">Tick gigs to change their times or fee together, and tell the artists.</span>
+            <button className="btn btn-sm">Change selected gigs</button>
+          </div>
           <table className="table">
             <thead>
               <tr>
+                <th className="w-10">
+                  <SelectAll name="ids" />
+                </th>
                 <th>Date</th>
                 <th>Artist</th>
                 <th>Venue</th>
@@ -137,6 +145,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 const arrival = arrivalFor(b, settings, now);
                 return (
                   <tr key={b.id} className="hover:bg-slate-50">
+                    <td>
+                      <input type="checkbox" name="ids" value={b.id} aria-label={`Select ${b.reference}`} className="h-4 w-4 accent-ink-950" />
+                    </td>
                     <td className="whitespace-nowrap">
                       <Link href={`/bookings/${b.id}`} className="link">
                         {formatDate(b.arriveBy, b.timezone)}
@@ -169,7 +180,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               })}
             </tbody>
           </table>
-        </div>
+        </form>
       )}
     </div>
   );

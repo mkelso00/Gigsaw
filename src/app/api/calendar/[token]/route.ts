@@ -1,6 +1,7 @@
 import { BOOKING_STATUS_LABELS, type BookingStatus } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { buildIcs } from "@/lib/ics";
+import { appUrl } from "@/lib/messaging";
 import { localTime } from "@/lib/time";
 
 // Private calendar feed for one artist, addressed by a secret token.
@@ -32,6 +33,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
           b.soundcheckAt ? `Soundcheck ${localTime(b.soundcheckAt, b.timezone)}` : "",
           `On stage ${localTime(b.setStart, b.timezone)}`,
           b.dayContact ? `Contact: ${b.dayContact}` : "",
+          `Details: ${appUrl()}/app/gigs/${b.id}`,
         ]
           .filter(Boolean)
           .join("\n"),

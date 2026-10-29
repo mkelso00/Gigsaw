@@ -48,14 +48,28 @@ export async function runOverdueCheck(now = new Date()) {
     const eta = a.expectedAt ? ` They said they'd arrive at ${localTime(a.expectedAt, tz)}.` : "";
     const link = `${appUrl()}/bookings/${b.id}`;
     const short = `Gigsaw: ${b.artist.name} hasn't checked in at ${where}. Call time was ${localTime(b.arriveBy, tz)} (${formatMinutes(a.minutesOverdue ?? 0)} ago).${eta} ${link}`;
-    const text = `${b.artist.name} hasn't checked in at ${where}.\n\nCall time was ${localTime(b.arriveBy, tz)}, ${formatMinutes(a.minutesOverdue ?? 0)} ago. On stage at ${localTime(b.setStart, tz)}.${eta}\n\nArtist phone: ${b.artist.phone || "not on file"}\nDay of show contact: ${b.dayContact || "not on file"}\n\nOpen the booking (${b.reference}): ${link}`;
+    const email = {
+      brand: settings.agencyName || b.agency.name,
+      preheader: `Call time was ${localTime(b.arriveBy, tz)}. No check-in yet.`,
+      title: `${b.artist.name} is late`,
+      intro: `${b.artist.name} hasn't checked in at ${where} yet.${eta}`,
+      highlight: { label: "Past call time", value: formatMinutes(a.minutesOverdue ?? 0), tone: "bad" as const },
+      rows: [
+        ["Call time", localTime(b.arriveBy, tz)],
+        ["On stage", localTime(b.setStart, tz)],
+        ["Artist phone", b.artist.phone || "Not on file"],
+        ["Day of show contact", b.dayContact || "Not on file"],
+        ["Booking", b.reference],
+      ] as [string, string][],
+      cta: { label: "Open the booking", url: link },
+    };
     const base = { kind: "OVERDUE_ALERT" as const, agencyId: b.agencyId, bookingId: b.id };
     const subject = `Late: ${b.artist.name} not at ${b.venue?.name ?? "the venue"} yet`;
 
     // Don't message the same address twice if the agent is also the on-call contact.
     const emails = new Set([b.agent?.email, settings.alertEmail].filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()));
     const phones = new Set([b.agent?.phone, settings.alertPhone].filter((p): p is string => !!p?.trim()));
-    for (const to of emails) await sendEmail({ ...base, to, subject, text });
+    for (const to of emails) await sendEmail({ ...base, to, subject, email });
     for (const to of phones) await sendSms({ ...base, to, text: short });
     sent++;
   }
@@ -76,9 +90,28 @@ export async function notifyClientOfArrival(bookingId: string) {
   const agencyName = b.agency.settings.agencyName || b.agency.name;
   const where = b.venue?.name ?? "the venue";
   const first = b.promoter.name.split(" ")[0];
-  const text = `Hi ${first},\n\nGood news: ${b.artist.name} has arrived at ${where} and is getting set up. On stage at ${localTime(b.setStart, b.timezone)}.\n\n${agencyName}`;
+  const arrived = await prisma.checkIn.findFirst({ where: { bookingId: b.id, kind: "ARRIVED" }, orderBy: { at: "asc" } });
   const base = { kind: "CLIENT_ARRIVAL" as const, agencyId: b.agencyId, bookingId: b.id };
-  if (b.promoter.email) await sendEmail({ ...base, to: b.promoter.email, subject: `${b.artist.name} has arrived`, text });
+  if (b.promoter.email) {
+    await sendEmail({
+      ...base,
+      to: b.promoter.email,
+      replyTo: b.agency.settings.agencyEmail,
+      subject: `${b.artist.name} has arrived`,
+      email: {
+        brand: agencyName,
+        preheader: `${b.artist.name} is at ${where} and getting set up.`,
+        title: `${b.artist.name} has arrived`,
+        intro: `Hi ${first}, good news: ${b.artist.name} is at ${where} and getting set up.`,
+        highlight: { label: "Checked in at", value: arrived ? localTime(arrived.at, b.timezone) : "Just now", tone: "good" },
+        rows: [
+          ["Venue", where],
+          ["On stage", localTime(b.setStart, b.timezone)],
+        ],
+        outro: `Any questions on the day? Just reply to this email to reach ${agencyName}.`,
+      },
+    });
+  }
   if (b.promoter.phone) {
     await sendSms({ ...base, to: b.promoter.phone, text: `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}` });
   }

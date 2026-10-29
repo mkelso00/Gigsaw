@@ -16,7 +16,9 @@ export type ChecklistBooking = {
   status: string;
   artistId: string;
   timezone: string;
+  arriveBy: Date;
   setStart: Date;
+  setEnd: Date | null;
   venue: VenueLike;
   promoterId: string | null;
   feeMinor: number;
@@ -35,7 +37,9 @@ export type OtherBooking = {
   reference: string;
   status: string;
   artistId: string;
+  arriveBy: Date;
   setStart: Date;
+  setEnd: Date | null;
   venue: VenueLike;
   radiusKm: number | null;
   radiusDays: number | null;
@@ -47,11 +51,31 @@ function isLive(status: string) {
   return LIVE_STATUSES.includes(status as BookingStatus);
 }
 
-/** Bookings for the same artist on the same local day. */
+/** From call time to end of set (or three hours after going on stage if no end time). */
+function busyWindow(x: { arriveBy: Date; setStart: Date; setEnd: Date | null }) {
+  const end = x.setEnd && x.setEnd > x.setStart ? x.setEnd : new Date(x.setStart.getTime() + 3 * 3_600_000);
+  return [x.arriveBy.getTime(), end.getTime()] as const;
+}
+
+/**
+ * Other bookings for the same artist whose times overlap this one. Two gigs on the same
+ * evening are fine (e.g. 16:00-19:00 and 20:00-22:00); overlapping ones are not.
+ */
 export function findDateClashes(b: ChecklistBooking, others: OtherBooking[]): OtherBooking[] {
-  const day = localDateKey(b.setStart, b.timezone);
+  const [start, end] = busyWindow(b);
+  return others.filter((o) => {
+    if (o.id === b.id || o.artistId !== b.artistId || !isLive(o.status)) return false;
+    const [oStart, oEnd] = busyWindow(o);
+    return start < oEnd && oStart < end;
+  });
+}
+
+/** Other gigs for the same artist on the same local day that don't overlap (worth knowing). */
+export function sameDayGigs(b: ChecklistBooking, others: OtherBooking[]): OtherBooking[] {
+  const day = localDateKey(b.arriveBy, b.timezone);
+  const clashing = new Set(findDateClashes(b, others).map((o) => o.id));
   return others.filter(
-    (o) => o.id !== b.id && o.artistId === b.artistId && isLive(o.status) && localDateKey(o.setStart, b.timezone) === day,
+    (o) => o.id !== b.id && o.artistId === b.artistId && isLive(o.status) && !clashing.has(o.id) && localDateKey(o.arriveBy, b.timezone) === day,
   );
 }
 
@@ -86,9 +110,17 @@ export function buildChecklist(
   const clashes = findDateClashes(b, others);
   items.push(
     clashes.length
-      ? { level: "error", label: "Double booking", detail: `Same day as ${clashes.map((c) => c.reference).join(", ")}` }
+      ? { level: "error", label: "Double booking", detail: `Times overlap with ${clashes.map((c) => c.reference).join(", ")}` }
       : { level: "ok", label: "No double booking" },
   );
+  const sameDay = sameDayGigs(b, others);
+  if (sameDay.length) {
+    items.push({
+      level: "warning",
+      label: "Another gig the same day",
+      detail: `Also playing ${sameDay.map((c) => `${c.reference}${c.venue ? ` (${c.venue.name})` : ""}`).join(", ")}. Check there's time to travel.`,
+    });
+  }
 
   const breaches = findRadiusBreaches(b, others);
   if (breaches.length) {

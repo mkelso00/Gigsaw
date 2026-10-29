@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { ArtistDot, PageHeader } from "@/components/ui";
+import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { gigDateKey } from "@/lib/bookings";
+import { arrivalFor, gigDateKey } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { isDateKey, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Calendar" };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const dayLabel = (key: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
@@ -18,18 +20,40 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const todayKey = localDateKey(new Date(), tz);
+  // Week view is the default: with dozens of gigs a week, a month grid gets too crowded.
+  const view = sp.view === "month" ? "month" : sp.view === "day" ? "day" : "week";
+  const anchor = isDateKey(sp.date) ? sp.date : todayKey;
 
-  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : todayKey.slice(0, 7);
-  const [y, m] = month.split("-").map(Number);
-  const firstKey = `${month}-01`;
-  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  // Monday-first grid.
-  const firstWeekday = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
-  const gridStart = addDaysToKey(firstKey, -firstWeekday);
-  const cells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  let gridStart: string;
+  let cells: number;
+  let title: string;
+  let prev: string;
+  let next: string;
+  if (view === "day") {
+    gridStart = anchor;
+    cells = 1;
+    title = dayLabel(anchor, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    prev = addDaysToKey(anchor, -1);
+    next = addDaysToKey(anchor, 1);
+  } else if (view === "week") {
+    gridStart = weekStartOf(anchor);
+    cells = 7;
+    title = `${dayLabel(gridStart, { day: "numeric", month: "short" })} – ${dayLabel(addDaysToKey(gridStart, 6), { day: "numeric", month: "short", year: "numeric" })}`;
+    prev = addDaysToKey(gridStart, -7);
+    next = addDaysToKey(gridStart, 7);
+  } else {
+    const [y, m] = anchor.split("-").map(Number);
+    const first = `${anchor.slice(0, 7)}-01`;
+    gridStart = weekStartOf(first);
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+    cells = Math.ceil((lead + daysInMonth) / 7) * 7;
+    title = dayLabel(first, { month: "long", year: "numeric" });
+    prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
+    next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+  }
   const gridEnd = addDaysToKey(gridStart, cells);
-  const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
-  const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  const month = anchor.slice(0, 7);
 
   const where: Prisma.BookingWhereInput = {
     agencyId: user.agencyId,
@@ -37,17 +61,31 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     arriveBy: { gte: zonedToUtc(addDaysToKey(gridStart, -1), "00:00", tz), lt: zonedToUtc(addDaysToKey(gridEnd, 1), "00:00", tz) },
   };
   if (sp.artist) where.artistId = sp.artist;
+  if (sp.town) where.venue = { city: { equals: sp.town, mode: "insensitive" } };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   else where.status = { not: "CANCELLED" };
 
-  const [bookings, artists] = await Promise.all([
+  const [bookings, artists, towns] = await Promise.all([
     prisma.booking.findMany({
       where,
-      include: { artist: { select: { name: true, colour: true } }, venue: { select: { name: true, city: true } } },
-      orderBy: { arriveBy: "asc" },
+      include: {
+        artist: { select: { name: true, colour: true, phone: true } },
+        venue: { select: { id: true, name: true, city: true, colour: true, latitude: true, longitude: true } },
+        checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
+      },
+      orderBy: { setStart: "asc" },
     }),
-    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, calendarToken: true } }),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.venue.findMany({ where: { agencyId: user.agencyId, city: { not: "" } }, distinct: ["city"], select: { city: true }, orderBy: { city: "asc" } }),
   ]);
+
+  const byArtist = sp.colour === "artist";
+  const colourOf = (b: (typeof bookings)[number]) => (byArtist ? b.artist.colour : b.venue ? venueColour(b.venue) : "#a2a199");
+  const legend = [
+    ...new Map(
+      bookings.map((b) => (byArtist ? [b.artist.name, b.artist.colour] : [b.venue?.name ?? "No venue", b.venue ? venueColour(b.venue) : "#a2a199"])),
+    ),
+  ].sort((a, b) => a[0].localeCompare(b[0]));
 
   const byDay = new Map<string, typeof bookings>();
   for (const b of bookings) {
@@ -55,25 +93,39 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     byDay.set(key, [...(byDay.get(key) ?? []), b]);
   }
 
-  const monthName = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
+  const keep = { artist: sp.artist, status: sp.status, colour: sp.colour, town: sp.town, view };
   const qs = (extra: Record<string, string>) =>
-    "?" + new URLSearchParams({ ...(sp.artist ? { artist: sp.artist } : {}), ...(sp.status ? { status: sp.status } : {}), ...extra }).toString();
+    "?" + new URLSearchParams(Object.entries({ ...keep, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
+  const dashed = (s: string) => (s === "HOLD" || s === "ENQUIRY" ? "border-dashed" : "border-solid");
+  const tip = (b: (typeof bookings)[number]) =>
+    `${b.artist.name} · ${eventTypeLabel(b.eventType)} · ${b.venue?.name ?? "No venue"} · ${BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}`;
 
   return (
     <div>
       <PageHeader
         title="Calendar"
-        subtitle="Shows by the date of their call time. Holds are dashed."
+        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "artist" : "venue"} · holds and enquiries are dashed`}
         actions={
-          <div className="flex items-center gap-2">
-            <Link href={`/calendar${qs({ month: prev })}`} className="btn" aria-label="Previous month">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg border border-ink-200 bg-white p-0.5 text-sm">
+              {(["day", "week", "month"] as const).map((v) => (
+                <Link
+                  key={v}
+                  href={`/calendar${qs({ view: v, date: anchor })}`}
+                  className={`rounded-md px-3 py-1.5 ${view === v ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
+                >
+                  {v === "day" ? "Day" : v === "week" ? "Week" : "Month"}
+                </Link>
+              ))}
+            </div>
+            <Link href={`/calendar${qs({ date: prev })}`} className="btn" aria-label="Previous">
               ←
             </Link>
-            <span className="min-w-40 text-center font-semibold">{monthName}</span>
-            <Link href={`/calendar${qs({ month: next })}`} className="btn" aria-label="Next month">
+            <span className="min-w-40 text-center text-sm font-medium">{title}</span>
+            <Link href={`/calendar${qs({ date: next })}`} className="btn" aria-label="Next">
               →
             </Link>
-            <Link href={`/calendar${qs({ month: todayKey.slice(0, 7) })}`} className="btn">
+            <Link href={`/calendar${qs({ date: todayKey })}`} className="btn">
               Today
             </Link>
           </div>
@@ -81,7 +133,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
 
       <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
-        <input type="hidden" name="month" value={month} />
+        <input type="hidden" name="view" value={view} />
+        <input type="hidden" name="date" value={anchor} />
+        <label>
+          <span className="label">Town</span>
+          <select name="town" defaultValue={sp.town ?? ""} className="input">
+            <option value="">Everywhere</option>
+            {towns.map((t) => (
+              <option key={t.city} value={t.city}>
+                {t.city}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           <span className="label">Artist</span>
           <select name="artist" defaultValue={sp.artist ?? ""} className="input">
@@ -104,61 +168,202 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             ))}
           </select>
         </label>
+        <label>
+          <span className="label">Colour by</span>
+          <select name="colour" defaultValue={byArtist ? "artist" : "venue"} className="input">
+            <option value="venue">Venue</option>
+            <option value="artist">Artist</option>
+          </select>
+        </label>
         <button className="btn">Filter</button>
-        <span className="ml-auto text-xs text-slate-500">Each artist has a private calendar feed on their profile page for phone calendars.</span>
       </form>
 
-      <div className="card overflow-x-auto">
-        <div className="grid min-w-[720px] grid-cols-7 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase">
-          {WEEKDAYS.map((d) => (
-            <div key={d} className="px-2 py-2">
-              {d}
-            </div>
+      {legend.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600">
+          {legend.map(([name, colour]) => (
+            <span key={name} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colour }} />
+              {name}
+            </span>
           ))}
         </div>
-        <div className="grid min-w-[720px] grid-cols-7">
-          {Array.from({ length: cells }, (_, i) => {
-            const key = addDaysToKey(gridStart, i);
-            const inMonth = key.startsWith(month);
-            const items = byDay.get(key) ?? [];
-            return (
-              <div key={key} className={`min-h-28 border-r border-b border-slate-100 p-1.5 ${inMonth ? "" : "bg-slate-50/70"}`}>
-                <div className="mb-1 flex items-center justify-between">
-                  <span
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                      key === todayKey ? "bg-brand-600 font-bold text-white" : inMonth ? "text-slate-700" : "text-slate-400"
-                    }`}
-                  >
-                    {Number(key.slice(8))}
-                  </span>
-                  <Link href={`/bookings/new?date=${key}${sp.artist ? `&artistId=${sp.artist}` : ""}`} className="text-xs text-slate-300 hover:text-brand-600" aria-label={`New booking on ${key}`}>
-                    +
-                  </Link>
-                </div>
-                <div className="space-y-1">
-                  {items.map((b) => (
-                    <Link
-                      key={b.id}
-                      href={`/bookings/${b.id}`}
-                      title={`${b.artist.name} · ${eventTypeLabel(b.eventType)} · ${b.venue?.name ?? "No venue"} · ${BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}`}
-                      className={`block truncate rounded px-1.5 py-1 text-xs leading-tight hover:brightness-95 ${b.status === "HOLD" || b.status === "ENQUIRY" ? "border border-dashed" : ""} ${b.status === "CANCELLED" ? "line-through opacity-60" : ""}`}
-                      style={{ backgroundColor: `${b.artist.colour}1f`, borderColor: b.artist.colour }}
-                    >
-                      <span className="flex items-center gap-1">
-                        <ArtistDot colour={b.artist.colour} />
-                        <span className="truncate font-medium">{b.artist.name}</span>
-                      </span>
-                      <span className="block truncate text-slate-600">
-                        {localTime(b.setStart, b.timezone)} {b.venue?.city || b.venue?.name || ""}
-                      </span>
+      )}
+
+      {view === "day" ? (
+        <DayList
+          items={(byDay.get(anchor) ?? []).map((b) => ({ b, a: arrivalFor(b, settings, new Date()), colour: colourOf(b) }))}
+          addHref={`/bookings/new?date=${anchor}`}
+        />
+      ) : view === "week" ? (
+        <div className="card overflow-x-auto">
+          <div className="grid min-w-[1100px] grid-cols-7">
+            {Array.from({ length: 7 }, (_, i) => {
+              const key = addDaysToKey(gridStart, i);
+              const items = byDay.get(key) ?? [];
+              return (
+                <div key={key} className={`min-h-[480px] border-r border-ink-100 last:border-r-0 ${key === todayKey ? "bg-volt-100/30" : ""}`}>
+                  <div className={`sticky top-0 flex items-baseline justify-between border-b border-ink-200 px-3 py-3 ${key === todayKey ? "bg-volt-100" : "bg-white"}`}>
+                    <Link href={`/calendar${qs({ view: "day", date: key })}`} className="hover:underline">
+                      <span className="text-xs text-ink-500">{dayLabel(key, { weekday: "short" })}</span>{" "}
+                      <span className="text-lg font-semibold tabular-nums">{dayLabel(key, { day: "numeric" })}</span>
                     </Link>
-                  ))}
+                    <span className="text-xs text-ink-400">{items.length || ""}</span>
+                  </div>
+                  <div className="space-y-1.5 p-2">
+                    {items.map((b) => (
+                      <Link
+                        key={b.id}
+                        href={`/bookings/${b.id}`}
+                        title={tip(b)}
+                        className={`block rounded-lg border bg-white px-2.5 py-2 text-xs hover:shadow-sm ${dashed(b.status)}`}
+                        style={{ borderColor: `${colourOf(b)}66`, borderLeft: `4px solid ${colourOf(b)}` }}
+                      >
+                        <div className="font-semibold tabular-nums">
+                          {localTime(b.setStart, b.timezone)}
+                          {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                        </div>
+                        <div className="mt-0.5 truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</div>
+                        <div className="truncate text-ink-500">
+                          {byArtist ? b.venue?.name ?? "No venue" : b.artist.name}
+                          {b.venue?.city && !byArtist ? ` · ${b.venue.city}` : ""}
+                        </div>
+                      </Link>
+                    ))}
+                    <Link
+                      href={`/bookings/new?date=${key}${sp.artist ? `&artistId=${sp.artist}` : ""}`}
+                      className="block rounded-lg py-1.5 text-center text-xs text-ink-300 hover:bg-ink-50 hover:text-ink-700"
+                    >
+                      + Add
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card overflow-x-auto">
+          <div className="grid min-w-[900px] grid-cols-7 border-b border-ink-200 text-xs font-medium text-ink-500">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className="px-2 py-2">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid min-w-[900px] grid-cols-7">
+            {Array.from({ length: cells }, (_, i) => {
+              const key = addDaysToKey(gridStart, i);
+              const inMonth = key.startsWith(month);
+              const items = byDay.get(key) ?? [];
+              return (
+                <div key={key} className={`min-h-28 border-r border-b border-ink-100 p-1.5 ${inMonth ? "" : "bg-ink-50/70"}`}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <Link
+                      href={`/calendar${qs({ view: "week", date: key })}`}
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                        key === todayKey ? "bg-ink-950 font-bold text-volt-400" : inMonth ? "text-ink-700 hover:bg-ink-100" : "text-ink-400"
+                      }`}
+                    >
+                      {Number(key.slice(8))}
+                    </Link>
+                    {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} gigs</span>}
+                  </div>
+                  <div className="space-y-1">
+                    {items.slice(0, 4).map((b) => (
+                      <Link
+                        key={b.id}
+                        href={`/bookings/${b.id}`}
+                        title={tip(b)}
+                        className={`flex items-center gap-1 truncate rounded px-1.5 py-1 text-[11px] leading-tight hover:brightness-95 ${dashed(b.status)} border`}
+                        style={{ backgroundColor: `${colourOf(b)}1a`, borderColor: `${colourOf(b)}55` }}
+                      >
+                        <ArtistDot colour={colourOf(b)} />
+                        <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span>
+                        <span className="truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</span>
+                      </Link>
+                    ))}
+                    {items.length > 4 && (
+                      <Link href={`/calendar${qs({ view: "week", date: key })}`} className="block px-1.5 text-[11px] font-medium text-ink-600 hover:underline">
+                        + {items.length - 4} more
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type DayItem = {
+  b: {
+    id: string;
+    status: string;
+    timezone: string;
+    setStart: Date;
+    setEnd: Date | null;
+    arriveBy: Date;
+    artist: { name: string; colour: string; phone: string };
+    venue: { id: string; name: string; city: string; colour: string } | null;
+  };
+  a: ReturnType<typeof arrivalFor>;
+  colour: string;
+};
+
+/** One day's gigs grouped by town, with the artist's number to hand. */
+function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
+  if (!items.length) {
+    return (
+      <Empty>
+        No gigs this day. <Link href={addHref} className="link">Add one</Link>
+      </Empty>
+    );
+  }
+  const towns = new Map<string, DayItem[]>();
+  for (const it of items) {
+    const town = it.b.venue?.city || "No town set";
+    towns.set(town, [...(towns.get(town) ?? []), it]);
+  }
+  return (
+    <div className="space-y-6">
+      {[...towns]
+        .sort((x, y) => x[0].localeCompare(y[0]))
+        .map(([town, list]) => (
+          <section key={town}>
+            <h2 className="section-title mb-3">
+              {town} <span className="font-normal text-ink-400">· {list.length}</span>
+            </h2>
+            <ul className="card divide-y divide-ink-100">
+              {list.map(({ b, a, colour }) => (
+                <li key={b.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3" style={{ boxShadow: `inset 4px 0 0 ${colour}` }}>
+                  <div className="w-28 shrink-0 font-semibold tabular-nums">
+                    {localTime(b.setStart, b.timezone)}
+                    {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                    <div className="text-xs font-normal text-ink-500">arrive {localTime(b.arriveBy, b.timezone)}</div>
+                  </div>
+                  <Link href={`/bookings/${b.id}`} className="min-w-48 flex-1">
+                    <div className="font-medium hover:underline">{b.venue?.name ?? "No venue"}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-sm text-ink-700">
+                      <ArtistDot colour={b.artist.colour} />
+                      {b.artist.name}
+                    </div>
+                  </Link>
+                  {b.artist.phone ? (
+                    <a href={`tel:${b.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
+                      Call {b.artist.phone}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-ink-400">No phone on file</span>
+                  )}
+                  <div className="w-36 text-right">{a.state !== "NOT_DUE" ? <ArrivalBadge state={a.state} /> : <StatusBadge status={b.status} />}</div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
     </div>
   );
 }

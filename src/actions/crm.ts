@@ -196,6 +196,7 @@ function venueData(form: FormData) {
     latitude,
     longitude,
     timezone,
+    colour: /^#[0-9a-f]{6}$/i.test(str(form, "colour")) ? str(form, "colour") : "",
     notes: str(form, "notes"),
   };
 }

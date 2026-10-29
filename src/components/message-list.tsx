@@ -6,6 +6,7 @@ const KIND: Record<string, string> = {
   PASSWORD_RESET: "Password reset",
   OVERDUE_ALERT: "Overdue alert",
   CLIENT_ARRIVAL: "Client: artist arrived",
+  BOOKING_CHANGE: "Artist: gig booked or changed",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {

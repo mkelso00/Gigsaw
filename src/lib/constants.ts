@@ -12,7 +12,6 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
-// Tailwind classes for status badges.
 // Tailwind classes for status badges: a soft fill, plus the colour of the leading dot.
 export const BOOKING_STATUS_STYLES: Record<BookingStatus, string> = {
   ENQUIRY: "bg-ink-100 text-ink-700 [--dot:var(--color-ink-400)]",

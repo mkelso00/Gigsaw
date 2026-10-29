@@ -80,3 +80,18 @@ export function CopyField({ value }: { value: string }) {
     </div>
   );
 }
+
+/** A checkbox that ticks or unticks every checkbox with the given name in the same form. */
+export function SelectAll({ name }: { name: string }) {
+  return (
+    <input
+      type="checkbox"
+      aria-label="Select all"
+      className="h-4 w-4 accent-ink-950"
+      onChange={(e) => {
+        const form = e.currentTarget.form;
+        form?.querySelectorAll<HTMLInputElement>(`input[type=checkbox][name="${name}"]`).forEach((c) => (c.checked = e.currentTarget.checked));
+      }}
+    />
+  );
+}

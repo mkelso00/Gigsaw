@@ -33,6 +33,7 @@ model Agency {
   activity   Activity[]
   statements BillingStatement[]
   messages   Message[]
+  slots      VenueSlot[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -130,7 +131,8 @@ model Artist {
   createdAt         DateTime @default(now())
   demo              Boolean  @default(false) // sample data, removable from Settings
 
-  login    User?     @relation("ArtistLogin")
+  login    User?       @relation("ArtistLogin")
+  slots    VenueSlot[]
   bookings Booking[]
   checkIns CheckIn[]
 
@@ -153,6 +155,7 @@ model Contact {
   demo      Boolean  @default(false) // sample data, removable from Settings
 
   notes    ContactNote[]
+  slots    VenueSlot[]
   bookings Booking[]
 
   @@index([agencyId])
@@ -179,11 +182,13 @@ model Venue {
   capacity  Int?
   latitude  Float?
   longitude Float?
+  colour    String   @default("") // calendar colour; blank means pick one automatically
   timezone  String   @default("Europe/London")
   notes     String   @default("")
   createdAt DateTime @default(now())
   demo      Boolean  @default(false) // sample data, removable from Settings
 
+  slots    VenueSlot[]
   bookings Booking[]
 
   @@index([agencyId])
@@ -238,6 +243,10 @@ model Booking {
   notes         String @default("")
   tags          String @default("")
 
+  // The weekly venue slot this gig fills, if it came from a venue's music schedule.
+  slotId String?
+  slot   VenueSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+
   // Messages: send the client an "artist has arrived" note; when alerts went out (sent once).
   notifyClientOnArrival Boolean   @default(true)
   overdueAlertSentAt    DateTime?
@@ -253,6 +262,7 @@ model Booking {
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
   @@index([artistId, setStart])
+  @@index([slotId])
 }
 
 model Payment {
@@ -333,4 +343,33 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([agencyId, createdAt])
+}
+
+// A regular weekly music slot at a venue, e.g. "Mondays 19:00-21:00, solo".
+// The rota turns slots into bookings, one per date, when an artist is put in them.
+model VenueSlot {
+  id            String    @id @default(cuid())
+  agencyId      String
+  agency        Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  venueId       String
+  venue         Venue     @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  weekday       Int // 1 = Monday ... 7 = Sunday
+  label         String    @default("") // e.g. "Solo", "Duo", "DJ"
+  arriveTime    String // "18:30", venue local time
+  startTime     String // "19:00"
+  endTime       String // "21:00"
+  feeMinor      Int       @default(0)
+  currency      String    @default("GBP")
+  eventType     String    @default("GIG")
+  bookingStatus String    @default("CONFIRMED") // status given to gigs made from this slot
+  promoterId    String? // who pays, usually the venue's own contact
+  promoter      Contact?  @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  artistId      String? // the regular performer, if there is one
+  artist        Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  bookings      Booking[]
+
+  @@index([agencyId, weekday])
+  @@index([venueId])
 }

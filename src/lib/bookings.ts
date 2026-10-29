@@ -5,7 +5,8 @@ import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES } from "./constan
 import { prisma } from "./db";
 import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from "./forms";
 import { toMinor } from "./money";
-import { addDaysToKey, isValidTimeZone, localDateKey, zonedToUtc } from "./time";
+import { buildSchedule } from "./schedule";
+import { isValidTimeZone, localDateKey, zonedToUtc } from "./time";
 
 export const bookingListInclude = {
   artist: { select: { id: true, name: true, colour: true } },
@@ -97,20 +98,11 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   const soundcheckTime = str(form, "soundcheckTime");
   const setEndTime = str(form, "setEndTime");
 
-  const arriveBy = zonedToUtc(date, arriveTime, timezone);
-  const rollForward = (time: string, after: Date) => {
-    let t = zonedToUtc(date, time, timezone);
-    // Add days in local time so a daylight saving change does not shift the clock time.
-    let d = date;
-    while (t < after) {
-      d = addDaysToKey(d, 1);
-      t = zonedToUtc(d, time, timezone);
-    }
-    return t;
-  };
-  const soundcheckAt = soundcheckTime ? rollForward(soundcheckTime, arriveBy) : null;
-  const setStart = rollForward(setStartTime, soundcheckAt ?? arriveBy);
-  const setEnd = setEndTime ? rollForward(setEndTime, setStart) : null;
+  const { arriveBy, soundcheckAt, setStart, setEnd } = buildSchedule(
+    date,
+    { arrive: arriveTime, soundcheck: soundcheckTime, setStart: setStartTime, setEnd: setEndTime },
+    timezone,
+  );
   if (setEnd && setEnd.getTime() === setStart.getTime()) throw new FormError("Set end must be after set start");
 
   const currency = oneOf(str(form, "currency"), CURRENCIES, settings.defaultCurrency as (typeof CURRENCIES)[number]);

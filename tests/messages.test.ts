@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalisePhone, textToHtml } from "@/lib/message-format";
+import { normalisePhone, renderEmail } from "@/lib/message-format";
 
 describe("normalisePhone", () => {
   it("turns UK mobile numbers into international format", () => {
@@ -17,10 +17,31 @@ describe("normalisePhone", () => {
   });
 });
 
-describe("textToHtml", () => {
-  it("escapes HTML and links URLs", () => {
-    const html = textToHtml("Hi <b>Sam</b>\nOpen https://example.com/x?a=1");
-    expect(html).toContain("Hi &lt;b&gt;Sam&lt;/b&gt;<br>");
-    expect(html).toContain('<a href="https://example.com/x?a=1"');
+describe("renderEmail", () => {
+  const out = renderEmail({
+    brand: "Northern Lights",
+    title: "Your gig has changed",
+    intro: "Hi <Sam>",
+    changes: [["On stage", "20:00", "20:30"]],
+    rows: [["Venue", "Jazz Cafe"]],
+    cta: { label: "Open", url: "https://example.com/x?a=1&b=2" },
+  });
+  it("escapes anything that came from users", () => {
+    expect(out.html).toContain("Hi &lt;Sam&gt;");
+    expect(out.html).not.toContain("<Sam>");
+    expect(out.html).toContain('href="https://example.com/x?a=1&amp;b=2"');
+  });
+  it("brands the header with the agency name", () => {
+    expect(out.html).toContain("Northern Lights");
+    expect(out.html).toContain("Sent with Gigsaw for Northern Lights");
+  });
+  it("shows old and new values for changes", () => {
+    expect(out.html).toContain("line-through");
+    expect(out.text).toContain("On stage: 20:00 → 20:30");
+  });
+  it("has a readable plain-text version", () => {
+    expect(out.text).toContain("Your gig has changed");
+    expect(out.text).toContain("Open: https://example.com/x?a=1&b=2");
+    expect(out.text).toContain("Venue: Jazz Cafe");
   });
 });

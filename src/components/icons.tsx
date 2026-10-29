@@ -3,6 +3,7 @@ const paths: Record<string, string> = {
   dashboard: "M4 13h7V4H4zM13 20h7v-9h-7zM4 20h7v-5H4zM13 9h7V4h-7z",
   arrivals: "M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+  rota: "M3 5h18v14H3zM3 10h18M3 15h18M9 5v14M15 5v14",
   bookings: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3",
   artists: "M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
   contacts: "M16 20v-1.5A3.5 3.5 0 0 0 12.5 15h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.4M15.5 4.2a3.5 3.5 0 0 1 0 6.6",

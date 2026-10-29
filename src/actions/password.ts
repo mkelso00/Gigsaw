@@ -22,7 +22,14 @@ export async function requestPasswordReset(_: FormState, form: FormData): Promis
           kind: "PASSWORD_RESET",
           to: user.email,
           subject: "Reset your Gigsaw password",
-          text: `Hi ${user.name.split(" ")[0]},\n\nSomeone asked to reset the password for your Gigsaw login. If that was you, choose a new password here:\n\n${link}\n\nThe link works once and expires in one hour. If you didn't ask for this, you can ignore this email and your password stays the same.`,
+          email: {
+            preheader: "Choose a new password. The link works for one hour.",
+            title: "Reset your password",
+            intro: `Hi ${user.name.split(" ")[0]}, someone asked to reset the password for your Gigsaw login. If that was you, choose a new one below.`,
+            cta: { label: "Choose a new password", url: link },
+            outro: "The link works once and expires in one hour.",
+            footnote: "Didn't ask for this? You can ignore this email and your password stays the same.",
+          },
         });
       }
     }

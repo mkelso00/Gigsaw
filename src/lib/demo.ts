@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import type { Artist, Contact, PrismaClient, Venue } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
+import { VENUE_PALETTE } from "./rota";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 
 const MIN = 60_000;
@@ -48,11 +49,11 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     ).id;
 
   const artistSeed = [
-    { name: "Maya Okafor Trio", genre: "Jazz", colour: "#7c3aed", agentId: lead },
-    { name: "The Velvet Owls", genre: "Indie rock", colour: "#0ea5e9", agentId: second },
-    { name: "DJ Kestrel", genre: "House", colour: "#f97316", agentId: second, defaultCommission: 12 },
-    { name: "Brass Tacks Collective", genre: "Brass / funk", colour: "#16a34a", agentId: lead },
-    { name: "Elena Ruiz", genre: "Singer-songwriter", colour: "#e11d48", agentId: lead },
+    { name: "Maya Okafor Trio", phone: "07700 900201", genre: "Jazz", colour: "#7c3aed", agentId: lead },
+    { name: "The Velvet Owls", phone: "07700 900202", genre: "Indie rock", colour: "#0ea5e9", agentId: second },
+    { name: "DJ Kestrel", phone: "07700 900203", genre: "House", colour: "#f97316", agentId: second, defaultCommission: 12 },
+    { name: "Brass Tacks Collective", phone: "07700 900204", genre: "Brass / funk", colour: "#16a34a", agentId: lead },
+    { name: "Elena Ruiz", phone: "07700 900205", genre: "Singer-songwriter", colour: "#e11d48", agentId: lead },
   ];
   const artists: Artist[] = [];
   for (const a of artistSeed) {
@@ -72,7 +73,9 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     { name: "The Village Hall", city: "Hebden Bridge", country: "UK", latitude: null, longitude: null, capacity: 120, address: "Market Street" },
   ];
   const venues: Venue[] = [];
-  for (const v of venueSeed) venues.push(await prisma.venue.create({ data: { timezone: "Europe/London", ...v, agencyId, demo: true } }));
+  for (const [i, v] of venueSeed.entries()) {
+    venues.push(await prisma.venue.create({ data: { timezone: "Europe/London", ...v, colour: VENUE_PALETTE[i % VENUE_PALETTE.length], agencyId, demo: true } }));
+  }
 
   const promoterSeed = [
     { name: "Priya Shah", company: "Lantern Live", tags: "uk, jazz", email: "priya@lantern.example", phone: "07700 900111" },
@@ -91,6 +94,35 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   }
   await prisma.contact.create({ data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", agencyId, demo: true } });
   await prisma.contactNote.create({ data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." } });
+
+  // Weekly music schedules for three venues, so the rota has something to show.
+  const [elena, maya, kestrel, owls] = [artists[4], artists[0], artists[2], artists[1]];
+  const slotRows: { v: Venue; days: number[]; label: string; arrive: string; start: string; end: string; fee: number; artist: Artist | null }[] = [
+    { v: venues[0], days: [1, 2, 4], label: "Solo", arrive: "18:30", start: "19:00", end: "21:00", fee: 150, artist: elena },
+    { v: venues[0], days: [3], label: "Solo", arrive: "17:30", start: "18:00", end: "20:00", fee: 150, artist: elena },
+    { v: venues[0], days: [5], label: "Duo", arrive: "15:30", start: "16:00", end: "19:00", fee: 220, artist: maya },
+    { v: venues[0], days: [5], label: "Band", arrive: "18:30", start: "19:00", end: "22:00", fee: 450, artist: owls },
+    { v: venues[1], days: [4, 5, 6], label: "Solo", arrive: "18:30", start: "19:00", end: "22:00", fee: 180, artist: null },
+    { v: venues[5], days: [6], label: "DJ", arrive: "21:30", start: "22:00", end: "02:00", fee: 300, artist: kestrel },
+  ];
+  for (const r of slotRows) {
+    await prisma.venueSlot.createMany({
+      data: r.days.map((weekday) => ({
+        agencyId,
+        venueId: r.v.id,
+        weekday,
+        label: r.label,
+        arriveTime: r.arrive,
+        startTime: r.start,
+        endTime: r.end,
+        feeMinor: r.fee * 100,
+        currency: "GBP",
+        eventType: r.label === "DJ" ? "CLUB_NIGHT" : "GIG",
+        promoterId: promoters[0].id,
+        artistId: r.artist?.id ?? null,
+      })),
+    });
+  }
 
   // Carry on numbering after any real bookings.
   const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });

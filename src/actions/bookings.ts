@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { notifyClientOfArrival } from "@/lib/alerts";
+import { notifyArtistIfChanged, snapshotOf } from "@/lib/notify";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, PAYMENT_KINDS } from "@/lib/constants";
@@ -13,7 +14,7 @@ import { localDateKey, zonedToUtc } from "@/lib/time";
 
 /** A booking that belongs to the user's agency. Anything else is treated as not found. */
 async function ownBooking(user: AgencyUser, bookingId: string) {
-  const booking = await prisma.booking.findFirst({ where: { id: bookingId, agencyId: user.agencyId } });
+  const booking = await prisma.booking.findFirst({ where: { id: bookingId, agencyId: user.agencyId }, include: { venue: { select: { name: true } } } });
   if (!booking) throw new FormError("Booking not found");
   return booking;
 }
@@ -35,10 +36,14 @@ export async function createBooking(_: FormState, form: FormData): Promise<FormS
 export async function updateBooking(bookingId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   const result = await handleForm(async () => {
-    await ownBooking(user, bookingId);
+    const before = snapshotOf(await ownBooking(user, bookingId));
     const data = await parseBookingForm(form, await getSettings(user.agencyId), user.agencyId);
     await prisma.booking.update({ where: { id: bookingId }, data });
     await logActivity(user, "BOOKING", bookingId, "updated");
+    if (str(form, "notifyArtist") === "on") {
+      const changes = await notifyArtistIfChanged(before, bookingId);
+      if (changes.length) await logActivity(user, "BOOKING", bookingId, "artist told about changes", changes.map((c) => c[0]).join(", "));
+    }
   });
   if (result?.error) return result;
   revalidatePath("/", "layout");
@@ -51,6 +56,7 @@ export async function setBookingStatus(bookingId: string, form: FormData) {
   const before = await ownBooking(user, bookingId);
   if (before.status !== status) {
     await prisma.booking.update({ where: { id: bookingId }, data: { status } });
+    await notifyArtistIfChanged(snapshotOf(before), bookingId);
     await logActivity(user, "BOOKING", bookingId, "status changed", `${BOOKING_STATUS_LABELS[before.status as keyof typeof BOOKING_STATUS_LABELS] ?? before.status} → ${BOOKING_STATUS_LABELS[status]}`);
   }
   revalidatePath("/", "layout");

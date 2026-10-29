@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { normalisePhone, textToHtml } from "./message-format";
+import { normalisePhone, renderEmail, type EmailContent } from "./message-format";
 
 // Sends emails (Resend) and texts (Twilio) when their keys are set in the environment,
 // and records every message in the Message table either way. With no provider set up,
@@ -9,7 +9,7 @@ import { normalisePhone, textToHtml } from "./message-format";
 //   Email: RESEND_API_KEY, MAIL_FROM (e.g. "Gigsaw <alerts@yourdomain.com>")
 //   Texts: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (e.g. +447700900000)
 
-export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "TEST";
+export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "TEST";
 
 type Base = { kind: MessageKind; agencyId?: string | null; bookingId?: string | null };
 
@@ -72,18 +72,33 @@ async function record(
   return status;
 }
 
-export async function sendEmail(m: Base & { to: string; subject: string; text: string }) {
+const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+
+/**
+ * Send a branded email. `replyTo` should be a real person or inbox (e.g. the agency's email),
+ * so replies don't go to the no-reply sending address.
+ */
+export async function sendEmail(m: Base & { to: string; subject: string; email: EmailContent; replyTo?: string | null }) {
   const to = m.to.trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return "SKIPPED";
+  if (!isEmail(to)) return "SKIPPED";
+  const { html, text } = renderEmail(m.email);
+  const replyTo = m.replyTo?.trim();
   const send = emailConfigured()
     ? () =>
         post("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: process.env.MAIL_FROM, to: [to], subject: m.subject, text: m.text, html: textToHtml(m.text) }),
+          body: JSON.stringify({
+            from: process.env.MAIL_FROM,
+            to: [to],
+            subject: m.subject,
+            text,
+            html,
+            ...(replyTo && isEmail(replyTo) ? { reply_to: replyTo } : {}),
+          }),
         })
     : null;
-  return record({ ...m, channel: "EMAIL", to, body: m.text }, send, "resend");
+  return record({ ...m, channel: "EMAIL", to, body: text }, send, "resend");
 }
 
 export async function sendSms(m: Base & { to: string; text: string }) {

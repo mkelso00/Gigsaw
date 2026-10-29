@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { CalendarConnect } from "@/components/calendar-connect";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { CheckInPanel } from "@/components/check-in-panel";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
@@ -15,6 +17,11 @@ export default async function ArtistHome() {
   if (!user.artistId) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an artist. Ask your agent to check it.</p>;
   const settings = await getSettings(user.agencyId);
   const now = new Date();
+  const artist = await prisma.artist.findFirst({ where: { id: user.artistId, agencyId: user.agencyId }, select: { calendarToken: true, name: true } });
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const feedUrl = artist ? `${proto}://${host}/api/calendar/${artist.calendarToken}.ics` : null;
 
   const bookings = await prisma.booking.findMany({
     // Artists don't see early-stage enquiries.
@@ -94,6 +101,8 @@ export default async function ArtistHome() {
           </ul>
         </section>
       )}
+
+      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${artist!.name} gigs`} />}
 
       {stats.tracked > 0 && (
         <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">

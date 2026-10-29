@@ -11,7 +11,9 @@ const booking: ChecklistBooking = {
   status: "CONFIRMED",
   artistId: "a1",
   timezone: "Europe/London",
+  arriveBy: new Date("2026-11-05T19:00:00Z"),
   setStart: new Date("2026-11-05T20:00:00Z"),
+  setEnd: new Date("2026-11-05T22:00:00Z"),
   venue: london,
   promoterId: "p1",
   feeMinor: 100000,
@@ -26,12 +28,30 @@ const booking: ChecklistBooking = {
 };
 
 function other(over: Partial<OtherBooking>): OtherBooking {
-  return { id: "o", reference: "GS-0002", status: "CONFIRMED", artistId: "a1", setStart: new Date("2026-11-05T13:00:00Z"), venue: manchester, radiusKm: null, radiusDays: null, ...over };
+  return {
+    id: "o",
+    reference: "GS-0002",
+    status: "CONFIRMED",
+    artistId: "a1",
+    arriveBy: new Date("2026-11-05T19:30:00Z"),
+    setStart: new Date("2026-11-05T20:30:00Z"),
+    setEnd: null,
+    venue: manchester,
+    radiusKm: null,
+    radiusDays: null,
+    ...over,
+  };
 }
 
 describe("clashes", () => {
-  it("spots same-day bookings for the same artist", () => {
+  it("spots overlapping bookings for the same artist", () => {
     expect(findDateClashes(booking, [other({})])).toHaveLength(1);
+  });
+  it("allows an earlier and a later gig on the same evening", () => {
+    const early = other({ arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
+    expect(findDateClashes(booking, [early])).toHaveLength(0);
+    const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
+    expect(items.find((i) => i.label === "Another gig the same day")?.level).toBe("warning");
   });
   it("ignores other artists and cancelled bookings", () => {
     expect(findDateClashes(booking, [other({ artistId: "a2" }), other({ status: "CANCELLED" })])).toHaveLength(0);
@@ -43,7 +63,7 @@ describe("clashes", () => {
 
 describe("radius clause", () => {
   it("flags a nearby show inside the window", () => {
-    expect(findRadiusBreaches(booking, [other({ venue: nearby, setStart: new Date("2026-11-20T20:00:00Z") })])).toHaveLength(1);
+    expect(findRadiusBreaches(booking, [other({ venue: nearby, arriveBy: new Date("2026-11-20T19:00:00Z"), setStart: new Date("2026-11-20T20:00:00Z") })])).toHaveLength(1);
   });
   it("allows a far away show", () => {
     expect(findRadiusBreaches(booking, [other({ venue: manchester, setStart: new Date("2026-11-20T20:00:00Z") })])).toHaveLength(0);

@@ -244,6 +244,16 @@ export function BookingForm({
         </div>
       </section>
 
+      {booking && (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-volt-400 bg-volt-100/60 p-4">
+          <input type="checkbox" name="notifyArtist" defaultChecked className="mt-0.5 h-4 w-4 accent-ink-950" />
+          <span>
+            <span className="block text-sm font-medium">Let the artist know what changed</span>
+            <span className="block text-xs text-ink-600">If the date, times, venue or their fee change, they get an email and text showing old and new.</span>
+          </span>
+        </label>
+      )}
+
       <div className="flex justify-end">
         <SubmitButton>{booking ? "Save changes" : "Create booking"}</SubmitButton>
       </div>

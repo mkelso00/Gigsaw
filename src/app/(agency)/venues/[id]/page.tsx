@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { deleteVenue, updateVenue } from "@/actions/crm";
 import { VenueForm } from "@/components/crm-forms";
 import { ConfirmButton } from "@/components/forms";
+import { ScheduleEditor } from "@/components/schedule-editor";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
@@ -14,12 +15,15 @@ export const metadata: Metadata = { title: "Venue" };
 export default async function VenuePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [venue, settings] = await Promise.all([
+  const [venue, settings, artists, contacts, slots] = await Promise.all([
     prisma.venue.findFirst({
       where: { id, agencyId: user.agencyId },
       include: { bookings: { orderBy: { setStart: "desc" }, take: 50, include: { artist: { select: { name: true } } } } },
     }),
     getSettings(user.agencyId),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.contact.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.venueSlot.findMany({ where: { agencyId: user.agencyId, venueId: id }, include: { artist: { select: { id: true, name: true } } } }),
   ]);
   if (!venue) notFound();
   return (
@@ -33,6 +37,9 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
           </Link>
         }
       />
+      <div className="mb-6">
+        <ScheduleEditor venueId={venue.id} slots={slots} artists={artists} contacts={contacts} currency={settings.defaultCurrency} />
+      </div>
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <VenueForm action={updateVenue.bind(null, venue.id)} venue={venue} defaultTimezone={settings.defaultTimezone} />

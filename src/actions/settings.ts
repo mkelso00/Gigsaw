@@ -118,7 +118,23 @@ export async function updateMyDetails(_: FormState, form: FormData): Promise<For
 export async function sendTestMessage(_: FormState): Promise<FormState> {
   const user = await requireAdmin();
   const text = `This is a test message from Gigsaw. If you can read this, ${user.phone ? "emails and texts are" : "emails are"} working.`;
-  const email = await sendEmail({ kind: "TEST", agencyId: user.agencyId, to: user.email, subject: "Gigsaw test message", text });
+  const settings = await prisma.settings.findUnique({ where: { agencyId: user.agencyId } });
+  const email = await sendEmail({
+    kind: "TEST",
+    agencyId: user.agencyId,
+    to: user.email,
+    replyTo: settings?.agencyEmail,
+    subject: "Gigsaw test message",
+    email: {
+      brand: settings?.agencyName || user.agency?.name,
+      title: "It works",
+      intro: text,
+      rows: [
+        ["Sent to", user.email],
+        ["Replies go to", settings?.agencyEmail || "the sending address (set your agency email in Settings)"],
+      ],
+    },
+  });
   const sms = user.phone ? await sendSms({ kind: "TEST", agencyId: user.agencyId, to: user.phone, text }) : "SKIPPED";
   revalidatePath("/settings");
   const word = (s: string, configured: boolean) =>
