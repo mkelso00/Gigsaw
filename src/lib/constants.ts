@@ -74,9 +74,6 @@ export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   OTHER: "Other",
 };
 
-export const PAYMENT_DIRECTIONS = ["IN", "OUT"] as const;
-export type PaymentDirection = (typeof PAYMENT_DIRECTIONS)[number];
-
 export const PAYMENT_KINDS = ["DEPOSIT", "BALANCE", "SETTLEMENT", "EXPENSE", "OTHER"] as const;
 export type PaymentKind = (typeof PAYMENT_KINDS)[number];
 

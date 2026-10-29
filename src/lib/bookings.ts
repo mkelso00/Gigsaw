@@ -16,8 +16,6 @@ export const bookingListInclude = {
   payments: { select: { direction: true, kind: true, amountMinor: true } },
 } satisfies Prisma.BookingInclude;
 
-export type BookingListItem = Prisma.BookingGetPayload<{ include: typeof bookingListInclude }>;
-
 type ArrivalSource = {
   status: string;
   arriveBy: Date;
