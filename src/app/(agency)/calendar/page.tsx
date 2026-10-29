@@ -83,6 +83,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         },
         venue: { select: { id: true, name: true, city: true, colour: true, latitude: true, longitude: true } },
         promoter: { select: { name: true, company: true, type: true } },
+        event: { select: { name: true } },
         payments: { select: { direction: true, kind: true, amountMinor: true } },
         checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
       },
@@ -150,6 +151,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           ? ([["Act contact", contact ? `${personName(contact)}${contact.phone ? ` · ${contact.phone}` : ""}` : b.artist.phone]] as [string, string][])
           : []),
         ["Type", eventTypeLabel(b.eventType)],
+        ...(b.event ? ([["Part of", b.event.name]] as [string, string][]) : []),
       ],
     };
   };

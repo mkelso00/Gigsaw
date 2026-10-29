@@ -3,9 +3,17 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-type Hit = { kind: "act" | "person" | "venue" | "contact" | "booking" | "page"; href: string; title: string; sub: string; colour?: string };
+type Hit = { kind: "act" | "person" | "venue" | "contact" | "booking" | "event" | "page"; href: string; title: string; sub: string; colour?: string };
 
-const KIND: Record<Hit["kind"], string> = { booking: "Booking", act: "Act", person: "Person", venue: "Venue", contact: "Contact", page: "Page" };
+const KIND: Record<Hit["kind"], string> = {
+  booking: "Booking",
+  act: "Act",
+  person: "Person",
+  event: "Wedding/event",
+  venue: "Venue",
+  contact: "Contact",
+  page: "Page",
+};
 
 /**
  * The search box at the top of every agency page. Results appear as you type, from acts,

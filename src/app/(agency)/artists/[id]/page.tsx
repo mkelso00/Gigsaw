@@ -3,11 +3,11 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resetCalendarToken, setArtistLogin } from "@/actions/crm";
-import { addActMember, removeActMember } from "@/actions/people";
+import { addActMember, addActPart, removeActMember, removeActPart } from "@/actions/people";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
-import { ArrivalBadge, Empty, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { ArrivalBadge, ArtistDot, Empty, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { punctuality } from "@/lib/arrival";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
@@ -29,12 +29,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [artist, settings, peopleRows] = await Promise.all([
+  const [artist, settings, peopleRows, actRows] = await Promise.all([
     prisma.artist.findFirst({
       where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
         members: { include: { person: { include: { login: { select: { id: true } } } } }, orderBy: { person: { firstName: "asc" } } },
+        partActs: { include: { child: { select: { id: true, name: true, colour: true, phone: true } } } },
+        partOf: { include: { parent: { select: { id: true, name: true, colour: true } } } },
         login: {
           select: {
             email: true,
@@ -67,7 +69,9 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
     }),
     getSettings(user.agencyId),
     prisma.person.findMany({ where: { agencyId: user.agencyId }, select: { firstName: true, surname: true, alias: true } }),
+    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { name: true } }),
   ]);
+  const actNames = actRows.map((a) => a.name);
   const people = [...new Set(peopleRows.map(personName))].sort();
   if (!artist) notFound();
 
@@ -143,17 +147,71 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-6">
+          <section className="card card-pad" id="line-up">
+            <h2 className="section-title">Members</h2>
+            <p className="mt-1 mb-4 text-sm text-ink-500">
+              The acts that make up this one, e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo. Search your acts to add one. Their gigs are checked
+              against each other, and each member sees this act&apos;s gigs too.
+            </p>
+            {artist.partActs.length > 0 && (
+              <ul className="mb-4 divide-y divide-ink-100 text-sm">
+                {artist.partActs.map((l) => (
+                  <li key={l.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ArtistDot colour={l.child.colour} />
+                      <Link href={`/artists/${l.child.id}`} className="link">
+                        {l.child.name}
+                      </Link>
+                      {l.role && <span className="text-ink-500">· {l.role}</span>}
+                    </span>
+                    <form action={removeActPart.bind(null, l.id)}>
+                      <ConfirmButton message={`Take ${l.child.name} out of ${artist.name}?`} className="btn btn-sm">
+                        Remove
+                      </ConfirmButton>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <datalist id="act-names">
+              {actNames
+                .filter((n) => n !== artist.name)
+                .map((n) => (
+                  <option key={n} value={n} />
+                ))}
+            </datalist>
+            <ActionForm action={addActPart.bind(null, artist.id)} className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+              <input name="act" list="act-names" required placeholder="Search acts…" aria-label="Act" className="input" autoComplete="off" />
+              <input name="role" placeholder="Role" aria-label="Role" className="input" />
+              <SubmitButton className="btn">Add</SubmitButton>
+            </ActionForm>
+            {artist.partOf.length > 0 && (
+              <p className="mt-4 border-t border-ink-100 pt-4 text-sm text-ink-600">
+                Part of{" "}
+                {artist.partOf.map((l, i) => (
+                  <span key={l.id}>
+                    {i > 0 && ", "}
+                    <Link href={`/artists/${l.parent.id}`} className="link">
+                      {l.parent.name}
+                    </Link>
+                  </span>
+                ))}
+                .
+              </p>
+            )}
+          </section>
+
           <section className="card card-pad" id="members">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="section-title">Members</h2>
+              <h2 className="section-title">People</h2>
               <Link href={`/people/new?actId=${artist.id}`} className="text-sm text-ink-500 hover:text-ink-950">
                 Add with full details →
               </Link>
             </div>
             <p className="mt-1 mb-4 text-sm text-ink-500">
               {artist.members.length
-                ? "Reminders and gig changes go to each member. Anyone in another act too is checked for clashes across both."
-                : "The people in this act. Until you add members, reminders and changes go to the act's own email and phone."}
+                ? "Reminders and gig changes go to each person. Anyone in another act too is checked for clashes across both."
+                : "Optional: the people in this act, with their own phone, email and login. Until you add any, reminders and changes go to the act's own email and phone."}
             </p>
             {artist.members.length > 0 && (
               <ul className="mb-4 divide-y divide-ink-100 text-sm">

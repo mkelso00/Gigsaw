@@ -36,6 +36,14 @@ async function slotFields(form: FormData, user: AgencyUser) {
   } catch {
     throw new FormError("Enter the fee as a number, like 150.00");
   }
+  let costMinor: number | null = null;
+  if (str(form, "cost")) {
+    try {
+      costMinor = toMinor(str(form, "cost"), currency);
+    } catch {
+      throw new FormError("Enter the cost as a number, like 120.00");
+    }
+  }
   const promoterId = optStr(form, "promoterId");
   if (
     promoterId &&
@@ -62,6 +70,7 @@ async function slotFields(form: FormData, user: AgencyUser) {
     startTime,
     endTime,
     feeMinor,
+    costMinor,
     currency,
     eventType: oneOf(str(form, "eventType"), EVENT_TYPES, "GIG"),
     bookingStatus: oneOf(str(form, "bookingStatus"), BOOKING_STATUSES, "CONFIRMED"),
@@ -150,6 +159,7 @@ export async function updateSlot(slotId: string, _: FormState, form: FormData): 
               setEnd: fields.endTime,
             },
             fee: fields.feeMinor !== slot.feeMinor ? minorToInput(fields.feeMinor, fields.currency) : undefined,
+            cost: fields.costMinor != null && fields.costMinor !== slot.costMinor ? minorToInput(fields.costMinor, fields.currency) : undefined,
             notifyArtists: str(form, "notifyArtists") === "on",
           },
         );
@@ -233,6 +243,8 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
     timezone: tz,
     currency: slot.currency,
     feeMinor: slot.feeMinor,
+    // Sale and cost when the slot has a cost; otherwise commission.
+    ...(slot.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: slot.costMinor } : {}),
     commissionPct: artist.defaultCommission ?? settings.defaultCommission,
   });
   await logActivity(user, "BOOKING", booking.id, "booked from venue schedule", `${slot.venue.name} ${date}`);
@@ -342,7 +354,10 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
     const schedule = buildSchedule(date, { arrive: fields.arriveTime, setStart: fields.startTime, setEnd: fields.endTime }, tz);
 
     if (!confirmed(form) && LIVE_STATUSES.includes(fields.bookingStatus)) {
-      const warnings = await findClashes({ agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...schedule }, settings.changeoverMinutes);
+      const warnings = await findClashes(
+        { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...schedule },
+        settings.changeoverMinutes,
+      );
       if (warnings.length) {
         return { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } };
       }
@@ -371,6 +386,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         timezone: tz,
         currency: fields.currency,
         feeMinor: fields.feeMinor,
+        ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
         commissionPct: artist.defaultCommission ?? settings.defaultCommission,
       });
       await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
@@ -379,6 +395,8 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
     const ref = id ? (await prisma.booking.findUnique({ where: { id }, select: { reference: true } }))?.reference : null;
     if (id && str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
     revalidatePath("/", "layout");
-    return { ok: `Booked ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.${weekly ? " Added to the venue's weekly schedule too." : ""}` };
+    return {
+      ok: `Booked ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.${weekly ? " Added to the venue's weekly schedule too." : ""}`,
+    };
   });
 }

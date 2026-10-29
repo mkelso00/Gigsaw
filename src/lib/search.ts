@@ -7,7 +7,13 @@ import { formatDate, localTime } from "./time";
 // Search across everything an agency has: acts, venues, contacts and bookings (any date),
 // plus the pages of the app. Used by the live search box at the top of every page.
 
-export type SearchHit = { kind: "act" | "person" | "venue" | "contact" | "booking" | "page"; href: string; title: string; sub: string; colour?: string };
+export type SearchHit = {
+  kind: "act" | "person" | "venue" | "contact" | "booking" | "event" | "page";
+  href: string;
+  title: string;
+  sub: string;
+  colour?: string;
+};
 
 const PAGES: [string, string, string][] = [
   ["Dashboard", "/dashboard", "home overview"],
@@ -16,6 +22,8 @@ const PAGES: [string, string, string][] = [
   ["Calendar", "/calendar", "diary month week day"],
   ["Bookings", "/bookings", "gigs list"],
   ["New booking", "/bookings/new", "add create gig"],
+  ["Weddings & events", "/events", "wedding party corporate customer planner"],
+  ["New wedding or event", "/events/new", "add create wedding party"],
   ["Acts", "/artists", "artists singers bands roster"],
   ["People", "/people", "musicians members managers staff"],
   ["Add a person", "/people/new", "new musician member manager"],
@@ -46,7 +54,13 @@ export async function globalSearch(agencyId: string, raw: string, opts: { isOwne
     ],
   };
   const bookingInclude = { artist: { select: { name: true } }, venue: { select: { id: true, name: true, city: true, colour: true } } } as const;
-  const [people, acts, venues, contacts, upcoming, past] = await Promise.all([
+  const [events, people, acts, venues, contacts, upcoming, past] = await Promise.all([
+    prisma.event.findMany({
+      where: { agencyId, OR: [{ name: contains }, { customer: { name: contains } }, { venueText: contains }, { venue: { name: contains } }] },
+      take: 4,
+      orderBy: { date: "desc" },
+      select: { id: true, name: true, date: true, type: true },
+    }),
     prisma.person.findMany({
       where: { agencyId, OR: [{ firstName: contains }, { surname: contains }, { alias: contains }, { email: contains }, { phone: contains }] },
       take: 4,
@@ -92,6 +106,12 @@ export async function globalSearch(agencyId: string, raw: string, opts: { isOwne
       title: a.name,
       sub: [a.genre, a.phone].filter(Boolean).join(" · ") || "Act",
       colour: a.colour,
+    })),
+    ...events.map<SearchHit>((e) => ({
+      kind: "event",
+      href: `/events/${e.id}`,
+      title: e.name,
+      sub: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${e.date}T12:00:00Z`)),
     })),
     ...people.map<SearchHit>((p) => ({
       kind: "person",

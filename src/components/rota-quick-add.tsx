@@ -61,7 +61,8 @@ export function RotaQuickAdd({
           </label>
           {artistSelect(small)}
           <input name="label" placeholder="Solo, duo…" aria-label="Act type" className={small} />
-          <input name="fee" inputMode="decimal" placeholder={`Fee (${currency})`} aria-label="Fee" className={small} />
+          <input name="fee" inputMode="decimal" placeholder={`Sale (${currency})`} aria-label="Sale" className={small} />
+          <input name="cost" inputMode="decimal" placeholder="Cost (act's fee)" aria-label="Cost" className={small} />
           <label className="flex items-center gap-1.5 text-[11px] leading-tight text-ink-600">
             <input type="checkbox" name="repeat" className="h-3.5 w-3.5 accent-ink-950" />
             Every {weekdayName ?? "week"}
@@ -105,8 +106,11 @@ export function RotaQuickAdd({
       <Field label="Finish">
         <input name="endTime" type="time" required defaultValue="21:00" className="input" />
       </Field>
-      <Field label={`Fee (${currency})`} hint="Optional">
+      <Field label={`Sale (${currency})`} hint="What the venue or customer pays">
         <input name="fee" inputMode="decimal" className="input" />
+      </Field>
+      <Field label="Cost (act's fee)" hint="Blank = commission">
+        <input name="cost" inputMode="decimal" className="input" />
       </Field>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 sm:col-span-2 lg:col-span-4">
         <label className="flex items-center gap-2 text-sm">

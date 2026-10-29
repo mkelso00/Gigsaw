@@ -61,7 +61,9 @@ export async function findClashes(c: Candidate, changeoverMinutes: number): Prom
     let who = `${o.artist.name} is`;
     if (o.artistId !== c.artistId) {
       const names = await sharedMembers(c.artistId, o.artistId);
-      who = `${names.join(" and ") || "A member"} (with ${o.artist.name}) ${names.length > 1 ? "are" : "is"}`;
+      who = names.includes(o.artist.name)
+        ? `${o.artist.name} (a member of this act) is`
+        : `${names.join(" and ") || "A member"} (with ${o.artist.name}) ${names.length > 1 ? "are" : "is"}`;
     }
     out.push({ level: a.level, assessment: a, text: `${who} also booked at ${where} (${when}). ${describeAssessment(a)}` });
   }

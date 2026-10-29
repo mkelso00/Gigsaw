@@ -113,10 +113,17 @@ export function BookingForm({
           </Field>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ink-200 p-4 hover:border-ink-300">
-          <input type="checkbox" name="notifyClientOnArrival" defaultChecked={booking?.notifyClientOnArrival ?? true} className="mt-0.5 h-4 w-4 accent-ink-950" />
+          <input
+            type="checkbox"
+            name="notifyClientOnArrival"
+            defaultChecked={booking?.notifyClientOnArrival ?? true}
+            className="mt-0.5 h-4 w-4 accent-ink-950"
+          />
           <span>
             <span className="block text-sm font-medium">Tell the promoter or client when the artist arrives</span>
-            <span className="block text-xs text-ink-500">Sends them a short email and text when the artist checks in. Good for weddings and private events.</span>
+            <span className="block text-xs text-ink-500">
+              Sends them a short email and text when the artist checks in. Good for weddings and private events.
+            </span>
           </span>
         </label>
       </section>
@@ -125,19 +132,13 @@ export function BookingForm({
         <div>
           <h2 className="section-title">Times</h2>
           <p className="text-sm text-slate-500">
-            Use the venue&apos;s local time. Times after midnight roll into the next day automatically. The <strong>arrive by</strong> time is
-            what arrival tracking measures against.
+            Use the venue&apos;s local time. Times after midnight roll into the next day automatically. The <strong>arrive by</strong> time is what arrival
+            tracking measures against.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Date" className="sm:col-span-1 lg:col-span-2">
-            <input
-              type="date"
-              name="date"
-              required
-              defaultValue={booking ? localDateKey(booking.arriveBy, tz) : defaults.date}
-              className="input"
-            />
+            <input type="date" name="date" required defaultValue={booking ? localDateKey(booking.arriveBy, tz) : defaults.date} className="input" />
           </Field>
           <Field label="Arrive by">
             <input type="time" name="arriveTime" required defaultValue={t(booking?.arriveBy) || "17:00"} className="input" />
@@ -182,10 +183,10 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Fee" hint="What the promoter pays, before VAT">
+          <Field label="Fee (sale)" hint="What the venue, promoter or customer pays, before VAT">
             <input name="fee" inputMode="decimal" defaultValue={minorToInput(booking?.feeMinor, cur)} placeholder="0.00" className="input" />
           </Field>
-          <Field label="Artist fee" hint="Buy / sell deals only">
+          <Field label="Cost (act's fee)" hint="Sale and cost deals: what the act is paid. The act only ever sees this.">
             <input name="artistFee" inputMode="decimal" defaultValue={minorToInput(booking?.artistFeeMinor, cur)} className="input" />
           </Field>
           <Field label="Commission %">
@@ -204,12 +205,7 @@ export function BookingForm({
             <input name="deposit" inputMode="decimal" defaultValue={minorToInput(booking?.depositMinor, cur)} placeholder="0.00" className="input" />
           </Field>
           <Field label="Deposit due">
-            <input
-              type="date"
-              name="depositDueDate"
-              defaultValue={booking?.depositDueDate ? localDateKey(booking.depositDueDate, tz) : ""}
-              className="input"
-            />
+            <input type="date" name="depositDueDate" defaultValue={booking?.depositDueDate ? localDateKey(booking.depositDueDate, tz) : ""} className="input" />
           </Field>
         </div>
         <Field label="Deal notes" hint="Door split, bonuses, buyouts and so on">

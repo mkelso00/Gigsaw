@@ -100,6 +100,7 @@ export default async function SettingsPage() {
         ["agency", "Agency"],
         ["arrivals", "Arrivals and alerts"],
         ["reminders", "Gig reminders"],
+        ["weddings", "Weddings and events"],
         ["documents", "Documents"],
         ["messages", "Messages"],
         ["team", "Team"],
@@ -285,6 +286,24 @@ export default async function SettingsPage() {
                   />
                   <Field label="Time on the day" hint="Venue's local time">
                     <input name="dayReminderTime" type="time" defaultValue={settings.dayReminderTime} className="input" />
+                  </Field>
+                </div>
+              </Section>
+
+              <Section
+                id="weddings"
+                title="Weddings and events"
+                description="Automatic emails for weddings and events: the planner link and a reminder to the customer, a balance reminder, final details to the acts a week before, and a thank-you afterwards."
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Toggle
+                    name="eventEmails"
+                    defaultChecked={settings.eventEmails}
+                    label="Send automatic wedding and event emails"
+                    hint="Can also be turned off for a single event. Sent between 9am and 8pm."
+                  />
+                  <Field label="Review link" hint="Added to the thank-you email, e.g. your Google or Facebook reviews page">
+                    <input name="reviewLink" type="url" defaultValue={settings.reviewLink} placeholder="https://" className="input" />
                   </Field>
                 </div>
               </Section>

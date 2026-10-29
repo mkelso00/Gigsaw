@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { PLAN_FIELDS } from "@/lib/event-plan";
 import { actIdsFor } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
@@ -41,6 +42,19 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
     : null;
   // Acts only ever see their own pay (after commission), never what the venue or customer is charged.
   const yourFee = dealBreakdown(b).artistMinor;
+  // Part of a wedding or event: show the plan and who else is on. Never any money.
+  const event = b.eventId
+    ? await prisma.event.findFirst({
+        where: { id: b.eventId, agencyId: user.agencyId },
+        include: {
+          bookings: {
+            where: { id: { not: b.id }, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
+            select: { setStart: true, setEnd: true, timezone: true, artist: { select: { name: true } } },
+            orderBy: { setStart: "asc" },
+          },
+        },
+      })
+    : null;
 
   const panel = "rounded-2xl border border-white/[0.06] bg-ink-900 p-5";
   return (
@@ -118,6 +132,33 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
               Get directions
             </a>
           )}
+        </section>
+      )}
+
+      {event && (
+        <section className={`${panel} space-y-4 text-sm`}>
+          <div>
+            <h2 className="text-sm font-medium text-ink-400">{event.type === "WEDDING" ? "The wedding" : "The event"}</h2>
+            <div className="mt-1 text-base font-medium">{event.name}</div>
+            {!v && event.venueText && <div className="text-ink-300">{event.venueText}</div>}
+          </div>
+          {[
+            ["Guests", event.guestCount ? String(event.guestCount) : ""],
+            ...PLAN_FIELDS.map(([k, label]) => [label, event[k]]),
+            [
+              "Also performing",
+              event.bookings
+                .map((o) => `${o.artist.name} ${localTime(o.setStart, o.timezone)}${o.setEnd ? `–${localTime(o.setEnd, o.timezone)}` : ""}`)
+                .join("\n"),
+            ],
+          ]
+            .filter(([, val]) => val)
+            .map(([k, val]) => (
+              <div key={k}>
+                <div className="text-xs text-ink-500">{k}</div>
+                <div className="mt-0.5 whitespace-pre-line">{val}</div>
+              </div>
+            ))}
         </section>
       )}
 

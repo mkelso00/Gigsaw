@@ -16,6 +16,7 @@ export async function bulkUpdateBookings(_: FormState, form: FormData): Promise<
       times: { arrive: t("arriveTime"), soundcheck: t("soundcheckTime"), setStart: t("setStartTime"), setEnd: t("setEndTime") },
       shiftMinutes: int(form, "shiftMinutes") ?? undefined,
       fee: str(form, "fee") || undefined,
+      cost: str(form, "cost") || undefined,
       notifyArtists: str(form, "notifyArtists") === "on",
     });
     revalidatePath("/", "layout");

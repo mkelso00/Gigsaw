@@ -13,8 +13,10 @@ export type BulkChange = {
   times?: { arrive?: string; soundcheck?: string; setStart?: string; setEnd?: string };
   /** Or: move every time by this many minutes. */
   shiftMinutes?: number;
-  /** New fee as typed, applied in each booking's own currency. */
+  /** New fee (sale) as typed, applied in each booking's own currency. */
   fee?: string;
+  /** New cost (the act's fee) as typed; makes each gig a sale and cost deal. */
+  cost?: string;
   notifyArtists: boolean;
 };
 
@@ -22,7 +24,8 @@ export type BulkChange = {
 export async function applyBulkChange(user: AgencyUser, bookingIds: string[], change: BulkChange) {
   const hasTimes = !!change.times && Object.values(change.times).some(Boolean);
   if (hasTimes && change.shiftMinutes) throw new FormError("Either set new times or move times by some minutes, not both");
-  if (!hasTimes && !change.shiftMinutes && !change.fee) throw new FormError("Nothing to change: set new times, a shift or a new fee");
+  if (!hasTimes && !change.shiftMinutes && !change.fee && !change.cost)
+    throw new FormError("Nothing to change: set new times, a shift, a new sale or a new cost");
 
   const bookings = await prisma.booking.findMany({
     where: { id: { in: bookingIds.slice(0, 500) }, agencyId: user.agencyId },
@@ -60,8 +63,25 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       }
       if (feeMinor < 0) throw new FormError("The fee can't be negative");
     }
-    await prisma.booking.update({ where: { id: b.id }, data: { ...schedule, feeMinor } });
-    await logActivity(user, "BOOKING", b.id, "updated with other gigs", [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "fee" : ""].filter(Boolean).join(" and "));
+    let cost: { dealType: string; artistFeeMinor: number } | object = {};
+    if (change.cost) {
+      let artistFeeMinor: number;
+      try {
+        artistFeeMinor = toMinor(change.cost, b.currency);
+      } catch {
+        throw new FormError("Enter the cost as a number, like 120.00");
+      }
+      if (artistFeeMinor < 0) throw new FormError("The cost can't be negative");
+      cost = { dealType: "BUY_SELL", artistFeeMinor };
+    }
+    await prisma.booking.update({ where: { id: b.id }, data: { ...schedule, feeMinor, ...cost } });
+    await logActivity(
+      user,
+      "BOOKING",
+      b.id,
+      "updated with other gigs",
+      [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "sale" : "", change.cost ? "cost" : ""].filter(Boolean).join(" and "),
+    );
     updated++;
     if (change.notifyArtists) {
       const changes = await notifyArtistIfChanged(before, b.id);

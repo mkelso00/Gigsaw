@@ -6,6 +6,7 @@ import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { personName } from "@/lib/person-name";
+import { wouldLoop } from "@/lib/people";
 
 // People, following Overture: a person has a company (a venue, or another company such as a
 // promoter or management firm) and can be in any number of acts, each with a job title.
@@ -193,4 +194,36 @@ export async function removeActMember(memberId: string) {
   await prisma.personAct.delete({ where: { id: m.id } });
   await logActivity(user, "ARTIST", m.artistId, "removed member", personName(m.person));
   revalidatePath(`/artists/${m.artistId}`);
+}
+
+/** Build a band from other acts: put an act (e.g. "Graham McKee Solo") inside this one. */
+export async function addActPart(parentId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const parent = await prisma.artist.findFirst({ where: { id: parentId, agencyId: user.agencyId }, select: { id: true, name: true } });
+    if (!parent) throw new FormError("Act not found");
+    // Members are picked from existing acts only; new acts are added under Acts first.
+    const name = required(form, "act", "Act");
+    const child = await prisma.artist.findFirst({ where: { agencyId: user.agencyId, name: same(name) }, select: { id: true, name: true } });
+    if (!child) throw new FormError(`There's no act called “${name}”. Pick one from the list, or add it under Acts first.`);
+    if (await wouldLoop(parentId, child.id)) throw new FormError(`${child.name} can't go inside ${parent.name}: ${parent.name} is already part of it.`);
+    const role = str(form, "role");
+    await prisma.actLink.upsert({
+      where: { parentId_childId: { parentId, childId: child.id } },
+      create: { parentId, childId: child.id, role },
+      update: { role },
+    });
+    await logActivity(user, "ARTIST", parentId, "added act to line-up", child.name);
+    revalidatePath(`/artists/${parentId}`);
+    return { ok: `${child.name} is now a member of ${parent.name}.` };
+  });
+}
+
+export async function removeActPart(linkId: string) {
+  const user = await requireStaff();
+  const l = await prisma.actLink.findFirst({ where: { id: linkId, parent: { agencyId: user.agencyId } }, include: { child: { select: { name: true } } } });
+  if (!l) return;
+  await prisma.actLink.delete({ where: { id: l.id } });
+  await logActivity(user, "ARTIST", l.parentId, "removed act from line-up", l.child.name);
+  revalidatePath(`/artists/${l.parentId}`);
 }

@@ -8,6 +8,7 @@ const KIND: Record<string, string> = {
   CLIENT_ARRIVAL: "Client: artist arrived",
   BOOKING_CHANGE: "Artist: gig booked or changed",
   REMINDER: "Artist: gig reminder",
+  EVENT: "Wedding or event",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {
@@ -17,7 +18,15 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 /** A log of outgoing emails and texts. */
-export function MessageList({ messages, timezone, showAgency }: { messages: (Message & { agency?: { name: string } | null })[]; timezone: string; showAgency?: boolean }) {
+export function MessageList({
+  messages,
+  timezone,
+  showAgency,
+}: {
+  messages: (Message & { agency?: { name: string } | null })[];
+  timezone: string;
+  showAgency?: boolean;
+}) {
   if (messages.length === 0) return <Empty>No messages yet.</Empty>;
   return (
     <ul className="card divide-y divide-ink-100">

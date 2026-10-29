@@ -55,6 +55,8 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         weeklyReminderTime,
         dayReminders: str(form, "dayReminders") === "on",
         dayReminderTime,
+        eventEmails: str(form, "eventEmails") === "on",
+        reviewLink: /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "",
         invoiceTerms: str(form, "invoiceTerms"),
         contractTerms: str(form, "contractTerms"),
       },

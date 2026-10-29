@@ -1,5 +1,6 @@
 import { BOOKING_STATUS_LABELS, type BookingStatus } from "@/lib/constants";
 import { prisma } from "@/lib/db";
+import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { buildIcs } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
@@ -16,7 +17,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
     : await prisma.person.findUnique({ where: { calendarToken: token }, include: { agency: true, acts: { select: { artistId: true } } } });
   const owner = act ?? person;
   if (!owner || owner.agency.status !== "ACTIVE") return new Response("Not found", { status: 404 });
-  const actIds = act ? [act.id] : person!.acts.map((a) => a.artistId);
+  // Includes any band the act or person is part of.
+  const actIds = await actIdsFor({ artistId: act?.id ?? null, personId: person?.id ?? null, agencyId: owner.agencyId });
   const calendarName = act ? act.name : personName(person!);
 
   const bookings = await prisma.booking.findMany({

@@ -42,6 +42,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         artist: true,
         venue: true,
         promoter: true,
+        event: { select: { id: true, name: true } },
         agent: { select: { name: true } },
         payments: { orderBy: { paidAt: "asc" } },
         checkIns: { orderBy: { at: "asc" }, include: { user: { select: { name: true } } } },
@@ -110,7 +111,18 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <>
             {booking.reference} · {eventTypeLabel(booking.eventType)} · {formatDate(booking.arriveBy, tz)}
             {booking.venue ? ` · ${booking.venue.name}${booking.venue.city ? `, ${booking.venue.city}` : ""}` : ""}
-            {booking.eventName ? ` · ${booking.eventName}` : ""}
+            {booking.event ? (
+              <>
+                {" · "}
+                <Link href={`/events/${booking.event.id}`} className="link">
+                  Part of {booking.event.name}
+                </Link>
+              </>
+            ) : booking.eventName ? (
+              ` · ${booking.eventName}`
+            ) : (
+              ""
+            )}
           </>
         }
         actions={
@@ -338,11 +350,11 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             <h2 className="section-title mb-3">Money</h2>
             <dl className="space-y-2 text-sm">
               <Row label="Deal">{DEAL_TYPE_LABELS[booking.dealType as DealType] ?? booking.dealType}</Row>
-              <Row label="Fee">{money(deal.grossMinor)}</Row>
+              <Row label={booking.dealType === "BUY_SELL" ? "Sale" : "Fee"}>{money(deal.grossMinor)}</Row>
               {deal.vatMinor > 0 && <Row label={`VAT (${booking.vatPct}%)`}>{money(deal.vatMinor)}</Row>}
               <Row label="Promoter pays">{money(deal.totalDueMinor)}</Row>
               <Row label={booking.dealType === "BUY_SELL" ? "Agency margin" : `Commission (${booking.commissionPct}%)`}>{money(deal.agencyMinor)}</Row>
-              <Row label="Artist earns">{money(deal.artistMinor)}</Row>
+              <Row label={booking.dealType === "BUY_SELL" ? "Cost (act's fee)" : "Act earns"}>{money(deal.artistMinor)}</Row>
               <hr className="border-slate-100" />
               {booking.depositMinor > 0 && (
                 <Row label="Deposit">

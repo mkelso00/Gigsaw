@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/rota", label: "Rota", icon: "rota" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/bookings", label: "Bookings", icon: "bookings" },
+  { href: "/events", label: "Weddings", icon: "heart" },
   { href: "/artists", label: "Acts", icon: "artists" },
   { href: "/people", label: "People", icon: "contacts" },
   { href: "/contacts", label: "Contacts", icon: "company" },

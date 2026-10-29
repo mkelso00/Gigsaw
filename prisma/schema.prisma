@@ -35,6 +35,7 @@ model Agency {
   messages   Message[]
   slots      VenueSlot[]
   people     Person[]
+  events     Event[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -77,6 +78,9 @@ model Settings {
   alertPhone            String  @default("")
   // Tell the client (the booking's promoter or client contact) when the artist arrives.
   clientArrivalMessages Boolean @default(true)
+  // Weddings and events: automatic emails to the customer and the acts, and a review link for the thank-you.
+  eventEmails           Boolean @default(true)
+  reviewLink            String  @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
   weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
@@ -149,6 +153,9 @@ model Artist {
   bookings Booking[]
   checkIns CheckIn[]
   members  PersonAct[]
+  // A band built from other acts, e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo.
+  partActs ActLink[]   @relation("ActParent")
+  partOf   ActLink[]   @relation("ActChild")
 
   @@index([agencyId])
 }
@@ -172,6 +179,7 @@ model Contact {
   slots    VenueSlot[]
   bookings Booking[]
   people   Person[]
+  events   Event[]
 
   @@index([agencyId])
 }
@@ -208,6 +216,7 @@ model Venue {
   slots    VenueSlot[]
   bookings Booking[]
   people   Person[]
+  events   Event[]
 
   @@index([agencyId])
 }
@@ -261,6 +270,10 @@ model Booking {
   notes         String @default("")
   tags          String @default("")
 
+  // The wedding or event this gig is part of (one customer booking with several acts).
+  eventId String?
+  event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
   // The weekly venue slot this gig fills, if it came from a venue's music schedule.
   slotId String?
   slot   VenueSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
@@ -281,6 +294,7 @@ model Booking {
   @@index([agencyId, setStart])
   @@index([artistId, setStart])
   @@index([slotId])
+  @@index([eventId])
 }
 
 model Payment {
@@ -376,7 +390,8 @@ model VenueSlot {
   arriveTime    String // "18:30", venue local time
   startTime     String // "19:00"
   endTime       String // "21:00"
-  feeMinor      Int       @default(0)
+  feeMinor      Int       @default(0) // sale: what the venue or customer pays
+  costMinor     Int? // cost: the act's fee, when the agency works on sale and cost (blank = commission)
   currency      String    @default("GBP")
   eventType     String    @default("GIG")
   bookingStatus String    @default("CONFIRMED") // status given to gigs made from this slot
@@ -467,4 +482,74 @@ model PersonAct {
 
   @@unique([personId, artistId])
   @@index([artistId])
+}
+
+// A wedding or other event: one customer booking that can include several acts. Each act's gig
+// is a normal booking linked here, so acts only ever see their own gig and fee, while the
+// customer's money is added up across all of them.
+model Event {
+  id         String   @id @default(cuid())
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name       String // e.g. "Hannah & Sam's wedding"
+  type       String   @default("WEDDING") // WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
+  date       String // "YYYY-MM-DD", the day of the event
+  timezone   String   @default("Europe/London")
+  customerId String?
+  customer   Contact? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  venueId    String?
+  venue      Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  venueText  String   @default("") // a venue not on file, e.g. a marquee at a farm
+  agentId    String?
+  status     String   @default("ACTIVE") // ACTIVE | CANCELLED
+  notes      String   @default("") // agency only
+
+  // The plan, filled in by the agency or by the customer using their planner link. Acts see it.
+  guestCount    Int?
+  timeline      String    @default("") // ceremony, drinks, dinner, speeches, first dance…
+  dayContact    String    @default("") // name and number on the day
+  arrivalInfo   String    @default("") // parking, load-in, access
+  dressCode     String    @default("")
+  meals         String    @default("") // food and drink for the acts
+  songRequests  String    @default("") // first dance, must-plays, do-not-plays
+  specialNotes  String    @default("")
+  plannerToken  String?   @unique
+  plannerSentAt DateTime?
+  plannerDoneAt DateTime?
+
+  autoEmails Boolean     @default(true) // automatic emails to the customer for this event
+  demo       Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  bookings   Booking[]
+  tasks      EventTask[]
+
+  @@index([agencyId, date])
+}
+
+// One item on an event's checklist, e.g. "Deposit received". Some tick themselves (key set).
+model EventTask {
+  id      String    @id @default(cuid())
+  eventId String
+  event   Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title   String
+  key     String    @default("") // CONTRACT | DEPOSIT | PLANNER | BALANCE | ITINERARY | THANKS, or "" for your own
+  dueDate String? // "YYYY-MM-DD"
+  doneAt  DateTime?
+  sort    Int       @default(0)
+
+  @@index([eventId])
+}
+
+// One act inside another, e.g. the solo act "Graham McKee Solo" (child) in the band "Wonderlust" (parent).
+model ActLink {
+  id       String @id @default(cuid())
+  parentId String
+  parent   Artist @relation("ActParent", fields: [parentId], references: [id], onDelete: Cascade)
+  childId  String
+  child    Artist @relation("ActChild", fields: [childId], references: [id], onDelete: Cascade)
+  role     String @default("") // e.g. "Lead vocals"
+
+  @@unique([parentId, childId])
+  @@index([childId])
 }

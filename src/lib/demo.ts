@@ -8,6 +8,7 @@ import type { Artist, Contact, PrismaClient, Venue } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
 import { VENUE_PALETTE } from "./rota";
+import { buildSchedule } from "./schedule";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 
 const MIN = 60_000;
@@ -120,6 +121,42 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   });
   await prisma.contactNote.create({
     data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." },
+  });
+
+  // A band built from two solo acts: each solo act sees the band's gigs, and clashes are
+  // checked between the band and its members' solo gigs.
+  const soloA = await prisma.artist.create({
+    data: {
+      agencyId,
+      name: "Graham McKee Solo",
+      genre: "Acoustic covers",
+      colour: "#0d9488",
+      phone: "07700 900206",
+      email: "graham.solo@example.com",
+      agentId: lead,
+      demo: true,
+    },
+  });
+  const soloB = await prisma.artist.create({
+    data: {
+      agencyId,
+      name: "Jo Drummond Solo",
+      genre: "Acoustic covers",
+      colour: "#ca8a04",
+      phone: "07700 900207",
+      email: "jo.solo@example.com",
+      agentId: lead,
+      demo: true,
+    },
+  });
+  const band = await prisma.artist.create({
+    data: { agencyId, name: "Wonderlust", genre: "Party band", colour: "#9333ea", email: "wonderlust@example.com", agentId: lead, demo: true },
+  });
+  await prisma.actLink.createMany({
+    data: [
+      { parentId: band.id, childId: soloA.id, role: "Lead vocals, guitar" },
+      { parentId: band.id, childId: soloB.id, role: "Vocals, drums" },
+    ],
   });
 
   // People: the members of two bands (Tom plays in both, so clashes are checked across them),
@@ -357,6 +394,75 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   await book({ artist: artists[0], venue: venues[1], date: addDaysToKey(todayKey, 1), arrive: "17:00", set: "20:30", status: "CONFIRMED", fee: 2000 });
   await book({ artist: artists[2], venue: venues[7], date: addDaysToKey(todayKey, 20), arrive: "22:00", set: "23:59", status: "CANCELLED", fee: 2500 });
 
+  // A wedding with three acts on one booking for the customer, each on sale and cost.
+  const weddingDate = addDaysToKey(todayKey, 60);
+  const hall = venues[8];
+  const wedding = await prisma.event.create({
+    data: {
+      agencyId,
+      demo: true,
+      name: "Hannah & Sam's wedding",
+      type: "WEDDING",
+      date: weddingDate,
+      timezone: hall.timezone,
+      customerId: promoters[4].id,
+      venueId: hall.id,
+      agentId: lead,
+      plannerToken: `demo-${agencyId}-wedding-planner`,
+      guestCount: 120,
+      timeline: "13:30 Ceremony\n14:15 Drinks reception\n16:00 Wedding breakfast\n18:00 Speeches\n19:30 First dance, then the band\n23:00 DJ until 00:30",
+      dayContact: "Kate (best friend), 07700 900555",
+      arrivalInfo: "Park behind the hall. Load in through the side door from 17:30.",
+      dressCode: "Smart, dark colours",
+      songRequests: "First dance: At Last (Etta James). No Macarena, please!",
+      tasks: {
+        create: [
+          { key: "CONTRACT", title: "Contract sent and signed", sort: 1, doneAt: new Date() },
+          { key: "DEPOSIT", title: "Deposit received", sort: 2 },
+          { key: "PLANNER", title: "Details from the couple (planner filled in)", dueDate: addDaysToKey(weddingDate, -42), sort: 3 },
+          { key: "BALANCE", title: "Balance paid", dueDate: addDaysToKey(weddingDate, -14), sort: 4 },
+          { key: "ITINERARY", title: "Final details sent to the acts", dueDate: addDaysToKey(weddingDate, -7), sort: 5 },
+          { key: "THANKS", title: "Thank-you and review request sent", dueDate: addDaysToKey(weddingDate, 2), sort: 6 },
+        ],
+      },
+    },
+  });
+  for (const [artist, arrive, start, end, sale, cost] of [
+    [artists[4], "12:45", "13:30", "14:15", 450, 350],
+    [artists[3], "17:30", "19:30", "23:00", 2200, 1800],
+    [artists[2], "22:30", "23:00", "00:30", 600, 450],
+  ] as const) {
+    const sched = buildSchedule(weddingDate, { arrive, setStart: start, setEnd: end }, hall.timezone);
+    const b = await prisma.booking.create({
+      data: {
+        reference: nextRef(),
+        agencyId,
+        demo: true,
+        eventId: wedding.id,
+        eventName: wedding.name,
+        artistId: artist.id,
+        venueId: hall.id,
+        promoterId: promoters[4].id,
+        agentId: lead,
+        createdById: lead,
+        status: "CONFIRMED",
+        eventType: "WEDDING",
+        timezone: hall.timezone,
+        ...sched,
+        currency: "GBP",
+        feeMinor: sale * 100,
+        dealType: "BUY_SELL",
+        artistFeeMinor: cost * 100,
+        notifyClientOnArrival: false,
+      },
+    });
+    if (artist === artists[4]) {
+      await prisma.payment.create({
+        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: 50000, paidAt: new Date(), note: "Deposit for the whole wedding" },
+      });
+    }
+  }
+
   return { artists, venues: venues.length, bookings: await prisma.booking.count({ where: { agencyId, demo: true } }) };
 }
 
@@ -369,6 +475,7 @@ export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
   const contactIds = (await prisma.contact.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((c) => c.id);
   const venueIds = (await prisma.venue.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((v) => v.id);
   const personIds = (await prisma.person.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((p) => p.id);
+  const eventIds = (await prisma.event.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((e) => e.id);
 
   await prisma.$transaction([
     // Payments and check-ins go with their bookings.
@@ -376,6 +483,7 @@ export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
     // Demo agents, and any app logins made for demo artists.
     prisma.user.deleteMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }, { personId: { in: personIds } }] } }),
     prisma.person.deleteMany({ where: { id: { in: personIds } } }),
+    prisma.event.deleteMany({ where: { id: { in: eventIds } } }),
     prisma.artist.deleteMany({ where: { id: { in: artistIds } } }),
     prisma.contact.deleteMany({ where: { id: { in: contactIds } } }),
     prisma.venue.deleteMany({ where: { id: { in: venueIds } } }),
@@ -387,6 +495,7 @@ export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
           { entity: "CONTACT", entityId: { in: contactIds } },
           { entity: "VENUE", entityId: { in: venueIds } },
           { entity: "PERSON", entityId: { in: personIds } },
+          { entity: "EVENT", entityId: { in: eventIds } },
         ],
       },
     }),

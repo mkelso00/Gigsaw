@@ -27,7 +27,7 @@ export type DealType = (typeof DEAL_TYPES)[number];
 
 export const DEAL_TYPE_LABELS: Record<DealType, string> = {
   STANDARD_COMMISSION: "Standard commission",
-  BUY_SELL: "Buy / sell",
+  BUY_SELL: "Sale and cost",
   VERSUS: "Guarantee vs % of door",
   PLUS: "Guarantee plus bonus",
   FLAT: "Flat fee (no commission)",
@@ -37,7 +37,7 @@ export const EVENT_TYPES = ["GIG", "FESTIVAL", "CLUB_NIGHT", "WEDDING", "CORPORA
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  GIG: "Gig / concert",
+  GIG: "Bar gig",
   FESTIVAL: "Festival",
   CLUB_NIGHT: "Club night",
   WEDDING: "Wedding",

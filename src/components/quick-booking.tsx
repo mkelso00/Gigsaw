@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { addRotaGig } from "@/actions/slots";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Icon } from "@/components/icons";
@@ -24,6 +24,7 @@ export function QuickBooking({
   today: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [type, setType] = useState("GIG");
   const open = () => ref.current?.showModal();
 
   useEffect(() => {
@@ -113,7 +114,7 @@ export function QuickBooking({
           </div>
           <label>
             <span className={label}>Type</span>
-            <select name="eventType" defaultValue="GIG" className={field}>
+            <select name="eventType" value={type} onChange={(e) => setType(e.target.value)} className={field}>
               {EVENT_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {EVENT_TYPE_LABELS[t]}
@@ -121,6 +122,15 @@ export function QuickBooking({
               ))}
             </select>
           </label>
+          {(type === "WEDDING" || type === "PRIVATE_PARTY" || type === "CORPORATE") && (
+            <p className="rounded-xl border border-volt-400/60 bg-volt-100 px-3 py-2 text-sm sm:order-last sm:col-span-2">
+              Booking several acts for one customer (e.g. ceremony singer, band and DJ)?{" "}
+              <Link href="/events/new" onClick={() => ref.current?.close()} className="font-medium underline">
+                Create a wedding or event
+              </Link>{" "}
+              to keep them together with one invoice.
+            </p>
+          )}
           <label>
             <span className={label}>Status</span>
             <select name="bookingStatus" defaultValue="CONFIRMED" className={field}>
@@ -131,10 +141,16 @@ export function QuickBooking({
               ))}
             </select>
           </label>
-          <label>
-            <span className={label}>Fee ({currency})</span>
-            <input name="fee" inputMode="decimal" placeholder="0.00" className={field} />
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label>
+              <span className={label}>Sale ({currency})</span>
+              <input name="fee" inputMode="decimal" placeholder="0.00" className={field} />
+            </label>
+            <label>
+              <span className={label}>Cost</span>
+              <input name="cost" inputMode="decimal" placeholder="Act's fee" className={field} />
+            </label>
+          </div>
           <label>
             <span className={label}>Booked by</span>
             <select name="promoterId" defaultValue="" className={field}>

@@ -23,8 +23,17 @@ function SlotFields({ slot, artists, contacts, currency }: { slot?: VenueSlot; a
       <Field label="Finish">
         <input type="time" name="endTime" required defaultValue={slot?.endTime ?? "21:00"} className="input" />
       </Field>
-      <Field label="Fee">
+      <Field label="Sale" hint="What the venue pays">
         <input name="fee" inputMode="decimal" defaultValue={slot ? minorToInput(slot.feeMinor, slot.currency) : ""} placeholder="150.00" className="input" />
+      </Field>
+      <Field label="Cost" hint="The act's fee. Blank = commission">
+        <input
+          name="cost"
+          inputMode="decimal"
+          defaultValue={slot?.costMinor != null ? minorToInput(slot.costMinor, slot.currency) : ""}
+          placeholder="120.00"
+          className="input"
+        />
       </Field>
       <Field label="Currency">
         <select name="currency" defaultValue={slot?.currency ?? currency} className="input">
