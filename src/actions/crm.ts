@@ -264,3 +264,53 @@ export async function removeVenueShareLink(venueId: string) {
   if (count) await logActivity(user, "VENUE", venueId, "turned off the venue line-up link");
   revalidatePath(`/venues/${venueId}`);
 }
+
+// ---------- Companies and venues: moving one to the other ----------
+// Overture keeps venues and client companies (e.g. a record label booking a band for a party) in
+// one list, so after an import some may be in the wrong place. These move them across, taking the
+// people who work there with them.
+
+/** A company that's really a venue: make the venue and move its people to it. */
+export async function companyToVenue(contactId: string) {
+  const user = await requireStaff();
+  const c = await prisma.contact.findFirst({ where: { id: contactId, agencyId: user.agencyId, type: { not: "CLIENT" } } });
+  if (!c) return;
+  const name = c.company || c.name;
+  const venue =
+    (await prisma.venue.findFirst({ where: { agencyId: user.agencyId, name: { equals: name, mode: "insensitive" } } })) ??
+    (await prisma.venue.create({ data: { agencyId: user.agencyId, name, address: c.address, importRef: c.importRef } }));
+  await prisma.person.updateMany({ where: { agencyId: user.agencyId, companyId: c.id }, data: { companyId: null, venueId: venue.id } });
+  // Keep the company if it's who pays for any bookings; otherwise it's no longer needed.
+  const used = await prisma.booking.count({ where: { promoterId: c.id } });
+  const usedByEvents = await prisma.event.count({ where: { customerId: c.id } });
+  if (!used && !usedByEvents) await prisma.contact.delete({ where: { id: c.id } });
+  await logActivity(user, "VENUE", venue.id, "made a venue from a company", name);
+  revalidatePath("/", "layout");
+  redirect(`/venues/${venue.id}`);
+}
+
+/** A venue that's really a client company: make the company and move its people to it. */
+export async function venueToCompany(venueId: string) {
+  const user = await requireStaff();
+  const v = await prisma.venue.findFirst({
+    where: { id: venueId, agencyId: user.agencyId },
+    include: { _count: { select: { bookings: true, slots: true, events: true } } },
+  });
+  if (!v) return;
+  if (v._count.bookings || v._count.slots || v._count.events) return; // it's being used as a venue
+  const company = await prisma.contact.create({
+    data: {
+      agencyId: user.agencyId,
+      type: "COMPANY",
+      name: v.name,
+      company: v.name,
+      address: [v.address, v.city].filter(Boolean).join(", "),
+      importRef: v.importRef,
+    },
+  });
+  await prisma.person.updateMany({ where: { agencyId: user.agencyId, venueId: v.id }, data: { venueId: null, companyId: company.id } });
+  await prisma.venue.delete({ where: { id: v.id } });
+  await logActivity(user, "CONTACT", company.id, "made a company from a venue", v.name);
+  revalidatePath("/", "layout");
+  redirect(`/contacts/${company.id}`);
+}

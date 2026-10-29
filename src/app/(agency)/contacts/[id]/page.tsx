@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { companyToVenue } from "@/actions/crm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addContactNote, deleteContactNote } from "@/actions/crm";
@@ -40,6 +41,13 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             <Link href={`/contacts/${contact.id}/edit`} className="btn">
               Edit
             </Link>
+            {contact.type !== "CLIENT" && (
+              <form action={companyToVenue.bind(null, contact.id)}>
+                <ConfirmButton message={`Make ${contact.company || contact.name} a venue? Its people move to the venue.`} className="btn">
+                  This is a venue
+                </ConfirmButton>
+              </form>
+            )}
             {contact.type === "PROMOTER" && (
               <Link href={`/bookings/new?promoterId=${contact.id}`} className="btn btn-primary">
                 New booking

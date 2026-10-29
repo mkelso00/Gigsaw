@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteVenue, updateVenue } from "@/actions/crm";
+import { deleteVenue, updateVenue, venueToCompany } from "@/actions/crm";
 import { VenueForm } from "@/components/crm-forms";
 import { ConfirmButton } from "@/components/forms";
 import { ScheduleEditor } from "@/components/schedule-editor";
@@ -64,6 +64,13 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
             <Link href={`/reports/venues?venue=${venue.id}`} className="btn">
               Statement
             </Link>
+            {!venue.bookings.length && !slots.length && (
+              <form action={venueToCompany.bind(null, venue.id)}>
+                <ConfirmButton message={`Move ${venue.name} to Companies & customers? Use this for a client company, not a place you play.`} className="btn">
+                  Not a venue
+                </ConfirmButton>
+              </form>
+            )}
             <Link href={`/bookings/new?venueId=${venue.id}`} className="btn btn-primary">
               New booking here
             </Link>
