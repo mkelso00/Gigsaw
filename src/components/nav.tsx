@@ -84,7 +84,7 @@ export function NavLinks({ isAdmin, isOwner, badges = {} }: { isAdmin: boolean; 
                 {badges[l.href] ? (
                   <span
                     className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-ink-950"
-                    title="Gigs in the next 7 days with no act"
+                    title={l.href === "/artists" ? "New acts waiting for approval" : "Gigs in the next 7 days with no act"}
                   >
                     {badges[l.href]}
                   </span>

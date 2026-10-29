@@ -35,7 +35,7 @@ export async function vapidKeys(): Promise<Keys> {
 
 function subject() {
   const from = process.env.MAIL_FROM?.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/)?.[0];
-  return `mailto:${from ?? "alerts@gigsaw.app"}`;
+  return `mailto:${from ?? "alerts@send.gigsaw.live"}`;
 }
 
 export type PushPayload = {

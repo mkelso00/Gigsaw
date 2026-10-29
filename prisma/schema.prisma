@@ -24,18 +24,19 @@ model Agency {
   ownerNotes       String   @default("") // only the platform owner sees this
   createdAt        DateTime @default(now())
 
-  settings   Settings?
-  users      User[]
-  artists    Artist[]
-  contacts   Contact[]
-  venues     Venue[]
-  bookings   Booking[]
-  activity   Activity[]
-  statements BillingStatement[]
-  messages   Message[]
-  slots      VenueSlot[]
-  people     Person[]
-  events     Event[]
+  settings     Settings?
+  users        User[]
+  artists      Artist[]
+  contacts     Contact[]
+  venues       Venue[]
+  bookings     Booking[]
+  activity     Activity[]
+  statements   BillingStatement[]
+  messages     Message[]
+  slots        VenueSlot[]
+  people       Person[]
+  events       Event[]
+  applications ActApplication[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -87,6 +88,8 @@ model Settings {
   // 0 means no default fee. Added to: EVENTS (weddings and private events, once per event) | ALL
   bookingFeeMinor       Int     @default(0)
   bookingFeeFor         String  @default("EVENTS")
+  // Secret for the private link new acts use to join (/join/<token>). Null means no link yet.
+  joinToken             String? @unique
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
   weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
@@ -153,6 +156,22 @@ model Artist {
   agent             User?    @relation("ArtistAgent", fields: [agentId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
   demo              Boolean  @default(false) // sample data, removable from Settings
+
+  // Profile, filled in by the act when they join or by the agency.
+  actType           String  @default("") // SOLO | DUO | BAND | DJ | OTHER
+  town              String  @default("")
+  photoUrl          String  @default("")
+  videoUrl          String  @default("")
+  instagram         String  @default("")
+  website           String  @default("")
+  setList           String  @default("")
+  usualFeeMinor     Int? // what they usually charge, a guide for the agency
+  // Bank details for paying the act. Agency only.
+  bankAccountName   String  @default("")
+  bankSortCode      String  @default("")
+  bankAccountNumber String  @default("")
+  vatRegistered     Boolean @default(false)
+  vatNumber         String  @default("")
 
   login    User?       @relation("ArtistLogin")
   slots    VenueSlot[]
@@ -570,4 +589,43 @@ model ActLink {
 
   @@unique([parentId, childId])
   @@index([childId])
+}
+
+// A new act filling in the private join link. The agency approves it to create the act (with its
+// members and a login), or declines it.
+model ActApplication {
+  id         String    @id @default(cuid())
+  agencyId   String
+  agency     Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  status     String    @default("NEW") // NEW | APPROVED | DECLINED
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  artistId   String? // the act made on approval
+
+  actName     String
+  actType     String @default("SOLO")
+  genre       String @default("")
+  town        String @default("")
+  contactName String
+  email       String
+  phone       String @default("")
+  members     Json   @default("[]") // [{ name, email, phone, role }]
+
+  photoUrl  String @default("")
+  videoUrl  String @default("")
+  instagram String @default("")
+  website   String @default("")
+  setList   String @default("")
+
+  usualFeeMinor     Int?
+  bankAccountName   String  @default("")
+  bankSortCode      String  @default("")
+  bankAccountNumber String  @default("")
+  vatRegistered     Boolean @default(false)
+  vatNumber         String  @default("")
+  notes             String  @default("")
+  // The password they chose, so they can log in once approved.
+  passwordHash      String
+
+  @@index([agencyId, status])
 }

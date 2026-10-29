@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
+import { parseActProfile } from "@/lib/act-profile";
 import { CONTACT_TYPES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
@@ -31,6 +32,7 @@ async function artistData(form: FormData, agencyId: string) {
     notes: str(form, "notes"),
     defaultCommission: commission,
     agentId,
+    ...parseActProfile(form),
   };
 }
 

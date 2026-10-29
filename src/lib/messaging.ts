@@ -7,10 +7,10 @@ import { pushTo, type PushPayload } from "./push";
 // and records every message in the Message table either way. With no provider set up,
 // messages are kept as NOT_SENT so they can still be read in the Outbox.
 //
-//   Email: RESEND_API_KEY, MAIL_FROM (e.g. "Gigsaw <alerts@yourdomain.com>")
+//   Email: RESEND_API_KEY, MAIL_FROM (e.g. "Gigsaw <bookings@send.gigsaw.live>")
 //   Texts: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (e.g. +447700900000)
 
-export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "REMINDER" | "EVENT" | "TEST";
+export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "REMINDER" | "EVENT" | "JOIN" | "TEST";
 
 type Base = {
   kind: MessageKind;

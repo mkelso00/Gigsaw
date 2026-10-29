@@ -18,12 +18,13 @@ export default async function AgencyLayout({ children }: { children: React.React
   const theme = (await cookies()).get("gigsaw_theme")?.value === "light" ? "light" : "dark";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
-  const [unfilled, noAct, acts, venues, contacts] = await Promise.all([
+  const [unfilled, noAct, acts, venues, contacts, newActs] = await Promise.all([
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
     oneOffsNeedingAct(user.agencyId, 7),
     prisma.artist.findMany(pick),
     prisma.venue.findMany(pick),
     prisma.contact.findMany(pick),
+    prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
   const initials = user.name
@@ -43,7 +44,7 @@ export default async function AgencyLayout({ children }: { children: React.React
             <button className="text-xs text-ink-400 hover:text-white">Sign out</button>
           </form>
         </div>
-        <NavLinks isAdmin={user.role === "ADMIN"} isOwner={user.isOwner} badges={{ "/rota": unfilledThisWeek }} />
+        <NavLinks isAdmin={user.role === "ADMIN"} isOwner={user.isOwner} badges={{ "/rota": unfilledThisWeek, "/artists": newActs }} />
         <div className="mt-auto hidden border-t border-white/[0.06] p-4 lg:block">
           {user.isOwner && (
             <Link

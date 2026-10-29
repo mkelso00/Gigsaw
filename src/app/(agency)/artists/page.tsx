@@ -16,6 +16,7 @@ type View = (typeof VIEWS)[number][0];
 
 export default async function ArtistsPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; show?: string }> }) {
   const user = await requireStaff();
+  const newActs = await prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } });
   const sp = await searchParams;
   const view: View = VIEWS.some(([v]) => v === sp.view) ? (sp.view as View) : "list";
   const settings = await getSettings(user.agencyId);
@@ -75,9 +76,14 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         title="Acts"
         subtitle="Your roster: solo singers, duos and bands. A band can be made up of other acts."
         actions={
-          <Link href="/artists/new" className="btn btn-primary">
-            Add act
-          </Link>
+          <>
+            <Link href="/artists/applications" className="btn">
+              New acts{newActs ? <span className="badge ml-1.5 bg-amber-400 text-ink-950">{newActs}</span> : null}
+            </Link>
+            <Link href="/artists/new" className="btn btn-primary">
+              Add act
+            </Link>
+          </>
         }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
