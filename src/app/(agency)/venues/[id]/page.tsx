@@ -25,11 +25,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
       where: { id, agencyId: user.agencyId },
       include: {
         people: { orderBy: { firstName: "asc" } },
-        bookings: {
-          orderBy: { setStart: "desc" },
-          take: 50,
-          include: { artist: { select: { name: true } } },
-        },
+        bookings: { where: { archivedAt: null }, orderBy: { setStart: "desc" }, take: 50, include: { artist: { select: { name: true } } } },
       },
     }),
     getSettings(user.agencyId),

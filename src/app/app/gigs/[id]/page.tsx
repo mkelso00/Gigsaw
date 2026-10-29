@@ -48,7 +48,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
         where: { id: b.eventId, agencyId: user.agencyId },
         include: {
           bookings: {
-            where: { id: { not: b.id }, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
+            where: { archivedAt: null, id: { not: b.id }, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
             select: { setStart: true, setEnd: true, timezone: true, artist: { select: { name: true } } },
             orderBy: { setStart: "asc" },
           },

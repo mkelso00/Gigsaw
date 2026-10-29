@@ -24,7 +24,11 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       include: {
         notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
         people: { orderBy: { firstName: "asc" } },
-        bookings: { orderBy: { setStart: "desc" }, include: { artist: { select: { name: true } }, venue: { select: { name: true } } } },
+        bookings: {
+          where: { archivedAt: null },
+          orderBy: { setStart: "desc" },
+          include: { artist: { select: { name: true } }, venue: { select: { name: true } } },
+        },
       },
     }),
     getSettings(user.agencyId),

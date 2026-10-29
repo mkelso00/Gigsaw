@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addPayment, deleteBooking, deleteCheckIn, deletePayment, logCheckInForArtist, resendOffer, setBookingStatus } from "@/actions/bookings";
+import {
+  addPayment,
+  deleteBooking,
+  deleteCheckIn,
+  deletePayment,
+  logCheckInForArtist,
+  resendOffer,
+  setBookingArchived,
+  setBookingStatus,
+} from "@/actions/bookings";
 import { CopyField } from "@/components/client-bits";
 import { CopyBooking } from "@/components/copy-booking";
 import { appUrl } from "@/lib/messaging";
@@ -153,11 +162,20 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             <a href={`/print/bookings/${booking.id}/itinerary`} target="_blank" className="btn">
               Itinerary
             </a>
+            <form action={setBookingArchived.bind(null, booking.id, !booking.archivedAt)}>
+              <button className="btn">{booking.archivedAt ? "Restore" : "Archive"}</button>
+            </form>
           </>
         }
       />
 
-      {arrival.state === "OVERDUE" && (
+      {booking.archivedAt && (
+        <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          <strong>Archived</strong> on {formatDate(booking.archivedAt, tz)}. It isn&apos;t in your lists, calendar or reports, and the act doesn&apos;t see it.
+          Press Restore to bring it back.
+        </div>
+      )}
+      {arrival.state === "OVERDUE" && !booking.archivedAt && (
         <div
           role="alert"
           className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-rose-600 px-6 py-5 text-white shadow-lg shadow-rose-900/20"
@@ -483,11 +501,24 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             )}
           </section>
 
-          <form action={deleteBooking.bind(null, booking.id)}>
-            <ConfirmButton message={`Delete ${booking.reference}? This removes its payments and check-ins too.`} className="btn btn-danger w-full">
-              Delete booking
-            </ConfirmButton>
-          </form>
+          {booking.archivedAt ? (
+            user.role === "ADMIN" && (
+              <form action={deleteBooking.bind(null, booking.id)}>
+                <ConfirmButton message={`Delete ${booking.reference} for good? This removes its payments and check-ins too.`} className="btn btn-danger w-full">
+                  Delete for good
+                </ConfirmButton>
+              </form>
+            )
+          ) : (
+            <form action={setBookingArchived.bind(null, booking.id, true)}>
+              <ConfirmButton
+                message={`Archive ${booking.reference}? It leaves your lists and calendar. You can restore it from Archived.`}
+                className="btn w-full"
+              >
+                Archive booking
+              </ConfirmButton>
+            </form>
+          )}
         </div>
       </div>
     </div>

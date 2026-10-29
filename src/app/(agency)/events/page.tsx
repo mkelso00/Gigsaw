@@ -26,7 +26,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       customer: { select: { name: true } },
       venue: { select: { name: true, city: true } },
       tasks: true,
-      bookings: { include: { payments: true, artist: { select: { name: true } } }, orderBy: { setStart: "asc" } },
+      bookings: { where: { archivedAt: null }, include: { payments: true, artist: { select: { name: true } } }, orderBy: { setStart: "asc" } },
     },
     orderBy: { date: past ? "desc" : "asc" },
     take: 200,

@@ -96,25 +96,40 @@ export function SelectAll({ name }: { name: string }) {
   );
 }
 
-/** "Delete selected" for a list of ticked rows: asks first, and does nothing if none are ticked. */
-export function DeleteSelected({ name, action }: { name: string; action: (form: FormData) => Promise<void> }) {
+/**
+ * A button that acts on the ticked rows of a list (archive, restore, delete). Asks first, says how
+ * many, and does nothing if none are ticked.
+ */
+export function SelectedAction({
+  name,
+  action,
+  label,
+  confirm,
+  danger = false,
+}: {
+  name: string;
+  action: (form: FormData) => Promise<void>;
+  label: string;
+  /** The question to ask, with {n} for how many and {s} for the plural "s". */
+  confirm: string;
+  danger?: boolean;
+}) {
   return (
     <button
       formAction={action}
       formMethod="post"
-      className="btn btn-sm btn-danger"
+      className={`btn btn-sm ${danger ? "btn-danger" : ""}`}
       onClick={(e) => {
         const n = e.currentTarget.form?.querySelectorAll(`input[type=checkbox][name="${name}"]:checked`).length ?? 0;
         if (!n) {
           e.preventDefault();
-          window.alert("Tick the bookings you want to delete first.");
+          window.alert("Tick the bookings first.");
           return;
         }
-        if (!window.confirm(`Delete ${n} booking${n === 1 ? "" : "s"}? Their payments and check-ins go too, and acts aren't told. This can't be undone.`))
-          e.preventDefault();
+        if (!window.confirm(confirm.replace("{n}", String(n)).replace("{s}", n === 1 ? "" : "s"))) e.preventDefault();
       }}
     >
-      Delete selected
+      {label}
     </button>
   );
 }

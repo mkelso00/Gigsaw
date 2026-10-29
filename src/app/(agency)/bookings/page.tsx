@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { deleteBookings } from "@/actions/bookings";
-import { DeleteSelected, SelectAll } from "@/components/client-bits";
+import { archiveBookings, deleteBookings, restoreBookings } from "@/actions/bookings";
+import { SelectAll, SelectedAction } from "@/components/client-bits";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
@@ -17,11 +17,12 @@ export const metadata: Metadata = { title: "Bookings" };
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
   const sp = await searchParams;
-  const when = sp.when === "past" ? "past" : sp.when === "all" ? "all" : "upcoming";
+  const archived = sp.view === "archived";
+  const when = archived ? "all" : sp.when === "past" ? "past" : sp.when === "all" ? "all" : "upcoming";
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 86_400_000);
 
-  const where: Prisma.BookingWhereInput = { agencyId: user.agencyId };
+  const where: Prisma.BookingWhereInput = { agencyId: user.agencyId, ...(archived ? { archivedAt: { not: null } } : {}) };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   const unresolved = sp.status === "UNRESOLVED";
   if (unresolved) Object.assign(where, unresolvedPastWhere());
@@ -42,7 +43,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     ];
   }
 
-  const [bookings, artists, settings] = await Promise.all([
+  const [bookings, artists, settings, archivedCount] = await Promise.all([
     prisma.booking.findMany({
       where,
       include: bookingListInclude,
@@ -51,15 +52,32 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     }),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     getSettings(user.agencyId),
+    prisma.booking.count({ where: { agencyId: user.agencyId, archivedAt: { not: null } } }),
   ]);
+  const isAdmin = user.role === "ADMIN";
 
   return (
     <div>
       <PageHeader
-        title="Bookings"
-        subtitle="Every show from first hold to final settlement."
+        title={archived ? "Archived bookings" : "Bookings"}
+        subtitle={
+          archived
+            ? "Tidied away: not in any list, calendar or report. Restore them, or delete them for good."
+            : "Every show from first hold to final settlement."
+        }
         actions={
           <>
+            {archived ? (
+              <Link href="/bookings" className="btn">
+                Back to bookings
+              </Link>
+            ) : (
+              archivedCount > 0 && (
+                <Link href="/bookings?view=archived" className="btn">
+                  Archived ({archivedCount})
+                </Link>
+              )
+            )}
             <a href={`/api/export/bookings${sp.artist ? `?artist=${sp.artist}` : ""}`} className="btn">
               Export CSV
             </a>
@@ -71,6 +89,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       />
 
       <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
+        {archived && <input type="hidden" name="view" value="archived" />}
         <label className="min-w-48 flex-1">
           <span className="label">Search</span>
           <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />
@@ -131,10 +150,41 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       ) : (
         <form action="/bookings/bulk" method="get" className="card overflow-x-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
-            <span className="text-sm text-ink-500">Tick gigs to change their times or fee together and tell the acts, or to delete them.</span>
-            <span className="flex gap-2">
-              <button className="btn btn-sm">Change selected gigs</button>
-              <DeleteSelected name="ids" action={deleteBookings} />
+            <span className="text-sm text-ink-500">
+              {archived
+                ? "Tick bookings to restore them or delete them for good."
+                : "Tick gigs to change their times or fee together and tell the acts, or to archive them."}
+            </span>
+            <span className="flex flex-wrap gap-2">
+              {archived ? (
+                <>
+                  <SelectedAction
+                    name="ids"
+                    action={restoreBookings}
+                    label="Restore selected"
+                    confirm="Restore {n} booking{s}? They go back into your lists and calendar."
+                  />
+                  {isAdmin && (
+                    <SelectedAction
+                      name="ids"
+                      action={deleteBookings}
+                      label="Delete for good"
+                      confirm="Delete {n} booking{s} for good? Their payments and check-ins go too. This can't be undone."
+                      danger
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-sm">Change selected gigs</button>
+                  <SelectedAction
+                    name="ids"
+                    action={archiveBookings}
+                    label="Archive selected"
+                    confirm="Archive {n} booking{s}? They leave your lists and calendar, and acts aren't told. You can restore them from Archived."
+                  />
+                </>
+              )}
             </span>
           </div>
           <table className="table">

@@ -10,6 +10,10 @@
 
 import { randomBytes } from "node:crypto";
 import type { Artist, Contact, Prisma, PrismaClient, Venue, VenueSlot } from "@prisma/client";
+import type { prisma as appPrisma } from "./db";
+
+/** Works with the app's client (which hides archived bookings) or a plain one (the seed script). */
+type Db = PrismaClient | typeof appPrisma;
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
 import { defaultTasks } from "./event-plan";
@@ -21,7 +25,7 @@ const MIN = 60_000;
 const DAY = 86_400_000;
 const TZ = "Europe/London";
 
-export async function hasDemoData(prisma: PrismaClient, agencyId: string) {
+export async function hasDemoData(prisma: Db, agencyId: string) {
   return (await prisma.artist.count({ where: { agencyId, demo: true } })) > 0;
 }
 
@@ -29,7 +33,7 @@ export async function hasDemoData(prisma: PrismaClient, agencyId: string) {
  * Add the sample data. `leadAgentId` looks after most acts. If `secondAgentId` is not given, a
  * demo agent who cannot sign in is created to look after the rest.
  */
-export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string; leadAgentId: string; secondAgentId?: string }) {
+export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgentId: string; secondAgentId?: string }) {
   const agencyId = opts.agencyId;
   // Seeded random numbers so the demo looks the same each time.
   let seed = 42;
@@ -740,7 +744,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
 }
 
 /** Remove every demo record, plus anything hanging off the demo artists. Real data is left alone. */
-export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
+export async function removeDemoData(prisma: Db, agencyId: string) {
   const artistIds = (await prisma.artist.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((a) => a.id);
   const bookingIds = (await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })).map(
     (b) => b.id,

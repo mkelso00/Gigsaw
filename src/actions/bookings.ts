@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
-import { requireStaff, type AgencyUser } from "@/lib/auth";
+import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, NEEDS_ACT, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
 import { onConfirmed } from "@/lib/confirmations";
@@ -143,23 +143,61 @@ async function offerAndLog(user: AgencyUser, bookingId: string) {
 }
 
 export async function deleteBooking(bookingId: string) {
-  const user = await requireStaff();
-  const b = await ownBooking(user, bookingId);
+  const user = await requireAdmin();
+  const b = await ownBooking(user as AgencyUser, bookingId);
+  // Only archived bookings can be deleted, so nothing live is lost by mistake.
+  if (!b.archivedAt) return;
   await prisma.booking.delete({ where: { id: b.id } });
   await logActivity(user, "BOOKING", bookingId, "deleted", b.reference);
   revalidatePath("/", "layout");
   redirect("/bookings");
 }
 
-/** Delete the ticked bookings from the bookings list. Their payments and check-ins go with them. */
-export async function deleteBookings(form: FormData) {
+const tickedIds = (form: FormData) => form.getAll("ids").map(String).slice(0, 500);
+
+/** Archive the ticked bookings: out of every list and calendar, but kept and easy to bring back. */
+export async function archiveBookings(form: FormData) {
   const user = await requireStaff();
-  const ids = form.getAll("ids").map(String).slice(0, 500);
+  const ids = tickedIds(form);
   if (!ids.length) return;
   const gigs = await prisma.booking.findMany({ where: { id: { in: ids }, agencyId: user.agencyId }, select: { id: true, reference: true } });
-  await prisma.booking.deleteMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId } });
+  await prisma.booking.updateMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId }, data: { archivedAt: new Date() } });
+  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "archived", g.reference);
+  revalidatePath("/", "layout");
+}
+
+/** Bring archived bookings back. */
+export async function restoreBookings(form: FormData) {
+  const user = await requireStaff();
+  const ids = tickedIds(form);
+  if (!ids.length) return;
+  const where = { id: { in: ids }, agencyId: user.agencyId, archivedAt: { not: null } };
+  const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
+  await prisma.booking.updateMany({ where, data: { archivedAt: null } });
+  for (const g of gigs) await logActivity(user, "BOOKING", g.id, "restored from the archive", g.reference);
+  revalidatePath("/", "layout");
+}
+
+/** Delete archived bookings for good (admins only). Only archived ones can go, so nothing live is lost by mistake. */
+export async function deleteBookings(form: FormData) {
+  const user = await requireAdmin();
+  const ids = tickedIds(form);
+  if (!ids.length) return;
+  const where = { id: { in: ids }, agencyId: user.agencyId!, archivedAt: { not: null } };
+  const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
+  await prisma.booking.deleteMany({ where });
   for (const g of gigs) await logActivity(user, "BOOKING", g.id, "deleted", g.reference);
   revalidatePath("/", "layout");
+}
+
+/** Archive or restore one booking from its page. */
+export async function setBookingArchived(bookingId: string, archived: boolean) {
+  const user = await requireStaff();
+  const b = await ownBooking(user, bookingId);
+  await prisma.booking.update({ where: { id: b.id }, data: { archivedAt: archived ? new Date() : null } });
+  await logActivity(user, "BOOKING", b.id, archived ? "archived" : "restored from the archive", b.reference);
+  revalidatePath("/", "layout");
+  if (archived) redirect("/bookings");
 }
 
 export async function addPayment(bookingId: string, _: FormState, form: FormData): Promise<FormState> {

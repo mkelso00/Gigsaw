@@ -7,7 +7,8 @@ export type Usage = { count: number; references: string[] };
 /** Billable gigs per agency for a month ("YYYY-MM"). */
 export async function usageForMonth(month: string, agencyId?: string): Promise<Map<string, Usage>> {
   const bookings = await prisma.booking.findMany({
-    where: { ...(agencyId ? { agencyId } : {}), demo: false, status: { not: "CANCELLED" }, arriveBy: monthSearchWindow(month) },
+    // Archived gigs still count: archiving tidies a booking away, it doesn't undo a gig that happened.
+    where: { ...(agencyId ? { agencyId } : {}), demo: false, status: { not: "CANCELLED" }, arriveBy: monthSearchWindow(month), archivedAt: undefined },
     select: {
       agencyId: true,
       reference: true,

@@ -45,6 +45,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           },
         },
         bookings: {
+          where: { archivedAt: null },
           orderBy: { setStart: "desc" },
           include: {
             venue: {

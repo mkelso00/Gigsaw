@@ -73,6 +73,7 @@ export const eventInclude = {
   customer: true,
   venue: true,
   bookings: {
+    where: { archivedAt: null },
     include: { artist: { select: { id: true, name: true, colour: true, phone: true } }, payments: true, agent: { select: { email: true, name: true } } },
     orderBy: { setStart: "asc" },
   },

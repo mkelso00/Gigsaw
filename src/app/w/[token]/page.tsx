@@ -21,7 +21,11 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
     include: {
       agency: { include: { settings: true } },
       venue: { select: { name: true, city: true } },
-      bookings: { where: { status: { notIn: ["CANCELLED", "ENQUIRY"] } }, include: { artist: { select: { name: true } } }, orderBy: { setStart: "asc" } },
+      bookings: {
+        where: { archivedAt: null, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
+        include: { artist: { select: { name: true } } },
+        orderBy: { setStart: "asc" },
+      },
     },
   });
   if (!e || e.status !== "ACTIVE" || e.agency.status !== "ACTIVE") notFound();

@@ -80,16 +80,17 @@ export function SettingsRow({
         <span className="block text-sm font-medium text-ink-950">{title}</span>
         {sub && <span className="mt-0.5 block text-sm text-ink-500">{sub}</span>}
       </span>
-      {right}
       {href && <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-400" />}
+      {/* On a phone, buttons and badges drop under the text rather than squashing it. */}
+      {right && <span className={`w-full sm:w-auto sm:shrink-0 ${icon ? "pl-[34px] sm:pl-0" : ""}`}>{right}</span>}
     </>
   );
   return href ? (
-    <Link href={href} className="flex items-start gap-3.5 px-5 py-4 transition-colors hover:bg-ink-50">
+    <Link href={href} className="flex flex-wrap items-start gap-x-3.5 gap-y-3 px-5 py-4 transition-colors hover:bg-ink-50 sm:flex-nowrap">
       {body}
     </Link>
   ) : (
-    <div className="flex items-start gap-3.5 px-5 py-4">{body}</div>
+    <div className="flex flex-wrap items-start gap-x-3.5 gap-y-3 px-5 py-4 sm:flex-nowrap">{body}</div>
   );
 }
 

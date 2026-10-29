@@ -303,6 +303,8 @@ model Booking {
   commissionPct   Float     @default(15)
   vatPct          Float     @default(0)
   bookingFeeMinor Int       @default(0) // charged to the venue or client on top, all ours; acts never see it
+  // Archived: tidied away out of every list, but kept (and still counted for billing if it happened).
+  archivedAt      DateTime?
   depositMinor    Int       @default(0)
   depositDueDate  DateTime?
   dealNotes       String    @default("")

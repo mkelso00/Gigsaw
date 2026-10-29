@@ -20,7 +20,11 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
       include: {
         customer: true,
         venue: true,
-        bookings: { where: { status: { not: "CANCELLED" } }, include: { artist: { select: { name: true } }, payments: true }, orderBy: { setStart: "asc" } },
+        bookings: {
+          where: { archivedAt: null, status: { not: "CANCELLED" } },
+          include: { artist: { select: { name: true } }, payments: true },
+          orderBy: { setStart: "asc" },
+        },
       },
     }),
     getSettings(user.agencyId),

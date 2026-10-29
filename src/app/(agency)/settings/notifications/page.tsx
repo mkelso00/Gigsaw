@@ -38,7 +38,7 @@ export default async function NotificationSettings() {
             title="Email and texts"
             sub="Send yourself a test to check they arrive."
             right={
-              <span className="flex flex-wrap items-center justify-end gap-2">
+              <span className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <Badge tone={emailConfigured() ? "green" : "red"}>Email {emailConfigured() ? "on" : "not set up"}</Badge>
                 <Badge tone={smsConfigured() ? "green" : "grey"}>Texts {smsConfigured() ? "on" : "not set up"}</Badge>
                 <ActionForm action={sendTestMessage}>
