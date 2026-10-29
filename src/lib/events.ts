@@ -84,8 +84,15 @@ export type FullEvent = Prisma.EventGetPayload<{ include: typeof eventInclude }>
 
 /** Which automatic emails have gone for an event (claimed in the Reminder table). */
 export async function sentEventMessages(eventId: string) {
-  const rows = await prisma.reminder.findMany({ where: { recipient: `event:${eventId}` }, select: { kind: true } });
-  return new Set(rows.map((r) => r.kind.replace(/^EV_/, "")));
+  return (await sentEventMessagesFor([eventId])).get(eventId)!;
+}
+
+/** The same for several events in one query, by event id. */
+export async function sentEventMessagesFor(eventIds: string[]) {
+  const rows = await prisma.reminder.findMany({ where: { recipient: { in: eventIds.map((id) => `event:${id}`) } }, select: { kind: true, recipient: true } });
+  const out = new Map(eventIds.map((id) => [id, new Set<string>()]));
+  for (const r of rows) out.get(r.recipient.replace(/^event:/, ""))?.add(r.kind.replace(/^EV_/, ""));
+  return out;
 }
 
 const claim = (kind: EventMessage, eventId: string) => claimReminder(`EV_${kind}`, `event:${eventId}`, "");
