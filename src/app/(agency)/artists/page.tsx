@@ -16,13 +16,12 @@ type View = (typeof VIEWS)[number][0];
 
 export default async function ArtistsPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string; show?: string }> }) {
   const user = await requireStaff();
-  const newActs = await prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } });
   const sp = await searchParams;
   const view: View = VIEWS.some(([v]) => v === sp.view) ? (sp.view as View) : "list";
   const settings = await getSettings(user.agencyId);
   const now = new Date();
   const contains = sp.q ? { contains: sp.q, mode: "insensitive" as const } : null;
-  const [all, stats] = await Promise.all([
+  const [all, stats, newActs] = await Promise.all([
     prisma.artist.findMany({
       where: {
         agencyId: user.agencyId,
@@ -48,6 +47,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       },
     }),
     punctualityByArtist(settings, new Date(now.getTime() - 365 * 86_400_000)),
+    prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const acts = sp.show === "bands" ? all.filter((a) => a.partActs.length) : sp.show === "solo" ? all.filter((a) => !a.partActs.length) : all;
   const qs = (extra: Record<string, string | undefined>) =>

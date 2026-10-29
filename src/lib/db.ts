@@ -34,7 +34,9 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 /** An agency's settings, created with defaults the first time they're needed. */
 export async function getSettings(agencyId: string) {
-  return prisma.settings.upsert({ where: { agencyId }, update: {}, create: { agencyId } });
+  // Read first: almost every page needs these, and a read is one query where the upsert is a
+  // transaction of several.
+  return (await prisma.settings.findUnique({ where: { agencyId } })) ?? prisma.settings.upsert({ where: { agencyId }, update: {}, create: { agencyId } });
 }
 
 export async function logActivity(user: { id: string; agencyId: string | null } | null, entity: string, entityId: string, action: string, detail = "") {

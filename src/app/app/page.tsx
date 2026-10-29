@@ -24,32 +24,39 @@ export default async function ArtistHome() {
   // A person's login sees every act they're in; an act's own login sees that act.
   const actIds = await actIdsFor(user);
   if (!actIds.length) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
-  const settings = await getSettings(user.agencyId);
   const now = new Date();
-  const feedOwner = user.personId
-    ? await prisma.person.findFirst({
-        where: { id: user.personId, agencyId: user.agencyId },
-        select: { calendarToken: true, firstName: true, surname: true, alias: true },
-      })
-    : await prisma.artist.findFirst({ where: { id: user.artistId!, agencyId: user.agencyId }, select: { calendarToken: true, name: true } });
+  const [settings, feedOwner, keys, bookings] = await Promise.all([
+    getSettings(user.agencyId),
+    user.personId
+      ? prisma.person.findFirst({
+          where: { id: user.personId, agencyId: user.agencyId },
+          select: { calendarToken: true, firstName: true, surname: true, alias: true },
+        })
+      : prisma.artist.findFirst({ where: { id: user.artistId!, agencyId: user.agencyId }, select: { calendarToken: true, name: true } }),
+    vapidKeys(),
+    prisma.booking.findMany({
+      // Artists don't see early-stage enquiries.
+      where: {
+        agencyId: user.agencyId,
+        artistId: { in: actIds },
+        status: { in: ACT_VISIBLE },
+      },
+      include: {
+        venue: { select: { name: true, city: true, latitude: true, longitude: true } },
+        checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
+        artist: { select: { name: true } },
+      },
+      orderBy: { arriveBy: "asc" },
+    }),
+  ]);
   const feedName = feedOwner ? ("name" in feedOwner ? feedOwner.name : personName(feedOwner)) : "";
   const manyActs = actIds.length > 1 || !!user.personId;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const pushKey = (await vapidKeys()).publicKey;
+  const pushKey = keys.publicKey;
   const feedUrl = feedOwner ? `${proto}://${host}/api/calendar/${feedOwner.calendarToken}.ics` : null;
 
-  const bookings = await prisma.booking.findMany({
-    // Artists don't see early-stage enquiries.
-    where: {
-      agencyId: user.agencyId,
-      artistId: { in: actIds },
-      status: { in: ACT_VISIBLE },
-    },
-    include: { venue: true, checkIns: true, artist: { select: { name: true } } },
-    orderBy: { arriveBy: "asc" },
-  });
   const rows = bookings.map((b) => ({
     b,
     a: arrivalFor(b, settings, now),

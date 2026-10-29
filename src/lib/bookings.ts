@@ -11,9 +11,7 @@ import { isValidTimeZone, localDateKey, zonedToUtc } from "./time";
 export const bookingListInclude = {
   artist: { select: { id: true, name: true, colour: true } },
   venue: { select: { id: true, name: true, city: true, latitude: true, longitude: true, timezone: true } },
-  promoter: { select: { id: true, name: true, company: true } },
   checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
-  payments: { select: { direction: true, kind: true, amountMinor: true } },
 } satisfies Prisma.BookingInclude;
 
 type ArrivalSource = {
