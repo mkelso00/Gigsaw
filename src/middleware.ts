@@ -23,7 +23,6 @@ const PUBLIC = [
   "/icon.svg",
   "/apple-icon",
   "/sw.js",
-  "/signup",
   "/api/stripe/webhook",
 ];
 
