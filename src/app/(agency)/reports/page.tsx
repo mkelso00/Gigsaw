@@ -6,7 +6,7 @@ import { actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { PERIODS, periodBuckets, periodRange, shiftPeriod, type Period } from "@/lib/periods";
-import { venueColour } from "@/lib/rota";
+import { isDateKey, venueColour } from "@/lib/rota";
 import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Reports" };
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Reports" };
 type Totals = { gigs: number; sale: number; fees: number; cost: number; profit: number; received: number; owed: number; paidOut: number; toPay: number };
 const empty = (): Totals => ({ gigs: 0, sale: 0, fees: 0, cost: 0, profit: 0, received: 0, owed: 0, paidOut: 0, toPay: 0 });
 
-const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
+const valid = (s?: string) => (isDateKey(s) ? s : undefined);
 const PERIOD_LABELS: Record<Period | "custom", string> = { week: "Week", month: "Month", year: "Year", custom: "Pick dates" };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string; date?: string; from?: string; to?: string }> }) {

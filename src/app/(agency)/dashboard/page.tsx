@@ -21,10 +21,10 @@ export default async function DashboardPage() {
   const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
 
-  const [upcoming, today, holds, money, activity, unresolved] = await Promise.all([
+  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
-      include: bookingListInclude,
+      include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
       orderBy: { setStart: "asc" },
       take: 10,
     }),
@@ -39,12 +39,40 @@ export default async function DashboardPage() {
     }),
     prisma.booking.count({ where: { agencyId: user.agencyId, status: "HOLD", setStart: { gte: now } } }),
     // Bookings that still involve money moving: confirmed or settled, in the agency's main currency.
+    // Every one ever, so only the columns the sums and the overdue deposits list need.
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: ["CONFIRMED", "SETTLED", "PENDING"] }, currency: cur },
-      include: { payments: true, artist: { select: { name: true } }, promoter: { select: { name: true } } },
+      select: {
+        id: true,
+        reference: true,
+        status: true,
+        setStart: true,
+        timezone: true,
+        currency: true,
+        dealType: true,
+        feeMinor: true,
+        artistFeeMinor: true,
+        commissionPct: true,
+        vatPct: true,
+        bookingFeeMinor: true,
+        depositMinor: true,
+        depositDueDate: true,
+        payments: { select: { direction: true, kind: true, amountMinor: true } },
+        artist: { select: { name: true } },
+        promoter: { select: { name: true } },
+      },
     }),
     prisma.activity.findMany({ where: { agencyId: user.agencyId }, orderBy: { createdAt: "desc" }, take: 8, include: { user: { select: { name: true } } } }),
     prisma.booking.count({ where: { agencyId: user.agencyId, ...unresolvedPastWhere(now) } }),
+    unfilledSlots(user.agencyId, settings.defaultTimezone, 14),
+    oneOffsNeedingAct(user.agencyId, 14),
+    // Offers waiting for the act's answer, and ones they've declined, soonest gig first.
+    prisma.booking.findMany({
+      where: { agencyId: user.agencyId, status: "AWAITING", setStart: { gte: now } },
+      include: { artist: { select: { name: true, colour: true, phone: true } }, venue: { select: { name: true, city: true } } },
+      orderBy: [{ offerResponse: "asc" }, { setStart: "asc" }],
+      take: 30,
+    }),
   ]);
 
   let owedByPromoters = 0;
@@ -65,17 +93,6 @@ export default async function DashboardPage() {
     }
   }
 
-  const [unfilled, oneOffsNoAct, offers] = await Promise.all([
-    unfilledSlots(user.agencyId, settings.defaultTimezone, 14),
-    oneOffsNeedingAct(user.agencyId, 14),
-    // Offers waiting for the act's answer, and ones they've declined, soonest gig first.
-    prisma.booking.findMany({
-      where: { agencyId: user.agencyId, status: "AWAITING", setStart: { gte: now } },
-      include: { artist: { select: { name: true, colour: true, phone: true } }, venue: { select: { name: true, city: true } } },
-      orderBy: [{ offerResponse: "asc" }, { setStart: "asc" }],
-      take: 30,
-    }),
-  ]);
   const declined = offers.filter((o) => o.offerResponse === "DECLINED");
   const waiting = offers.filter((o) => o.offerResponse !== "DECLINED");
   const unfilledSoon = unfilled.filter((u) => u.date <= addDaysToKey(localDateKey(now, settings.defaultTimezone), 6)).length;

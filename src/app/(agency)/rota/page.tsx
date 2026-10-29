@@ -48,7 +48,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
       },
     },
   } as const;
-  const [slots, artists, needs, allVenues, oneOffs] = await Promise.all([
+  const [slots, artists, needs, allVenues, oneOffs, bookings] = await Promise.all([
     prisma.venueSlot.findMany({
       where: { agencyId: user.agencyId, active: true },
       include: {
@@ -79,18 +79,17 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
       include: bookingInclude,
       orderBy: { setStart: "asc" },
     }),
+    // Gigs from the weekly slots, fetched alongside the slots (only active slots' are looked up).
+    prisma.booking.findMany({
+      where: {
+        agencyId: user.agencyId,
+        slotId: { not: null },
+        status: { not: "CANCELLED" },
+        arriveBy: { gte: weekFrom, lt: weekTo },
+      },
+      include: bookingInclude,
+    }),
   ]);
-  const bookings = slots.length
-    ? await prisma.booking.findMany({
-        where: {
-          agencyId: user.agencyId,
-          slotId: { in: slots.map((s) => s.id) },
-          status: { not: "CANCELLED" },
-          arriveBy: { gte: weekFrom, lt: weekTo },
-        },
-        include: bookingInclude,
-      })
-    : [];
   // A slot is filled on a date if a booking made from it falls on that date in the venue's time zone.
   const filled = new Map(bookings.map((b) => [`${b.slotId}|${localDateKey(b.arriveBy, b.timezone)}`, b]));
 

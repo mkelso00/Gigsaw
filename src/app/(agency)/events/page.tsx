@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
-import { autoDone, eventTotals, sentEventMessages } from "@/lib/events";
+import { autoDone, eventTotals, sentEventMessagesFor } from "@/lib/events";
 import { formatMoney } from "@/lib/money";
 import { localDateKey } from "@/lib/time";
 import { actName } from "@/lib/constants";
@@ -31,15 +31,14 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     orderBy: { date: past ? "desc" : "asc" },
     take: 200,
   });
-  const rows = await Promise.all(
-    events.map(async (e) => {
-      const totals = eventTotals(e.bookings);
-      const sent = await sentEventMessages(e.id);
-      const done = e.tasks.filter((t) => t.doneAt || autoDone(t.key, e, totals, sent)).length;
-      const overdue = e.tasks.some((t) => !t.doneAt && !autoDone(t.key, e, totals, sent) && t.dueDate && t.dueDate < today);
-      return { e, totals, done, overdue };
-    }),
-  );
+  const sentByEvent = await sentEventMessagesFor(events.map((e) => e.id));
+  const rows = events.map((e) => {
+    const totals = eventTotals(e.bookings);
+    const sent = sentByEvent.get(e.id)!;
+    const done = e.tasks.filter((t) => t.doneAt || autoDone(t.key, e, totals, sent)).length;
+    const overdue = e.tasks.some((t) => !t.doneAt && !autoDone(t.key, e, totals, sent) && t.dueDate && t.dueDate < today);
+    return { e, totals, done, overdue };
+  });
 
   return (
     <div>

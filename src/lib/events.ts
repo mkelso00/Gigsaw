@@ -7,6 +7,7 @@ import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type Payment
 import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForActs } from "./people";
+import { claimedReminders, claimReminder } from "./reminders";
 import { formatDate, localDateKey, localTime } from "./time";
 
 // Weddings and events: one customer booking with several acts. Each act's gig is an ordinary
@@ -83,19 +84,18 @@ export type FullEvent = Prisma.EventGetPayload<{ include: typeof eventInclude }>
 
 /** Which automatic emails have gone for an event (claimed in the Reminder table). */
 export async function sentEventMessages(eventId: string) {
-  const rows = await prisma.reminder.findMany({ where: { recipient: `event:${eventId}` }, select: { kind: true } });
-  return new Set(rows.map((r) => r.kind.replace(/^EV_/, "")));
+  return (await sentEventMessagesFor([eventId])).get(eventId)!;
 }
 
-async function claim(kind: EventMessage, eventId: string) {
-  try {
-    await prisma.reminder.create({ data: { kind: `EV_${kind}`, recipient: `event:${eventId}`, key: "" } });
-    return true;
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return false;
-    throw e;
-  }
+/** The same for several events in one query, by event id. */
+export async function sentEventMessagesFor(eventIds: string[]) {
+  const rows = await prisma.reminder.findMany({ where: { recipient: { in: eventIds.map((id) => `event:${id}`) } }, select: { kind: true, recipient: true } });
+  const out = new Map(eventIds.map((id) => [id, new Set<string>()]));
+  for (const r of rows) out.get(r.recipient.replace(/^event:/, ""))?.add(r.kind.replace(/^EV_/, ""));
+  return out;
 }
+
+const claim = (kind: EventMessage, eventId: string) => claimReminder(`EV_${kind}`, `event:${eventId}`, "");
 
 export function plannerUrl(token: string) {
   return `${appUrl()}/w/${token}`;
@@ -273,26 +273,43 @@ async function sendThanks(e: FullEvent) {
 
 /** Send whichever automatic event emails are due. Safe to run as often as you like. */
 export async function runEventMessages(now = new Date()) {
-  const events = await prisma.event.findMany({
-    where: {
-      status: "ACTIVE",
-      autoEmails: true,
-      demo: false,
-      agency: { status: "ACTIVE", settings: { eventEmails: true } },
-      date: { gte: localDateKey(new Date(now.getTime() - 8 * 86_400_000), "UTC"), lte: localDateKey(new Date(now.getTime() + 57 * 86_400_000), "UTC") },
-    },
-    include: eventInclude,
-  });
-  let sent = 0;
-  for (const e of events) {
+  const where = {
+    status: "ACTIVE",
+    autoEmails: true,
+    demo: false,
+    agency: { status: "ACTIVE", settings: { eventEmails: true } },
+    date: { gte: localDateKey(new Date(now.getTime() - 8 * 86_400_000), "UTC"), lte: localDateKey(new Date(now.getTime() + 57 * 86_400_000), "UTC") },
+  } satisfies Prisma.EventWhereInput;
+  // The emails in their sending window that could go: all but the acts' details need the customer's email.
+  const dueNow = (e: { date: string; timezone: string; plannerDoneAt: Date | null; customer: { email: string } | null }) => {
     // Office hours only: nothing before 9am or after 8pm, the event's local time.
     const hour = localTime(now, e.timezone);
-    if (hour < "09:00" || hour >= "20:00") continue;
-    const today = localDateKey(now, e.timezone);
-    for (const kind of eventMessagesDue(daysBetween(today, e.date))) {
-      if ((kind === "PLANNER_REQUEST" || kind === "PLANNER_CHASE") && (e.plannerDoneAt || !e.customer?.email)) continue;
-      if (kind === "BALANCE_REMINDER" && (!e.customer?.email || eventTotals(e.bookings).outstanding <= 0)) continue;
-      if (kind === "THANKS" && !e.customer?.email) continue;
+    if (hour < "09:00" || hour >= "20:00") return [];
+    return eventMessagesDue(daysBetween(localDateKey(now, e.timezone), e.date)).filter((kind) => {
+      if (kind === "ACT_DETAILS") return true;
+      if ((kind === "PLANNER_REQUEST" || kind === "PLANNER_CHASE") && e.plannerDoneAt) return false;
+      return !!e.customer?.email;
+    });
+  };
+  // This runs every minute, so look first at just the dates: only events with an email due that
+  // hasn't gone yet are loaded in full.
+  const candidates = (
+    await prisma.event.findMany({ where, select: { id: true, date: true, timezone: true, plannerDoneAt: true, customer: { select: { email: true } } } })
+  ).filter((e) => dueNow(e).length);
+  const claimed = await claimedReminders(
+    [...new Set(candidates.flatMap(dueNow))].map((k) => `EV_${k}`),
+    candidates.map((e) => `event:${e.id}`),
+    [""],
+  );
+  const isSent = (kind: EventMessage, eventId: string) => claimed.has(`EV_${kind}|event:${eventId}|`);
+  const ids = candidates.filter((e) => dueNow(e).some((kind) => !isSent(kind, e.id))).map((e) => e.id);
+  if (!ids.length) return 0;
+  const events = await prisma.event.findMany({ where: { ...where, id: { in: ids } }, include: eventInclude });
+  let sent = 0;
+  for (const e of events) {
+    for (const kind of dueNow(e)) {
+      if (isSent(kind, e.id)) continue;
+      if (kind === "BALANCE_REMINDER" && eventTotals(e.bookings).outstanding <= 0) continue;
       if (kind === "ACT_DETAILS" && !withAct(e).length) continue;
       // Switched off in Settings > Notifications: the automatic email doesn't go.
       const key = TEMPLATE_OF[kind];

@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
@@ -220,15 +221,17 @@ export async function recordEventPayment(eventId: string, _: FormState, form: Fo
     const paidAt = isDateKey(str(form, "paidAt")) ? new Date(`${str(form, "paidAt")}T12:00:00Z`) : new Date();
     const note = str(form, "note");
     const total = left;
+    const parts: Prisma.PaymentCreateManyInput[] = [];
     for (const [i, b] of bookings.entries()) {
       const owed = Math.max(0, dealBreakdown(b).totalDueMinor - paymentTotals(b.payments).receivedMinor);
       // Anything over what's owed goes on the last gig.
       const part = i === bookings.length - 1 ? left : Math.min(left, owed);
       if (part <= 0) continue;
-      await prisma.payment.create({ data: { bookingId: b.id, direction: "IN", kind, amountMinor: part, paidAt, note: note || "Payment for the whole event" } });
+      parts.push({ bookingId: b.id, direction: "IN", kind, amountMinor: part, paidAt, note: note || "Payment for the whole event" });
       left -= part;
       if (left <= 0) break;
     }
+    await prisma.payment.createMany({ data: parts });
     await logActivity(user, "EVENT", eventId, "recorded a payment", (total / 100).toFixed(2));
     revalidatePath("/", "layout");
     return { ok: "Payment recorded and shared across the acts." };

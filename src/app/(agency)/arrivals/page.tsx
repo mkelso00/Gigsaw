@@ -31,23 +31,18 @@ export default async function ArrivalsPage() {
   const now = new Date();
   const HOUR = 3_600_000;
 
-  // Gigs with a call time from 12 hours ago to 24 hours ahead.
-  const live = await prisma.booking.findMany({
-    where: {
-      agencyId: user.agencyId,
-      status: { in: LIVE_STATUSES },
-      arriveBy: { gte: new Date(now.getTime() - 12 * HOUR), lte: new Date(now.getTime() + 24 * HOUR) },
-    },
-    include: bookingListInclude,
-  });
-  const board = live
-    .map((b) => ({ b, a: arrivalFor(b, settings, now) }))
-    .sort((x, y) => ORDER[x.a.state] - ORDER[y.a.state] || x.b.arriveBy.getTime() - y.b.arriveBy.getTime());
-
-  const count = (s: ArrivalState) => board.filter((r) => r.a.state === s).length;
   const yearAgo = new Date(now.getTime() - 365 * 86_400_000);
 
-  const [recent, artists, stats] = await Promise.all([
+  const [live, recent, artists, stats] = await Promise.all([
+    // Gigs with a call time from 12 hours ago to 24 hours ahead.
+    prisma.booking.findMany({
+      where: {
+        agencyId: user.agencyId,
+        status: { in: LIVE_STATUSES },
+        arriveBy: { gte: new Date(now.getTime() - 12 * HOUR), lte: new Date(now.getTime() + 24 * HOUR) },
+      },
+      include: bookingListInclude,
+    }),
     prisma.checkIn.findMany({
       where: { booking: { agencyId: user.agencyId } },
       orderBy: { at: "desc" },
@@ -60,6 +55,11 @@ export default async function ArrivalsPage() {
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, colour: true } }),
     punctualityByArtist(settings, yearAgo),
   ]);
+  const board = live
+    .map((b) => ({ b, a: arrivalFor(b, settings, now) }))
+    .sort((x, y) => ORDER[x.a.state] - ORDER[y.a.state] || x.b.arriveBy.getTime() - y.b.arriveBy.getTime());
+
+  const count = (s: ArrivalState) => board.filter((r) => r.a.state === s).length;
 
   return (
     <div>

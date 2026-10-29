@@ -82,7 +82,7 @@ async function record(
   return status;
 }
 
-const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
 /**
  * Send a branded email. `replyTo` should be a real person or inbox (e.g. the agency's email),

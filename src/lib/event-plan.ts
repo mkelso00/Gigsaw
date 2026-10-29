@@ -54,5 +54,3 @@ export const PLAN_FIELDS = [
   ["songRequests", "Song requests", "First dance, must-plays and anything you'd rather not hear"],
   ["specialNotes", "Anything else", "Surprises, guests with special needs, things to avoid"],
 ] as const;
-
-export type PlanField = (typeof PLAN_FIELDS)[number][0];
