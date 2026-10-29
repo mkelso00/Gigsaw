@@ -60,9 +60,14 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
         }
         subtitle={[venue.city, venue.country].filter(Boolean).join(", ")}
         actions={
-          <Link href={`/bookings/new?venueId=${venue.id}`} className="btn btn-primary">
-            New booking here
-          </Link>
+          <>
+            <Link href={`/reports/venues?venue=${venue.id}`} className="btn">
+              Statement
+            </Link>
+            <Link href={`/bookings/new?venueId=${venue.id}`} className="btn btn-primary">
+              New booking here
+            </Link>
+          </>
         }
       />
       <div className="mb-6">

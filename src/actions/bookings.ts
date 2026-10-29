@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { notifyClientOfArrival } from "@/lib/alerts";
-import { notifyArtistIfChanged, snapshotOf } from "@/lib/notify";
+import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, NEEDS_ACT, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
@@ -13,7 +13,8 @@ import { findClashes } from "@/lib/clash-check";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { formatMoney, toMinor } from "@/lib/money";
-import { localDateKey, zonedToUtc } from "@/lib/time";
+import { formatDate, localDateKey, localTime, zonedToUtc } from "@/lib/time";
+import { buildSchedule } from "@/lib/schedule";
 
 /** A booking that belongs to the user's agency. Anything else is treated as not found. */
 async function ownBooking(user: AgencyUser, bookingId: string) {
@@ -220,4 +221,78 @@ export async function deleteCheckIn(checkInId: string) {
   await prisma.checkIn.delete({ where: { id: c.id } });
   await logActivity(user, "BOOKING", c.bookingId, "check-in removed", c.kind.toLowerCase().replaceAll("_", " "));
   revalidatePath("/", "layout");
+}
+
+export type CopyResult = { ok: boolean; message: string; ids: string[] };
+
+/**
+ * Copy a booking to other dates: same venue, times, money, act and details, as new gigs with
+ * no payments or check-ins. The copies take the chosen status: Pending, Awaiting confirmation
+ * (the act gets one message listing all the offers) or Confirmed.
+ */
+export async function copyBooking(bookingId: string, dates: string[], status: string, keepAct: boolean): Promise<CopyResult> {
+  const user = await requireStaff();
+  const b = await ownBooking(user, bookingId);
+  const unique = [...new Set(dates)].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if (!unique.length) return { ok: false, message: "Pick at least one date.", ids: [] };
+  if (unique.length > 120) return { ok: false, message: "That's a lot of dates: copy up to 120 at once.", ids: [] };
+  const artistId = keepAct ? b.artistId : null;
+  const wanted = oneOf(status, ["PENDING", "AWAITING", "CONFIRMED"] as const, "PENDING");
+  // No act: the copies are Pending whatever was chosen.
+  const finalStatus = artistId ? wanted : "PENDING";
+  const tz = b.timezone;
+  const t = (d: Date | null) => (d ? localTime(d, tz) : null);
+  const settings = await getSettings(user.agencyId);
+  const ids: string[] = [];
+  const clashes: string[] = [];
+  for (const date of unique) {
+    const schedule = buildSchedule(date, { arrive: t(b.arriveBy)!, soundcheck: t(b.soundcheckAt), setStart: t(b.setStart)!, setEnd: t(b.setEnd) }, tz);
+    if (artistId && LIVE_STATUSES.includes(finalStatus)) {
+      const w = await findClashes({ agencyId: user.agencyId, artistId, venueId: b.venueId, timezone: tz, ...schedule }, settings.changeoverMinutes);
+      if (w.length) clashes.push(formatDate(schedule.arriveBy, tz));
+    }
+    const copy = await createBookingWithReference(user.agencyId, {
+      ...schedule,
+      artistId,
+      venueId: b.venueId,
+      promoterId: b.promoterId,
+      agentId: b.agentId,
+      createdById: user.id,
+      status: finalStatus,
+      dealType: b.dealType,
+      eventType: b.eventType,
+      eventName: b.eventName,
+      timezone: tz,
+      currency: b.currency,
+      feeMinor: b.feeMinor,
+      artistFeeMinor: b.artistFeeMinor,
+      commissionPct: b.commissionPct,
+      vatPct: b.vatPct,
+      depositMinor: b.depositMinor,
+      dealNotes: b.dealNotes,
+      radiusKm: b.radiusKm,
+      radiusDays: b.radiusDays,
+      travel: b.travel,
+      accommodation: b.accommodation,
+      dayContact: b.dayContact,
+      hospitality: b.hospitality,
+      notes: b.notes,
+      tags: b.tags,
+      notifyClientOnArrival: b.notifyClientOnArrival,
+      demo: b.demo,
+    });
+    ids.push(copy.id);
+  }
+  await logActivity(user, "BOOKING", bookingId, "copied", `${ids.length} date${ids.length === 1 ? "" : "s"}`);
+  if (finalStatus === "AWAITING") await sendOffers(ids);
+  if (finalStatus === "CONFIRMED") await notifyArtistsOfNewGigs(ids);
+  revalidatePath("/", "layout");
+  const label = BOOKING_STATUS_LABELS[finalStatus];
+  return {
+    ok: true,
+    ids,
+    message: `Copied to ${ids.length} date${ids.length === 1 ? "" : "s"} as ${label}${finalStatus === "AWAITING" ? ": the act has been sent the offers" : ""}.${
+      clashes.length ? ` Check ${clashes.slice(0, 5).join(", ")}${clashes.length > 5 ? "…" : ""}: the act may have another gig then.` : ""
+    }`,
+  };
 }

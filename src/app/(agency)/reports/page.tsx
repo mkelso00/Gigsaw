@@ -96,6 +96,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         subtitle="Confirmed and settled shows, by date of the gig."
         actions={
           <>
+            <Link href="/reports/venues" className="btn">
+              Venue statements
+            </Link>
             <a href={`/api/export/bookings?from=${from}&to=${to}`} className="btn">
               Export bookings CSV
             </a>

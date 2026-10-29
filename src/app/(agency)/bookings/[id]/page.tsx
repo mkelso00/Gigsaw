@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addPayment, deleteBooking, deleteCheckIn, deletePayment, logCheckInForArtist, resendOffer, setBookingStatus } from "@/actions/bookings";
 import { CopyField } from "@/components/client-bits";
+import { CopyBooking } from "@/components/copy-booking";
 import { appUrl } from "@/lib/messaging";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
@@ -133,6 +134,13 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             <Link href={`/bookings/${booking.id}/edit`} className="btn">
               Edit
             </Link>
+            <CopyBooking
+              bookingId={booking.id}
+              startDate={localDateKey(booking.arriveBy, tz)}
+              today={localDateKey(new Date(), tz)}
+              hasAct={!!booking.artistId}
+              actName={actName(booking)}
+            />
             <a href={`/print/bookings/${booking.id}/contract`} target="_blank" className="btn">
               Contract
             </a>
@@ -147,7 +155,10 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       />
 
       {arrival.state === "OVERDUE" && (
-        <div role="alert" className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-rose-600 px-6 py-5 text-white shadow-lg shadow-rose-900/20">
+        <div
+          role="alert"
+          className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-rose-600 px-6 py-5 text-white shadow-lg shadow-rose-900/20"
+        >
           <span className="relative flex h-4 w-4 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-60" />
             <span className="relative inline-flex h-4 w-4 rounded-full bg-[#fff]" />
@@ -160,7 +171,10 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           {booking.artist?.phone && (
-            <a href={`tel:${booking.artist.phone.replace(/\s/g, "")}`} className="btn h-12 border-[#fff] bg-[#fff] px-6 text-base font-semibold text-[#be123c] hover:bg-[#fff1f2]">
+            <a
+              href={`tel:${booking.artist.phone.replace(/\s/g, "")}`}
+              className="btn h-12 border-[#fff] bg-[#fff] px-6 text-base font-semibold text-[#be123c] hover:bg-[#fff1f2]"
+            >
               Call {booking.artist.phone}
             </a>
           )}
