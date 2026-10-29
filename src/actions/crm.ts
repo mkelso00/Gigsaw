@@ -242,3 +242,23 @@ export async function deleteVenue(venueId: string) {
   if (count) await logActivity(user, "VENUE", venueId, "deleted venue");
   redirect("/venues");
 }
+
+/** Make (or replace) the venue's private line-up link. The old link stops working. */
+export async function makeVenueShareLink(venueId: string) {
+  const user = await requireStaff();
+  const { randomBytes } = await import("node:crypto");
+  const { count } = await prisma.venue.updateMany({
+    where: { id: venueId, agencyId: user.agencyId },
+    data: { shareToken: randomBytes(24).toString("base64url") },
+  });
+  if (count) await logActivity(user, "VENUE", venueId, "made a new venue line-up link");
+  revalidatePath(`/venues/${venueId}`);
+}
+
+/** Turn the venue's line-up link off. */
+export async function removeVenueShareLink(venueId: string) {
+  const user = await requireStaff();
+  const { count } = await prisma.venue.updateMany({ where: { id: venueId, agencyId: user.agencyId }, data: { shareToken: null } });
+  if (count) await logActivity(user, "VENUE", venueId, "turned off the venue line-up link");
+  revalidatePath(`/venues/${venueId}`);
+}

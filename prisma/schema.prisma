@@ -172,21 +172,23 @@ model ContactNote {
 }
 
 model Venue {
-  id        String   @id @default(cuid())
-  agencyId  String
-  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  name      String
-  address   String   @default("")
-  city      String   @default("")
-  country   String   @default("")
-  capacity  Int?
-  latitude  Float?
-  longitude Float?
-  colour    String   @default("") // calendar colour; blank means pick one automatically
-  timezone  String   @default("Europe/London")
-  notes     String   @default("")
-  createdAt DateTime @default(now())
-  demo      Boolean  @default(false) // sample data, removable from Settings
+  id         String   @id @default(cuid())
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name       String
+  address    String   @default("")
+  city       String   @default("")
+  country    String   @default("")
+  capacity   Int?
+  latitude   Float?
+  longitude  Float?
+  // Secret for the venue's read-only page (/v/<token>). Null means no link has been made.
+  shareToken String?  @unique
+  colour     String   @default("") // calendar colour; blank means pick one automatically
+  timezone   String   @default("Europe/London")
+  notes      String   @default("")
+  createdAt  DateTime @default(now())
+  demo       Boolean  @default(false) // sample data, removable from Settings
 
   slots    VenueSlot[]
   bookings Booking[]

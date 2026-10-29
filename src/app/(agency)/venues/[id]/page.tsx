@@ -5,6 +5,8 @@ import { deleteVenue, updateVenue } from "@/actions/crm";
 import { VenueForm } from "@/components/crm-forms";
 import { ConfirmButton } from "@/components/forms";
 import { ScheduleEditor } from "@/components/schedule-editor";
+import { VenueShareCard } from "@/components/venue-share-card";
+import { appUrl } from "@/lib/messaging";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
@@ -47,6 +49,8 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
             <ConfirmButton message={`Delete ${venue.name}? Bookings stay but lose their venue.`}>Delete venue</ConfirmButton>
           </form>
         </div>
+        <div className="space-y-6">
+        <VenueShareCard venueId={venue.id} url={venue.shareToken ? `${appUrl()}/v/${venue.shareToken}` : null} />
         <section>
           <h2 className="section-title mb-3">Shows here</h2>
           <ul className="card divide-y divide-slate-100 text-sm">
@@ -64,6 +68,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
             ))}
           </ul>
         </section>
+        </div>
       </div>
     </div>
   );

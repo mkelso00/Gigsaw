@@ -14,6 +14,7 @@ Most agency work is weekly slots at the same venues, so Gigsaw is built around t
 - **Who's on where**: the search bar on every page (press `/`) finds tonight's and this week's gigs by town, venue or artist, with a tap-to-call number.
 - **Calendar**: Day, Week (default) and Month views, coloured by venue (or artist), filter by town.
 - **Phone calendars**: artists tap once in their app to add their gigs to Apple, Google or Outlook calendar; it updates by itself.
+- **Venue line-up links**: each venue can have a private link (`/v/…`) showing who's playing and when, slots still to be confirmed, and arrivals on the night, plus a calendar feed. It never shows fees, deals, contacts or other venues. Make, replace or turn off the link on the venue's page.
 - **Branded emails** in the agency's name; replies go to the agent or agency, not a no-reply address.
 - **Double-booking check** looks at overlapping times, so an early and a late gig on the same evening are fine.
 
