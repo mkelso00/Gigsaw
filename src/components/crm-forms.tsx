@@ -1,4 +1,4 @@
-import type { Artist, Contact, Venue } from "@prisma/client";
+import type { Artist, Contact, Venue } from "@/generated/prisma/client";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { UseMyLocation } from "@/components/client-bits";
 import { Field } from "@/components/ui";

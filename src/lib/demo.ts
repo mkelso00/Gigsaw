@@ -4,7 +4,7 @@
 // Every record is flagged `demo: true` so removeDemoData can take it all out again.
 
 import { randomBytes } from "node:crypto";
-import type { Artist, Contact, PrismaClient, Venue } from "@prisma/client";
+import type { Artist, Contact, PrismaClient, Venue } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
 import { VENUE_PALETTE } from "./rota";

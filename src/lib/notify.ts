@@ -1,5 +1,5 @@
 import "server-only";
-import type { Booking, Venue } from "@prisma/client";
+import type { Booking, Venue } from "@/generated/prisma/client";
 import { describeChanges, type BookingSnapshot, type Change } from "./changes";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendSms } from "./messaging";

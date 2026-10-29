@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // The real session check happens on the server in each layout and action.
 const PUBLIC = ["/v/", "/api/venue-calendar", "/api/cron", "/login", "/setup", "/forgot-password", "/reset-password", "/api/calendar", "/manifest.webmanifest", "/icon.svg"];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (!req.cookies.get("gigsaw_session")) {

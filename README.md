@@ -94,7 +94,7 @@ To try Gigsaw with sample data, go to **Settings → Demo data → Load demo dat
 
 ## Running it locally
 
-You need Node.js 20 or newer and a Postgres database. The quickest way to get Postgres is Docker:
+You need Node.js 20.19+, 22.12+ or 24+ (Prisma 7 won't run on older versions) and a Postgres database. The quickest way to get Postgres is Docker:
 
 ```bash
 docker run -d --name gigsaw-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gigsaw -p 5432:5432 postgres:16
@@ -129,6 +129,8 @@ Demo logins (password `gigsaw123` for all):
 
 `npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.
 
+The database client is generated into `src/generated/prisma` (not committed) whenever you run `npm install` or `npm run build`; import it from `@/generated/prisma/client`. Prisma's own settings, including where it finds `DATABASE_URL`, are in `prisma.config.ts`.
+
 ## Checks
 
 ```bash
@@ -143,9 +145,15 @@ npm run lint
 npm run build
 ```
 
+To check the database in `DATABASE_URL` matches `prisma/schema.prisma` ("No difference detected" means no drift):
+
+```bash
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+```
+
 ## Tech
 
-Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind CSS 4, Prisma with Postgres. Money is stored in pence/cents, times in UTC with the venue's time zone alongside.
+Next.js 16 (App Router, server actions), React 19, TypeScript, Tailwind CSS 4, Prisma 7 with Postgres (through the `pg` driver). Money is stored in pence/cents, times in UTC with the venue's time zone alongside.
 
 ## Not built yet
 

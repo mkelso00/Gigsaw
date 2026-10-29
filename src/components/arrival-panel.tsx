@@ -1,4 +1,4 @@
-import type { CheckIn, Settings, Venue } from "@prisma/client";
+import type { CheckIn, Settings, Venue } from "@/generated/prisma/client";
 import { ArrivalBadge } from "@/components/ui";
 import { LOCATION_LABELS, formatDistance, type ArrivalSummary } from "@/lib/arrival";
 import { formatDateTime, formatMinutes, localTime, zoneLabel } from "@/lib/time";

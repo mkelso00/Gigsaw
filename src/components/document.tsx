@@ -1,4 +1,4 @@
-import type { Settings } from "@prisma/client";
+import type { Settings } from "@/generated/prisma/client";
 import { PrintButton } from "@/components/client-bits";
 
 export function DocumentShell({ title, reference, settings, children }: { title: string; reference: string; settings: Settings; children: React.ReactNode }) {

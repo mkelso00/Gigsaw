@@ -1,4 +1,4 @@
-import type { Message } from "@prisma/client";
+import type { Message } from "@/generated/prisma/client";
 import { Empty } from "@/components/ui";
 import { formatDateTime } from "@/lib/time";
 

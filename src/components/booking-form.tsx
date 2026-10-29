@@ -1,4 +1,4 @@
-import type { Booking, Settings } from "@prisma/client";
+import type { Booking, Settings } from "@/generated/prisma/client";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CURRENCIES, DEAL_TYPES, DEAL_TYPE_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";

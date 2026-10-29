@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma, Settings } from "@prisma/client";
+import type { Prisma, Settings } from "@/generated/prisma/client";
 import { punctuality, summariseArrival, type ArrivalSummary } from "./arrival";
 import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES } from "./constants";
 import { prisma } from "./db";

@@ -2,13 +2,15 @@
 // Postgres in production (Railway) and in local development.
 // Enum-like fields are stored as strings; allowed values live in src/lib/constants.ts.
 
+// Generated into src/generated/prisma (not committed). Import it as "@/generated/prisma/client".
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
+// The connection URL lives in prisma.config.ts (for migrations) and src/lib/db.ts (for the app).
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // A company using Gigsaw. Every artist, contact, venue and booking belongs to one agency,

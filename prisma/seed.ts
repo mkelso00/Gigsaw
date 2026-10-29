@@ -1,11 +1,13 @@
 // Local development: wipe the database and load the demo agency with known logins.
 // Run with: npm run setup or npm run db:reset. On a live site, use Settings → Load demo data instead.
 
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { PrismaClient } from "../src/generated/prisma/client";
 import { addDemoData } from "../src/lib/demo";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
 
 async function main() {
   // The demo wipes everything, so never run it over real data by accident.

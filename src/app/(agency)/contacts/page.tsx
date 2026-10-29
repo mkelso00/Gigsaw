@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, type ContactType } from "@/lib/constants";

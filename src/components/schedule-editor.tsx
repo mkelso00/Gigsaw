@@ -1,4 +1,4 @@
-import type { VenueSlot } from "@prisma/client";
+import type { VenueSlot } from "@/generated/prisma/client";
 import { createSlots, deleteSlot, updateSlot } from "@/actions/slots";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
