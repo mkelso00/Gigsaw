@@ -36,6 +36,7 @@ model User {
   artistId     String?  @unique
   artist       Artist?  @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
+  demo         Boolean  @default(false) // sample data, removable from Settings
 
   sessions        Session[]
   managedArtists  Artist[]      @relation("ArtistAgent")
@@ -69,6 +70,7 @@ model Artist {
   agentId           String?
   agent             User?    @relation("ArtistAgent", fields: [agentId], references: [id], onDelete: SetNull)
   createdAt         DateTime @default(now())
+  demo              Boolean  @default(false) // sample data, removable from Settings
 
   login    User?     @relation("ArtistLogin")
   bookings Booking[]
@@ -86,6 +88,7 @@ model Contact {
   tags      String   @default("") // comma separated
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  demo      Boolean  @default(false) // sample data, removable from Settings
 
   notes    ContactNote[]
   bookings Booking[]
@@ -113,58 +116,60 @@ model Venue {
   timezone  String   @default("Europe/London")
   notes     String   @default("")
   createdAt DateTime @default(now())
+  demo      Boolean  @default(false) // sample data, removable from Settings
 
   bookings Booking[]
 }
 
 model Booking {
-  id              String    @id @default(cuid())
-  reference       String    @unique
-  eventName       String    @default("")
-  status          String    @default("HOLD") // ENQUIRY | HOLD | PENDING | CONFIRMED | SETTLED | CANCELLED
-  dealType        String    @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
-  artistId        String
-  artist          Artist    @relation(fields: [artistId], references: [id], onDelete: Restrict)
-  venueId         String?
-  venue           Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  promoterId      String?
-  promoter        Contact?  @relation(fields: [promoterId], references: [id], onDelete: SetNull)
-  agentId         String?
-  agent           User?     @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
-  createdById     String?
-  createdBy       User?     @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  id          String   @id @default(cuid())
+  reference   String   @unique
+  eventName   String   @default("")
+  status      String   @default("HOLD") // ENQUIRY | HOLD | PENDING | CONFIRMED | SETTLED | CANCELLED
+  dealType    String   @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
+  artistId    String
+  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  venueId     String?
+  venue       Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  promoterId  String?
+  promoter    Contact? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  agentId     String?
+  agent       User?    @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?    @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   // All times are stored in UTC. They are entered and shown in the venue's time zone.
-  timezone        String    @default("Europe/London")
-  arriveBy        DateTime  // call time / load-in: the time the artist must be at the venue
-  soundcheckAt    DateTime?
-  setStart        DateTime
-  setEnd          DateTime?
+  timezone     String    @default("Europe/London")
+  arriveBy     DateTime // call time / load-in: the time the artist must be at the venue
+  soundcheckAt DateTime?
+  setStart     DateTime
+  setEnd       DateTime?
 
   // Money is stored in minor units (pence / cents) to avoid rounding errors.
-  currency        String    @default("GBP")
-  feeMinor        Int       @default(0)
-  artistFeeMinor  Int?      // buy/sell deals: what the agency pays the artist
-  commissionPct   Float     @default(15)
-  vatPct          Float     @default(0)
-  depositMinor    Int       @default(0)
-  depositDueDate  DateTime?
-  dealNotes       String    @default("")
+  currency       String    @default("GBP")
+  feeMinor       Int       @default(0)
+  artistFeeMinor Int? // buy/sell deals: what the agency pays the artist
+  commissionPct  Float     @default(15)
+  vatPct         Float     @default(0)
+  depositMinor   Int       @default(0)
+  depositDueDate DateTime?
+  dealNotes      String    @default("")
 
   // Radius clause: no other show for this artist within radiusKm for radiusDays either side.
-  radiusKm        Int?
-  radiusDays      Int?
+  radiusKm   Int?
+  radiusDays Int?
 
   // Itinerary
-  travel          String    @default("")
-  accommodation   String    @default("")
-  dayContact      String    @default("")
-  hospitality     String    @default("")
-  notes           String    @default("")
-  tags            String    @default("")
+  travel        String @default("")
+  accommodation String @default("")
+  dayContact    String @default("")
+  hospitality   String @default("")
+  notes         String @default("")
+  tags          String @default("")
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  demo      Boolean  @default(false) // sample data, removable from Settings
 
   payments Payment[]
   checkIns CheckIn[]
@@ -177,7 +182,7 @@ model Payment {
   id          String   @id @default(cuid())
   bookingId   String
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  direction   String   // IN (from promoter) | OUT (paid to artist)
+  direction   String // IN (from promoter) | OUT (paid to artist)
   kind        String   @default("BALANCE") // DEPOSIT | BALANCE | SETTLEMENT | EXPENSE | OTHER
   amountMinor Int
   paidAt      DateTime
@@ -187,23 +192,23 @@ model Payment {
 
 // A musician marking where they are for a gig. ARRIVED is the one that counts for punctuality.
 model CheckIn {
-  id          String   @id @default(cuid())
-  bookingId   String
-  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  artistId    String
-  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  kind        String   // ON_THE_WAY | ARRIVED | DEPARTED
-  source      String   @default("APP") // APP (artist on their phone) | AGENT (logged by the agency)
-  at          DateTime @default(now())
-  latitude    Float?
-  longitude   Float?
-  accuracyM   Float?
-  distanceM   Float?   // distance from the venue at the time of check-in
-  etaMinutes  Int?
-  note        String   @default("")
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  artistId   String
+  artist     Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind       String // ON_THE_WAY | ARRIVED | DEPARTED
+  source     String   @default("APP") // APP (artist on their phone) | AGENT (logged by the agency)
+  at         DateTime @default(now())
+  latitude   Float?
+  longitude  Float?
+  accuracyM  Float?
+  distanceM  Float? // distance from the venue at the time of check-in
+  etaMinutes Int?
+  note       String   @default("")
+  createdAt  DateTime @default(now())
 
   @@index([bookingId, kind])
 }
@@ -212,7 +217,7 @@ model Activity {
   id        String   @id @default(cuid())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  entity    String   // BOOKING | CONTACT | ARTIST | VENUE | SETTINGS | USER
+  entity    String // BOOKING | CONTACT | ARTIST | VENUE | SETTINGS | USER
   entityId  String
   action    String
   detail    String   @default("")

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
+import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
 import { isValidTimeZone } from "@/lib/time";
 
@@ -74,4 +75,21 @@ export async function changePassword(_: FormState, form: FormData): Promise<Form
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } });
     return { ok: "Password changed." };
   });
+}
+
+export async function loadDemoData(_: FormState): Promise<FormState> {
+  const admin = await requireAdmin();
+  if (await hasDemoData(prisma)) return { error: "Demo data is already loaded." };
+  const res = await addDemoData(prisma, { leadAgentId: admin.id });
+  await logActivity(admin.id, "SETTINGS", "1", "loaded demo data", `${res.bookings} bookings`);
+  revalidatePath("/", "layout");
+  return { ok: `Added ${res.artists.length} artists, ${res.venues} venues and ${res.bookings} bookings. Have a look at Arrivals and the Dashboard.` };
+}
+
+export async function clearDemoData(_: FormState): Promise<FormState> {
+  const admin = await requireAdmin();
+  const res = await removeDemoData(prisma);
+  await logActivity(admin.id, "SETTINGS", "1", "removed demo data", `${res.bookings} bookings`);
+  revalidatePath("/", "layout");
+  return { ok: `Removed ${res.artists} demo artists and ${res.bookings} bookings. Your own data is untouched.` };
 }

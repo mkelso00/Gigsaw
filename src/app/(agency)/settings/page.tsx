@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { logout } from "@/actions/auth";
-import { changePassword, createStaffUser, removeStaffUser, saveSettings } from "@/actions/settings";
+import { changePassword, clearDemoData, createStaffUser, loadDemoData, removeStaffUser, saveSettings } from "@/actions/settings";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { Field, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -12,9 +12,10 @@ export const metadata: Metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const user = await requireStaff();
   const isAdmin = user.role === "ADMIN";
-  const [settings, team] = await Promise.all([
+  const [settings, team, demoBookings] = await Promise.all([
     getSettings(),
-    prisma.user.findMany({ where: { role: { in: ["ADMIN", "AGENT"] } }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { role: { in: ["ADMIN", "AGENT"] }, demo: false }, orderBy: { name: "asc" } }),
+    prisma.booking.count({ where: { demo: true } }),
   ]);
 
   return (
@@ -121,6 +122,33 @@ export default async function SettingsPage() {
             <SubmitButton>Add</SubmitButton>
           </ActionForm>
           <p className="hint mt-2">Admins can change settings and manage the team. Agents can do everything else. Artist logins are made on each artist&apos;s page.</p>
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className="card card-pad">
+          <h2 className="section-title">Demo data</h2>
+          {demoBookings > 0 ? (
+            <>
+              <p className="mt-1 mb-4 text-sm text-slate-500">
+                Demo data is loaded ({demoBookings} bookings). Remove it before you start using Gigsaw for real. Only the demo artists,
+                venues, contacts and bookings are removed, plus anything you added to a demo artist.
+              </p>
+              <ActionForm action={clearDemoData}>
+                <ConfirmButton message="Remove all demo data? This can't be undone.">Remove demo data</ConfirmButton>
+              </ActionForm>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 mb-4 text-sm text-slate-500">
+                Fill Gigsaw with sample artists, venues, promoters and about 80 bookings, including live arrivals for today, so you can
+                see how everything works. It sits alongside your own data and can be removed in one click.
+              </p>
+              <ActionForm action={loadDemoData}>
+                <SubmitButton pendingText="Loading demo data…">Load demo data</SubmitButton>
+              </ActionForm>
+            </>
+          )}
         </section>
       )}
 

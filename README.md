@@ -44,7 +44,7 @@ The grace period and venue radius are set in **Settings**. The rules live in `sr
 
 Railway runs `npm run build` and `npm start` on its own and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
 
-The demo data is not loaded on Railway, because its logins use a published password. Add your own artists, venues and team from the app.
+To try Gigsaw with sample data, go to **Settings → Demo data → Load demo data**. It adds five artists, nine venues, five promoters and about 80 bookings (including live arrivals for today) alongside your own data, and **Remove demo data** takes it all out again. Sample logins with published passwords are only created by the local seed script, never on the live site.
 
 ## Running it locally
 
