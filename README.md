@@ -7,16 +7,19 @@ Booking management for music agencies and their artists, modelled on [Overture](
 Most agency work is weekly slots at the same venues, so Gigsaw is built around them:
 
 - **Weekly music schedules** on each venue (e.g. Mon–Thu 19:00–21:00 Solo, Fri 16:00–19:00 and 19:00–22:00), with fee, who pays, act type and an optional regular artist. Add the same slot to several days at once.
-- **Rota**: a week grid of every venue's slots, showing who's booked and what's empty (amber). Fill a slot by picking an artist; **Book regulars** books every slot's regular artist for 1–12 weeks, skipping anything already booked.
+- **Rota**: a week grid of every venue's slots, showing who's booked and what's empty (amber). Fill a slot by picking an artist; **Book regulars** books every slot's regular artist for 1–12 weeks, skipping anything already booked. **+ Add** in any day adds a gig there (one-off, or tick "Every Thursday" to make it a weekly slot), **Add a gig** at the top does the same for any date and venue, and the date picker jumps to any week. One-off gigs at a venue show on the rota too.
+- **New booking** button on every page (or press `N`): act, date, venue (optional, e.g. a wedding), times, type, status, fee and who booked it, with the same double-booking check. The full form is one click away.
 - **Change a slot, change its gigs**: new times or fee on a slot can be applied to every upcoming gig in it, and each artist is told.
 - **Change several gigs at once**: tick gigs on Bookings, then set new times, move them by some minutes, or set a new fee.
 - **Artists are told about changes**: an email and text showing old → new for date, times, venue and their fee, and when a gig is confirmed or cancelled; one message listing new gigs when they're booked.
-- **Who's on where**: the search bar on every page (press `/`) finds tonight's and this week's gigs by town, venue or artist, with a tap-to-call number.
+- **Search everything**: the search bar on every page (press `/`) shows results as you type: acts, venues, contacts, bookings on any date (including by reference, e.g. GS-0042) and pages. Enter opens the full list of gigs for a town, venue or act, with tap-to-call numbers.
 - **Calendar**: Day, Week (default) and Month views, coloured by venue (or artist), filter by town.
 - **Phone calendars**: artists tap once in their app to add their gigs to Apple, Google or Outlook calendar; it updates by itself.
 - **Venue line-up links**: each venue can have a private link (`/v/…`) showing who's playing and when, slots still to be confirmed, and arrivals on the night, plus a calendar feed. It never shows fees, deals, contacts or other venues. Make, replace or turn off the link on the venue's page.
 - **Branded emails** in the agency's name; replies go to the agent or agency, not a no-reply address.
 - **"Hold on" before double-booking**: saving a booking, filling a rota slot or changing times checks the artist's other gigs. If times overlap, or there isn't enough time to pack down and travel between venues (estimated from the venues' map pins plus a changeover time set in Settings), a clear warning explains why, with **Save anyway** or **Go back**. Gigs with plenty of time between them aren't flagged. "Book regulars" never double-books: it leaves the slot empty and says why.
+- **Gig reminders**: each act gets a list of the coming week's gigs (default Sunday 18:00) and a "Don't forget your gig this evening" reminder on the day (default 12:00, or 3 hours before an afternoon call time). They go as phone notifications once turned on in the artist app, and by email; acts without phone notifications get a text instead. Set days and times, or turn them off, in **Settings → Gig reminders**. Each reminder only ever goes once.
+- **Dark mode** by default for the agency pages; the sun/moon button by your name switches to light (remembered on that device).
 - **Gigs without an artist are hard to miss**: a count on Rota in the menu (next 7 days), a dashboard banner (next 14 days), and a "Needs an artist" list on the Rota, soonest first, where each can be filled in one step.
 
 ## Owner area and agencies
@@ -33,12 +36,12 @@ Gigsaw runs many agencies on one site. Each agency only ever sees its own artist
 | Area | What it does |
 | --- | --- |
 | **Arrivals (new)** | Live board of every gig with a call time in the last 12 or next 24 hours: overdue, on the way (with ETA), arrived on time, arrived late. Punctuality table per artist for the last 12 months. Latest check-ins feed. CSV export. Refreshes every 30 seconds. |
-| **Artist app** | Phone-friendly pages at `/app` (can be added to the home screen). Artists see their gigs, schedule, venue directions and itinerary, and tap **I'm on the way**, **I've arrived** and **I've left the venue**. |
+| **Artist app** | Phone-friendly pages at `/app` (can be added to the home screen). Artists see their gigs, schedule, venue directions and itinerary, and tap **I'm on the way**, **I've arrived** and **I've left the venue**. **Turn on reminders** enables phone notifications on that phone (on iPhone, add Gigsaw to the Home Screen first; the app shows how). Each act's page shows whether their phone reminders are on. |
 | Dashboard | Today's arrivals, shows in the next 30 days, open holds, money owed, overdue deposits, recent activity. |
 | Bookings | Booking type (gig, festival, club night, wedding, corporate, private party, other). Enquiry → hold → pending → confirmed → settled (or cancelled). Deal types: standard commission, buy/sell, guarantee vs %, guarantee plus bonus, flat fee. Fee, VAT, deposit, radius clause, itinerary, tags, notes. |
 | Checklist | On every booking: double bookings, radius clause breaches, missing venue/promoter/fee, overdue deposits, missing itinerary details. |
 | Calendar | Month view filtered by artist and status. Each artist has a private calendar feed (ICS) for Google, Apple or Outlook calendar. |
-| Contacts | Promoters, clients, venue staff and collaborators with tags, search (including the notes archive) and conversation notes. |
+| Contacts | Promoters, private customers (e.g. weddings), venue staff and collaborators, with type tabs, tags, search (including the notes archive) and conversation notes. |
 | Venues | Address, capacity, time zone and the map pin used to verify arrivals. |
 | Money | Payments in from promoters and out to artists. Commission and artist earnings worked out per deal type. |
 | Documents | Printable contract, invoice and day sheet (print or save as PDF). |
@@ -61,9 +64,10 @@ The grace period and venue radius are set in **Settings**. The rules live in `sr
 
 ## Emails, texts and alerts
 
-- **Late alerts:** once a minute, Gigsaw checks for gigs whose call time (plus the grace period) has passed with no check-in, and emails and texts the booking's agent plus an optional on-call email and mobile (Settings → Arrival tracking and alerts). Each gig is alerted once.
+- **Late alerts:** once a minute, Gigsaw checks for gigs whose call time (plus the grace period) has passed with no check-in, and emails and texts the booking's agent plus an optional on-call email and mobile (Settings → Arrivals and alerts). Each gig is alerted once.
 - **Client arrival messages:** when an artist checks in, the booking's promoter or client gets a short email and text. Switch off per agency or per booking.
 - **Password reset:** "Forgot password?" on the sign-in page emails a one-hour, single-use link.
+- **Gig reminders** for acts: weekly and on the day (see above). Phone notifications need no extra account or provider.
 - Demo data never sends anything.
 
 Messages go out once these are set in Railway → Variables. Until then, every message is saved to the **Outbox** (Owner area) and the agency's **Settings → Messages**, so nothing is lost and you can check the wording.
@@ -73,7 +77,8 @@ Messages go out once these are set in Railway → Variables. Until then, every m
 | `RESEND_API_KEY`, `MAIL_FROM` | Email via [Resend](https://resend.com). `MAIL_FROM` like `Gigsaw <alerts@yourdomain.com>` (the domain must be verified in Resend). |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Texts via [Twilio](https://www.twilio.com). `TWILIO_FROM` is your Twilio number, e.g. `+447700900000`. |
 | `APP_URL` | Optional. The site address used in links. Railway's own domain is used if this isn't set. |
-| `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Optional. Keys that sign phone notifications. If not set, Gigsaw makes a pair once and keeps it in the database, which is fine for most installs. Changing them means every phone has to turn reminders on again. |
+| `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker (late alerts and gig reminders) and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
 
 Settings → Messages → **Send me a test** checks both are working.
 
@@ -149,4 +154,4 @@ Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind CSS 4, P
 
 ## Not built yet
 
-These Overture features are not in this first version: sending emails and messages from the app, e-signatures (Dropbox Sign), Stripe payments, live currency conversion, withholding tax, custom document templates, the REST API and Zapier, two-factor sign-in, push notifications, native iOS/Android apps, multi-agency artist accounts, and the AI assistant. Push or SMS alerts to the agent when an artist goes overdue would be a natural next step for arrival tracking.
+These Overture features are not in this first version: sending emails and messages from the app, e-signatures (Dropbox Sign), Stripe payments, live currency conversion, withholding tax, custom document templates, the REST API and Zapier, two-factor sign-in, native iOS/Android apps, multi-agency artist accounts, and the AI assistant.

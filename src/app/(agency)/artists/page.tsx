@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { punctualityByArtist } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
 
-export const metadata: Metadata = { title: "Artists" };
+export const metadata: Metadata = { title: "Acts" };
 
 export default async function ArtistsPage() {
   const user = await requireStaff();
@@ -27,11 +27,11 @@ export default async function ArtistsPage() {
   return (
     <div>
       <PageHeader
-        title="Artists"
-        subtitle="Your roster."
+        title="Acts"
+        subtitle="Your roster: one profile per solo singer, duo or band."
         actions={
           <Link href="/artists/new" className="btn btn-primary">
-            Add artist
+            Add act
           </Link>
         }
       />

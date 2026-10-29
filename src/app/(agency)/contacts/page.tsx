@@ -36,13 +36,29 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Contacts"
-        subtitle="Promoters, clients, venue staff and collaborators."
+        subtitle="Promoters, private customers (weddings and parties), venue staff and collaborators."
         actions={
-          <Link href="/contacts/new" className="btn btn-primary">
-            Add contact
-          </Link>
+          <>
+            <Link href="/contacts/new?type=CLIENT" className="btn">
+              Add private customer
+            </Link>
+            <Link href="/contacts/new" className="btn btn-primary">
+              Add contact
+            </Link>
+          </>
         }
       />
+      <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm">
+        {[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, `${CONTACT_TYPE_LABELS[t]}s`])].map(([t, label]) => (
+          <Link
+            key={t}
+            href={t ? `/contacts?type=${t}` : "/contacts"}
+            className={`rounded-lg px-3 py-1.5 ${(sp.type ?? "") === t ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
       <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
         <label className="min-w-48 flex-1">
           <span className="label">Search</span>

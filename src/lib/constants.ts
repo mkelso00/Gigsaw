@@ -55,7 +55,7 @@ export type ContactType = (typeof CONTACT_TYPES)[number];
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   PROMOTER: "Promoter",
-  CLIENT: "Client",
+  CLIENT: "Private customer",
   VENUE_CONTACT: "Venue contact",
   COLLABORATOR: "Collaborator",
   OTHER: "Other",

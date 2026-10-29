@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { venueColour } from "@/lib/rota";
 
 export const metadata: Metadata = { title: "Venues" };
 
@@ -10,7 +11,18 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
   const user = await requireStaff();
   const { q } = await searchParams;
   const venues = await prisma.venue.findMany({
-    where: { agencyId: user.agencyId, ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }, { country: { contains: q, mode: "insensitive" } }] } : {}) },
+    where: {
+      agencyId: user.agencyId,
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { city: { contains: q, mode: "insensitive" } },
+              { country: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { name: "asc" },
     include: { _count: { select: { bookings: true } } },
   });
@@ -47,9 +59,16 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
               {venues.map((v) => (
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td>
-                    <Link href={`/venues/${v.id}`} className="link">
-                      {v.name}
-                    </Link>
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className="inline-block h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/10"
+                        style={{ background: venueColour(v) }}
+                        aria-hidden
+                      />
+                      <Link href={`/venues/${v.id}`} className="link">
+                        {v.name}
+                      </Link>
+                    </span>
                   </td>
                   <td>{[v.city, v.country].filter(Boolean).join(", ")}</td>
                   <td className="text-right">{v.capacity?.toLocaleString("en-GB") ?? "–"}</td>

@@ -18,7 +18,7 @@ export default async function NewBookingPage({ searchParams }: { searchParams: P
       <PageHeader title="New booking" subtitle="Start with a hold and move it forward as the deal firms up." />
       {options.artists.length === 0 ? (
         <Empty>
-          Add an artist first. <Link href="/artists/new" className="link">Add artist</Link>
+          Add an act first. <Link href="/artists/new" className="link">Add act</Link>
         </Empty>
       ) : (
         <BookingForm

@@ -8,6 +8,7 @@ import { ScheduleEditor } from "@/components/schedule-editor";
 import { VenueShareCard } from "@/components/venue-share-card";
 import { appUrl } from "@/lib/messaging";
 import { PageHeader, StatusBadge } from "@/components/ui";
+import { venueColour } from "@/lib/rota";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { formatDate } from "@/lib/time";
@@ -20,18 +21,40 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
   const [venue, settings, artists, contacts, slots] = await Promise.all([
     prisma.venue.findFirst({
       where: { id, agencyId: user.agencyId },
-      include: { bookings: { orderBy: { setStart: "desc" }, take: 50, include: { artist: { select: { name: true } } } } },
+      include: {
+        bookings: {
+          orderBy: { setStart: "desc" },
+          take: 50,
+          include: { artist: { select: { name: true } } },
+        },
+      },
     }),
     getSettings(user.agencyId),
-    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.contact.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.venueSlot.findMany({ where: { agencyId: user.agencyId, venueId: id }, include: { artist: { select: { id: true, name: true } } } }),
+    prisma.artist.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.contact.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.venueSlot.findMany({
+      where: { agencyId: user.agencyId, venueId: id },
+      include: { artist: { select: { id: true, name: true } } },
+    }),
   ]);
   if (!venue) notFound();
   return (
     <div>
       <PageHeader
-        title={venue.name}
+        title={
+          <span className="flex items-center gap-3">
+            <span className="inline-block h-5 w-5 shrink-0 rounded-full ring-1 ring-black/10" style={{ background: venueColour(venue) }} aria-hidden />
+            {venue.name}
+          </span>
+        }
         subtitle={[venue.city, venue.country].filter(Boolean).join(", ")}
         actions={
           <Link href={`/bookings/new?venueId=${venue.id}`} className="btn btn-primary">
@@ -50,24 +73,24 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
           </form>
         </div>
         <div className="space-y-6">
-        <VenueShareCard venueId={venue.id} url={venue.shareToken ? `${appUrl()}/v/${venue.shareToken}` : null} />
-        <section>
-          <h2 className="section-title mb-3">Shows here</h2>
-          <ul className="card divide-y divide-slate-100 text-sm">
-            {venue.bookings.length === 0 && <li className="px-4 py-3 text-slate-500">None yet.</li>}
-            {venue.bookings.map((b) => (
-              <li key={b.id}>
-                <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50">
-                  <span>
-                    {b.artist.name}
-                    <span className="block text-xs text-slate-500">{formatDate(b.arriveBy, b.timezone)}</span>
-                  </span>
-                  <StatusBadge status={b.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+          <VenueShareCard venueId={venue.id} url={venue.shareToken ? `${appUrl()}/v/${venue.shareToken}` : null} />
+          <section>
+            <h2 className="section-title mb-3">Shows here</h2>
+            <ul className="card divide-y divide-slate-100 text-sm">
+              {venue.bookings.length === 0 && <li className="px-4 py-3 text-slate-500">None yet.</li>}
+              {venue.bookings.map((b) => (
+                <li key={b.id}>
+                  <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50">
+                    <span>
+                      {b.artist.name}
+                      <span className="block text-xs text-slate-500">{formatDate(b.arriveBy, b.timezone)}</span>
+                    </span>
+                    <StatusBadge status={b.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       </div>
     </div>

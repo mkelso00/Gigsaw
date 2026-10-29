@@ -90,9 +90,19 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Promoter">
+          <Field
+            label="Booked by"
+            hint={
+              <>
+                Promoter or private customer.{" "}
+                <a href="/contacts/new?type=CLIENT" target="_blank" className="underline">
+                  Add a private customer
+                </a>
+              </>
+            }
+          >
             <select name="promoterId" defaultValue={booking?.promoterId ?? defaults.promoterId ?? ""} className="input">
-              <option value="">No promoter yet</option>
+              <option value="">Not set yet</option>
               {promoters.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

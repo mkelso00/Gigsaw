@@ -2,20 +2,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { assignSlot, bookRegulars } from "@/actions/slots";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { RotaQuickAdd } from "@/components/rota-quick-add";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { WEEKDAYS, dateInWeek, isDateKey, venueColour, weekStartOf } from "@/lib/rota";
-import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
+import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { unfilledSlots } from "@/lib/unfilled";
+import { WeekJump } from "@/components/week-jump";
 
 export const metadata: Metadata = { title: "Rota" };
 export const dynamic = "force-dynamic";
 
 const dayLabel = (key: string) =>
-  new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
+  new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${key}T12:00:00Z`));
 
 export default async function RotaPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
   const user = await requireStaff();
@@ -26,14 +33,52 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
   const weekStart = weekStartOf(isDateKey(sp.week) ? sp.week : today);
   const weekEnd = addDaysToKey(weekStart, 7);
 
-  const [slots, artists, needs] = await Promise.all([
+  const weekFrom = zonedToUtc(addDaysToKey(weekStart, -1), "00:00", tz);
+  const weekTo = zonedToUtc(addDaysToKey(weekEnd, 1), "00:00", tz);
+  const bookingInclude = {
+    artist: { select: { name: true, colour: true } },
+    venue: { select: { latitude: true, longitude: true } },
+    checkIns: {
+      select: {
+        kind: true,
+        at: true,
+        source: true,
+        distanceM: true,
+        etaMinutes: true,
+      },
+    },
+  } as const;
+  const [slots, artists, needs, allVenues, oneOffs] = await Promise.all([
     prisma.venueSlot.findMany({
       where: { agencyId: user.agencyId, active: true },
-      include: { venue: true, artist: { select: { id: true, name: true, colour: true } } },
+      include: {
+        venue: true,
+        artist: { select: { id: true, name: true, colour: true } },
+      },
       orderBy: [{ startTime: "asc" }],
     }),
-    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.artist.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
     unfilledSlots(user.agencyId, tz, 28),
+    prisma.venue.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+    }),
+    // Gigs at a venue that aren't from its weekly schedule.
+    prisma.booking.findMany({
+      where: {
+        agencyId: user.agencyId,
+        slotId: null,
+        venueId: { not: null },
+        status: { not: "CANCELLED" },
+        arriveBy: { gte: weekFrom, lt: weekTo },
+      },
+      include: bookingInclude,
+      orderBy: { setStart: "asc" },
+    }),
   ]);
   const bookings = slots.length
     ? await prisma.booking.findMany({
@@ -41,19 +86,21 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
           agencyId: user.agencyId,
           slotId: { in: slots.map((s) => s.id) },
           status: { not: "CANCELLED" },
-          arriveBy: { gte: zonedToUtc(addDaysToKey(weekStart, -1), "00:00", tz), lt: zonedToUtc(addDaysToKey(weekEnd, 1), "00:00", tz) },
+          arriveBy: { gte: weekFrom, lt: weekTo },
         },
-        include: {
-          artist: { select: { name: true, colour: true } },
-          venue: { select: { latitude: true, longitude: true } },
-          checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
-        },
+        include: bookingInclude,
       })
     : [];
   // A slot is filled on a date if a booking made from it falls on that date in the venue's time zone.
   const filled = new Map(bookings.map((b) => [`${b.slotId}|${localDateKey(b.arriveBy, b.timezone)}`, b]));
 
-  const venues = [...new Map(slots.map((s) => [s.venueId, s.venue])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const oneOffsByCell = new Map<string, typeof oneOffs>();
+  for (const b of oneOffs) {
+    const k = `${b.venueId}|${localDateKey(b.arriveBy, b.timezone)}`;
+    oneOffsByCell.set(k, [...(oneOffsByCell.get(k) ?? []), b]);
+  }
+  const rowIds = new Set([...slots.map((s) => s.venueId), ...oneOffs.map((b) => b.venueId!)]);
+  const venues = allVenues.filter((v) => rowIds.has(v.id));
   const total = slots.length;
   const filledCount = slots.filter((s) => filled.has(`${s.id}|${dateInWeek(weekStart, s.weekday)}`)).length;
   const now = new Date();
@@ -64,7 +111,8 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
         title="Rota"
         subtitle="Every venue's weekly music slots, and who's playing them."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <WeekJump value={isDateKey(sp.week) ? sp.week : weekStart} />
             <Link href={`/rota?week=${addDaysToKey(weekStart, -7)}`} className="btn" aria-label="Previous week">
               ←
             </Link>
@@ -81,34 +129,61 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
         }
       />
 
-      {total === 0 ? (
+      {allVenues.length > 0 && (
+        <details className="card mb-6 [&[open]>summary]:border-b [&[open]>summary]:border-ink-100" id="add-gig">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+            <span>
+              <span className="section-title">Add a gig</span>
+              <span className="ml-2 text-sm text-ink-500">Any date, any venue. One-off, or every week.</span>
+            </span>
+            <span className="btn btn-sm">+ Add</span>
+          </summary>
+          <div className="p-5">
+            <RotaQuickAdd
+              artists={artists}
+              venues={allVenues}
+              minDate={today}
+              date={weekStart > today ? weekStart : today}
+              currency={settings.defaultCurrency}
+            />
+          </div>
+        </details>
+      )}
+
+      {venues.length === 0 ? (
         <Empty>
-          No weekly slots yet. Open a <Link href="/venues" className="link">venue</Link> and add its music schedule, for example Mon to Thu 19:00–21:00 solo.
+          No weekly slots yet. Open a{" "}
+          <Link href="/venues" className="link">
+            venue
+          </Link>{" "}
+          and add its music schedule, for example Mon to Thu 19:00–21:00 solo, or use Add a gig above.
         </Empty>
       ) : (
         <>
-          <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
-            <Stat tone={filledCount === total ? "dark" : "default"} label="Slots filled this week" value={`${filledCount} / ${total}`} />
-            <Stat label="Still to fill" value={total - filledCount} hint={total - filledCount ? "Shown in amber below" : "All done"} />
-            <ActionForm action={bookRegulars} className="card flex flex-col justify-between gap-3 p-5">
-              <input type="hidden" name="weekStart" value={weekStart} />
-              <div className="text-[13px] text-ink-500">Book the regular artists into their slots</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select name="weeks" defaultValue="4" className="input w-auto">
-                  {[1, 2, 4, 8, 12].map((n) => (
-                    <option key={n} value={n}>
-                      {n === 1 ? "This week" : `${n} weeks from this week`}
-                    </option>
-                  ))}
-                </select>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="notify" defaultChecked className="h-4 w-4 accent-ink-950" />
-                  Tell artists
-                </label>
-                <SubmitButton pendingText="Booking…">Book regulars</SubmitButton>
-              </div>
-            </ActionForm>
-          </div>
+          {total > 0 && (
+            <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
+              <Stat tone={filledCount === total ? "dark" : "default"} label="Slots filled this week" value={`${filledCount} / ${total}`} />
+              <Stat label="Still to fill" value={total - filledCount} hint={total - filledCount ? "Shown in amber below" : "All done"} />
+              <ActionForm action={bookRegulars} className="card flex flex-col justify-between gap-3 p-5">
+                <input type="hidden" name="weekStart" value={weekStart} />
+                <div className="text-[13px] text-ink-500">Book the regular artists into their slots</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select name="weeks" defaultValue="4" className="input w-auto">
+                    {[1, 2, 4, 8, 12].map((n) => (
+                      <option key={n} value={n}>
+                        {n === 1 ? "This week" : `${n} weeks from this week`}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="notify" defaultChecked className="h-4 w-4 accent-ink-950" />
+                    Tell artists
+                  </label>
+                  <SubmitButton pendingText="Booking…">Book regulars</SubmitButton>
+                </div>
+              </ActionForm>
+            </div>
+          )}
 
           {needs.length > 0 && (
             <section id="needs-artist" className="mb-6 scroll-mt-6 overflow-hidden rounded-[var(--radius-card)] border-2 border-amber-300 bg-white">
@@ -137,7 +212,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                     </div>
                     <ActionForm action={assignSlot.bind(null, slot.id, date)} className="flex flex-wrap items-start gap-2">
                       <input type="hidden" name="notify" value="on" />
-                      <select name="artistId" defaultValue={slot.artistId ?? ""} className="input h-9 w-48">
+                      <select name="artistId" defaultValue={slot.artistId ?? ""} className="input w-52">
                         <option value="">Choose artist…</option>
                         {artists.map((ar) => (
                           <option key={ar.id} value={ar.id}>
@@ -164,7 +239,10 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                   {WEEKDAYS.map(([d]) => {
                     const key = dateInWeek(weekStart, d);
                     return (
-                      <th key={d} className={`border-b border-l border-ink-200 px-3 py-3 text-left text-xs font-medium ${key === today ? "bg-volt-100 text-ink-950" : "text-ink-500"}`}>
+                      <th
+                        key={d}
+                        className={`border-b border-l border-ink-200 px-3 py-3 text-left text-xs font-medium ${key === today ? "bg-volt-100 text-ink-950" : "text-ink-500"}`}
+                      >
                         {dayLabel(key)}
                       </th>
                     );
@@ -194,7 +272,11 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                               if (b) {
                                 const a = arrivalFor(b, settings, now);
                                 return (
-                                  <Link key={s.id} href={`/bookings/${b.id}`} className="block rounded-lg border border-ink-200 bg-white p-2 hover:border-ink-400">
+                                  <Link
+                                    key={s.id}
+                                    href={`/bookings/${b.id}`}
+                                    className="block rounded-lg border border-ink-200 bg-white p-2 hover:border-ink-400"
+                                  >
                                     <div className="text-xs font-semibold tabular-nums">{time}</div>
                                     <div className="mt-1 flex items-center gap-1.5 truncate font-medium">
                                       <ArtistDot colour={b.artist.colour} />
@@ -205,7 +287,10 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                 );
                               }
                               return (
-                                <div key={s.id} className={`rounded-lg border border-dashed p-2 ${past ? "border-ink-200 text-ink-400" : "border-amber-300 bg-amber-50/60"}`}>
+                                <div
+                                  key={s.id}
+                                  className={`rounded-lg border border-dashed p-2 ${past ? "border-ink-200 text-ink-400" : "border-amber-300 bg-amber-50/60"}`}
+                                >
                                   <div className="text-xs font-semibold tabular-nums">{time}</div>
                                   <div className="text-xs text-ink-500">{s.label || eventTypeLabel(s.eventType)}</div>
                                   {past ? (
@@ -213,7 +298,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                   ) : (
                                     <ActionForm action={assignSlot.bind(null, s.id, date)} className="mt-1.5 space-y-1.5">
                                       <input type="hidden" name="notify" value="on" />
-                                      <select name="artistId" defaultValue={s.artistId ?? ""} className="h-8 w-full rounded-md border border-ink-200 bg-white px-1.5 text-xs">
+                                      <select name="artistId" defaultValue={s.artistId ?? ""} className="input-sm">
                                         <option value="">Artist…</option>
                                         {artists.map((ar) => (
                                           <option key={ar.id} value={ar.id}>
@@ -229,6 +314,37 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                 </div>
                               );
                             })}
+                            {(oneOffsByCell.get(`${v.id}|${date}`) ?? []).map((b) => {
+                              const a = arrivalFor(b, settings, now);
+                              return (
+                                <Link
+                                  key={b.id}
+                                  href={`/bookings/${b.id}`}
+                                  className="block rounded-lg border border-ink-200 bg-white p-2 hover:border-ink-400"
+                                >
+                                  <div className="text-xs font-semibold tabular-nums">
+                                    {localTime(b.setStart, b.timezone)}
+                                    {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                                  </div>
+                                  <div className="text-[11px] text-ink-500">One-off{b.eventName ? ` · ${b.eventName}` : ""}</div>
+                                  <div className="mt-1 flex items-center gap-1.5 truncate font-medium">
+                                    <ArtistDot colour={b.artist.colour} />
+                                    <span className="truncate">{b.artist.name}</span>
+                                  </div>
+                                  <div className="mt-1.5">{a.state !== "NOT_DUE" ? <ArrivalBadge state={a.state} /> : <StatusBadge status={b.status} />}</div>
+                                </Link>
+                              );
+                            })}
+                            {!past && (
+                              <RotaQuickAdd
+                                artists={artists}
+                                venueId={v.id}
+                                date={date}
+                                minDate={today}
+                                currency={settings.defaultCurrency}
+                                weekdayName={WEEKDAYS[d - 1][2]}
+                              />
+                            )}
                           </div>
                         </td>
                       );
@@ -238,7 +354,10 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-ink-500">Booking a slot tells the artist by email and text. Change a slot&apos;s times or fee on the venue&apos;s page.</p>
+          <p className="mt-3 text-xs text-ink-500">
+            Booking a slot or adding a gig tells the artist by email and text. Tick &ldquo;Every …&rdquo; when adding to make it a weekly slot. Change a
+            slot&apos;s times or fee on the venue&apos;s page.
+          </p>
         </>
       )}
     </div>

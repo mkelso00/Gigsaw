@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { normalisePhone, renderEmail, type EmailContent } from "./message-format";
+import { pushTo, type PushPayload } from "./push";
 
 // Sends emails (Resend) and texts (Twilio) when their keys are set in the environment,
 // and records every message in the Message table either way. With no provider set up,
@@ -9,9 +10,13 @@ import { normalisePhone, renderEmail, type EmailContent } from "./message-format
 //   Email: RESEND_API_KEY, MAIL_FROM (e.g. "Gigsaw <alerts@yourdomain.com>")
 //   Texts: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (e.g. +447700900000)
 
-export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "TEST";
+export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "REMINDER" | "TEST";
 
-type Base = { kind: MessageKind; agencyId?: string | null; bookingId?: string | null };
+type Base = {
+  kind: MessageKind;
+  agencyId?: string | null;
+  bookingId?: string | null;
+};
 
 export function emailConfigured() {
   return !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
@@ -40,7 +45,12 @@ async function post(url: string, init: RequestInit) {
 }
 
 async function record(
-  m: Base & { channel: "EMAIL" | "SMS"; to: string; subject?: string; body: string },
+  m: Base & {
+    channel: "EMAIL" | "SMS" | "PUSH";
+    to: string;
+    subject?: string;
+    body: string;
+  },
   send: (() => Promise<void>) | null,
   provider: string,
 ) {
@@ -78,7 +88,14 @@ const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
  * Send a branded email. `replyTo` should be a real person or inbox (e.g. the agency's email),
  * so replies don't go to the no-reply sending address.
  */
-export async function sendEmail(m: Base & { to: string; subject: string; email: EmailContent; replyTo?: string | null }) {
+export async function sendEmail(
+  m: Base & {
+    to: string;
+    subject: string;
+    email: EmailContent;
+    replyTo?: string | null;
+  },
+) {
   const to = m.to.trim();
   if (!isEmail(to)) return "SKIPPED";
   const { html, text } = renderEmail(m.email);
@@ -87,7 +104,10 @@ export async function sendEmail(m: Base & { to: string; subject: string; email: 
     ? () =>
         post("https://api.resend.com/emails", {
           method: "POST",
-          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             from: process.env.MAIL_FROM,
             to: [to],
@@ -113,8 +133,44 @@ export async function sendSms(m: Base & { to: string; text: string }) {
             Authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
             "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: new URLSearchParams({ To: to, From: process.env.TWILIO_FROM!, Body: m.text }).toString(),
+          body: new URLSearchParams({
+            To: to,
+            From: process.env.TWILIO_FROM!,
+            Body: m.text,
+          }).toString(),
         })
     : null;
   return record({ ...m, channel: "SMS", to, body: m.text }, send, "twilio");
+}
+
+/**
+ * Send a phone notification to every device where this login has turned them on.
+ * Each device is logged in the Outbox. Devices that have since turned notifications off are
+ * forgotten. Returns how many devices it reached.
+ */
+export async function sendPush(m: Base & { userId: string; payload: PushPayload; ttlSeconds?: number }) {
+  const subs = await prisma.pushSubscription.findMany({
+    where: { userId: m.userId },
+  });
+  let reached = 0;
+  for (const sub of subs) {
+    let gone = false;
+    const status = await record(
+      {
+        ...m,
+        channel: "PUSH",
+        to: sub.device || "Phone",
+        subject: m.payload.title,
+        body: m.payload.body,
+      },
+      async () => {
+        gone = (await pushTo(sub, m.payload, m.ttlSeconds)) === "gone";
+        if (gone) throw new Error("This device has turned notifications off. It has been removed.");
+      },
+      "web-push",
+    );
+    if (gone) await prisma.pushSubscription.deleteMany({ where: { id: sub.id } });
+    if (status === "SENT") reached++;
+  }
+  return reached;
 }

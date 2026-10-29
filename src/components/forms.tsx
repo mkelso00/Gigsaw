@@ -63,14 +63,14 @@ export function ActionForm({
         startTransition(() => formAction(data));
       }}
     >
-      <div ref={messageRef} className="scroll-mt-24" />
+      <div ref={messageRef} className="col-span-full scroll-mt-24" />
       {state?.error && (
-        <div role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+        <div role="alert" className="col-span-full mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {state.error}
         </div>
       )}
       {confirm && (
-        <div role="alert" className="mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
+        <div role="alert" className="col-span-full mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-400 font-bold text-ink-950">!</span>
             <div className="min-w-0 flex-1">
@@ -83,7 +83,13 @@ export function ActionForm({
                 ))}
               </ul>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button type="submit" name="confirmed" value="yes" className="btn btn-sm border-amber-500 bg-amber-400 text-ink-950 hover:bg-amber-300" disabled={pending}>
+                <button
+                  type="submit"
+                  name="confirmed"
+                  value="yes"
+                  className="btn btn-sm border-amber-500 bg-amber-400 text-ink-950 hover:bg-amber-300"
+                  disabled={pending}
+                >
                   {confirm.button ?? "Save anyway"}
                 </button>
                 <button type="button" className="btn btn-sm" onClick={() => setDismissed(state)}>
@@ -95,7 +101,7 @@ export function ActionForm({
         </div>
       )}
       {state?.ok && (
-        <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <div role="status" className="col-span-full mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {state.ok}
         </div>
       )}

@@ -10,7 +10,7 @@ const LINKS = [
   { href: "/rota", label: "Rota", icon: "rota" },
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/bookings", label: "Bookings", icon: "bookings" },
-  { href: "/artists", label: "Artists", icon: "artists" },
+  { href: "/artists", label: "Acts", icon: "artists" },
   { href: "/contacts", label: "Contacts", icon: "contacts" },
   { href: "/venues", label: "Venues", icon: "venues" },
   { href: "/reports", label: "Reports", icon: "reports" },
@@ -21,7 +21,8 @@ export function NavLinks({ isAdmin, isOwner, badges = {} }: { isAdmin: boolean; 
   const links = [
     ...LINKS,
     { href: "/settings", label: isAdmin ? "Settings" : "My account", icon: "settings" },
-    ...(isOwner ? [{ href: "/owner", label: "Owner area", icon: "owner" }] : []),
+    // On phones the sidebar is a scrolling strip, so the owner link sits at its end.
+    ...(isOwner ? [{ href: "/owner", label: "Owner area", icon: "owner", mobileOnly: true }] : []),
   ];
   return (
     <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0">
@@ -31,7 +32,7 @@ export function NavLinks({ isAdmin, isOwner, badges = {} }: { isAdmin: boolean; 
           <Link
             key={l.href}
             href={l.href}
-            className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${
+            className={`group relative ${"mobileOnly" in l ? "flex lg:hidden" : "flex"} items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${
               active ? "bg-white/[0.08] font-medium text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white"
             }`}
           >
@@ -39,7 +40,10 @@ export function NavLinks({ isAdmin, isOwner, badges = {} }: { isAdmin: boolean; 
             <Icon name={l.icon} className={`h-[18px] w-[18px] ${active ? "text-volt-400" : "text-ink-500 group-hover:text-ink-300"}`} />
             {l.label}
             {badges[l.href] ? (
-              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-ink-950" title="Gigs in the next 7 days with no artist">
+              <span
+                className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-ink-950"
+                title="Gigs in the next 7 days with no artist"
+              >
                 {badges[l.href]}
               </span>
             ) : null}

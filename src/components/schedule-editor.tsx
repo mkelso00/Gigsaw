@@ -93,7 +93,9 @@ export function ScheduleEditor({
     <section className="card card-pad">
       <div className="mb-5">
         <h2 className="section-title">Weekly music schedule</h2>
-        <p className="mt-1 text-sm text-ink-500">The regular slots at this venue. Fill them week by week on the Rota, or book the regular artist for several weeks at once.</p>
+        <p className="mt-1 text-sm text-ink-500">
+          The regular slots at this venue. Fill them week by week on the Rota, or book the regular artist for several weeks at once.
+        </p>
       </div>
 
       <div className="grid gap-px overflow-hidden rounded-xl border border-ink-200 bg-ink-200 sm:grid-cols-7">
@@ -181,7 +183,10 @@ export function ScheduleEditor({
             <span className="label">Days</span>
             <div className="flex flex-wrap gap-2">
               {WEEKDAYS.map(([d, short]) => (
-                <label key={d} className="flex cursor-pointer items-center gap-2 rounded-lg border border-ink-200 px-3 py-2 text-sm has-[:checked]:border-ink-950 has-[:checked]:bg-ink-950 has-[:checked]:text-white">
+                <label
+                  key={d}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-ink-200 px-3 py-2 text-sm has-[:checked]:border-volt-400 has-[:checked]:bg-volt-400 has-[:checked]:font-medium has-[:checked]:text-black"
+                >
                   <input type="checkbox" name="weekday" value={d} className="sr-only" />
                   {short}
                 </label>

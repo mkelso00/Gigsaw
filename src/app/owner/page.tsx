@@ -64,7 +64,7 @@ export default async function OwnerHome() {
                 <th>Agency</th>
                 <th>Status</th>
                 <th className="text-right">Team</th>
-                <th className="text-right">Artists</th>
+                <th className="text-right">Acts</th>
                 <th className="text-right">Price per gig</th>
                 <th className="text-right">Gigs this month</th>
                 <th className="text-right">Bill so far</th>

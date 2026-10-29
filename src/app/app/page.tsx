@@ -3,10 +3,12 @@ import Link from "next/link";
 import { CalendarConnect } from "@/components/calendar-connect";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { CheckInPanel } from "@/components/check-in-panel";
+import { PushSetup } from "@/components/push-setup";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
+import { vapidKeys } from "@/lib/push";
 import { getSettings, prisma } from "@/lib/db";
 import { formatDate, localTime } from "@/lib/time";
 
@@ -17,19 +19,31 @@ export default async function ArtistHome() {
   if (!user.artistId) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an artist. Ask your agent to check it.</p>;
   const settings = await getSettings(user.agencyId);
   const now = new Date();
-  const artist = await prisma.artist.findFirst({ where: { id: user.artistId, agencyId: user.agencyId }, select: { calendarToken: true, name: true } });
+  const artist = await prisma.artist.findFirst({
+    where: { id: user.artistId, agencyId: user.agencyId },
+    select: { calendarToken: true, name: true },
+  });
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const pushKey = (await vapidKeys()).publicKey;
   const feedUrl = artist ? `${proto}://${host}/api/calendar/${artist.calendarToken}.ics` : null;
 
   const bookings = await prisma.booking.findMany({
     // Artists don't see early-stage enquiries.
-    where: { agencyId: user.agencyId, artistId: user.artistId, status: { notIn: ["ENQUIRY"] } },
+    where: {
+      agencyId: user.agencyId,
+      artistId: user.artistId,
+      status: { notIn: ["ENQUIRY"] },
+    },
     include: { venue: true, checkIns: true },
     orderBy: { arriveBy: "asc" },
   });
-  const rows = bookings.map((b) => ({ b, a: arrivalFor(b, settings, now), w: checkInWindow(b.arriveBy, b.setStart, b.setEnd) }));
+  const rows = bookings.map((b) => ({
+    b,
+    a: arrivalFor(b, settings, now),
+    w: checkInWindow(b.arriveBy, b.setStart, b.setEnd),
+  }));
   // "Current" gigs: not cancelled and check-in hasn't closed.
   const current = rows.filter((r) => r.b.status !== "CANCELLED" && r.w.closesAt > now);
   const past = rows.filter((r) => r.w.closesAt <= now || r.b.status === "CANCELLED").reverse();
@@ -101,6 +115,8 @@ export default async function ArtistHome() {
           </ul>
         </section>
       )}
+
+      <PushSetup publicKey={pushKey} />
 
       {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${artist!.name} gigs`} />}
 

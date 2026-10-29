@@ -7,6 +7,7 @@ const KIND: Record<string, string> = {
   OVERDUE_ALERT: "Overdue alert",
   CLIENT_ARRIVAL: "Client: artist arrived",
   BOOKING_CHANGE: "Artist: gig booked or changed",
+  REMINDER: "Artist: gig reminder",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {
@@ -29,7 +30,7 @@ export function MessageList({ messages, timezone, showAgency }: { messages: (Mes
                 <span className={`badge ${style}`}>{label}</span>
                 <span className="font-medium">{KIND[m.kind] ?? m.kind}</span>
                 <span className="text-ink-500">
-                  {m.channel === "SMS" ? "Text" : "Email"} to {m.to}
+                  {m.channel === "SMS" ? "Text" : m.channel === "PUSH" ? "Phone notification" : "Email"} to {m.to}
                 </span>
                 {showAgency && m.agency && <span className="text-ink-400">· {m.agency.name}</span>}
                 <span className="ml-auto text-xs text-ink-400">{formatDateTime(m.createdAt, timezone)}</span>

@@ -12,7 +12,7 @@ export function ArtistForm({ action, artist, agents }: { action: Action; artist?
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Artist or act name">
+        <Field label="Act name" hint="A solo singer, duo or band: one profile per act">
           <input name="name" required defaultValue={artist?.name} className="input" />
         </Field>
         <Field label="Genre">
@@ -45,18 +45,18 @@ export function ArtistForm({ action, artist, agents }: { action: Action; artist?
         <textarea name="notes" rows={3} defaultValue={artist?.notes} className="input" />
       </Field>
       <div className="flex justify-end">
-        <SubmitButton>{artist ? "Save changes" : "Add artist"}</SubmitButton>
+        <SubmitButton>{artist ? "Save changes" : "Add act"}</SubmitButton>
       </div>
     </ActionForm>
   );
 }
 
-export function ContactForm({ action, contact }: { action: Action; contact?: Contact }) {
+export function ContactForm({ action, contact, defaultType }: { action: Action; contact?: Contact; defaultType?: string }) {
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Type">
-          <select name="type" defaultValue={contact?.type ?? "PROMOTER"} className="input">
+          <select name="type" defaultValue={contact?.type ?? defaultType ?? "PROMOTER"} className="input">
             {CONTACT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {CONTACT_TYPE_LABELS[t]}

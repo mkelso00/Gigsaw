@@ -73,7 +73,7 @@ body {
     @apply p-5 sm:p-6;
   }
   .btn {
-    @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3.5 text-sm font-medium text-ink-900 transition-colors hover:border-ink-300 hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-volt-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-4 text-sm shadow-[0_1px_2px_rgba(13,13,12,0.04)] font-medium text-ink-900 transition-colors hover:border-ink-300 hover:bg-ink-50 focus-visible:ring-2 focus-visible:ring-volt-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
     @apply border-ink-950 bg-ink-950 text-white hover:border-ink-800 hover:bg-ink-800;
@@ -85,19 +85,54 @@ body {
     @apply border-rose-200 text-rose-700 hover:border-rose-300 hover:bg-rose-50;
   }
   .btn-sm {
-    @apply h-7 rounded-md px-2.5 text-xs;
+    @apply h-8 rounded-lg px-2.5 text-xs shadow-none;
   }
   .input {
-    @apply block h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-950 transition placeholder:text-ink-400 hover:border-ink-300 focus:border-ink-950 focus:ring-4 focus:ring-volt-300/60 focus:outline-none;
+    @apply block h-11 w-full rounded-xl border border-ink-200 bg-white px-3.5 text-base text-ink-950 shadow-[0_1px_2px_rgba(13,13,12,0.04)] transition placeholder:text-ink-400 hover:border-ink-300 focus:border-ink-950 focus:ring-4 focus:ring-volt-300/60 focus:outline-none disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-500 sm:text-sm;
+  }
+  /* Our own arrow on dropdowns, so they match the other fields on every browser. */
+  select.input {
+    @apply cursor-pointer appearance-none bg-[length:16px] bg-[right_0.85rem_center] bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375746d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+  /* Compact fields for tight spots such as rota cells. */
+  .input-sm {
+    @apply block h-8 w-full rounded-lg border border-ink-200 bg-white px-2 text-xs text-ink-950 transition placeholder:text-ink-400 hover:border-ink-300 focus:border-ink-950 focus:ring-2 focus:ring-volt-300/60 focus:outline-none;
+  }
+  select.input-sm {
+    @apply cursor-pointer appearance-none bg-[length:14px] bg-[right_0.4rem_center] bg-no-repeat pr-6;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2375746d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+  input[type="date"].input,
+  input[type="time"].input {
+    @apply tabular-nums;
   }
   textarea.input {
-    @apply h-auto py-2;
+    @apply h-auto py-2.5 leading-relaxed;
+  }
+  .input[aria-invalid="true"] {
+    @apply border-rose-400 focus:ring-rose-200;
   }
   .label {
-    @apply mb-1.5 block text-[13px] font-medium text-ink-700;
+    @apply mb-1.5 block text-[13px] font-medium text-ink-800;
   }
   .hint {
-    @apply mt-1.5 text-xs text-ink-500;
+    @apply mt-1.5 text-xs leading-relaxed text-ink-500;
+  }
+  /* Tick boxes and radio buttons: ink when on, with the same focus ring as fields. */
+  input[type="checkbox"]:not(.switch),
+  input[type="radio"] {
+    @apply cursor-pointer accent-ink-950 focus-visible:ring-4 focus-visible:ring-volt-300/60 focus-visible:outline-none;
+  }
+  /* An on/off switch: <input type="checkbox" className="switch">. */
+  .switch {
+    @apply relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full bg-ink-200 transition-colors checked:bg-ink-950 focus-visible:ring-4 focus-visible:ring-volt-300/60 focus-visible:outline-none;
+  }
+  .switch::before {
+    @apply absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform content-[''];
+  }
+  .switch:checked::before {
+    @apply translate-x-5 bg-volt-400;
   }
   .badge {
     @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap;
@@ -132,4 +167,109 @@ body {
   body {
     background: white;
   }
+}
+
+/*
+ * Dark theme for the agency pages (the default; people can switch to light in the sidebar).
+ * It works by re-pointing the colour tokens inside .theme-dark: the ink scale flips, white
+ * surfaces become dark, and the pale status tints (emerald, amber, rose, sky) become deep
+ * tints with light text. Kept outside @layer so it wins over component styles.
+ */
+.theme-dark {
+  color-scheme: dark;
+  --surface: #181816;
+  --surface-2: #232320;
+
+  --color-ink-50: #0e0e0d;
+  --color-ink-100: #23231f;
+  --color-ink-200: #302f2b;
+  --color-ink-300: #46453f;
+  --color-ink-400: #6d6c65;
+  --color-ink-500: #96958d;
+  --color-ink-600: #b6b5ac;
+  --color-ink-700: #d0cfc7;
+  --color-ink-800: #e3e3dc;
+  --color-ink-900: #efefea;
+  --color-ink-950: #f7f7f4;
+  --color-slate-50: #0e0e0d;
+  --color-slate-100: #23231f;
+  --color-slate-200: #302f2b;
+  --color-slate-300: #46453f;
+  --color-slate-400: #6d6c65;
+  --color-slate-500: #96958d;
+  --color-slate-600: #b6b5ac;
+  --color-slate-700: #d0cfc7;
+  --color-slate-800: #e3e3dc;
+  --color-slate-900: #efefea;
+
+  --color-volt-100: color-mix(in oklab, #cdf72e 10%, #181816);
+  --color-volt-200: color-mix(in oklab, #cdf72e 22%, #181816);
+  --color-volt-700: #dcff5c;
+  --color-brand-50: color-mix(in oklab, #cdf72e 10%, #181816);
+  --color-brand-100: color-mix(in oklab, #cdf72e 22%, #181816);
+
+  --color-emerald-50: color-mix(in oklab, #10b981 13%, #181816);
+  --color-emerald-100: color-mix(in oklab, #10b981 22%, #181816);
+  --color-emerald-200: color-mix(in oklab, #10b981 38%, #181816);
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+  --color-amber-50: color-mix(in oklab, #f59e0b 12%, #181816);
+  --color-amber-100: color-mix(in oklab, #f59e0b 22%, #181816);
+  --color-amber-200: color-mix(in oklab, #f59e0b 38%, #181816);
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+  --color-amber-950: #fffbeb;
+  --color-rose-50: color-mix(in oklab, #f43f5e 13%, #181816);
+  --color-rose-100: color-mix(in oklab, #f43f5e 22%, #181816);
+  --color-rose-200: color-mix(in oklab, #f43f5e 38%, #181816);
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-rose-900: #ffe4e6;
+  --color-sky-50: color-mix(in oklab, #0ea5e9 13%, #181816);
+  --color-sky-100: color-mix(in oklab, #0ea5e9 22%, #181816);
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #bae6fd;
+
+  background-color: var(--color-ink-50);
+  color: var(--color-ink-950);
+}
+/* Overscroll and the page behind the sidebar match the theme. */
+html:has(.theme-dark),
+html:has(.theme-dark) body {
+  background-color: #0e0e0d;
+}
+/* White surfaces become dark ones. */
+.theme-dark :is(.bg-white, .card, .input, .input-sm, dialog, .btn:not(.btn-primary, .btn-volt, [class*=" bg-"])) {
+  background-color: var(--surface);
+}
+.theme-dark [class*="bg-white/"] {
+  background-color: color-mix(in oklab, var(--surface) 85%, transparent);
+}
+.theme-dark [class*="hover:bg-white"]:hover,
+.theme-dark .btn:not(.btn-primary, .btn-volt, [class*=" bg-"]):hover {
+  background-color: var(--surface-2);
+}
+.theme-dark .ring-white {
+  --tw-ring-color: var(--surface);
+}
+/* "Dark" chips and panels (selected tabs, the plan card) become raised dark surfaces. */
+.theme-dark .bg-ink-950 {
+  background-color: #2c2c28;
+}
+/* The main button is light on dark, and lights up lime on hover. */
+.theme-dark .btn-primary {
+  border-color: #f7f7f4;
+  background-color: #f7f7f4;
+  color: #0d0d0c;
+}
+.theme-dark .btn-primary:hover {
+  border-color: #dcff5c;
+  background-color: #dcff5c;
+}
+/* Dark text stays dark on bright lime and amber backgrounds. */
+.theme-dark :is([class*="bg-volt-3"], [class*="bg-volt-4"], [class*="bg-amber-3"], [class*="bg-amber-4"], .btn-volt) {
+  --color-ink-950: #0d0d0c;
+  --color-ink-900: #171715;
 }

@@ -17,7 +17,10 @@ import { formatDate, formatMinutes, localTime } from "@/lib/time";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const user = await requireStaff();
-  const a = await prisma.artist.findFirst({ where: { id, agencyId: user.agencyId }, select: { name: true } });
+  const a = await prisma.artist.findFirst({
+    where: { id, agencyId: user.agencyId },
+    select: { name: true },
+  });
   return { title: a?.name ?? "Artist" };
 }
 
@@ -29,12 +32,32 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
-        login: { select: { email: true } },
+        login: {
+          select: {
+            email: true,
+            pushSubscriptions: { select: { device: true } },
+          },
+        },
         bookings: {
           orderBy: { setStart: "desc" },
           include: {
-            venue: { select: { name: true, city: true, latitude: true, longitude: true } },
-            checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
+            venue: {
+              select: {
+                name: true,
+                city: true,
+                latitude: true,
+                longitude: true,
+              },
+            },
+            checkIns: {
+              select: {
+                kind: true,
+                at: true,
+                source: true,
+                distanceM: true,
+                etaMinutes: true,
+              },
+            },
           },
         },
       },
@@ -44,7 +67,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   if (!artist) notFound();
 
   const now = new Date();
-  const rows = artist.bookings.map((b) => ({ b, a: arrivalFor(b, settings, now) }));
+  const rows = artist.bookings.map((b) => ({
+    b,
+    a: arrivalFor(b, settings, now),
+  }));
   const upcoming = rows.filter((r) => r.b.setStart >= now && r.b.status !== "CANCELLED").reverse();
   const past = rows.filter((r) => r.b.setStart < now);
   const stats = punctuality(past.map((r) => r.a));
@@ -84,11 +110,17 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           value={stats.onTimeRate != null ? `${Math.round(stats.onTimeRate * 100)}%` : "No data"}
           hint={stats.tracked ? `${stats.onTime} of ${stats.tracked} past gigs` : "Builds up as gigs happen"}
         />
-        <Stat label="Late arrivals" value={stats.late} hint={stats.averageMinutesLate != null ? `Avg ${formatMinutes(stats.averageMinutesLate)} late` : undefined} />
+        <Stat
+          label="Late arrivals"
+          value={stats.late}
+          hint={stats.averageMinutesLate != null ? `Avg ${formatMinutes(stats.averageMinutesLate)} late` : undefined}
+        />
         <Stat label="No check-in" value={stats.missing} hint="Gigs with no arrival recorded" />
         <Stat
           label="Typical arrival"
-          value={stats.averageArrivalOffset != null ? `${formatMinutes(stats.averageArrivalOffset)} ${stats.averageArrivalOffset <= 0 ? "early" : "late"}` : "–"}
+          value={
+            stats.averageArrivalOffset != null ? `${formatMinutes(stats.averageArrivalOffset)} ${stats.averageArrivalOffset <= 0 ? "early" : "late"}` : "–"
+          }
           hint={`${stats.verifiedOnSite} verified at the venue`}
         />
       </div>
@@ -97,11 +129,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         <div className="space-y-6 xl:col-span-2">
           <section>
             <h2 className="section-title mb-3">Upcoming</h2>
-            {upcoming.length === 0 ? (
-              <Empty>No upcoming shows.</Empty>
-            ) : (
-              <BookingTable rows={upcoming} />
-            )}
+            {upcoming.length === 0 ? <Empty>No upcoming shows.</Empty> : <BookingTable rows={upcoming} />}
           </section>
           <section>
             <h2 className="section-title mb-3">Past shows and arrival history</h2>
@@ -112,10 +140,17 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         <div className="space-y-6">
           <section className="card card-pad">
             <h2 className="section-title">Artist app login</h2>
-            <p className="mt-1 mb-4 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-500">
               {artist.login
                 ? `Signed up as ${artist.login.email}. Set a new password below if they've forgotten it.`
                 : "Give the artist a login so they can see their gigs and check in on arrival from their phone."}
+            </p>
+            <p className="mt-1 mb-4 text-sm text-ink-500" data-testid="push-status">
+              {!artist.login
+                ? "Gig reminders go by email and text until they have a login."
+                : artist.login.pushSubscriptions.length
+                  ? `Phone reminders on: ${[...new Set(artist.login.pushSubscriptions.map((p) => p.device || "Phone"))].join(", ")}.`
+                  : "Phone reminders are off. They can turn them on in their app; until then reminders go by email and text."}
             </p>
             <ActionForm action={setArtistLogin.bind(null, artist.id)} className="space-y-3">
               <Field label="Email">
@@ -131,8 +166,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           <section className="card card-pad">
             <h2 className="section-title">Calendar feed</h2>
             <p className="mt-1 mb-3 text-sm text-slate-500">
-              Subscribe to this link in Google, Apple or Outlook calendar to see this artist&apos;s shows. Anyone with the link can see the
-              dates, so only share it with the artist&apos;s team.
+              Subscribe to this link in Google, Apple or Outlook calendar to see this artist&apos;s shows. Anyone with the link can see the dates, so only share
+              it with the artist&apos;s team.
             </p>
             <CopyField value={feedUrl} />
             <form action={resetCalendarToken.bind(null, artist.id)} className="mt-3">
@@ -154,7 +189,19 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   );
 }
 
-type Row = { b: { id: string; arriveBy: Date; setStart: Date; timezone: string; status: string; feeMinor: number; currency: string; venue: { name: string; city: string } | null }; a: ReturnType<typeof arrivalFor> };
+type Row = {
+  b: {
+    id: string;
+    arriveBy: Date;
+    setStart: Date;
+    timezone: string;
+    status: string;
+    feeMinor: number;
+    currency: string;
+    venue: { name: string; city: string } | null;
+  };
+  a: ReturnType<typeof arrivalFor>;
+};
 
 function BookingTable({ rows, showArrival = false }: { rows: Row[]; showArrival?: boolean }) {
   return (

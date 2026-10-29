@@ -76,6 +76,12 @@ model Settings {
   alertPhone            String  @default("")
   // Tell the client (the booking's promoter or client contact) when the artist arrives.
   clientArrivalMessages Boolean @default(true)
+  // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
+  weeklyReminders       Boolean @default(true)
+  weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
+  weeklyReminderTime    String  @default("18:00") // agency's local time
+  dayReminders          Boolean @default(true)
+  dayReminderTime       String  @default("12:00") // venue's local time
   invoiceTerms          String  @default("Payment due within 14 days of invoice date.")
   contractTerms         String  @default("")
 }
@@ -96,14 +102,15 @@ model User {
   createdAt    DateTime @default(now())
   demo         Boolean  @default(false) // sample data, removable from Settings
 
-  sessions        Session[]
-  passwordResets  PasswordReset[]
-  managedArtists  Artist[]        @relation("ArtistAgent")
-  bookingsCreated Booking[]       @relation("BookingCreator")
-  bookingsAgented Booking[]       @relation("BookingAgent")
-  notes           ContactNote[]
-  checkIns        CheckIn[]
-  activity        Activity[]
+  sessions          Session[]
+  passwordResets    PasswordReset[]
+  managedArtists    Artist[]           @relation("ArtistAgent")
+  bookingsCreated   Booking[]          @relation("BookingCreator")
+  bookingsAgented   Booking[]          @relation("BookingAgent")
+  notes             ContactNote[]
+  checkIns          CheckIn[]
+  activity          Activity[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Session {
@@ -133,10 +140,11 @@ model Artist {
   createdAt         DateTime @default(now())
   demo              Boolean  @default(false) // sample data, removable from Settings
 
-  login    User?       @relation("ArtistLogin")
-  slots    VenueSlot[]
-  bookings Booking[]
-  checkIns CheckIn[]
+  login     User?       @relation("ArtistLogin")
+  slots     VenueSlot[]
+  reminders Reminder[]
+  bookings  Booking[]
+  checkIns  CheckIn[]
 
   @@index([agencyId])
 }
@@ -336,8 +344,8 @@ model Message {
   agencyId  String?
   agency    Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   bookingId String?
-  kind      String // PASSWORD_RESET | OVERDUE_ALERT | CLIENT_ARRIVAL | TEST
-  channel   String // EMAIL | SMS
+  kind      String // PASSWORD_RESET | OVERDUE_ALERT | CLIENT_ARRIVAL | BOOKING_CHANGE | REMINDER | TEST
+  channel   String // EMAIL | SMS | PUSH
   to        String
   subject   String   @default("")
   body      String
@@ -376,4 +384,37 @@ model VenueSlot {
 
   @@index([agencyId, weekday])
   @@index([venueId])
+}
+
+// A phone or browser that has turned on notifications (web push) for a login.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  device    String   @default("") // e.g. "iPhone", for the artist's own reference
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Site-wide generated secrets, e.g. the web push (VAPID) keys.
+model AppSecret {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+}
+
+// Records each reminder sent so it only goes once, e.g. ("WEEK", artist, "2026-11-02").
+model Reminder {
+  id        String   @id @default(cuid())
+  kind      String // WEEK | DAY
+  artistId  String
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  key       String
+  createdAt DateTime @default(now())
+
+  @@unique([kind, artistId, key])
 }

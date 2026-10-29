@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: { default: "Gigsaw", template: "%s · Gigsaw" },
   description: "Booking management for music agencies and artists, with gig arrival tracking.",
   manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Gigsaw", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
