@@ -80,6 +80,8 @@ model Settings {
   clientArrivalMessages Boolean @default(true)
   // Weddings and events: automatic emails to the customer and the acts, and a review link for the thank-you.
   eventEmails           Boolean @default(true)
+  // Tell the customer when an act is confirmed: EVENTS (weddings and private events) | ALL | OFF
+  customerConfirmations String  @default("EVENTS")
   reviewLink            String  @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
@@ -227,11 +229,14 @@ model Booking {
   agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   reference   String
   eventName   String   @default("")
-  status      String   @default("HOLD") // ENQUIRY | HOLD | PENDING | CONFIRMED | SETTLED | CANCELLED
+  // ENQUIRY | PENDING (being set up, maybe no act yet) | AWAITING (offered to the act) |
+  // HOLD | CONFIRMED (the act has accepted: the gig is on) | SETTLED | CANCELLED
+  status      String   @default("PENDING")
   dealType    String   @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
   eventType   String   @default("GIG") // GIG | FESTIVAL | CLUB_NIGHT | WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
-  artistId    String
-  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  // The act. Empty while the gig is being set up ("Needs an act").
+  artistId    String?
+  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: Restrict)
   venueId     String?
   venue       Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
   promoterId  String?
@@ -279,6 +284,14 @@ model Booking {
   slot   VenueSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
 
   // Messages: send the client an "artist has arrived" note; when alerts went out (sent once).
+  // Offer to the act: a private accept/decline link, and their answer.
+  offerToken     String?   @unique
+  offeredAt      DateTime?
+  offerResponse  String? // ACCEPTED | DECLINED
+  respondedAt    DateTime?
+  // When the customer (weddings and private events) was told this act is confirmed.
+  customerToldAt DateTime?
+
   notifyClientOnArrival Boolean   @default(true)
   overdueAlertSentAt    DateTime?
   clientNotifiedAt      DateTime?

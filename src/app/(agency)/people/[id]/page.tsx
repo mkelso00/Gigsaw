@@ -11,6 +11,7 @@ import { personFormOptions } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { venueColour } from "@/lib/rota";
 import { formatDate, localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Person" };
 
@@ -114,8 +115,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
                         {formatDate(b.arriveBy, b.timezone)}, {localTime(b.setStart, b.timezone)}
                       </div>
                       <div className="flex items-center gap-1.5 truncate text-xs text-ink-500">
-                        <ArtistDot colour={b.artist.colour} />
-                        {b.artist.name} · {b.venue?.name ?? "No venue"}
+                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                        {actName(b)} · {b.venue?.name ?? "No venue"}
                       </div>
                     </Link>
                     <StatusBadge status={b.status} />

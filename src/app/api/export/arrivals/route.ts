@@ -5,6 +5,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { csvResponse, toCsv } from "@/lib/csv";
 import { getSettings, prisma } from "@/lib/db";
 import { localDateKey, localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 // One row per past or current gig, with how and when the artist arrived.
 export async function GET() {
@@ -25,7 +26,7 @@ export async function GET() {
     return [
       b.reference,
       localDateKey(b.arriveBy, b.timezone),
-      b.artist.name,
+      actName(b),
       b.venue?.name,
       b.venue?.city,
       localTime(b.arriveBy, b.timezone),
@@ -39,7 +40,21 @@ export async function GET() {
     ];
   });
   const csv = toCsv(
-    ["Reference", "Date", "Artist", "Venue", "City", "Call time", "Arrived at", "Minutes late (negative = early)", "Result", "Location check", "Metres from venue", "Left at", "Time zone"],
+    [
+      "Reference",
+      "Date",
+      "Artist",
+      "Venue",
+      "City",
+      "Call time",
+      "Arrived at",
+      "Minutes late (negative = early)",
+      "Result",
+      "Location check",
+      "Metres from venue",
+      "Left at",
+      "Time zone",
+    ],
     rows,
   );
   return csvResponse(`gigsaw-arrivals-${localDateKey(now, settings.defaultTimezone)}.csv`, csv);

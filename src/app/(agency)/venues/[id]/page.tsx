@@ -13,6 +13,7 @@ import { venueColour } from "@/lib/rota";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { formatDate } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Venue" };
 
@@ -114,7 +115,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
                 <li key={b.id}>
                   <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50">
                     <span>
-                      {b.artist.name}
+                      {actName(b)}
                       <span className="block text-xs text-slate-500">{formatDate(b.arriveBy, b.timezone)}</span>
                     </span>
                     <StatusBadge status={b.status} />

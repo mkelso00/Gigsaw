@@ -4,12 +4,12 @@ import { arrivalDetail } from "@/components/arrival-panel";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
-import { LIVE_STATUSES } from "@/lib/constants";
+import { LIVE_STATUSES, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { unresolvedPastWhere } from "@/lib/billing";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
-import { addDaysToKey, formatDate, formatDateTime, localDateKey, localTime } from "@/lib/time";
-import { unfilledSlots } from "@/lib/unfilled";
+import { addDaysToKey, formatDate, formatDateTime, localDateKey, localTime, formatMinutes } from "@/lib/time";
+import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -29,7 +29,11 @@ export default async function DashboardPage() {
       take: 10,
     }),
     prisma.booking.findMany({
-      where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, arriveBy: { gte: new Date(now.getTime() - 12 * 3_600_000), lte: new Date(now.getTime() + 24 * 3_600_000) } },
+      where: {
+        agencyId: user.agencyId,
+        status: { in: LIVE_STATUSES },
+        arriveBy: { gte: new Date(now.getTime() - 12 * 3_600_000), lte: new Date(now.getTime() + 24 * 3_600_000) },
+      },
       include: bookingListInclude,
       orderBy: { arriveBy: "asc" },
     }),
@@ -61,7 +65,19 @@ export default async function DashboardPage() {
     }
   }
 
-  const unfilled = await unfilledSlots(user.agencyId, settings.defaultTimezone, 14);
+  const [unfilled, oneOffsNoAct, offers] = await Promise.all([
+    unfilledSlots(user.agencyId, settings.defaultTimezone, 14),
+    oneOffsNeedingAct(user.agencyId, 14),
+    // Offers waiting for the act's answer, and ones they've declined, soonest gig first.
+    prisma.booking.findMany({
+      where: { agencyId: user.agencyId, status: "AWAITING", setStart: { gte: now } },
+      include: { artist: { select: { name: true, colour: true, phone: true } }, venue: { select: { name: true, city: true } } },
+      orderBy: [{ offerResponse: "asc" }, { setStart: "asc" }],
+      take: 30,
+    }),
+  ]);
+  const declined = offers.filter((o) => o.offerResponse === "DECLINED");
+  const waiting = offers.filter((o) => o.offerResponse !== "DECLINED");
   const unfilledSoon = unfilled.filter((u) => u.date <= addDaysToKey(localDateKey(now, settings.defaultTimezone), 6)).length;
   const todayRows = today.map((b) => ({ b, a: arrivalFor(b, settings, now) }));
   const overdue = todayRows.filter((r) => r.a.state === "OVERDUE").length;
@@ -93,10 +109,60 @@ export default async function DashboardPage() {
           }`}
         >
           <span className={`badge ${unfilledSoon ? "bg-rose-600 text-white" : "bg-amber-400 text-ink-950"}`}>{unfilled.length}</span>
-          gig{unfilled.length === 1 ? "" : "s"} in the next 14 days still need{unfilled.length === 1 ? "s" : ""} an artist
-          {unfilledSoon ? `, ${unfilledSoon} of them in the next 7 days` : ""}.
-          <span className="ml-auto font-medium">Fill them →</span>
+          weekly slot{unfilled.length === 1 ? "" : "s"} in the next 14 days still need{unfilled.length === 1 ? "s" : ""} an act
+          {unfilledSoon ? `, ${unfilledSoon} of them in the next 7 days` : ""}.<span className="ml-auto font-medium">Fill them →</span>
         </Link>
+      )}
+
+      {oneOffsNoAct > 0 && (
+        <Link
+          href="/bookings?artist=none"
+          className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:brightness-95"
+        >
+          <span className="badge bg-amber-400 text-ink-950">{oneOffsNoAct}</span>
+          other gig{oneOffsNoAct === 1 ? "" : "s"} in the next 14 days {oneOffsNoAct === 1 ? "has" : "have"} no act yet.
+          <span className="ml-auto font-medium">See them →</span>
+        </Link>
+      )}
+
+      {offers.length > 0 && (
+        <section className="card mb-6 overflow-hidden">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-100 px-5 py-3">
+            <h2 className="section-title">
+              Waiting for acts
+              <span className="font-normal text-ink-500">
+                {" "}
+                · {waiting.length} offer{waiting.length === 1 ? "" : "s"} out{declined.length ? `, ${declined.length} declined` : ""}
+              </span>
+            </h2>
+            <span className="text-xs text-ink-500">Accepted offers confirm themselves. Chase or re-offer from here.</span>
+          </div>
+          <ul className="divide-y divide-ink-100 text-sm">
+            {offers.slice(0, 12).map((o) => (
+              <li key={o.id} className={`flex flex-wrap items-center gap-x-5 gap-y-1 px-5 py-3 ${o.offerResponse === "DECLINED" ? "bg-rose-50" : ""}`}>
+                <Link href={`/bookings/${o.id}`} className="min-w-48 flex-1">
+                  <span className="font-medium hover:underline">{actName(o)}</span>
+                  <span className="text-ink-500">
+                    {" "}
+                    · {o.venue?.name ?? "No venue"}, {formatDate(o.arriveBy, o.timezone)}
+                  </span>
+                </Link>
+                <span className={`text-xs ${o.offerResponse === "DECLINED" ? "font-semibold text-rose-700" : "text-ink-500"}`}>
+                  {o.offerResponse === "DECLINED"
+                    ? "Declined: find another act"
+                    : o.offeredAt
+                      ? `Offered ${formatMinutes(Math.round((now.getTime() - o.offeredAt.getTime()) / 60_000))} ago`
+                      : "Not sent yet"}
+                </span>
+                {o.artist?.phone && (
+                  <a href={`tel:${o.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
+                    Call
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {unresolved > 0 && (
@@ -118,9 +184,19 @@ export default async function DashboardPage() {
           hint={overdue > 0 ? `${overdue} overdue` : "checked in"}
           href="/arrivals"
         />
-        <Stat label="Shows in next 30 days" value={upcoming.length >= 10 ? "10+" : upcoming.length} hint={`${holds} open hold${holds === 1 ? "" : "s"}`} href="/calendar" />
+        <Stat
+          label="Shows in next 30 days"
+          value={upcoming.length >= 10 ? "10+" : upcoming.length}
+          hint={`${holds} open hold${holds === 1 ? "" : "s"}`}
+          href="/calendar"
+        />
         <Stat label="Owed by promoters" value={formatMoney(owedByPromoters, cur)} hint={`${cur} bookings`} href="/reports" />
-        <Stat label={`Commission ${now.getUTCFullYear()}`} value={formatMoney(commissionThisYear, cur)} hint={`Owed to artists ${formatMoney(owedToArtists, cur)}`} href="/reports" />
+        <Stat
+          label={`Commission ${now.getUTCFullYear()}`}
+          value={formatMoney(commissionThisYear, cur)}
+          hint={`Owed to artists ${formatMoney(owedToArtists, cur)}`}
+          href="/reports"
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -140,8 +216,8 @@ export default async function DashboardPage() {
                   <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 font-medium">
-                        <ArtistDot colour={b.artist.colour} />
-                        {b.artist.name}
+                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                        {actName(b)}
                         <span className="truncate font-normal text-slate-500">· {b.venue?.name ?? "No venue"}</span>
                       </div>
                       <div className="text-xs text-slate-500">
@@ -165,8 +241,8 @@ export default async function DashboardPage() {
                   <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 font-medium">
-                        <ArtistDot colour={b.artist.colour} />
-                        {b.artist.name}
+                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                        {actName(b)}
                       </div>
                       <div className="truncate text-xs text-slate-500">
                         {formatDate(b.arriveBy, b.timezone)} · {b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}
@@ -190,7 +266,7 @@ export default async function DashboardPage() {
                 {overdueDeposits.map((b) => (
                   <li key={b.id}>
                     <Link href={`/bookings/${b.id}`} className="block px-4 py-3 hover:bg-slate-50">
-                      <strong>{b.reference}</strong> · {b.artist.name}
+                      <strong>{b.reference}</strong> · {actName(b)}
                       <div className="text-xs text-slate-500">
                         {formatMoney(b.depositMinor, b.currency)} from {b.promoter?.name ?? "promoter"}, due {formatDate(b.depositDueDate!, b.timezone)}
                       </div>

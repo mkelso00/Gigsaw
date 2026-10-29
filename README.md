@@ -23,6 +23,13 @@ Most agency work is weekly slots at the same venues, so Gigsaw is built around t
   - A person can have **their own app login**: they see the gigs for every act they're in, labelled by act, with one calendar link for all of them.
   - Reminders and gig changes go to each **member** (an act with no members yet uses its own email and phone).
   - **Double-booking checks follow the people**: a gig for one act is checked against gigs for any act that shares a member.
+- **Statuses and offers**: create gigs first, add acts later.
+  - **Pending**: the gig is in the calendar (venue, date, times, money) and may have no act yet. It shows as "Needs an act" on the calendar, rota, dashboard and menu badge.
+  - **Awaiting confirmation**: add an act and choose this status. The act (or each of its members) gets an email, phone notification or text offering the gig with their own fee only, and a private link (`/o/…`, no login) to **Accept** or **Decline**; several offers can be accepted at once. Offers also appear at the top of the artist app.
+  - **Confirmed**: when the act accepts, the gig confirms itself and the agent is emailed. A decline leaves the gig as it is and the agent gets an email and a text. The dashboard lists offers waiting and declined.
+  - When a gig becomes Confirmed, the act is told it's booked (and it appears in their phone calendar). For weddings and private events the customer is told too; bar gigs' venues are not (Settings → Weddings and events).
+  - Rota: "Put every slot in the calendar" (Pending, no act), "Offer each slot to its regular act" or "Book each regular act in as confirmed"; each empty slot has **Offer** and **Confirm**.
+- **Overdue** gigs show a large red banner on the booking with a Call button.
 - **Weddings & events** (menu: Weddings): one booking for the customer with every act they've booked (ceremony singer, band, DJ…). Each act gets its own gig with its own times, **sale** (what the customer pays) and **cost** (the act's fee). The customer's total, payments and balance are added up across the acts, with **one combined invoice**; a payment is shared across the acts automatically.
   - **Checklist** per wedding (contract, deposit, details from the couple, balance, final details to the acts, thank-you); several tick themselves.
   - **Planner link** for the couple (`/w/…`, no login): running order, contact on the day, parking and load-in, dress code, food for the acts, song requests. The acts see it on their gig page with who else is performing, but never any prices.

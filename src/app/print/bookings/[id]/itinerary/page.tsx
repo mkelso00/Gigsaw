@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DocTable, DocumentShell } from "@/components/document";
 import { loadPrintable } from "@/lib/print";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Itinerary" };
 
@@ -12,7 +13,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
   const v = b.venue;
   return (
     <DocumentShell title="Day sheet" reference={b.reference} settings={settings}>
-      <h1 className="mb-1 text-2xl font-bold">{b.artist.name}</h1>
+      <h1 className="mb-1 text-2xl font-bold">{actName(b)}</h1>
       <p className="mb-6 text-slate-600">
         {formatDate(b.arriveBy, tz)}
         {v ? ` · ${v.name}${v.city ? `, ${v.city}` : ""}` : ""}

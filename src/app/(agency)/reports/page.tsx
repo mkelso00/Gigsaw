@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { localDateKey, zonedToUtc } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -49,9 +50,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     const d = dealBreakdown(b);
     const p = paymentTotals(b.payments);
     add(byCurrency, b.currency, d, p);
-    const ar = byArtist.get(b.artist.id) ?? { name: b.artist.name, colour: b.artist.colour, t: new Map() };
+    const actKey = b.artist?.id ?? "none";
+    const ar = byArtist.get(actKey) ?? { name: actName(b), colour: b.artist?.colour ?? "#a2a199", t: new Map() };
     add(ar.t, b.currency, d, p);
-    byArtist.set(b.artist.id, ar);
+    byArtist.set(actKey, ar);
     const agKey = b.agent?.id ?? "none";
     const ag = byAgent.get(agKey) ?? { name: b.agent?.name ?? "Unassigned", t: new Map() };
     add(ag.t, b.currency, d, p);

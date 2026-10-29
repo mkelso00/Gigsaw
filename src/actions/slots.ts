@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference } from "@/lib/bookings";
 import { applyBulkChange } from "@/lib/bulk";
-import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES } from "@/lib/constants";
+import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { findClashes } from "@/lib/clash-check";
 import { minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
+import { sendOffers } from "@/lib/offers";
 import { dateInWeek, isDateKey, weekdayOf } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
 import { localDateKey, zonedToUtc } from "@/lib/time";
@@ -205,7 +206,9 @@ async function slotClashes(user: AgencyUser, slot: Awaited<ReturnType<typeof own
 }
 
 /** Create the booking for one slot on one date. Returns null if it's already booked. */
-async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string) {
+async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string | null, statusOverride?: string) {
+  const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } }) : null;
+  if (artistId && !artist) throw new FormError("Choose an act");
   const tz = slot.venue.timezone;
   const dayStart = zonedToUtc(date, "00:00", tz);
   const existing = await prisma.booking.findFirst({
@@ -217,27 +220,35 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
         lt: new Date(dayStart.getTime() + 30 * 3_600_000),
       },
     },
-    select: { id: true, arriveBy: true },
+    select: { id: true, arriveBy: true, artistId: true },
   });
-  if (existing && localDateKey(existing.arriveBy, tz) === date) return null;
+  if (existing && localDateKey(existing.arriveBy, tz) === date) {
+    // Already in the calendar with no act (Pending): put the act on that gig instead.
+    if (!existing.artistId && artist) {
+      await prisma.booking.update({
+        where: { id: existing.id },
+        data: { artistId: artist.id, status: statusOverride ?? slot.bookingStatus, agentId: artist.agentId ?? undefined, demo: slot.venue.demo || artist.demo },
+      });
+      await logActivity(user, "BOOKING", existing.id, "act added", artist.name);
+      return existing.id;
+    }
+    return null;
+  }
 
-  const artist = await prisma.artist.findFirst({
-    where: { id: artistId, agencyId: user.agencyId },
-  });
-  if (!artist) throw new FormError("Choose an artist");
   const settings = await getSettings(user.agencyId);
   const schedule = slotSchedule(slot, date);
   const booking = await createBookingWithReference(user.agencyId, {
     ...schedule,
-    artistId: artist.id,
+    artistId: artist?.id ?? null,
     venueId: slot.venueId,
     promoterId: slot.promoterId,
-    agentId: artist.agentId ?? user.id,
+    agentId: artist?.agentId ?? user.id,
     createdById: user.id,
     slotId: slot.id,
     // Gigs made from demo venues or for demo artists are demo data: never billed or messaged.
-    demo: slot.venue.demo || artist.demo,
-    status: slot.bookingStatus,
+    demo: slot.venue.demo || !!artist?.demo,
+    // No act yet: the gig is Pending until one is added.
+    status: artist ? (statusOverride ?? slot.bookingStatus) : "PENDING",
     eventType: slot.eventType,
     eventName: slot.label,
     timezone: tz,
@@ -245,7 +256,7 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
     feeMinor: slot.feeMinor,
     // Sale and cost when the slot has a cost; otherwise commission.
     ...(slot.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: slot.costMinor } : {}),
-    commissionPct: artist.defaultCommission ?? settings.defaultCommission,
+    commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
   });
   await logActivity(user, "BOOKING", booking.id, "booked from venue schedule", `${slot.venue.name} ${date}`);
   return booking.id;
@@ -258,7 +269,9 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
     if (!isDateKey(date)) throw new FormError("Unknown date");
     const slot = await ownSlot(user, slotId);
     const artistId = optStr(form, "artistId");
-    if (!artistId) throw new FormError("Choose an artist");
+    if (!artistId) throw new FormError("Choose an act");
+    // "Offer" asks the act to accept; "Confirm" books them straight in.
+    const status = str(form, "mode") === "confirm" ? "CONFIRMED" : "AWAITING";
     if (!confirmed(form)) {
       const warnings = await slotClashes(user, slot, date, artistId);
       if (warnings.length) {
@@ -271,23 +284,32 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
         };
       }
     }
-    const id = await bookSlot(user, slot, date, artistId);
-    if (!id) throw new FormError("This slot is already booked for that date");
-    if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
+    const id = await bookSlot(user, slot, date, artistId, status);
+    if (!id) throw new FormError("This slot already has an act for that date");
+    if (status === "AWAITING") await sendOffers([id]);
+    else if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
     revalidatePath("/", "layout");
+    if (status === "AWAITING") return { ok: "Offered. You'll get an email when they answer." };
     return { ok: "Booked." };
   });
 }
 
 /** Book every slot that has a regular artist, for a number of weeks, skipping anything already booked or past. */
+/**
+ * Fill the calendar from the weekly slots for a number of weeks, skipping dates already done:
+ *  - "pending": every slot becomes a Pending gig with no act, ready to add acts to
+ *  - "offer": each slot's regular act is offered the gig (they accept or decline)
+ *  - "confirm": each slot's regular act is booked in as confirmed
+ */
 export async function bookRegulars(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
     const weekStart = str(form, "weekStart");
     if (!isDateKey(weekStart)) throw new FormError("Unknown week");
     const weeks = Math.min(Math.max(int(form, "weeks") ?? 1, 1), 26);
+    const mode = oneOf(str(form, "mode"), ["pending", "offer", "confirm"] as const, "pending");
     const slots = await prisma.venueSlot.findMany({
-      where: { agencyId: user.agencyId, active: true, artistId: { not: null } },
+      where: { agencyId: user.agencyId, active: true, ...(mode === "pending" ? {} : { artistId: { not: null } }) },
       include: { venue: true },
     });
     const today = localDateKey(new Date(), (await getSettings(user.agencyId)).defaultTimezone);
@@ -298,28 +320,44 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
       for (const slot of slots) {
         const date = dateInWeek(monday, slot.weekday);
         if (date < today) continue;
-        // Never quietly double-book a regular: leave the slot empty for a person to decide.
+        if (mode === "pending") {
+          const id = await bookSlot(user, slot, date, null);
+          if (id) created.push(id);
+          continue;
+        }
+        // Never quietly double-book a regular: leave the slot for a person to decide.
         const warnings = await slotClashes(user, slot, date, slot.artistId!);
         if (warnings.length) {
           skipped.push(`${slot.venue.name} ${date} ${slot.startTime}`);
           continue;
         }
-        const id = await bookSlot(user, slot, date, slot.artistId!);
+        const id = await bookSlot(user, slot, date, slot.artistId!, mode === "offer" ? "AWAITING" : "CONFIRMED");
         if (id) created.push(id);
       }
     }
-    const told = str(form, "notify") === "on" ? await notifyArtistsOfNewGigs(created) : 0;
     revalidatePath("/", "layout");
-    if (!slots.length)
+    if (!slots.length) {
       return {
-        ok: "No slots have a regular artist yet. Set one on each venue's schedule.",
+        ok: mode === "pending" ? "No weekly slots yet. Add them on each venue's page." : "No slots have a regular act yet. Set one on each venue's schedule.",
       };
+    }
+    const span = `over ${weeks} week${weeks === 1 ? "" : "s"}`;
+    const left = skipped.length
+      ? ` ${skipped.length} left without an act because the regular act is busy elsewhere then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}.`
+      : "";
+    if (mode === "pending")
+      return {
+        ok: `Added ${created.length} gig${created.length === 1 ? "" : "s"} to the calendar ${span}, Pending with no act. Dates already in the calendar were left alone.`,
+      };
+    if (mode === "offer") {
+      const people = await sendOffers(created);
+      return {
+        ok: `Offered ${created.length} gig${created.length === 1 ? "" : "s"} ${span}${people ? `: ${people} ${people === 1 ? "person was" : "people were"} sent their offers` : ""}.${left}`,
+      };
+    }
+    const told = str(form, "notify") === "on" ? await notifyArtistsOfNewGigs(created) : 0;
     return {
-      ok: `Booked ${created.length} gig${created.length === 1 ? "" : "s"} over ${weeks} week${weeks === 1 ? "" : "s"}.${told ? ` ${told} artist${told === 1 ? "" : "s"} sent a list of their new gigs.` : ""} Slots already booked were left alone.${
-        skipped.length
-          ? ` ${skipped.length} left empty because the regular artist is busy elsewhere then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}. They're in “Needs an artist”.`
-          : ""
-      }`,
+      ok: `Booked ${created.length} gig${created.length === 1 ? "" : "s"} ${span}.${told ? ` ${told} act${told === 1 ? "" : "s"} sent a list of their new gigs.` : ""}${left}`,
     };
   });
 }
@@ -339,11 +377,21 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
     if (!venueId && weekly) throw new FormError("Choose a venue to make this a weekly slot");
     const venue = venueId ? await ownVenue(user, venueId) : null;
     const fields = await slotFields(form, user);
-    if (!fields.artistId) throw new FormError("Choose an act");
     const settings = await getSettings(user.agencyId);
     const tz = venue?.timezone ?? settings.defaultTimezone;
     if (date < localDateKey(new Date(), tz)) throw new FormError("That date has already passed");
-    const artist = (await prisma.artist.findFirst({ where: { id: fields.artistId, agencyId: user.agencyId } }))!;
+    const artist = fields.artistId ? (await prisma.artist.findFirst({ where: { id: fields.artistId, agencyId: user.agencyId } }))! : null;
+    // "Offer" and "Confirm" buttons choose the status; with no act yet the gig is Pending.
+    const mode = str(form, "mode");
+    const status = !artist
+      ? fields.bookingStatus === "ENQUIRY"
+        ? "ENQUIRY"
+        : "PENDING"
+      : mode === "offer"
+        ? "AWAITING"
+        : mode === "confirm"
+          ? "CONFIRMED"
+          : fields.bookingStatus;
     // Who pays: the one chosen, else whoever pays for this venue's regular slots.
     const promoterId =
       fields.promoterId ??
@@ -353,7 +401,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       null;
     const schedule = buildSchedule(date, { arrive: fields.arriveTime, setStart: fields.startTime, setEnd: fields.endTime }, tz);
 
-    if (!confirmed(form) && LIVE_STATUSES.includes(fields.bookingStatus)) {
+    if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus)) {
       const warnings = await findClashes(
         { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...schedule },
         settings.changeoverMinutes,
@@ -370,33 +418,37 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         include: { venue: true },
       });
       await logActivity(user, "VENUE", venue.id, "added a weekly slot", `${fields.startTime}–${fields.endTime}`);
-      id = await bookSlot(user, created, date, artist.id);
+      id = await bookSlot(user, created, date, artist?.id ?? null, status);
     } else {
       const booking = await createBookingWithReference(user.agencyId, {
         ...schedule,
-        artistId: artist.id,
+        artistId: artist?.id ?? null,
         venueId: venue?.id ?? null,
         promoterId,
-        agentId: artist.agentId ?? user.id,
+        agentId: artist?.agentId ?? user.id,
         createdById: user.id,
-        demo: !!venue?.demo || artist.demo,
-        status: fields.bookingStatus,
+        demo: !!venue?.demo || !!artist?.demo,
+        status,
         eventType: fields.eventType,
         eventName: fields.label,
         timezone: tz,
         currency: fields.currency,
         feeMinor: fields.feeMinor,
         ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
-        commissionPct: artist.defaultCommission ?? settings.defaultCommission,
+        commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
       });
       await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
       id = booking.id;
     }
     const ref = id ? (await prisma.booking.findUnique({ where: { id }, select: { reference: true } }))?.reference : null;
-    if (id && str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
+    const offered = id && status === "AWAITING" ? await sendOffers([id]) : 0;
+    if (id && status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
     revalidatePath("/", "layout");
-    return {
-      ok: `Booked ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.${weekly ? " Added to the venue's weekly schedule too." : ""}`,
-    };
+    const what = !artist
+      ? `Added${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}: Pending, needs an act.`
+      : status === "AWAITING"
+        ? `Offered to ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.${offered ? " They've been sent the offer." : " They have no email, phone or login on file: send the link from the booking."}`
+        : `Booked ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.`;
+    return { ok: `${what}${weekly ? " Added to the venue's weekly schedule too." : ""}` };
   });
 }

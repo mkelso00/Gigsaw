@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import { daysBetween, eventMessagesDue, PLAN_FIELDS, type EventMessage, type TaskKey } from "./event-plan";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type PaymentLike } from "./money";
+import { actName } from "./constants";
 import { recipientsForActs } from "./people";
 import { formatDate, localDateKey, localTime } from "./time";
 
@@ -109,6 +110,8 @@ const replyOf = (e: FullEvent) => e.bookings.find((b) => b.agent?.email)?.agent?
 const isWedding = (e: FullEvent) => e.type === "WEDDING";
 const eventDay = (e: FullEvent) => formatDate(new Date(`${e.date}T12:00:00Z`), "UTC");
 const live = (e: FullEvent) => e.bookings.filter((b) => b.status !== "CANCELLED" && b.status !== "ENQUIRY");
+/** Gigs that have an act, for messages to the acts. */
+const withAct = (e: FullEvent) => live(e).filter((b): b is typeof b & { artistId: string; artist: NonNullable<typeof b.artist> } => !!b.artistId && !!b.artist);
 
 /** Email the customer their planner link. Used by the automatic emails and the "Send" button. */
 export async function sendPlannerEmail(e: FullEvent, chase = false) {
@@ -129,9 +132,7 @@ export async function sendPlannerEmail(e: FullEvent, chase = false) {
       }: the running order, who to ask for on the day, parking, and any song requests. It takes about five minutes, and you can come back and change it.`,
       rows: [
         ["Date", eventDay(e)],
-        ...live(e).map(
-          (b) => [b.artist.name, `${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`] as [string, string],
-        ),
+        ...live(e).map((b) => [actName(b), `${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`] as [string, string]),
       ],
       cta: { label: "Fill in your details", url: plannerUrl(token) },
       outro: "Any questions, just reply to this email.",
@@ -160,7 +161,7 @@ async function sendBalanceReminder(e: FullEvent) {
       rows: [
         ...live(e).map((b) => {
           const d = dealBreakdown(b);
-          return [b.artist.name, m(d.totalDueMinor)] as [string, string];
+          return [actName(b), m(d.totalDueMinor)] as [string, string];
         }),
         ["Total", m(t.total)],
         ["Paid so far", m(t.received)],
@@ -174,7 +175,7 @@ async function sendBalanceReminder(e: FullEvent) {
 
 /** Each act's final details: their own times plus the plan. No money at all. */
 export async function sendActDetails(e: FullEvent) {
-  const gigs = live(e);
+  const gigs = withAct(e);
   if (!gigs.length) return 0;
   const recipients = await recipientsForActs(gigs.map((g) => g.artistId));
   const plan = PLAN_FIELDS.filter(([k]) => e[k]).map(([k, label]) => [label, e[k]] as [string, string]);
@@ -234,7 +235,7 @@ async function sendThanks(e: FullEvent) {
     email: {
       brand: brandOf(e),
       title: isWedding(e) ? "Congratulations!" : "Thank you",
-      intro: `Hi ${e.customer.name.split(" ")[0]}, thank you for booking ${live(e)
+      intro: `Hi ${e.customer.name.split(" ")[0]}, thank you for booking ${withAct(e)
         .map((b) => b.artist.name)
         .join(", ")} with us. We hope it was a brilliant day.`,
       cta: review ? { label: "Leave us a review", url: review } : undefined,
@@ -266,7 +267,7 @@ export async function runEventMessages(now = new Date()) {
       if ((kind === "PLANNER_REQUEST" || kind === "PLANNER_CHASE") && (e.plannerDoneAt || !e.customer?.email)) continue;
       if (kind === "BALANCE_REMINDER" && (!e.customer?.email || eventTotals(e.bookings).outstanding <= 0)) continue;
       if (kind === "THANKS" && !e.customer?.email) continue;
-      if (kind === "ACT_DETAILS" && !live(e).length) continue;
+      if (kind === "ACT_DETAILS" && !withAct(e).length) continue;
       if (!(await claim(kind, e.id))) continue;
       if (kind === "PLANNER_REQUEST") await sendPlannerEmail(e);
       else if (kind === "PLANNER_CHASE") await sendPlannerEmail(e, true);

@@ -6,6 +6,7 @@ import { getSettings, prisma } from "@/lib/db";
 import { autoDone, eventTotals, sentEventMessages } from "@/lib/events";
 import { formatMoney } from "@/lib/money";
 import { localDateKey } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Weddings & events" };
 
@@ -100,7 +101,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                   <td className="text-sm">
                     {e.bookings
                       .filter((b) => b.status !== "CANCELLED")
-                      .map((b) => b.artist.name)
+                      .map((b) => actName(b))
                       .join(", ") || <span className="text-amber-700">No acts yet</span>}
                   </td>
                   <td>

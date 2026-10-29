@@ -5,6 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { prisma } from "@/lib/db";
 import { PLAN_FIELDS } from "@/lib/event-plan";
 import { localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 // The customer's planner: a private link (no login) where a couple tells the agency the running
 // order, contacts, parking and song requests. Shows which acts are booked and when, never money.
@@ -48,7 +49,7 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
             <ul className="divide-y divide-ink-100 text-sm">
               {e.bookings.map((b) => (
                 <li key={b.id} className="flex justify-between gap-3 py-2.5">
-                  <span className="font-medium">{b.artist.name}</span>
+                  <span className="font-medium">{actName(b)}</span>
                   <span className="text-ink-600 tabular-nums">
                     {localTime(b.setStart, b.timezone)}
                     {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}

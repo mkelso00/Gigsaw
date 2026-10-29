@@ -15,6 +15,6 @@ export async function loadPrintable(id: string, allowArtist = false) {
     getSettings(user.agencyId),
   ]);
   if (!booking) notFound();
-  if (user.role === "ARTIST" && !(await actIdsFor(user)).includes(booking.artistId)) notFound();
+  if (user.role === "ARTIST" && (!booking.artistId || !(await actIdsFor(user)).includes(booking.artistId))) notFound();
   return { booking, settings, user };
 }

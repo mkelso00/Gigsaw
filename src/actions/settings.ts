@@ -56,6 +56,7 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         dayReminders: str(form, "dayReminders") === "on",
         dayReminderTime,
         eventEmails: str(form, "eventEmails") === "on",
+        customerConfirmations: oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS"),
         reviewLink: /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "",
         invoiceTerms: str(form, "invoiceTerms"),
         contractTerms: str(form, "contractTerms"),

@@ -1,6 +1,6 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { LIVE_STATUSES } from "./constants";
+import { actName, ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { recipientsForActs, type Recipient } from "./people";
@@ -43,10 +43,10 @@ const held = (b: Gig) => (b.status === "HOLD" || b.status === "PENDING" ? " (not
 
 /** Group gigs by who should hear about them. */
 async function byRecipient(gigs: Gig[]) {
-  const recipients = await recipientsForActs(gigs.map((g) => g.artistId));
+  const recipients = await recipientsForActs(gigs.map((g) => g.artistId!));
   const out = new Map<string, { to: Recipient; gigs: Gig[] }>();
   for (const g of gigs) {
-    for (const r of recipients.get(g.artistId) ?? []) {
+    for (const r of recipients.get(g.artistId!) ?? []) {
       const entry = out.get(r.key) ?? { to: r, gigs: [] };
       entry.gigs.push(g);
       out.set(r.key, entry);
@@ -71,7 +71,7 @@ async function deliver(d: Delivery) {
   const first = d.gigs[0];
   // Members (and anyone in more than one act) need to know which act each gig is for.
   const named = d.to.isMember || new Set(d.gigs.map((g) => g.artistId)).size > 1;
-  const label = (b: Gig) => `${named ? `${b.artist.name} at ` : ""}${where(b)}`;
+  const label = (b: Gig) => `${named ? `${actName(b)} at ` : ""}${where(b)}`;
   const lines = d.gigs.map((b) =>
     d.kind === "WEEK"
       ? `${formatDate(b.arriveBy, b.timezone).split(" ")[0]} ${label(b)} ${localTime(b.arriveBy, b.timezone)}`
@@ -123,7 +123,7 @@ export async function runReminders(now = new Date()) {
   for (const agency of agencies) {
     const s = agency.settings!;
     const agencyName = s.agencyName || agency.name;
-    const base = { agencyId: agency.id, demo: false, status: { in: LIVE_STATUSES }, artist: { demo: false } };
+    const base = { agencyId: agency.id, demo: false, status: { in: ON_STATUSES }, artist: { demo: false } };
 
     // ---- Weekly ----
     const week = s.weeklyReminders ? weeklyReminderWeek(now, s.defaultTimezone, s.weeklyReminderDay, s.weeklyReminderTime) : null;

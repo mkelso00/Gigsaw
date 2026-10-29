@@ -1,12 +1,16 @@
 // Allowed values for the string "enum" columns in the database, with display labels.
 
-export const BOOKING_STATUSES = ["ENQUIRY", "HOLD", "PENDING", "CONFIRMED", "SETTLED", "CANCELLED"] as const;
+// The life of a gig: Pending (being set up, maybe no act yet) → Awaiting confirmation (offered to
+// the act) → Confirmed (the act accepted: the gig is on) → Settled. Enquiry, On hold and Cancelled
+// sit alongside. "Confirmed" is about the act; a wedding customer's side is tracked on the event.
+export const BOOKING_STATUSES = ["ENQUIRY", "PENDING", "AWAITING", "HOLD", "CONFIRMED", "SETTLED", "CANCELLED"] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   ENQUIRY: "Enquiry",
-  HOLD: "Hold",
-  PENDING: "Pending contract",
+  PENDING: "Pending",
+  AWAITING: "Awaiting confirmation",
+  HOLD: "On hold",
   CONFIRMED: "Confirmed",
   SETTLED: "Settled",
   CANCELLED: "Cancelled",
@@ -15,12 +19,20 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 // Tailwind classes for status badges: a soft fill, plus the colour of the leading dot.
 export const BOOKING_STATUS_STYLES: Record<BookingStatus, string> = {
   ENQUIRY: "bg-ink-100 text-ink-700 [--dot:var(--color-ink-400)]",
+  PENDING: "bg-ink-100 text-ink-800 [--dot:var(--color-sky-500)]",
+  AWAITING: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
   HOLD: "bg-amber-50 text-amber-800 [--dot:var(--color-amber-500)]",
-  PENDING: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
   CONFIRMED: "bg-emerald-50 text-emerald-800 [--dot:var(--color-emerald-500)]",
   SETTLED: "bg-ink-950 text-white [--dot:var(--color-volt-400)]",
   CANCELLED: "bg-ink-100 text-ink-500 line-through [--dot:var(--color-ink-300)]",
 };
+
+/** Statuses that need an act on the gig. */
+export const NEEDS_ACT: BookingStatus[] = ["AWAITING", "HOLD", "CONFIRMED", "SETTLED"];
+/** Statuses the act sees in their app and calendar (Pending and Enquiry are still being set up). */
+export const ACT_VISIBLE: BookingStatus[] = ["AWAITING", "HOLD", "CONFIRMED", "SETTLED", "CANCELLED"];
+/** The gig is on: reminders go out and the act is expected. */
+export const ON_STATUSES: BookingStatus[] = ["CONFIRMED", "SETTLED"];
 
 export const DEAL_TYPES = ["STANDARD_COMMISSION", "BUY_SELL", "VERSUS", "PLUS", "FLAT"] as const;
 export type DealType = (typeof DEAL_TYPES)[number];
@@ -117,4 +129,9 @@ export const TIMEZONES = [
 ] as const;
 
 // Statuses that mean a show is going ahead (used for clash checks and arrival tracking).
-export const LIVE_STATUSES: BookingStatus[] = ["HOLD", "PENDING", "CONFIRMED", "SETTLED"];
+export const LIVE_STATUSES: BookingStatus[] = ["HOLD", "PENDING", "AWAITING", "CONFIRMED", "SETTLED"];
+
+/** The act's name, or "Needs an act" for a gig still being set up. */
+export function actName(b: { artist?: { name: string } | null }) {
+  return b.artist?.name ?? "Needs an act";
+}

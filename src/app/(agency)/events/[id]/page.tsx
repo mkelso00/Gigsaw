@@ -18,7 +18,7 @@ import { EventForm } from "@/components/event-form";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArtistDot, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { BOOKING_STATUS_LABELS } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { eventFormOptions } from "@/lib/event-options";
 import { PLAN_FIELDS, daysBetween, type EventMessage } from "@/lib/event-plan";
@@ -123,8 +123,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                         <tr key={b.id} className={b.status === "CANCELLED" ? "opacity-50" : ""}>
                           <td>
                             <Link href={`/bookings/${b.id}`} className="flex items-center gap-2 font-medium hover:underline">
-                              <ArtistDot colour={b.artist.colour} />
-                              {b.artist.name}
+                              <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                              {actName(b)}
                             </Link>
                             <div className="pl-[18px] text-xs text-ink-500">{b.reference}</div>
                           </td>
@@ -135,6 +135,10 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                           </td>
                           <td>
                             <StatusBadge status={b.status} />
+                            {b.customerToldAt && <div className="mt-1 text-xs text-emerald-700">Customer told</div>}
+                            {b.offerResponse === "DECLINED" && b.status === "AWAITING" && (
+                              <div className="mt-1 text-xs font-medium text-rose-700">Act declined</div>
+                            )}
                           </td>
                           <td className="text-right tabular-nums">{m(d.totalDueMinor)}</td>
                           <td className="text-right tabular-nums text-ink-600">{m(d.artistMinor)}</td>
@@ -149,10 +153,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 <ActionForm action={addEventAct.bind(null, e.id)} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="sm:col-span-2">
                     <span className="label">Act</span>
-                    <select name="artistId" required defaultValue="" className="input">
-                      <option value="" disabled>
-                        Choose an act…
-                      </option>
+                    <select name="artistId" defaultValue="" className="input">
+                      <option value="">No act yet (add later)</option>
                       {acts.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.name}
@@ -162,8 +164,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                   </label>
                   <label>
                     <span className="label">Status</span>
-                    <select name="status" defaultValue="CONFIRMED" className="input">
-                      {(["ENQUIRY", "HOLD", "PENDING", "CONFIRMED"] as const).map((s) => (
+                    <select name="status" defaultValue="PENDING" className="input">
+                      {(["PENDING", "AWAITING", "CONFIRMED", "HOLD", "ENQUIRY"] as const).map((s) => (
                         <option key={s} value={s}>
                           {BOOKING_STATUS_LABELS[s]}
                         </option>

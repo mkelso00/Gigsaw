@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addPayment, deleteBooking, deleteCheckIn, deletePayment, logCheckInForArtist, setBookingStatus } from "@/actions/bookings";
+import { addPayment, deleteBooking, deleteCheckIn, deletePayment, logCheckInForArtist, resendOffer, setBookingStatus } from "@/actions/bookings";
+import { CopyField } from "@/components/client-bits";
+import { appUrl } from "@/lib/messaging";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
@@ -20,10 +22,11 @@ import {
   PAYMENT_KIND_LABELS,
   type DealType,
   type PaymentKind,
+  actName,
 } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
-import { formatDate, formatDateTime, localDateKey, localTime, zoneLabel } from "@/lib/time";
+import { formatDate, formatDateTime, localDateKey, localTime, zoneLabel, formatMinutes } from "@/lib/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -56,7 +59,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const tz = booking.timezone;
   const windowStart = new Date(booking.setStart.getTime() - 400 * 86_400_000);
   const windowEnd = new Date(booking.setStart.getTime() + 400 * 86_400_000);
-  const linked = await linkedActIds(booking.artistId);
+  const linked = booking.artistId ? await linkedActIds(booking.artistId) : [];
   const [others, activity] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, artistId: { in: linked }, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
@@ -86,7 +89,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const totals = paymentTotals(booking.payments);
   const checklist = buildChecklist(
     { ...booking, linkedArtistIds: linked },
-    others.map((o) => ({ ...o, artistName: o.artist.name })),
+    others.map((o) => ({ ...o, artistName: actName(o) })),
     totals.depositReceivedMinor,
     now,
     settings.changeoverMinutes,
@@ -101,8 +104,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         title={
           <span className="flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-2">
-              <ArtistDot colour={booking.artist.colour} />
-              {booking.artist.name}
+              <ArtistDot colour={booking.artist?.colour ?? "#a2a199"} />
+              {actName(booking)}
             </span>
             <StatusBadge status={booking.status} />
           </span>
@@ -142,6 +145,27 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           </>
         }
       />
+
+      {arrival.state === "OVERDUE" && (
+        <div role="alert" className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl bg-rose-600 px-6 py-5 text-white shadow-lg shadow-rose-900/20">
+          <span className="relative flex h-4 w-4 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-60" />
+            <span className="relative inline-flex h-4 w-4 rounded-full bg-[#fff]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-2xl font-bold tracking-tight">Overdue{arrival.minutesOverdue ? `: ${formatMinutes(arrival.minutesOverdue)} late` : ""}</div>
+            <div className="mt-0.5 text-[15px] text-white/90">
+              {actName(booking)} hasn&apos;t checked in. Call time was {localTime(booking.arriveBy, tz)}
+              {arrival.expectedAt ? `; they said they'd arrive at ${localTime(arrival.expectedAt, tz)}` : ""}.
+            </div>
+          </div>
+          {booking.artist?.phone && (
+            <a href={`tel:${booking.artist.phone.replace(/\s/g, "")}`} className="btn h-12 border-[#fff] bg-[#fff] px-6 text-base font-semibold text-[#be123c] hover:bg-[#fff1f2]">
+              Call {booking.artist.phone}
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
@@ -313,8 +337,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         <div className="space-y-6">
           <section className="card card-pad">
             <h2 className="section-title mb-3">Status</h2>
-            <form action={setBookingStatus.bind(null, booking.id)} className="flex gap-2">
-              <select name="status" defaultValue={booking.status} className="input">
+            <ActionForm action={setBookingStatus.bind(null, booking.id)} className="flex flex-wrap gap-2">
+              <select name="status" defaultValue={booking.status} className="input min-w-0 flex-1">
                 {BOOKING_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {BOOKING_STATUS_LABELS[s]}
@@ -322,7 +346,39 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 ))}
               </select>
               <SubmitButton className="btn">Update</SubmitButton>
-            </form>
+            </ActionForm>
+            <p className="hint">Pending → Awaiting confirmation (the act is offered the gig) → Confirmed when they accept.</p>
+            {booking.customerToldAt && (
+              <p className="mt-2 text-xs font-medium text-emerald-700">Customer told it&apos;s confirmed, {formatDateTime(booking.customerToldAt, tz)}</p>
+            )}
+            {booking.artistId && (booking.status === "AWAITING" || booking.offerResponse) && (
+              <div className="mt-4 border-t border-ink-100 pt-4 text-sm">
+                <div className="font-medium">
+                  {booking.offerResponse === "ACCEPTED"
+                    ? "Accepted by the act"
+                    : booking.offerResponse === "DECLINED"
+                      ? "Declined by the act"
+                      : booking.offeredAt
+                        ? "Waiting for the act to answer"
+                        : "Offer not sent yet"}
+                </div>
+                <div className={`text-xs ${booking.offerResponse === "DECLINED" ? "font-medium text-rose-700" : "text-ink-500"}`}>
+                  {booking.respondedAt ? formatDateTime(booking.respondedAt, tz) : booking.offeredAt ? `Offered ${formatDateTime(booking.offeredAt, tz)}` : ""}
+                </div>
+                {booking.offerToken && booking.status === "AWAITING" && (
+                  <div className="mt-3">
+                    <CopyField value={`${appUrl()}/o/${booking.offerToken}`} />
+                  </div>
+                )}
+                {booking.status === "AWAITING" && (
+                  <ActionForm action={resendOffer.bind(null, booking.id)} className="mt-2">
+                    <SubmitButton className="btn w-full" pendingText="Sending…">
+                      {booking.offeredAt ? "Send the offer again" : "Send the offer"}
+                    </SubmitButton>
+                  </ActionForm>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="card card-pad">

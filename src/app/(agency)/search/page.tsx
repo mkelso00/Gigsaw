@@ -6,6 +6,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
 import { venueColour } from "@/lib/rota";
 import { addDaysToKey, formatDate, localDateKey, localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Search" };
 export const dynamic = "force-dynamic";
@@ -156,13 +157,13 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
                             {b.venue?.city && <span className="font-normal text-ink-500">· {b.venue.city}</span>}
                           </div>
                           <div className="mt-0.5 flex items-center gap-2 pl-[18px] text-sm text-ink-700">
-                            <ArtistDot colour={b.artist.colour} />
-                            {b.artist.name}
+                            <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                            {actName(b)}
                           </div>
                         </Link>
-                        {b.artist.phone ? (
-                          <a href={`tel:${b.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm" title={`Call ${b.artist.name}`}>
-                            Call {b.artist.phone}
+                        {b.artist?.phone ? (
+                          <a href={`tel:${b.artist?.phone.replace(/\s/g, "")}`} className="btn btn-sm" title={`Call ${actName(b)}`}>
+                            Call {b.artist?.phone}
                           </a>
                         ) : (
                           <span className="text-xs text-ink-400">No phone on file</span>

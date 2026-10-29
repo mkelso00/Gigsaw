@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference } from "@/lib/bookings";
 import { findClashes } from "@/lib/clash-check";
-import { BOOKING_STATUSES, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
+import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { defaultTasks, PLAN_FIELDS } from "@/lib/event-plan";
 import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
@@ -141,9 +142,9 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
   const user = await requireStaff();
   return handleForm(async () => {
     const e = await ownEvent(user, eventId);
-    const artistId = required(form, "artistId", "Act");
-    const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } });
-    if (!artist) throw new FormError("Choose an act");
+    const artistId = optStr(form, "artistId");
+    const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } }) : null;
+    if (artistId && !artist) throw new FormError("That act no longer exists");
     const start = str(form, "startTime");
     const end = str(form, "endTime");
     if (!TIME.test(start)) throw new FormError("Enter when they're on, like 19:30");
@@ -152,9 +153,10 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
     const currency = settings.defaultCurrency;
     const sale = money(form, "sale", currency, "sale") ?? 0;
     const cost = money(form, "cost", currency, "cost");
-    const status = oneOf(str(form, "status"), BOOKING_STATUSES, "CONFIRMED") as BookingStatus;
+    const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING") as BookingStatus;
+    if (!artist && NEEDS_ACT.includes(status)) throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}, or leave it Pending.`);
     const schedule = buildSchedule(e.date, { arrive, setStart: start, setEnd: TIME.test(end) ? end : null }, e.timezone);
-    if (!confirmed(form) && LIVE_STATUSES.includes(status)) {
+    if (artistId && !confirmed(form) && LIVE_STATUSES.includes(status)) {
       const warnings = await findClashes(
         { agencyId: user.agencyId, artistId, venueId: e.venueId, timezone: e.timezone, ...schedule },
         settings.changeoverMinutes,
@@ -167,7 +169,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       artistId,
       venueId: e.venueId,
       promoterId: e.customerId,
-      agentId: artist.agentId ?? user.id,
+      agentId: artist?.agentId ?? user.id,
       createdById: user.id,
       status,
       eventType: e.type,
@@ -177,15 +179,20 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       feeMinor: sale,
       vatPct: Number(str(form, "vatPct")) || 0,
       ...(cost != null ? { dealType: "BUY_SELL", artistFeeMinor: cost } : {}),
-      commissionPct: artist.defaultCommission ?? settings.defaultCommission,
+      commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
       dayContact: e.dayContact,
-      demo: e.demo || artist.demo,
+      demo: e.demo || !!artist?.demo,
       notifyClientOnArrival: false,
     });
     await logActivity(user, "BOOKING", b.id, "added to event", e.name);
-    if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([b.id]);
+    if (status === "AWAITING") await sendOffers([b.id]);
+    else if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([b.id]);
     revalidatePath("/", "layout");
-    return { ok: `${artist.name} added (${b.reference}).` };
+    return {
+      ok: artist
+        ? `${artist.name} added (${b.reference})${status === "AWAITING" ? ": offer sent" : ""}.`
+        : `Gig added (${b.reference}): Pending, needs an act.`,
+    };
   });
 }
 

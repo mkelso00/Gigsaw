@@ -6,6 +6,7 @@ import { getSettings, prisma } from "@/lib/db";
 import { eventTotals } from "@/lib/events";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Invoice" };
 
@@ -64,7 +65,7 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
           {e.bookings.map((b) => (
             <tr key={b.id} className="border-b border-slate-100">
               <td className="py-3">
-                {b.artist.name}, {localTime(b.setStart, b.timezone)}
+                {actName(b)}, {localTime(b.setStart, b.timezone)}
                 {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
                 <span className="block text-xs text-slate-500">{b.reference}</span>
               </td>

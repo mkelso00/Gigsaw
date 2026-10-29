@@ -6,7 +6,7 @@ import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
-import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind } from "@/lib/constants";
+import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { PLAN_FIELDS } from "@/lib/event-plan";
 import { actIdsFor } from "@/lib/people";
@@ -27,7 +27,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
   ]);
   // Only gigs for the act(s) this login belongs to; never enquiries.
   const actIds = await actIdsFor(user);
-  if (!b || !actIds.includes(b.artistId) || b.status === "ENQUIRY") notFound();
+  if (!b || !b.artistId || !actIds.includes(b.artistId) || !ACT_VISIBLE.includes(b.status as BookingStatus)) notFound();
 
   const now = new Date();
   const tz = b.timezone;
@@ -148,7 +148,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
             [
               "Also performing",
               event.bookings
-                .map((o) => `${o.artist.name} ${localTime(o.setStart, o.timezone)}${o.setEnd ? `–${localTime(o.setEnd, o.timezone)}` : ""}`)
+                .map((o) => `${actName(o)} ${localTime(o.setStart, o.timezone)}${o.setEnd ? `–${localTime(o.setEnd, o.timezone)}` : ""}`)
                 .join("\n"),
             ],
           ]
@@ -171,7 +171,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           ["Hospitality", b.hospitality],
           ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? ` · ${b.promoter.phone}` : ""}` : ""],
           ["Your agent", b.agent ? `${b.agent.name} · ${b.agent.email}` : ""],
-          [user.personId ? `${b.artist.name} fee` : "Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
+          [user.personId ? `${actName(b)} fee` : "Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
         ]
           .filter(([, val]) => val)
           .map(([k, val]) => (

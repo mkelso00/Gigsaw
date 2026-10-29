@@ -36,11 +36,9 @@ export function BookingForm({
       <section className="card card-pad space-y-4">
         <h2 className="section-title">The booking</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Artist">
-            <select name="artistId" required defaultValue={booking?.artistId ?? defaults.artistId ?? ""} className="input">
-              <option value="" disabled>
-                Choose an artist
-              </option>
+          <Field label="Act" hint="Leave empty while you set the gig up; add the act later">
+            <select name="artistId" defaultValue={booking?.artistId ?? defaults.artistId ?? ""} className="input">
+              <option value="">No act yet (needs an act)</option>
               {artists.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -60,8 +58,8 @@ export function BookingForm({
           <Field label="Event name" hint="Optional, e.g. a festival, tour or the couple's names">
             <input name="eventName" defaultValue={booking?.eventName} className="input" />
           </Field>
-          <Field label="Status">
-            <select name="status" defaultValue={booking?.status ?? "HOLD"} className="input">
+          <Field label="Status" hint="Awaiting confirmation sends the act an offer to accept or decline">
+            <select name="status" defaultValue={booking?.status ?? "PENDING"} className="input">
               {BOOKING_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {BOOKING_STATUS_LABELS[s]}

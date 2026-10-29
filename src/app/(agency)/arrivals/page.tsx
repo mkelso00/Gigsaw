@@ -6,7 +6,7 @@ import { ArrivalBadge, ArtistDot, Empty, PageHeader, Stat } from "@/components/u
 import { LOCATION_LABELS, formatDistance, type ArrivalState } from "@/lib/arrival";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude, punctualityByArtist } from "@/lib/bookings";
-import { CHECK_IN_KIND_LABELS, LIVE_STATUSES } from "@/lib/constants";
+import { CHECK_IN_KIND_LABELS, LIVE_STATUSES, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { formatDate, formatDateTime, formatMinutes, localTime, zoneLabel } from "@/lib/time";
 
@@ -100,12 +100,10 @@ export default async function ArrivalsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 font-semibold">
-                      <ArtistDot colour={b.artist.colour} />
-                      <span className="truncate">{b.artist.name}</span>
+                      <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                      <span className="truncate">{actName(b)}</span>
                     </div>
-                    <div className="truncate text-sm text-slate-500">
-                      {b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}
-                    </div>
+                    <div className="truncate text-sm text-slate-500">{b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}</div>
                   </div>
                   <ArrivalBadge state={a.state} />
                 </div>
@@ -164,7 +162,11 @@ export default async function ArrivalsPage() {
                         ) : (
                           <span className="text-slate-400">No data</span>
                         )}
-                        {s && s.tracked > 0 && <span className="block text-xs text-slate-500">{s.onTime} of {s.tracked}</span>}
+                        {s && s.tracked > 0 && (
+                          <span className="block text-xs text-slate-500">
+                            {s.onTime} of {s.tracked}
+                          </span>
+                        )}
                       </td>
                       <td className="text-right">{s?.late ?? 0}</td>
                       <td className="text-right">{s?.missing ?? 0}</td>
@@ -187,8 +189,8 @@ export default async function ArrivalsPage() {
                 <li key={c.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
                   <div>
                     <div className="flex items-center gap-2">
-                      <ArtistDot colour={c.artist.colour} />
-                      <strong>{c.artist.name}</strong>
+                      <ArtistDot colour={c.artist?.colour ?? "#a2a199"} />
+                      <strong>{actName(c)}</strong>
                       <span>{(CHECK_IN_KIND_LABELS[c.kind as keyof typeof CHECK_IN_KIND_LABELS] ?? c.kind).toLowerCase()}</span>
                     </div>
                     <div className="text-xs text-slate-500">

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
+import { actName } from "./constants";
 import { personName } from "./person-name";
 import { venueColour } from "./rota";
 import { formatDate, localTime } from "./time";
@@ -127,7 +128,7 @@ export async function globalSearch(agencyId: string, raw: string, opts: { isOwne
     ...[...upcoming, ...past].map<SearchHit>((b) => ({
       kind: "booking",
       href: `/bookings/${b.id}`,
-      title: `${b.artist.name} · ${b.venue?.name ?? "No venue"}`,
+      title: `${actName(b)} · ${b.venue?.name ?? "No venue"}`,
       sub: `${formatDate(b.arriveBy, b.timezone)}, ${localTime(b.setStart, b.timezone)} · ${b.reference}${b.status === "CANCELLED" ? " · cancelled" : ""}`,
       colour: b.venue ? venueColour(b.venue) : undefined,
     })),

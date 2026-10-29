@@ -394,6 +394,55 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   await book({ artist: artists[0], venue: venues[1], date: addDaysToKey(todayKey, 1), arrive: "17:00", set: "20:30", status: "CONFIRMED", fee: 2000 });
   await book({ artist: artists[2], venue: venues[7], date: addDaysToKey(todayKey, 20), arrive: "22:00", set: "23:59", status: "CANCELLED", fee: 2500 });
 
+  // The booking flow: gigs set up with no act yet (Pending), offers waiting for an answer
+  // (Awaiting confirmation), and one the act turned down.
+  const flow = async (o: {
+    venue: Venue;
+    days: number;
+    start: string;
+    end: string;
+    sale: number;
+    cost: number;
+    artist?: Artist;
+    status: string;
+    declined?: boolean;
+  }) => {
+    const date = addDaysToKey(todayKey, o.days);
+    const [h, m] = o.start.split(":").map(Number);
+    const arrive = `${String(h - 1).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    const sched = buildSchedule(date, { arrive, setStart: o.start, setEnd: o.end }, o.venue.timezone);
+    await prisma.booking.create({
+      data: {
+        reference: nextRef(),
+        agencyId,
+        demo: true,
+        artistId: o.artist?.id ?? null,
+        venueId: o.venue.id,
+        agentId: lead,
+        createdById: lead,
+        status: o.status,
+        eventType: "GIG",
+        timezone: o.venue.timezone,
+        ...sched,
+        currency: "GBP",
+        feeMinor: o.sale * 100,
+        dealType: "BUY_SELL",
+        artistFeeMinor: o.cost * 100,
+        ...(o.status === "AWAITING"
+          ? {
+              offerToken: randomBytes(18).toString("base64url"),
+              offeredAt: new Date(Date.now() - 5 * 3_600_000),
+              ...(o.declined ? { offerResponse: "DECLINED", respondedAt: new Date(Date.now() - 3_600_000) } : {}),
+            }
+          : {}),
+      },
+    });
+  };
+  await flow({ venue: venues[2], days: 5, start: "20:00", end: "22:00", sale: 250, cost: 180, status: "PENDING" });
+  await flow({ venue: venues[0], days: 6, start: "19:30", end: "22:30", sale: 400, cost: 300, status: "PENDING" });
+  await flow({ venue: venues[5], days: 8, start: "20:00", end: "23:00", sale: 300, cost: 220, artist: artists[4], status: "AWAITING" });
+  await flow({ venue: venues[4], days: 9, start: "21:00", end: "23:00", sale: 350, cost: 260, artist: artists[1], status: "AWAITING", declined: true });
+
   // A wedding with three acts on one booking for the customer, each on sale and cost.
   const weddingDate = addDaysToKey(todayKey, 60);
   const hall = venues[8];

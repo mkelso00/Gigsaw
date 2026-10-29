@@ -33,7 +33,7 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
     include: { venue: true, checkIns: { select: { kind: true } } },
   });
   // Artists can only check in to their own gigs (any act they're in).
-  if (!booking || !(await actIdsFor(user)).includes(booking.artistId)) return { ok: false, message: "Gig not found." };
+  if (!booking || !booking.artistId || !(await actIdsFor(user)).includes(booking.artistId)) return { ok: false, message: "Gig not found." };
   if (booking.status === "CANCELLED") return { ok: false, message: "This gig has been cancelled." };
 
   const now = new Date();
@@ -58,7 +58,7 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
   await prisma.checkIn.create({
     data: {
       bookingId,
-      artistId: booking.artistId,
+      artistId: booking.artistId!,
       userId: user.id,
       kind: payload.kind,
       source: "APP",

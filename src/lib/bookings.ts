@@ -1,7 +1,7 @@
 import "server-only";
 import type { Prisma, Settings } from "@prisma/client";
 import { punctuality, summariseArrival, type ArrivalSummary } from "./arrival";
-import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES } from "./constants";
+import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES, BOOKING_STATUS_LABELS, NEEDS_ACT } from "./constants";
 import { prisma } from "./db";
 import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from "./forms";
 import { toMinor } from "./money";
@@ -72,9 +72,14 @@ export async function createBookingWithReference(agencyId: string, data: Omit<Pr
  * Every linked record (artist, venue, promoter, agent) must belong to the same agency.
  */
 export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string) {
-  const artistId = required(form, "artistId", "Artist");
-  const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId } });
-  if (!artist) throw new FormError("Choose an artist");
+  // The act can be left empty while the gig is being set up (Pending).
+  const artistId = optStr(form, "artistId");
+  const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId } }) : null;
+  if (artistId && !artist) throw new FormError("That act no longer exists");
+  const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING");
+  if (!artist && NEEDS_ACT.includes(status)) {
+    throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}. Leave it Pending until you've picked one.`);
+  }
 
   const venueId = optStr(form, "venueId");
   const venue = venueId ? await prisma.venue.findFirst({ where: { id: venueId, agencyId } }) : null;
@@ -107,7 +112,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
 
   const currency = oneOf(str(form, "currency"), CURRENCIES, settings.defaultCurrency as (typeof CURRENCIES)[number]);
   const dealType = oneOf(str(form, "dealType"), DEAL_TYPES, "STANDARD_COMMISSION");
-  const commissionPct = num(form, "commissionPct") ?? artist.defaultCommission ?? settings.defaultCommission;
+  const commissionPct = num(form, "commissionPct") ?? artist?.defaultCommission ?? settings.defaultCommission;
   if (commissionPct < 0 || commissionPct > 100) throw new FormError("Commission must be between 0 and 100%");
   const vatPct = num(form, "vatPct") ?? 0;
   if (vatPct < 0 || vatPct > 100) throw new FormError("VAT must be between 0 and 100%");
@@ -139,7 +144,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
     agentId,
     eventName: str(form, "eventName"),
     eventType: oneOf(str(form, "eventType"), EVENT_TYPES, "GIG"),
-    status: oneOf(str(form, "status"), BOOKING_STATUSES, "HOLD"),
+    status,
     dealType,
     timezone,
     arriveBy,
@@ -166,7 +171,6 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   };
 }
 
-
 /** Punctuality for each of the agency's artists over their gigs between `from` and now. */
 export async function punctualityByArtist(settings: Settings, from: Date, artistId?: string) {
   const now = new Date();
@@ -184,6 +188,7 @@ export async function punctualityByArtist(settings: Settings, from: Date, artist
   });
   const byArtist = new Map<string, ArrivalSummary[]>();
   for (const b of bookings) {
+    if (!b.artistId) continue;
     const list = byArtist.get(b.artistId) ?? [];
     list.push(arrivalFor(b, settings, now));
     byArtist.set(b.artistId, list);

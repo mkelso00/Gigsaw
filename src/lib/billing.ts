@@ -10,15 +10,16 @@
 import { addDaysToKey, localDateKey } from "./time";
 
 export const CONFIRMED_STATUSES = ["CONFIRMED", "SETTLED"];
-const UNRESOLVED_STATUSES = ["ENQUIRY", "HOLD", "PENDING"];
+const UNRESOLVED_STATUSES = ["ENQUIRY", "HOLD", "PENDING", "AWAITING"];
 const DAY = 86_400_000;
 
-export type BillableLike = { status: string; demo: boolean; arriveBy: Date; timezone: string; reference: string; arrived: boolean };
+export type BillableLike = { status: string; demo: boolean; arriveBy: Date; timezone: string; reference: string; arrived: boolean; hasAct?: boolean };
 
-export function isBillable(b: { status: string; demo: boolean; arriveBy: Date; arrived: boolean }, now = new Date()) {
+export function isBillable(b: { status: string; demo: boolean; arriveBy: Date; arrived: boolean; hasAct?: boolean }, now = new Date()) {
   if (b.demo || b.status === "CANCELLED") return false;
   if (CONFIRMED_STATUSES.includes(b.status) || b.arrived) return true;
-  return (b.status === "HOLD" || b.status === "PENDING") && b.arriveBy < now;
+  if (b.hasAct === false) return false;
+  return (b.status === "HOLD" || b.status === "PENDING" || b.status === "AWAITING") && b.arriveBy < now;
 }
 
 /** A gig more than a day in the past that was never confirmed or cancelled. */

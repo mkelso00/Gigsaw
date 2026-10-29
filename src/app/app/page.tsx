@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CalendarConnect } from "@/components/calendar-connect";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { CheckInPanel } from "@/components/check-in-panel";
+import { InAppOffer } from "@/components/in-app-offer";
 import { PushSetup } from "@/components/push-setup";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
@@ -12,7 +13,9 @@ import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { vapidKeys } from "@/lib/push";
 import { getSettings, prisma } from "@/lib/db";
+import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
+import { actName, ACT_VISIBLE } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +45,7 @@ export default async function ArtistHome() {
     where: {
       agencyId: user.agencyId,
       artistId: { in: actIds },
-      status: { notIn: ["ENQUIRY"] },
+      status: { in: ACT_VISIBLE },
     },
     include: { venue: true, checkIns: true, artist: { select: { name: true } } },
     orderBy: { arriveBy: "asc" },
@@ -53,7 +56,9 @@ export default async function ArtistHome() {
     w: checkInWindow(b.arriveBy, b.setStart, b.setEnd),
   }));
   // "Current" gigs: not cancelled and check-in hasn't closed.
-  const current = rows.filter((r) => r.b.status !== "CANCELLED" && r.w.closesAt > now);
+  // Offers still waiting for an answer sit at the top; they aren't "your gigs" until accepted.
+  const offers = rows.filter((r) => r.b.status === "AWAITING" && r.b.offerResponse !== "DECLINED" && r.w.closesAt > now);
+  const current = rows.filter((r) => r.b.status !== "CANCELLED" && r.b.status !== "AWAITING" && r.w.closesAt > now);
   const past = rows.filter((r) => r.w.closesAt <= now || r.b.status === "CANCELLED").reverse();
   const next = current[0];
   const stats = punctuality(past.map((r) => r.a));
@@ -67,11 +72,39 @@ export default async function ArtistHome() {
 
   return (
     <div className="space-y-8">
+      {offers.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-volt-400">
+            {offers.length === 1 ? "New gig offer" : `${offers.length} gig offers`} · please accept or decline
+          </h2>
+          <div className="space-y-3">
+            {offers.map(({ b }) => {
+              const fee = dealBreakdown(b).artistMinor;
+              return (
+                <div key={b.id} className="rounded-2xl border border-volt-400/40 bg-ink-900 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-lg font-semibold">{b.venue?.name ?? "Venue to be confirmed"}</div>
+                      <div className="text-sm text-ink-400">
+                        {formatDate(b.arriveBy, b.timezone)} · on {localTime(b.setStart, b.timezone)}
+                        {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                        {manyActs ? ` · ${actName(b)}` : ""}
+                      </div>
+                    </div>
+                    {fee > 0 && <div className="shrink-0 text-lg font-semibold text-volt-400 tabular-nums">{formatMoney(fee, b.currency)}</div>}
+                  </div>
+                  <InAppOffer bookingId={b.id} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {next ? (
         <section className="overflow-hidden rounded-3xl border border-white/[0.06] bg-ink-900">
           <div className="p-5 pb-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next gig{manyActs ? ` · ${next.b.artist.name}` : ""}</span>
+              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next gig{manyActs ? ` · ${actName(next.b)}` : ""}</span>
               <ArrivalBadge state={next.a.state} />
             </div>
             <div className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{next.b.venue?.name ?? "Venue to be confirmed"}</div>
@@ -113,7 +146,7 @@ export default async function ArtistHome() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{b.venue?.name ?? "Venue to be confirmed"}</div>
                     <div className="text-xs text-ink-400">
-                      {manyActs ? `${b.artist.name} · ` : ""}
+                      {manyActs ? `${actName(b)} · ` : ""}
                       {formatDate(b.arriveBy, b.timezone)} · arrive by {localTime(b.arriveBy, b.timezone)}
                     </div>
                   </div>
@@ -156,7 +189,7 @@ export default async function ArtistHome() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">
                       {b.venue?.name ?? "No venue"}
-                      {manyActs ? <span className="font-normal text-ink-400"> · {b.artist.name}</span> : null}
+                      {manyActs ? <span className="font-normal text-ink-400"> · {actName(b)}</span> : null}
                     </div>
                     <div className="text-xs text-ink-400">{formatDate(b.arriveBy, b.timezone)}</div>
                   </div>

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { BOOKING_STATUS_LABELS, DEAL_TYPE_LABELS, eventTypeLabel, type BookingStatus, type DealType } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, DEAL_TYPE_LABELS, eventTypeLabel, type BookingStatus, type DealType, actName } from "@/lib/constants";
 import { csvResponse, toCsv } from "@/lib/csv";
 import { getSettings, prisma } from "@/lib/db";
 import { arrivalFor } from "@/lib/bookings";
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       localTime(b.arriveBy, b.timezone),
       localTime(b.setStart, b.timezone),
       b.timezone,
-      b.artist.name,
+      actName(b),
       eventTypeLabel(b.eventType),
       b.eventName,
       b.venue?.name,
@@ -70,9 +70,32 @@ export async function GET(req: NextRequest) {
   });
   const csv = toCsv(
     [
-      "Reference", "Date", "Arrive by", "On stage", "Time zone", "Artist", "Type", "Event", "Venue", "City", "Promoter", "Agent", "Status", "Deal",
-      "Currency", "Fee", "VAT", "Agency commission", "Artist earnings", "Received", "Owed by promoter", "Paid to artist",
-      "Arrival", "Arrived at", "Minutes late", "Tags",
+      "Reference",
+      "Date",
+      "Arrive by",
+      "On stage",
+      "Time zone",
+      "Artist",
+      "Type",
+      "Event",
+      "Venue",
+      "City",
+      "Promoter",
+      "Agent",
+      "Status",
+      "Deal",
+      "Currency",
+      "Fee",
+      "VAT",
+      "Agency commission",
+      "Artist earnings",
+      "Received",
+      "Owed by promoter",
+      "Paid to artist",
+      "Arrival",
+      "Arrived at",
+      "Minutes late",
+      "Tags",
     ],
     rows,
   );

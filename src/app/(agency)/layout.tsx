@@ -11,20 +11,21 @@ import { NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { localDateKey } from "@/lib/time";
-import { unfilledSlots } from "@/lib/unfilled";
+import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
   const user = await requireStaff();
   const theme = (await cookies()).get("gigsaw_theme")?.value === "light" ? "light" : "dark";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
-  const [unfilled, acts, venues, contacts] = await Promise.all([
+  const [unfilled, noAct, acts, venues, contacts] = await Promise.all([
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
+    oneOffsNeedingAct(user.agencyId, 7),
     prisma.artist.findMany(pick),
     prisma.venue.findMany(pick),
     prisma.contact.findMany(pick),
   ]);
-  const unfilledThisWeek = unfilled.length;
+  const unfilledThisWeek = unfilled.length + noAct;
   const initials = user.name
     .split(" ")
     .map((w) => w[0])

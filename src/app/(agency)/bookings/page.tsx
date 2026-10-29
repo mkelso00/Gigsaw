@@ -5,7 +5,7 @@ import { SelectAll } from "@/components/client-bits";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, eventTypeLabel } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, eventTypeLabel, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { unresolvedPastWhere } from "@/lib/billing";
 import { formatMoney } from "@/lib/money";
@@ -24,7 +24,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   const unresolved = sp.status === "UNRESOLVED";
   if (unresolved) Object.assign(where, unresolvedPastWhere());
-  if (sp.artist) where.artistId = sp.artist;
+  if (sp.artist === "none" || sp.act === "none") where.artistId = null;
+  else if (sp.artist) where.artistId = sp.artist;
   if (sp.type && (EVENT_TYPES as readonly string[]).includes(sp.type)) where.eventType = sp.type;
   if (when === "upcoming" && !unresolved) where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
@@ -76,7 +77,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         <label>
           <span className="label">Artist</span>
           <select name="artist" defaultValue={sp.artist ?? ""} className="input">
-            <option value="">All artists</option>
+            <option value="">All acts</option>
+            <option value="none">No act yet</option>
             {artists.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -119,7 +121,12 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       </form>
 
       {bookings.length === 0 ? (
-        <Empty>No bookings match. <Link href="/bookings/new" className="link">Create one</Link></Empty>
+        <Empty>
+          No bookings match.{" "}
+          <Link href="/bookings/new" className="link">
+            Create one
+          </Link>
+        </Empty>
       ) : (
         <form action="/bookings/bulk" method="get" className="card overflow-x-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
@@ -158,8 +165,8 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                     </td>
                     <td>
                       <span className="flex items-center gap-2">
-                        <ArtistDot colour={b.artist.colour} />
-                        {b.artist.name}
+                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                        {actName(b)}
                       </span>
                       <div className="text-xs text-slate-500">
                         {eventTypeLabel(b.eventType)}

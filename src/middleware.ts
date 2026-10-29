@@ -2,7 +2,22 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Quick gate: send visitors without a session cookie to the login page.
 // The real session check happens on the server in each layout and action.
-const PUBLIC = ["/v/", "/w/", "/api/venue-calendar", "/api/cron", "/login", "/setup", "/forgot-password", "/reset-password", "/api/calendar", "/manifest.webmanifest", "/icon.svg", "/apple-icon", "/sw.js"];
+const PUBLIC = [
+  "/v/",
+  "/w/",
+  "/o/",
+  "/api/venue-calendar",
+  "/api/cron",
+  "/login",
+  "/setup",
+  "/forgot-password",
+  "/reset-password",
+  "/api/calendar",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/apple-icon",
+  "/sw.js",
+];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

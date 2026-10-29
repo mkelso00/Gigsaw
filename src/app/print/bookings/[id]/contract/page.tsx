@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DocTable, DocumentShell } from "@/components/document";
-import { DEAL_TYPE_LABELS, eventTypeLabel, type DealType } from "@/lib/constants";
+import { DEAL_TYPE_LABELS, eventTypeLabel, type DealType, actName } from "@/lib/constants";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { loadPrintable } from "@/lib/print";
 import { formatDate, formatDateTime, localTime, zoneLabel } from "@/lib/time";
@@ -18,14 +18,14 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   return (
     <DocumentShell title="Performance contract" reference={b.reference} settings={settings}>
       <p className="mb-6">
-        This agreement is made between <strong>{b.promoter ? `${b.promoter.name}${b.promoter.company ? ` of ${b.promoter.company}` : ""}` : "the Promoter"}</strong>{" "}
-        (&ldquo;the Promoter&rdquo;) and <strong>{settings.agencyName}</strong> acting as agent for <strong>{b.artist.name}</strong> (&ldquo;the
-        Artist&rdquo;).
+        This agreement is made between{" "}
+        <strong>{b.promoter ? `${b.promoter.name}${b.promoter.company ? ` of ${b.promoter.company}` : ""}` : "the Promoter"}</strong> (&ldquo;the
+        Promoter&rdquo;) and <strong>{settings.agencyName}</strong> acting as agent for <strong>{actName(b)}</strong> (&ldquo;the Artist&rdquo;).
       </p>
       <h2 className="mb-2 font-semibold">1. Engagement</h2>
       <DocTable
         rows={[
-          ["Artist", b.artist.name],
+          ["Artist", actName(b)],
           ["Type of engagement", eventTypeLabel(b.eventType)],
           ["Event", b.eventName],
           ["Venue", venue],
@@ -46,11 +46,21 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
           ["Deposit", b.depositMinor ? `${money(b.depositMinor)}${b.depositDueDate ? `, due by ${formatDate(b.depositDueDate, tz)}` : ""}` : ""],
           ["Balance", b.depositMinor ? money(d.totalDueMinor - b.depositMinor) : ""],
           ["Deal terms", b.dealNotes],
-          ["Radius clause", b.radiusKm !== null ? `The Promoter agrees the Artist may not perform within ${b.radiusKm} km for ${b.radiusDays} days either side of the engagement without consent.` : ""],
+          [
+            "Radius clause",
+            b.radiusKm !== null
+              ? `The Promoter agrees the Artist may not perform within ${b.radiusKm} km for ${b.radiusDays} days either side of the engagement without consent.`
+              : "",
+          ],
         ]}
       />
       <h2 className="mt-6 mb-2 font-semibold">3. Hospitality and production</h2>
-      <DocTable rows={[["Hospitality", b.hospitality || "As per the Artist's rider."], ["Day of show contact", b.dayContact]]} />
+      <DocTable
+        rows={[
+          ["Hospitality", b.hospitality || "As per the Artist's rider."],
+          ["Day of show contact", b.dayContact],
+        ]}
+      />
       {settings.contractTerms && (
         <>
           <h2 className="mt-6 mb-2 font-semibold">4. Terms</h2>

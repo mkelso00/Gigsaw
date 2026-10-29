@@ -7,7 +7,8 @@ import { formatDate, localTime } from "./time";
 
 export type Candidate = {
   agencyId: string;
-  artistId: string;
+  /** Empty for a gig with no act yet: nothing to check. */
+  artistId: string | null;
   venueId: string | null;
   arriveBy: Date;
   setStart: Date;
@@ -26,6 +27,7 @@ const DAY = 86_400_000;
  * travel between them. Gigs with plenty of time in between are not returned.
  */
 export async function findClashes(c: Candidate, changeoverMinutes: number): Promise<ClashWarning[]> {
+  if (!c.artistId) return [];
   // Check this act's other gigs, and gigs for any other act that shares a member with it.
   const actIds = await linkedActIds(c.artistId);
   const [venue, others] = await Promise.all([
@@ -54,6 +56,7 @@ export async function findClashes(c: Candidate, changeoverMinutes: number): Prom
   ]);
   const out: ClashWarning[] = [];
   for (const o of others) {
+    if (!o.artist || !o.artistId) continue;
     const a = assessPair({ arriveBy: c.arriveBy, setStart: c.setStart, setEnd: c.setEnd, venue }, o, changeoverMinutes);
     if (a.level === "ok") continue;
     const where = o.venue ? `${o.venue.name}${o.venue.city ? `, ${o.venue.city}` : ""}` : "another gig";

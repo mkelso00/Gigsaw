@@ -79,3 +79,12 @@ describe("month helpers", () => {
     expect(monthIsOver("2026-10", now)).toBe(false);
   });
 });
+
+describe("gigs with no act", () => {
+  it("never bills a pending gig that never got an act, but does bill an unanswered offer that went ahead", async () => {
+    const { isBillable } = await import("@/lib/billing");
+    const past = new Date(Date.now() - 3 * 86_400_000);
+    expect(isBillable({ status: "PENDING", demo: false, arriveBy: past, arrived: false, hasAct: false })).toBe(false);
+    expect(isBillable({ status: "AWAITING", demo: false, arriveBy: past, arrived: false, hasAct: true })).toBe(true);
+  });
+});

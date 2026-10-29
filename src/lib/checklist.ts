@@ -14,9 +14,9 @@ export type ChecklistBooking = {
   id: string;
   reference: string;
   status: string;
-  artistId: string;
+  artistId: string | null;
   /** Acts sharing a member with this one; their gigs count as double bookings too. */
-  linkedArtistIds?: string[];
+  linkedArtistIds?: (string | null)[];
   timezone: string;
   arriveBy: Date;
   setStart: Date;
@@ -38,7 +38,7 @@ export type OtherBooking = {
   id: string;
   reference: string;
   status: string;
-  artistId: string;
+  artistId: string | null;
   /** The act's name, shown when the clash is with another act that shares a member. */
   artistName?: string;
   arriveBy: Date;
@@ -60,6 +60,8 @@ export type ClashFinding = { other: OtherBooking; assessment: ClashAssessment };
 /** Every other live gig for the same act (or an act sharing a member) within a day, with whether there's time to travel between them. */
 export function assessOtherGigs(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes: number): ClashFinding[] {
   const day = 86_400_000;
+  // A gig with no act yet can't clash with anything.
+  if (!b.artistId) return [];
   const acts = b.linkedArtistIds ?? [b.artistId];
   return others
     .filter((o) => o.id !== b.id && acts.includes(o.artistId) && isLive(o.status) && Math.abs(o.arriveBy.getTime() - b.arriveBy.getTime()) < day)
@@ -79,7 +81,7 @@ export function findDateClashes(b: ChecklistBooking, others: OtherBooking[], cha
  */
 export function findRadiusBreaches(b: ChecklistBooking, others: OtherBooking[]): OtherBooking[] {
   const v = b.venue;
-  if (!v || v.latitude === null || v.longitude === null) return [];
+  if (!b.artistId || !v || v.latitude === null || v.longitude === null) return [];
   return others.filter((o) => {
     if (o.id === b.id || o.artistId !== b.artistId || !isLive(o.status)) return false;
     const ov = o.venue;
@@ -95,6 +97,8 @@ export function findRadiusBreaches(b: ChecklistBooking, others: OtherBooking[]):
 export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depositReceivedMinor: number, now: Date, changeoverMinutes = 15): ChecklistItem[] {
   const items: ChecklistItem[] = [];
   if (b.status === "CANCELLED") return [{ level: "ok", label: "Booking is cancelled" }];
+  if (!b.artistId)
+    items.push({ level: "warning", label: "No act yet", detail: "Add an act, then set the status to Awaiting confirmation to offer them the gig." });
 
   const label = (o: OtherBooking) =>
     `${o.reference}${o.artistId !== b.artistId ? ` (${o.artistName ?? "another act"}, which shares a member)` : ""}${o.venue ? ` at ${o.venue.name}` : ""}`;

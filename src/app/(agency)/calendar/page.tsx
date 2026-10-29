@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, gigDateKey } from "@/lib/bookings";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { isDateKey, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
@@ -94,9 +94,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   ]);
 
   const byArtist = sp.colour === "artist";
-  const colourOf = (b: (typeof bookings)[number]) => (byArtist ? b.artist.colour : b.venue ? venueColour(b.venue) : "#a2a199");
+  const colourOf = (b: (typeof bookings)[number]) => (byArtist ? (b.artist?.colour ?? "#a2a199") : b.venue ? venueColour(b.venue) : "#a2a199");
   const legend = [
-    ...new Map(bookings.map((b) => (byArtist ? [b.artist.name, b.artist.colour] : [b.venue?.name ?? "No venue", b.venue ? venueColour(b.venue) : "#a2a199"]))),
+    ...new Map(
+      bookings.map((b) => (byArtist ? [actName(b), b.artist?.colour ?? "#a2a199"] : [b.venue?.name ?? "No venue", b.venue ? venueColour(b.venue) : "#a2a199"])),
+    ),
   ].sort((a, b) => a[0].localeCompare(b[0]));
 
   const byDay = new Map<string, typeof bookings>();
@@ -108,7 +110,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const keep = { artist: sp.artist, status: sp.status, colour: sp.colour, town: sp.town, view };
   const qs = (extra: Record<string, string>) =>
     "?" + new URLSearchParams(Object.entries({ ...keep, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
-  const dashed = (s: string) => (s === "HOLD" || s === "ENQUIRY" ? "border-dashed" : "border-solid");
+  // Not yet confirmed (pending, awaiting the act, on hold, enquiry): dashed outline.
+  const dashed = (s: string) => (s === "CONFIRMED" || s === "SETTLED" ? "border-solid" : "border-dashed");
   type Gig = (typeof bookings)[number];
   // A gig that finishes after midnight stays on the day it starts, with a moon to show it runs late.
   const overnight = (b: Gig) =>
@@ -123,7 +126,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     const d = dealBreakdown(b);
     const received = paymentTotals(b.payments).receivedMinor;
     const m = (x: number) => formatMoney(x, b.currency);
-    const contact = b.artist.members[0]?.person;
+    const contact = b.artist?.members[0]?.person;
     return {
       when: `${dayLabel(gigDateKey(b), { weekday: "short", day: "numeric", month: "short" })} · ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`,
       overnight: overnight(b),
@@ -137,7 +140,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           ]
         : [],
       people: [
-        ["Act", b.artist.name],
+        ["Act", actName(b)],
         ["Venue", b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "Not set"],
         ...(b.promoter
           ? ([
@@ -147,8 +150,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               ],
             ] as [string, string][])
           : []),
-        ...(contact || b.artist.phone
-          ? ([["Act contact", contact ? `${personName(contact)}${contact.phone ? ` · ${contact.phone}` : ""}` : b.artist.phone]] as [string, string][])
+        ...(contact || b.artist?.phone
+          ? ([["Act contact", contact ? `${personName(contact)}${contact.phone ? ` · ${contact.phone}` : ""}` : b.artist?.phone]] as [string, string][])
           : []),
         ["Type", eventTypeLabel(b.eventType)],
         ...(b.event ? ([["Part of", b.event.name]] as [string, string][]) : []),
@@ -160,7 +163,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Calendar"
-        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "artist" : "venue"} · holds and enquiries are dashed`}
+        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "artist" : "venue"} · not yet confirmed is dashed`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-lg border border-ink-200 bg-white p-0.5 text-sm">
@@ -282,9 +285,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             </span>
                             <Moon b={b} />
                           </div>
-                          <div className="mt-0.5 truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</div>
+                          <div className="mt-0.5 truncate font-medium">{byArtist ? actName(b) : (b.venue?.name ?? "No venue")}</div>
                           <div className="truncate text-ink-500">
-                            {byArtist ? (b.venue?.name ?? "No venue") : b.artist.name}
+                            {byArtist ? (b.venue?.name ?? "No venue") : actName(b)}
                             {b.venue?.city && !byArtist ? ` · ${b.venue.city}` : ""}
                           </div>
                         </Link>
@@ -339,7 +342,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         >
                           <ArtistDot colour={colourOf(b)} />
                           <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span>
-                          <span className="truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</span>
+                          <span className="truncate font-medium">{byArtist ? actName(b) : (b.venue?.name ?? "No venue")}</span>
                           <Moon b={b} />
                         </Link>
                       </GigHover>
@@ -368,7 +371,7 @@ type DayItem = {
     setStart: Date;
     setEnd: Date | null;
     arriveBy: Date;
-    artist: { name: string; colour: string; phone: string };
+    artist: { name: string; colour: string; phone: string } | null;
     venue: { id: string; name: string; city: string; colour: string } | null;
   };
   a: ReturnType<typeof arrivalFor>;
@@ -417,13 +420,13 @@ function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
                   <Link href={`/bookings/${b.id}`} className="min-w-48 flex-1">
                     <div className="font-medium hover:underline">{b.venue?.name ?? "No venue"}</div>
                     <div className="mt-0.5 flex items-center gap-2 text-sm text-ink-700">
-                      <ArtistDot colour={b.artist.colour} />
-                      {b.artist.name}
+                      <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                      {actName(b)}
                     </div>
                   </Link>
-                  {b.artist.phone ? (
-                    <a href={`tel:${b.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
-                      Call {b.artist.phone}
+                  {b.artist?.phone ? (
+                    <a href={`tel:${b.artist?.phone.replace(/\s/g, "")}`} className="btn btn-sm">
+                      Call {b.artist?.phone}
                     </a>
                   ) : (
                     <span className="text-xs text-ink-400">No phone on file</span>

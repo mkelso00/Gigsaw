@@ -1,6 +1,6 @@
 import "server-only";
 import { arrivalFor } from "./bookings";
-import { LIVE_STATUSES } from "./constants";
+import { ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendSms } from "./messaging";
 import { formatMinutes, localTime } from "./time";
@@ -19,8 +19,10 @@ export async function runOverdueCheck(now = new Date()) {
   const candidates = await prisma.booking.findMany({
     where: {
       demo: false,
-      status: { in: LIVE_STATUSES },
+      // Only gigs the act has confirmed: an unanswered offer isn't late.
+      status: { in: [...ON_STATUSES, "HOLD"] },
       overdueAlertSentAt: null,
+      artistId: { not: null },
       arriveBy: { gte: new Date(now.getTime() - 12 * HOUR), lte: now },
       agency: { status: "ACTIVE", settings: { overdueAlerts: true } },
       checkIns: { none: { kind: "ARRIVED" } },
@@ -36,6 +38,7 @@ export async function runOverdueCheck(now = new Date()) {
 
   let sent = 0;
   for (const b of candidates) {
+    if (!b.artist) continue;
     const settings = b.agency.settings;
     if (!settings) continue;
     const a = arrivalFor(b, settings, now);
@@ -82,7 +85,7 @@ export async function notifyClientOfArrival(bookingId: string) {
     where: { id: bookingId },
     include: { artist: true, venue: true, promoter: true, agency: { include: { settings: true } } },
   });
-  if (!b || b.demo || !b.notifyClientOnArrival || !b.promoter || !b.agency.settings?.clientArrivalMessages) return false;
+  if (!b || !b.artist || b.demo || !b.notifyClientOnArrival || !b.promoter || !b.agency.settings?.clientArrivalMessages) return false;
   if (!b.promoter.email && !b.promoter.phone) return false;
   const claim = await prisma.booking.updateMany({ where: { id: b.id, clientNotifiedAt: null }, data: { clientNotifiedAt: new Date() } });
   if (claim.count !== 1) return false;
@@ -113,7 +116,11 @@ export async function notifyClientOfArrival(bookingId: string) {
     });
   }
   if (b.promoter.phone) {
-    await sendSms({ ...base, to: b.promoter.phone, text: `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}` });
+    await sendSms({
+      ...base,
+      to: b.promoter.phone,
+      text: `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}`,
+    });
   }
   return true;
 }

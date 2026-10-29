@@ -302,6 +302,16 @@ export default async function SettingsPage() {
                     label="Send automatic wedding and event emails"
                     hint="Can also be turned off for a single event. Sent between 9am and 8pm."
                   />
+                  <Field
+                    label="Tell the customer when an act is confirmed"
+                    hint="The act is always told. Bar gigs' venues aren't told: that's just for your records."
+                  >
+                    <select name="customerConfirmations" defaultValue={settings.customerConfirmations} className="input">
+                      <option value="EVENTS">Weddings and private events only</option>
+                      <option value="ALL">Every booking with a customer email</option>
+                      <option value="OFF">Never</option>
+                    </select>
+                  </Field>
                   <Field label="Review link" hint="Added to the thank-you email, e.g. your Google or Facebook reviews page">
                     <input name="reviewLink" type="url" defaultValue={settings.reviewLink} placeholder="https://" className="input" />
                   </Field>

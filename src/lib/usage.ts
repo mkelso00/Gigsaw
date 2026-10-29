@@ -15,10 +15,11 @@ export async function usageForMonth(month: string, agencyId?: string): Promise<M
       demo: true,
       arriveBy: true,
       timezone: true,
+      artistId: true,
       checkIns: { where: { kind: "ARRIVED" }, select: { id: true }, take: 1 },
     },
   });
-  const rows = bookings.map((b) => ({ ...b, arrived: b.checkIns.length > 0 }));
+  const rows = bookings.map((b) => ({ ...b, arrived: b.checkIns.length > 0, hasAct: !!b.artistId }));
   const out = new Map<string, Usage>();
   for (const b of billableGigs(rows, month)) {
     const u = out.get(b.agencyId) ?? { count: 0, references: [] };

@@ -6,7 +6,7 @@ import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { DefinitionList, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { personName } from "@/lib/person-name";
 import { requireStaff } from "@/lib/auth";
-import { CONTACT_TYPE_LABELS, type ContactType } from "@/lib/constants";
+import { CONTACT_TYPE_LABELS, type ContactType, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { splitTags } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
@@ -128,7 +128,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                             {formatDate(b.arriveBy, b.timezone)}
                           </Link>
                         </td>
-                        <td>{b.artist.name}</td>
+                        <td>{actName(b)}</td>
                         <td>{b.venue?.name ?? "–"}</td>
                         <td>
                           <StatusBadge status={b.status} />

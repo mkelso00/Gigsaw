@@ -34,9 +34,12 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
   if (!b) return [];
   const all = describeChanges(before, snapshotOf(b));
   // Status steps like hold → pending don't concern the artist; confirmed and cancelled do.
-  const changes = all.filter(([k, , to]) => k !== "Status" || to === "Confirmed" || to === "Cancelled");
+  // Being confirmed has its own "You're booked" message (confirmations.ts); cancellations are told here.
+  const changes = all.filter(([k, , to]) => k !== "Status" || to === "Cancelled");
   if (!changes.length || b.demo) return changes;
-  if (b.status === "ENQUIRY" && before.status === "ENQUIRY") return changes;
+  // Acts aren't involved until the gig is offered to them.
+  const notYet = ["ENQUIRY", "PENDING"];
+  if (notYet.includes(b.status) && notYet.includes(before.status)) return changes;
   if (b.setStart.getTime() < Date.now() - 6 * 3_600_000) return changes;
 
   const tz = b.timezone;
@@ -47,9 +50,11 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
   const base = { kind: "BOOKING_CHANGE" as const, agencyId: b.agencyId, bookingId: b.id };
   const replyTo = b.agent?.email || b.agency.settings?.agencyEmail;
 
+  if (!b.artistId || !b.artist) return changes;
+  const act = b.artist;
   const recipients = (await recipientsForActs([b.artistId])).get(b.artistId) ?? [];
   for (const r of recipients) {
-    const whose = r.isMember ? `${b.artist.name}'s` : "your";
+    const whose = r.isMember ? `${act.name}'s` : "your";
     const link = r.userId ? `${appUrl()}/app/gigs/${b.id}` : null;
     if (r.userId) {
       await sendPush({
@@ -69,13 +74,13 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
           preheader: changes.map(([k, , v]) => `${k}: ${v}`).join(" · "),
           title,
           intro: cancelled
-            ? `Hi ${r.firstName}, ${r.isMember ? `${b.artist.name}'s gig` : "this gig"} has been cancelled.`
+            ? `Hi ${r.firstName}, ${r.isMember ? `${act.name}'s gig` : "this gig"} has been cancelled.`
             : `Hi ${r.firstName}, ${agencyName} has updated ${whose} gig. Here's what's different:`,
           changes,
           rows: cancelled
             ? []
             : [
-                ...(r.isMember ? ([["Act", b.artist.name]] as [string, string][]) : []),
+                ...(r.isMember ? ([["Act", act.name]] as [string, string][]) : []),
                 ["Venue", where],
                 ["Date", formatDate(b.arriveBy, tz)],
                 ["Arrive by", localTime(b.arriveBy, tz)],
@@ -91,7 +96,7 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
       await sendSms({
         ...base,
         to: r.phone,
-        text: `${agencyName}: ${cancelled ? "CANCELLED" : "Gig change"}${r.isMember ? ` (${b.artist.name})` : ""} at ${where}, ${formatDate(b.arriveBy, tz)}. ${summary}.${link ? ` ${link}` : ""}`,
+        text: `${agencyName}: ${cancelled ? "CANCELLED" : "Gig change"}${r.isMember ? ` (${act.name})` : ""} at ${where}, ${formatDate(b.arriveBy, tz)}. ${summary}.${link ? ` ${link}` : ""}`,
       });
     }
   }
@@ -102,14 +107,15 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
 export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
   if (!bookingIds.length) return 0;
   const bookings = await prisma.booking.findMany({
-    where: { id: { in: bookingIds }, demo: false, status: { notIn: ["ENQUIRY", "CANCELLED"] } },
+    // Offers (awaiting confirmation) go out separately; pending gigs aren't the act's business yet.
+    where: { id: { in: bookingIds }, demo: false, artistId: { not: null }, status: { in: ["HOLD", "CONFIRMED", "SETTLED"] } },
     include: { venue: true, artist: { include: { login: true } }, agent: true, agency: { include: { settings: true } } },
     orderBy: { arriveBy: "asc" },
   });
-  const recipients = await recipientsForActs(bookings.map((b) => b.artistId));
+  const recipients = await recipientsForActs(bookings.map((b) => b.artistId!));
   const byRecipient = new Map<string, { to: Recipient; gigs: typeof bookings }>();
   for (const b of bookings) {
-    for (const r of recipients.get(b.artistId) ?? []) {
+    for (const r of recipients.get(b.artistId!) ?? []) {
       const entry = byRecipient.get(r.key) ?? { to: r, gigs: [] };
       entry.gigs.push(b);
       byRecipient.set(r.key, entry);
@@ -122,7 +128,7 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
     const agencyName = first.agency.settings?.agencyName || first.agency.name;
     const named = r.isMember || new Set(gigs.map((g) => g.artistId)).size > 1;
     const line = (b: (typeof gigs)[number]) =>
-      `${formatDate(b.arriveBy, b.timezone)}: ${named ? `${b.artist.name} at ` : ""}${b.venue?.name ?? "venue to be confirmed"}, ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""} (arrive ${localTime(b.arriveBy, b.timezone)})`;
+      `${formatDate(b.arriveBy, b.timezone)}: ${named ? `${b.artist!.name} at ` : ""}${b.venue?.name ?? "venue to be confirmed"}, ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""} (arrive ${localTime(b.arriveBy, b.timezone)})`;
     const n = gigs.length;
     const title = n === 1 ? `New gig: ${first.venue?.name ?? "booked"}, ${formatDate(first.arriveBy, first.timezone)}` : `You've been booked for ${n} gigs`;
     const link = r.userId ? `${appUrl()}/app` : null;

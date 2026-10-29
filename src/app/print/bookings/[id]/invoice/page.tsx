@@ -3,6 +3,7 @@ import { DocumentShell } from "@/components/document";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { loadPrintable } from "@/lib/print";
 import { formatDate } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Invoice" };
 
@@ -42,7 +43,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <tbody>
           <tr className="border-b border-slate-100">
             <td className="py-3">
-              Performance by {b.artist.name}
+              Performance by {actName(b)}
               {b.venue ? ` at ${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : ""} on {formatDate(b.arriveBy, b.timezone)}
               {b.eventName ? ` (${b.eventName})` : ""}
             </td>

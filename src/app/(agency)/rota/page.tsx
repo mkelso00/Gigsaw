@@ -6,7 +6,7 @@ import { RotaQuickAdd } from "@/components/rota-quick-add";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
-import { eventTypeLabel } from "@/lib/constants";
+import { eventTypeLabel, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { WEEKDAYS, dateInWeek, isDateKey, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
@@ -102,7 +102,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
   const rowIds = new Set([...slots.map((s) => s.venueId), ...oneOffs.map((b) => b.venueId!)]);
   const venues = allVenues.filter((v) => rowIds.has(v.id));
   const total = slots.length;
-  const filledCount = slots.filter((s) => filled.has(`${s.id}|${dateInWeek(weekStart, s.weekday)}`)).length;
+  const filledCount = slots.filter((s) => filled.get(`${s.id}|${dateInWeek(weekStart, s.weekday)}`)?.artistId).length;
   const now = new Date();
 
   return (
@@ -162,11 +162,16 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
         <>
           {total > 0 && (
             <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
-              <Stat tone={filledCount === total ? "dark" : "default"} label="Slots filled this week" value={`${filledCount} / ${total}`} />
+              <Stat tone={filledCount === total ? "dark" : "default"} label="Slots with an act this week" value={`${filledCount} / ${total}`} />
               <Stat label="Still to fill" value={total - filledCount} hint={total - filledCount ? "Shown in amber below" : "All done"} />
               <ActionForm action={bookRegulars} className="card flex flex-col justify-between gap-3 p-5">
                 <input type="hidden" name="weekStart" value={weekStart} />
-                <div className="text-[13px] text-ink-500">Book the regular artists into their slots</div>
+                <div className="text-[13px] text-ink-500">Fill the calendar from the weekly slots</div>
+                <select name="mode" defaultValue="pending" className="input">
+                  <option value="pending">Put every slot in the calendar (Pending, no act yet)</option>
+                  <option value="offer">Offer each slot to its regular act</option>
+                  <option value="confirm">Book each regular act in as confirmed</option>
+                </select>
                 <div className="flex flex-wrap items-center gap-2">
                   <select name="weeks" defaultValue="4" className="input w-auto">
                     {[1, 2, 4, 8, 12].map((n) => (
@@ -177,9 +182,9 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                   </select>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="notify" defaultChecked className="h-4 w-4 accent-ink-950" />
-                    Tell artists
+                    Tell acts (confirmed only)
                   </label>
-                  <SubmitButton pendingText="Booking…">Book regulars</SubmitButton>
+                  <SubmitButton pendingText="Working…">Go</SubmitButton>
                 </div>
               </ActionForm>
             </div>
@@ -189,9 +194,9 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
             <section id="needs-artist" className="mb-6 scroll-mt-6 overflow-hidden rounded-[var(--radius-card)] border-2 border-amber-300 bg-white">
               <div className="flex flex-wrap items-baseline justify-between gap-2 bg-amber-50 px-5 py-3">
                 <h2 className="section-title">
-                  Needs an artist <span className="font-normal text-ink-500">· {needs.length} in the next 4 weeks</span>
+                  Needs an act <span className="font-normal text-ink-500">· {needs.length} in the next 4 weeks</span>
                 </h2>
-                <span className="text-xs text-ink-500">Soonest first. Picking an artist books them and tells them.</span>
+                <span className="text-xs text-ink-500">Soonest first. Offer sends the act the gig to accept; Confirm books them straight in.</span>
               </div>
               <ul className="divide-y divide-ink-100">
                 {needs.slice(0, 40).map(({ date, slot }) => (
@@ -213,15 +218,18 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                     <ActionForm action={assignSlot.bind(null, slot.id, date)} className="flex flex-wrap items-start gap-2">
                       <input type="hidden" name="notify" value="on" />
                       <select name="artistId" defaultValue={slot.artistId ?? ""} className="input w-52">
-                        <option value="">Choose artist…</option>
+                        <option value="">Choose act…</option>
                         {artists.map((ar) => (
                           <option key={ar.id} value={ar.id}>
                             {ar.name}
                           </option>
                         ))}
                       </select>
-                      <SubmitButton className="btn btn-primary" pendingText="Booking…">
-                        Book
+                      <SubmitButton className="btn btn-primary" pendingText="…" name="mode" value="offer">
+                        Offer
+                      </SubmitButton>
+                      <SubmitButton className="btn" pendingText="…" name="mode" value="confirm">
+                        Confirm
                       </SubmitButton>
                     </ActionForm>
                   </li>
@@ -269,7 +277,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                             {daySlots.map((s) => {
                               const b = filled.get(`${s.id}|${date}`);
                               const time = `${s.startTime}–${s.endTime}`;
-                              if (b) {
+                              if (b && b.artistId) {
                                 const a = arrivalFor(b, settings, now);
                                 return (
                                   <Link
@@ -279,8 +287,8 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                   >
                                     <div className="text-xs font-semibold tabular-nums">{time}</div>
                                     <div className="mt-1 flex items-center gap-1.5 truncate font-medium">
-                                      <ArtistDot colour={b.artist.colour} />
-                                      <span className="truncate">{b.artist.name}</span>
+                                      <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                                      <span className="truncate">{actName(b)}</span>
                                     </div>
                                     <div className="mt-1.5">{a.state !== "NOT_DUE" ? <ArrivalBadge state={a.state} /> : <StatusBadge status={b.status} />}</div>
                                   </Link>
@@ -291,24 +299,36 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                   key={s.id}
                                   className={`rounded-lg border border-dashed p-2 ${past ? "border-ink-200 text-ink-400" : "border-amber-300 bg-amber-50/60"}`}
                                 >
-                                  <div className="text-xs font-semibold tabular-nums">{time}</div>
+                                  <div className="flex items-center justify-between text-xs font-semibold tabular-nums">
+                                    {time}
+                                    {b && (
+                                      <Link href={`/bookings/${b.id}`} className="font-normal text-ink-500 underline" title="In the calendar, Pending">
+                                        Pending
+                                      </Link>
+                                    )}
+                                  </div>
                                   <div className="text-xs text-ink-500">{s.label || eventTypeLabel(s.eventType)}</div>
                                   {past ? (
-                                    <div className="mt-1 text-xs">Not booked</div>
+                                    <div className="mt-1 text-xs">No act</div>
                                   ) : (
                                     <ActionForm action={assignSlot.bind(null, s.id, date)} className="mt-1.5 space-y-1.5">
                                       <input type="hidden" name="notify" value="on" />
                                       <select name="artistId" defaultValue={s.artistId ?? ""} className="input-sm">
-                                        <option value="">Artist…</option>
+                                        <option value="">Act…</option>
                                         {artists.map((ar) => (
                                           <option key={ar.id} value={ar.id}>
                                             {ar.name}
                                           </option>
                                         ))}
                                       </select>
-                                      <SubmitButton className="btn btn-sm w-full" pendingText="…">
-                                        Book
-                                      </SubmitButton>
+                                      <div className="grid grid-cols-2 gap-1">
+                                        <SubmitButton className="btn btn-sm btn-primary w-full px-1" pendingText="…" name="mode" value="offer">
+                                          Offer
+                                        </SubmitButton>
+                                        <SubmitButton className="btn btn-sm w-full px-1" pendingText="…" name="mode" value="confirm">
+                                          Confirm
+                                        </SubmitButton>
+                                      </div>
                                     </ActionForm>
                                   )}
                                 </div>
@@ -328,8 +348,8 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                   </div>
                                   <div className="text-[11px] text-ink-500">One-off{b.eventName ? ` · ${b.eventName}` : ""}</div>
                                   <div className="mt-1 flex items-center gap-1.5 truncate font-medium">
-                                    <ArtistDot colour={b.artist.colour} />
-                                    <span className="truncate">{b.artist.name}</span>
+                                    <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                                    <span className="truncate">{actName(b)}</span>
                                   </div>
                                   <div className="mt-1.5">{a.state !== "NOT_DUE" ? <ArrivalBadge state={a.state} /> : <StatusBadge status={b.status} />}</div>
                                 </Link>

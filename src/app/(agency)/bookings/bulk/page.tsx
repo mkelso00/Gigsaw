@@ -7,6 +7,7 @@ import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
+import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Change several gigs" };
 export const dynamic = "force-dynamic";
@@ -100,8 +101,8 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
                 <li key={b.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 font-medium">
-                      <ArtistDot colour={b.artist.colour} />
-                      {b.artist.name}
+                      <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
+                      {actName(b)}
                     </span>
                     <StatusBadge status={b.status} />
                   </div>

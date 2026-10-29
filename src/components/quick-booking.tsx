@@ -72,10 +72,8 @@ export function QuickBooking({
           <input type="hidden" name="currency" value={currency} />
           <label className="sm:col-span-2">
             <span className={label}>Act</span>
-            <select name="artistId" required defaultValue="" autoFocus className={field}>
-              <option value="" disabled>
-                Choose an act…
-              </option>
+            <select name="artistId" defaultValue="" autoFocus className={field}>
+              <option value="">No act yet (add later)</option>
               {acts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -133,8 +131,8 @@ export function QuickBooking({
           )}
           <label>
             <span className={label}>Status</span>
-            <select name="bookingStatus" defaultValue="CONFIRMED" className={field}>
-              {(["ENQUIRY", "HOLD", "PENDING", "CONFIRMED"] as const).map((s) => (
+            <select name="bookingStatus" defaultValue="PENDING" className={field}>
+              {(["PENDING", "AWAITING", "CONFIRMED", "HOLD", "ENQUIRY"] as const).map((s) => (
                 <option key={s} value={s}>
                   {BOOKING_STATUS_LABELS[s]}
                 </option>
@@ -162,6 +160,9 @@ export function QuickBooking({
               ))}
             </select>
           </label>
+          <p className="-mt-2 text-xs text-ink-500 sm:col-span-2">
+            Pending: in the calendar, act to be sorted. Awaiting confirmation: the act is sent the offer to accept. Confirmed: they&apos;re booked.
+          </p>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-ink-100 pt-4 sm:col-span-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="notify" defaultChecked className="h-4 w-4 accent-ink-950" />

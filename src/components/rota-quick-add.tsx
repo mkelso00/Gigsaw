@@ -27,10 +27,8 @@ export function RotaQuickAdd({
 }) {
   const compact = !!(venueId && date);
   const artistSelect = (cls: string) => (
-    <select name="artistId" required defaultValue="" className={cls}>
-      <option value="" disabled>
-        {compact ? "Artist…" : "Choose…"}
-      </option>
+    <select name="artistId" defaultValue="" className={cls}>
+      <option value="">{compact ? "No act yet" : "No act yet (Pending)"}</option>
       {artists.map((a) => (
         <option key={a.id} value={a.id}>
           {a.name}
@@ -67,9 +65,15 @@ export function RotaQuickAdd({
             <input type="checkbox" name="repeat" className="h-3.5 w-3.5 accent-ink-950" />
             Every {weekdayName ?? "week"}
           </label>
-          <SubmitButton className="btn btn-sm btn-primary w-full" pendingText="…">
-            Book
-          </SubmitButton>
+          <div className="grid grid-cols-2 gap-1">
+            <SubmitButton className="btn btn-sm btn-primary w-full px-1" pendingText="…" name="mode" value="offer">
+              Offer
+            </SubmitButton>
+            <SubmitButton className="btn btn-sm w-full px-1" pendingText="…" name="mode" value="confirm">
+              Confirm
+            </SubmitButton>
+          </div>
+          <p className="text-[10px] leading-tight text-ink-500">No act: added as Pending.</p>
         </ActionForm>
       </details>
     );
@@ -93,7 +97,9 @@ export function RotaQuickAdd({
           ))}
         </select>
       </Field>
-      <Field label="Artist">{artistSelect("input")}</Field>
+      <Field label="Act" hint="Optional: leave empty to add the act later">
+        {artistSelect("input")}
+      </Field>
       <Field label="Act type" hint="Optional, e.g. Solo">
         <input name="label" className="input" />
       </Field>
@@ -119,11 +125,16 @@ export function RotaQuickAdd({
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" name="notify" defaultChecked className="h-4 w-4 accent-ink-950" />
-          Tell the artist
+          Tell the act (when confirmed)
         </label>
-        <SubmitButton className="btn btn-primary ml-auto" pendingText="Booking…">
-          Add gig
-        </SubmitButton>
+        <div className="ml-auto flex gap-2">
+          <SubmitButton className="btn" pendingText="…" name="mode" value="confirm">
+            Add as confirmed
+          </SubmitButton>
+          <SubmitButton className="btn btn-primary" pendingText="…" name="mode" value="offer">
+            Add and offer to act
+          </SubmitButton>
+        </div>
       </div>
     </ActionForm>
   );

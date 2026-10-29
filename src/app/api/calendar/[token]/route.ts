@@ -1,4 +1,4 @@
-import { BOOKING_STATUS_LABELS, type BookingStatus } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, type BookingStatus, actName, ACT_VISIBLE } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
@@ -22,7 +22,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
   const calendarName = act ? act.name : personName(person!);
 
   const bookings = await prisma.booking.findMany({
-    where: { agencyId: owner.agencyId, artistId: { in: actIds }, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { not: "ENQUIRY" } },
+    where: { agencyId: owner.agencyId, artistId: { in: actIds }, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { in: ACT_VISIBLE } },
     include: { venue: true, artist: { select: { name: true } } },
     orderBy: { setStart: "asc" },
   });
@@ -36,7 +36,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
         uid: `${b.id}@gigsaw`,
         start: b.arriveBy,
         end: b.setEnd ?? new Date(b.setStart.getTime() + 2 * 3_600_000),
-        summary: `${b.status === "HOLD" ? "[HOLD] " : ""}${b.artist.name}${b.venue ? ` @ ${b.venue.name}` : ""}`,
+        summary: `${b.status === "HOLD" ? "[HOLD] " : ""}${actName(b)}${b.venue ? ` @ ${b.venue.name}` : ""}`,
         location: where,
         description: [
           `Status: ${status}`,
