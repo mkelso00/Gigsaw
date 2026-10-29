@@ -1,0 +1,223 @@
+// Gigsaw data model.
+// SQLite is used for local development. To run on Postgres, change the
+// provider below and point DATABASE_URL at your Postgres instance.
+// Enum-like fields are stored as strings; allowed values live in src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Settings {
+  id                Int    @id @default(1)
+  agencyName        String @default("My Agency")
+  agencyEmail       String @default("")
+  agencyAddress     String @default("")
+  defaultTimezone   String @default("Europe/London")
+  defaultCurrency   String @default("GBP")
+  defaultCommission Float  @default(15)
+  // Minutes after the call time before an arrival counts as late.
+  lateGraceMinutes  Int    @default(5)
+  // How close (in metres) a check-in must be to the venue to count as "on site".
+  geofenceMetres    Int    @default(500)
+  invoiceTerms      String @default("Payment due within 14 days of invoice date.")
+  contractTerms     String @default("")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("AGENT") // ADMIN | AGENT | ARTIST
+  artistId     String?  @unique
+  artist       Artist?  @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  sessions        Session[]
+  managedArtists  Artist[]      @relation("ArtistAgent")
+  bookingsCreated Booking[]     @relation("BookingCreator")
+  bookingsAgented Booking[]     @relation("BookingAgent")
+  notes           ContactNote[]
+  checkIns        CheckIn[]
+  activity        Activity[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Artist {
+  id                String   @id @default(cuid())
+  name              String
+  genre             String   @default("")
+  email             String   @default("")
+  phone             String   @default("")
+  colour            String   @default("#6d28d9")
+  notes             String   @default("")
+  defaultCommission Float?
+  // Secret token used for the artist's private calendar (ICS) feed.
+  calendarToken     String   @unique @default(cuid())
+  agentId           String?
+  agent             User?    @relation("ArtistAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+
+  login    User?     @relation("ArtistLogin")
+  bookings Booking[]
+  checkIns CheckIn[]
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  type      String   @default("PROMOTER") // PROMOTER | CLIENT | VENUE_CONTACT | COLLABORATOR | OTHER
+  name      String
+  company   String   @default("")
+  email     String   @default("")
+  phone     String   @default("")
+  address   String   @default("")
+  tags      String   @default("") // comma separated
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notes    ContactNote[]
+  bookings Booking[]
+}
+
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  address   String   @default("")
+  city      String   @default("")
+  country   String   @default("")
+  capacity  Int?
+  latitude  Float?
+  longitude Float?
+  timezone  String   @default("Europe/London")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  bookings Booking[]
+}
+
+model Booking {
+  id              String    @id @default(cuid())
+  reference       String    @unique
+  eventName       String    @default("")
+  status          String    @default("HOLD") // ENQUIRY | HOLD | PENDING | CONFIRMED | SETTLED | CANCELLED
+  dealType        String    @default("STANDARD_COMMISSION") // STANDARD_COMMISSION | BUY_SELL | VERSUS | PLUS | FLAT
+  artistId        String
+  artist          Artist    @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  venueId         String?
+  venue           Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  promoterId      String?
+  promoter        Contact?  @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  agentId         String?
+  agent           User?     @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?     @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // All times are stored in UTC. They are entered and shown in the venue's time zone.
+  timezone        String    @default("Europe/London")
+  arriveBy        DateTime  // call time / load-in: the time the artist must be at the venue
+  soundcheckAt    DateTime?
+  setStart        DateTime
+  setEnd          DateTime?
+
+  // Money is stored in minor units (pence / cents) to avoid rounding errors.
+  currency        String    @default("GBP")
+  feeMinor        Int       @default(0)
+  artistFeeMinor  Int?      // buy/sell deals: what the agency pays the artist
+  commissionPct   Float     @default(15)
+  vatPct          Float     @default(0)
+  depositMinor    Int       @default(0)
+  depositDueDate  DateTime?
+  dealNotes       String    @default("")
+
+  // Radius clause: no other show for this artist within radiusKm for radiusDays either side.
+  radiusKm        Int?
+  radiusDays      Int?
+
+  // Itinerary
+  travel          String    @default("")
+  accommodation   String    @default("")
+  dayContact      String    @default("")
+  hospitality     String    @default("")
+  notes           String    @default("")
+  tags            String    @default("")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  payments Payment[]
+  checkIns CheckIn[]
+
+  @@index([artistId, setStart])
+  @@index([setStart])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  direction   String   // IN (from promoter) | OUT (paid to artist)
+  kind        String   @default("BALANCE") // DEPOSIT | BALANCE | SETTLEMENT | EXPENSE | OTHER
+  amountMinor Int
+  paidAt      DateTime
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+}
+
+// A musician marking where they are for a gig. ARRIVED is the one that counts for punctuality.
+model CheckIn {
+  id          String   @id @default(cuid())
+  bookingId   String
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  artistId    String
+  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind        String   // ON_THE_WAY | ARRIVED | DEPARTED
+  source      String   @default("APP") // APP (artist on their phone) | AGENT (logged by the agency)
+  at          DateTime @default(now())
+  latitude    Float?
+  longitude   Float?
+  accuracyM   Float?
+  distanceM   Float?   // distance from the venue at the time of check-in
+  etaMinutes  Int?
+  note        String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([bookingId, kind])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  entity    String   // BOOKING | CONTACT | ARTIST | VENUE | SETTINGS | USER
+  entityId  String
+  action    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}

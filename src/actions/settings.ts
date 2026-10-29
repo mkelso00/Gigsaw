@@ -1,0 +1,77 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { hashPassword, requireAdmin, requireUser, verifyPassword } from "@/lib/auth";
+import { CURRENCIES } from "@/lib/constants";
+import { logActivity, prisma } from "@/lib/db";
+import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
+import { isValidTimeZone } from "@/lib/time";
+
+export async function saveSettings(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireAdmin();
+  return handleForm(async () => {
+    const tz = str(form, "defaultTimezone");
+    if (!isValidTimeZone(tz)) throw new FormError("Unknown time zone");
+    const commission = num(form, "defaultCommission") ?? 15;
+    if (commission < 0 || commission > 100) throw new FormError("Commission must be between 0 and 100%");
+    const grace = int(form, "lateGraceMinutes") ?? 5;
+    if (grace < 0 || grace > 240) throw new FormError("Grace period must be between 0 and 240 minutes");
+    const geofence = int(form, "geofenceMetres") ?? 500;
+    if (geofence < 25 || geofence > 50_000) throw new FormError("Venue radius must be between 25 m and 50 km");
+    await prisma.settings.update({
+      where: { id: 1 },
+      data: {
+        agencyName: required(form, "agencyName", "Agency name"),
+        agencyEmail: str(form, "agencyEmail"),
+        agencyAddress: str(form, "agencyAddress"),
+        defaultTimezone: tz,
+        defaultCurrency: oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP"),
+        defaultCommission: commission,
+        lateGraceMinutes: grace,
+        geofenceMetres: geofence,
+        invoiceTerms: str(form, "invoiceTerms"),
+        contractTerms: str(form, "contractTerms"),
+      },
+    });
+    await logActivity(user.id, "SETTINGS", "1", "updated agency settings");
+    revalidatePath("/", "layout");
+    return { ok: "Settings saved." };
+  });
+}
+
+export async function createStaffUser(_: FormState, form: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  return handleForm(async () => {
+    const email = required(form, "email", "Email").toLowerCase();
+    const password = required(form, "password", "Password");
+    if (password.length < 8) throw new FormError("Password must be at least 8 characters");
+    if (await prisma.user.findUnique({ where: { email } })) throw new FormError("That email already has a login");
+    const role = str(form, "role") === "ADMIN" ? "ADMIN" : "AGENT";
+    const u = await prisma.user.create({
+      data: { email, name: required(form, "name", "Name"), role, passwordHash: await hashPassword(password) },
+    });
+    await logActivity(admin.id, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
+    revalidatePath("/settings");
+    return { ok: `${u.name} can now sign in.` };
+  });
+}
+
+export async function removeStaffUser(userId: string) {
+  const admin = await requireAdmin();
+  if (userId === admin.id) return;
+  const u = await prisma.user.delete({ where: { id: userId } });
+  await logActivity(admin.id, "USER", userId, "removed team member", u.name);
+  revalidatePath("/settings");
+}
+
+export async function changePassword(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  return handleForm(async () => {
+    const current = required(form, "current", "Current password");
+    const next = required(form, "next", "New password");
+    if (next.length < 8) throw new FormError("New password must be at least 8 characters");
+    if (!(await verifyPassword(current, user.passwordHash))) throw new FormError("Your current password is wrong");
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } });
+    return { ok: "Password changed." };
+  });
+}

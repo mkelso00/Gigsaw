@@ -1,0 +1,157 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
+import { requireStaff } from "@/lib/auth";
+import { arrivalFor, bookingListInclude } from "@/lib/bookings";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS } from "@/lib/constants";
+import { getSettings, prisma } from "@/lib/db";
+import { formatMoney } from "@/lib/money";
+import { formatDate, localTime } from "@/lib/time";
+
+export const metadata: Metadata = { title: "Bookings" };
+
+export default async function BookingsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  await requireStaff();
+  const sp = await searchParams;
+  const when = sp.when === "past" ? "past" : sp.when === "all" ? "all" : "upcoming";
+  const now = new Date();
+  const dayAgo = new Date(now.getTime() - 86_400_000);
+
+  const where: Prisma.BookingWhereInput = {};
+  if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
+  if (sp.artist) where.artistId = sp.artist;
+  if (when === "upcoming") where.setStart = { gte: dayAgo };
+  if (when === "past") where.setStart = { lt: now };
+  if (sp.q) {
+    where.OR = [
+      { reference: { contains: sp.q } },
+      { eventName: { contains: sp.q } },
+      { tags: { contains: sp.q.toLowerCase() } },
+      { venue: { name: { contains: sp.q } } },
+      { venue: { city: { contains: sp.q } } },
+      { promoter: { name: { contains: sp.q } } },
+      { artist: { name: { contains: sp.q } } },
+    ];
+  }
+
+  const [bookings, artists, settings] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      include: bookingListInclude,
+      orderBy: { setStart: when === "past" ? "desc" : "asc" },
+      take: 300,
+    }),
+    prisma.artist.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    getSettings(),
+  ]);
+
+  return (
+    <div>
+      <PageHeader
+        title="Bookings"
+        subtitle="Every show from first hold to final settlement."
+        actions={
+          <>
+            <a href={`/api/export/bookings${sp.artist ? `?artist=${sp.artist}` : ""}`} className="btn">
+              Export CSV
+            </a>
+            <Link href="/bookings/new" className="btn btn-primary">
+              New booking
+            </Link>
+          </>
+        }
+      />
+
+      <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
+        <label className="min-w-48 flex-1">
+          <span className="label">Search</span>
+          <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />
+        </label>
+        <label>
+          <span className="label">Artist</span>
+          <select name="artist" defaultValue={sp.artist ?? ""} className="input">
+            <option value="">All artists</option>
+            {artists.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="label">Status</span>
+          <select name="status" defaultValue={sp.status ?? ""} className="input">
+            <option value="">Any status</option>
+            {BOOKING_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {BOOKING_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="label">When</span>
+          <select name="when" defaultValue={when} className="input">
+            <option value="upcoming">Upcoming</option>
+            <option value="past">Past</option>
+            <option value="all">All dates</option>
+          </select>
+        </label>
+        <button className="btn">Filter</button>
+      </form>
+
+      {bookings.length === 0 ? (
+        <Empty>No bookings match. <Link href="/bookings/new" className="link">Create one</Link></Empty>
+      ) : (
+        <div className="card overflow-x-auto">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Artist</th>
+                <th>Venue</th>
+                <th>Status</th>
+                <th className="text-right">Fee</th>
+                <th>Arrival</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bookings.map((b) => {
+                const arrival = arrivalFor(b, settings, now);
+                return (
+                  <tr key={b.id} className="hover:bg-slate-50">
+                    <td className="whitespace-nowrap">
+                      <Link href={`/bookings/${b.id}`} className="link">
+                        {formatDate(b.arriveBy, b.timezone)}
+                      </Link>
+                      <div className="text-xs text-slate-500">
+                        {b.reference} · on stage {localTime(b.setStart, b.timezone)}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="flex items-center gap-2">
+                        <ArtistDot colour={b.artist.colour} />
+                        {b.artist.name}
+                      </span>
+                      {b.eventName && <div className="text-xs text-slate-500">{b.eventName}</div>}
+                    </td>
+                    <td>
+                      {b.venue ? b.venue.name : <span className="text-slate-400">No venue</span>}
+                      {b.venue?.city && <div className="text-xs text-slate-500">{b.venue.city}</div>}
+                    </td>
+                    <td>
+                      <StatusBadge status={b.status} />
+                    </td>
+                    <td className="text-right whitespace-nowrap">{formatMoney(b.feeMinor, b.currency)}</td>
+                    <td>{arrival.state !== "NOT_DUE" && <ArrivalBadge state={arrival.state} />}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
