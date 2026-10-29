@@ -8,12 +8,11 @@ import { parseActProfile, parseMembers, type JoinMember } from "@/lib/act-profil
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { messageFor } from "@/lib/message-templates";
-import { appUrl, sendEmail } from "@/lib/messaging";
+import { appUrl, isEmail, sendEmail } from "@/lib/messaging";
 
 // New acts join through the agency's private link (/join/<token>). What they send waits as an
 // application until the agency approves it, which makes the act, its members and their login.
 
-const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 const COLOURS = ["#e11d48", "#7c3aed", "#2563eb", "#0891b2", "#059669", "#ca8a04", "#ea580c", "#db2777", "#4f46e5", "#16a34a"];
 
 /** Make the join link, or a new one (the old link stops working). */

@@ -6,7 +6,7 @@ import { wants } from "./notify-prefs";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { onConfirmed } from "./confirmations";
-import { recipientsForActs, type Recipient } from "./people";
+import { groupByRecipient, recipientsForActs } from "./people";
 import { formatDate, localTime } from "./time";
 
 // Offering gigs to acts. Setting a gig to "Awaiting confirmation" sends the act (or each of its
@@ -44,14 +44,7 @@ export async function sendOffers(bookingIds: string[]) {
   }
   const live = gigs.filter((g) => !g.demo); // demo data never sends anything
   const recipients = await recipientsForActs(live.map((g) => g.artistId!));
-  const byPerson = new Map<string, { to: Recipient; gigs: typeof live }>();
-  for (const g of live) {
-    for (const r of recipients.get(g.artistId!) ?? []) {
-      const entry = byPerson.get(r.key) ?? { to: r, gigs: [] };
-      entry.gigs.push(g);
-      byPerson.set(r.key, entry);
-    }
-  }
+  const byPerson = groupByRecipient(live, recipients);
   for (const { to: r, gigs: list } of byPerson.values()) {
     const first = list[0];
     const agencyName = first.agency.settings?.agencyName || first.agency.name;

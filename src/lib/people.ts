@@ -160,6 +160,19 @@ export async function recipientsForActs(actIds: string[]): Promise<Map<string, R
   return out;
 }
 
+/** Gigs grouped by who hears about them (from recipientsForActs): each person once, with all their gigs in order. */
+export function groupByRecipient<T extends { artistId: string | null }>(gigs: T[], recipients: Map<string, Recipient[]>) {
+  const out = new Map<string, { to: Recipient; gigs: T[] }>();
+  for (const g of gigs) {
+    for (const r of recipients.get(g.artistId!) ?? []) {
+      const entry = out.get(r.key) ?? { to: r, gigs: [] };
+      entry.gigs.push(g);
+      out.set(r.key, entry);
+    }
+  }
+  return out;
+}
+
 /** Names offered in the person form: acts, and companies (venues first, then company contacts). */
 export async function personFormOptions(agencyId: string) {
   const [acts, venues, contacts] = await Promise.all([

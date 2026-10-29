@@ -5,12 +5,13 @@ import { requireStaff } from "@/lib/auth";
 import { actName } from "@/lib/constants";
 import { getSettings } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
+import { isDateKey } from "@/lib/rota";
 import { formatDate, localTime } from "@/lib/time";
 import { venueStatement } from "@/lib/venue-statement";
 
 export const metadata: Metadata = { title: "Venue invoice" };
 
-const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
+const valid = (s?: string) => (isDateKey(s) ? s : undefined);
 
 /** One invoice for a venue covering every gig in the dates. Agency staff only; never shows what the acts are paid. */
 export default async function VenueInvoicePage({

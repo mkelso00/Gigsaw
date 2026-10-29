@@ -4,7 +4,7 @@ import { actName, ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
-import { recipientsForActs, type Recipient } from "./people";
+import { groupByRecipient, recipientsForActs, type Recipient } from "./people";
 import { dayReminderAt, partOfDay, weeklyReminderWeek } from "./reminder-time";
 import { addDaysToKey, formatDate, localDateKey, localTime, zonedToUtc } from "./time";
 
@@ -27,7 +27,7 @@ const gigInclude = {
 type Gig = Prisma.BookingGetPayload<{ include: typeof gigInclude }>;
 
 /** Claim a reminder. False if it has already been sent (or another server just claimed it). */
-async function claim(kind: "WEEK" | "DAY", recipient: string, key: string) {
+export async function claimReminder(kind: string, recipient: string, key: string) {
   try {
     await prisma.reminder.create({ data: { kind, recipient, key } });
     return true;
@@ -44,16 +44,7 @@ const held = (b: Gig) => (b.status === "HOLD" || b.status === "PENDING" ? " (not
 
 /** Group gigs by who should hear about them. */
 async function byRecipient(gigs: Gig[]) {
-  const recipients = await recipientsForActs(gigs.map((g) => g.artistId!));
-  const out = new Map<string, { to: Recipient; gigs: Gig[] }>();
-  for (const g of gigs) {
-    for (const r of recipients.get(g.artistId!) ?? []) {
-      const entry = out.get(r.key) ?? { to: r, gigs: [] };
-      entry.gigs.push(g);
-      out.set(r.key, entry);
-    }
-  }
-  return [...out.values()];
+  return [...groupByRecipient(gigs, await recipientsForActs(gigs.map((g) => g.artistId!))).values()];
 }
 
 type Delivery = {
@@ -149,7 +140,7 @@ export async function runReminders(now = new Date()) {
         orderBy: { arriveBy: "asc" },
       });
       for (const { to: who, gigs: list } of await byRecipient(gigs)) {
-        if (!(await claim("WEEK", who.key, week))) continue;
+        if (!(await claimReminder("WEEK", who.key, week))) continue;
         const n = list.length;
         const thisWeek = week === localDateKey(now, s.defaultTimezone);
         await deliver({
@@ -188,7 +179,7 @@ export async function runReminders(now = new Date()) {
             const at = dayReminderAt(g.arriveBy, g.timezone, s.dayReminderTime);
             return at <= now && g.createdAt <= at;
           });
-          if (!due || !(await claim("DAY", who.key, day))) continue;
+          if (!due || !(await claimReminder("DAY", who.key, day))) continue;
           const first = list[0];
           await deliver({
             to: who,

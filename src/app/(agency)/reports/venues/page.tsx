@@ -5,13 +5,13 @@ import { requireStaff } from "@/lib/auth";
 import { actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
-import { venueColour } from "@/lib/rota";
+import { isDateKey, venueColour } from "@/lib/rota";
 import { formatDate, localDateKey, localTime } from "@/lib/time";
 import { monthRange, venueStatement } from "@/lib/venue-statement";
 
 export const metadata: Metadata = { title: "Venue statement" };
 
-const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
+const valid = (s?: string) => (isDateKey(s) ? s : undefined);
 
 /** Pick a venue and dates: the gigs played there, what the venue owes and what the acts were paid. */
 export default async function VenueStatementPage({

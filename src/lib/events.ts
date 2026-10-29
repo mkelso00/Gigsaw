@@ -7,6 +7,7 @@ import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type Payment
 import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForActs } from "./people";
+import { claimReminder } from "./reminders";
 import { formatDate, localDateKey, localTime } from "./time";
 
 // Weddings and events: one customer booking with several acts. Each act's gig is an ordinary
@@ -87,15 +88,7 @@ export async function sentEventMessages(eventId: string) {
   return new Set(rows.map((r) => r.kind.replace(/^EV_/, "")));
 }
 
-async function claim(kind: EventMessage, eventId: string) {
-  try {
-    await prisma.reminder.create({ data: { kind: `EV_${kind}`, recipient: `event:${eventId}`, key: "" } });
-    return true;
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return false;
-    throw e;
-  }
-}
+const claim = (kind: EventMessage, eventId: string) => claimReminder(`EV_${kind}`, `event:${eventId}`, "");
 
 export function plannerUrl(token: string) {
   return `${appUrl()}/w/${token}`;

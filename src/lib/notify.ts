@@ -4,7 +4,7 @@ import { describeChanges, type BookingSnapshot, type Change } from "./changes";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { messageFor } from "./message-templates";
-import { recipientsForActs, type Recipient } from "./people";
+import { groupByRecipient, recipientsForActs } from "./people";
 import { dealBreakdown } from "./money";
 import { formatDate, localTime } from "./time";
 
@@ -124,14 +124,7 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
     orderBy: { arriveBy: "asc" },
   });
   const recipients = await recipientsForActs(bookings.map((b) => b.artistId!));
-  const byRecipient = new Map<string, { to: Recipient; gigs: typeof bookings }>();
-  for (const b of bookings) {
-    for (const r of recipients.get(b.artistId!) ?? []) {
-      const entry = byRecipient.get(r.key) ?? { to: r, gigs: [] };
-      entry.gigs.push(b);
-      byRecipient.set(r.key, entry);
-    }
-  }
+  const byRecipient = groupByRecipient(bookings, recipients);
 
   let sent = 0;
   for (const { to: r, gigs } of byRecipient.values()) {
