@@ -1,5 +1,6 @@
 "use server";
 
+import type { Artist } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference } from "@/lib/bookings";
@@ -191,8 +192,11 @@ function slotSchedule(slot: Awaited<ReturnType<typeof ownSlot>>, date: string) {
 }
 
 /** Possible double bookings if this artist played this slot on this date. */
-async function slotClashes(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string) {
-  const settings = await getSettings(user.agencyId);
+/** Settings and acts already loaded, so booking many weeks at once doesn't look them up every time. */
+type BookingContext = { settings: Awaited<ReturnType<typeof getSettings>>; artists: Map<string, Artist> };
+
+async function slotClashes(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string, ctx?: BookingContext) {
+  const settings = ctx?.settings ?? (await getSettings(user.agencyId));
   return findClashes(
     {
       agencyId: user.agencyId,
@@ -205,24 +209,35 @@ async function slotClashes(user: AgencyUser, slot: Awaited<ReturnType<typeof own
   );
 }
 
-/** Create the booking for one slot on one date. Returns null if it's already booked. */
-async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string | null, statusOverride?: string) {
-  const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } }) : null;
-  if (artistId && !artist) throw new FormError("Choose an act");
+/** The gig already made from this slot on this date, if any (cancelled ones don't count). */
+async function slotBookingOn(slot: Awaited<ReturnType<typeof ownSlot>>, date: string) {
   const tz = slot.venue.timezone;
   const dayStart = zonedToUtc(date, "00:00", tz);
-  const existing = await prisma.booking.findFirst({
+  const found = await prisma.booking.findFirst({
     where: {
       slotId: slot.id,
       status: { not: "CANCELLED" },
-      arriveBy: {
-        gte: new Date(dayStart.getTime() - 6 * 3_600_000),
-        lt: new Date(dayStart.getTime() + 30 * 3_600_000),
-      },
+      arriveBy: { gte: new Date(dayStart.getTime() - 6 * 3_600_000), lt: new Date(dayStart.getTime() + 30 * 3_600_000) },
     },
     select: { id: true, arriveBy: true, artistId: true },
   });
-  if (existing && localDateKey(existing.arriveBy, tz) === date) {
+  return found && localDateKey(found.arriveBy, tz) === date ? found : null;
+}
+
+/** Create the booking for one slot on one date. Returns null if it's already booked. */
+async function bookSlot(
+  user: AgencyUser,
+  slot: Awaited<ReturnType<typeof ownSlot>>,
+  date: string,
+  artistId: string | null,
+  statusOverride?: string,
+  ctx?: BookingContext,
+) {
+  const artist = artistId ? (ctx?.artists.get(artistId) ?? (await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } }))) : null;
+  if (artistId && !artist) throw new FormError("Choose an act");
+  const tz = slot.venue.timezone;
+  const existing = await slotBookingOn(slot, date);
+  if (existing) {
     // Already in the calendar with no act (Pending): put the act on that gig instead.
     if (!existing.artistId && artist) {
       await prisma.booking.update({
@@ -235,7 +250,7 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
     return null;
   }
 
-  const settings = await getSettings(user.agencyId);
+  const settings = ctx?.settings ?? (await getSettings(user.agencyId));
   const schedule = slotSchedule(slot, date);
   const booking = await createBookingWithReference(user.agencyId, {
     ...schedule,
@@ -313,7 +328,12 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
       where: { agencyId: user.agencyId, active: true, ...(mode === "pending" ? {} : { artistId: { not: null } }) },
       include: { venue: true },
     });
-    const today = localDateKey(new Date(), (await getSettings(user.agencyId)).defaultTimezone);
+    const [settings, artists] = await Promise.all([
+      getSettings(user.agencyId),
+      prisma.artist.findMany({ where: { agencyId: user.agencyId, id: { in: slots.flatMap((s) => (s.artistId ? [s.artistId] : [])) } } }),
+    ]);
+    const ctx: BookingContext = { settings, artists: new Map(artists.map((a) => [a.id, a])) };
+    const today = localDateKey(new Date(), settings.defaultTimezone);
     const created: string[] = [];
     const skipped: string[] = [];
     for (let w = 0; w < weeks; w++) {
@@ -322,17 +342,19 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
         const date = dateInWeek(monday, slot.weekday);
         if (date < today) continue;
         if (mode === "pending") {
-          const id = await bookSlot(user, slot, date, null);
+          const id = await bookSlot(user, slot, date, null, undefined, ctx);
           if (id) created.push(id);
           continue;
         }
+        // Already has an act on that date: nothing to do (and its own gig isn't a clash).
+        if ((await slotBookingOn(slot, date))?.artistId) continue;
         // Never quietly double-book a regular: leave the slot for a person to decide.
-        const warnings = await slotClashes(user, slot, date, slot.artistId!);
+        const warnings = await slotClashes(user, slot, date, slot.artistId!, ctx);
         if (warnings.length) {
           skipped.push(`${slot.venue.name} ${date} ${slot.startTime}`);
           continue;
         }
-        const id = await bookSlot(user, slot, date, slot.artistId!, mode === "offer" ? "AWAITING" : "CONFIRMED");
+        const id = await bookSlot(user, slot, date, slot.artistId!, mode === "offer" ? "AWAITING" : "CONFIRMED", ctx);
         if (id) created.push(id);
       }
     }
