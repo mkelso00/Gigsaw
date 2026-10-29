@@ -5,6 +5,7 @@ import { daysBetween, eventMessagesDue, PLAN_FIELDS, type EventMessage, type Tas
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type PaymentLike } from "./money";
 import { actName } from "./constants";
+import { messageFor } from "./message-templates";
 import { recipientsForActs } from "./people";
 import { formatDate, localDateKey, localTime } from "./time";
 
@@ -117,23 +118,37 @@ const live = (e: FullEvent) => e.bookings.filter((b) => b.status !== "CANCELLED"
 /** Gigs that have an act, for messages to the acts. */
 const withAct = (e: FullEvent) => live(e).filter((b): b is typeof b & { artistId: string; artist: NonNullable<typeof b.artist> } => !!b.artistId && !!b.artist);
 
+/** The business's wording for an event email, if it has changed it (Settings > Notifications). */
+const tpl = (e: FullEvent, key: string, firstName: string) =>
+  messageFor(e.agency.settings?.messageTemplates, key, { first_name: firstName, event: e.name, date: eventDay(e), business: brandOf(e) });
+const TEMPLATE_OF: Partial<Record<EventMessage, string>> = {
+  PLANNER_REQUEST: "PLANNER",
+  PLANNER_CHASE: "PLANNER",
+  BALANCE_REMINDER: "BALANCE",
+  ACT_DETAILS: "EVENT_DETAILS",
+  THANKS: "THANKS",
+};
+
 /** Email the customer their planner link. Used by the automatic emails and the "Send" button. */
 export async function sendPlannerEmail(e: FullEvent, chase = false) {
   if (!e.customer?.email) return false;
   const token = await ensurePlannerToken(e.id);
   const what = isWedding(e) ? "your wedding" : "your event";
+  const t = tpl(e, "PLANNER", e.customer.name.split(" ")[0]);
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
     to: e.customer.email,
     replyTo: replyOf(e),
-    subject: chase ? `A quick reminder: the details for ${what}` : `${e.name}: a few details from you`,
+    subject: t.subject ?? (chase ? `A quick reminder: the details for ${what}` : `${e.name}: a few details from you`),
     email: {
       brand: brandOf(e),
       title: chase ? `A quick reminder about ${what}` : `Let's get ${what} just right`,
-      intro: `Hi ${e.customer.name.split(" ")[0]}, ${
-        chase ? "we still need a few details" : "so everyone performing knows exactly what you'd like, please tell us a few details"
-      }: the running order, who to ask for on the day, parking, and any song requests. It takes about five minutes, and you can come back and change it.`,
+      intro:
+        t.intro ??
+        `Hi ${e.customer.name.split(" ")[0]}, ${
+          chase ? "we still need a few details" : "so everyone performing knows exactly what you'd like, please tell us a few details"
+        }: the running order, who to ask for on the day, parking, and any song requests. It takes about five minutes, and you can come back and change it.`,
       rows: [
         ["Date", eventDay(e)],
         ...live(e).map((b) => [actName(b), `${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`] as [string, string]),
@@ -152,16 +167,17 @@ async function sendBalanceReminder(e: FullEvent) {
   const t = eventTotals(e.bookings);
   if (t.outstanding <= 0) return false;
   const m = (x: number) => formatMoney(x, t.currency);
+  const w = tpl(e, "BALANCE", e.customer.name.split(" ")[0]);
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
     to: e.customer.email,
     replyTo: replyOf(e),
-    subject: `${e.name}: balance of ${m(t.outstanding)}`,
+    subject: w.subject ?? `${e.name}: balance of ${m(t.outstanding)}`,
     email: {
       brand: brandOf(e),
       title: `Your balance for ${eventDay(e)}`,
-      intro: `Hi ${e.customer.name.split(" ")[0]}, not long now! Here's a summary of what's booked and what's left to pay.`,
+      intro: w.intro ?? `Hi ${e.customer.name.split(" ")[0]}, not long now! Here's a summary of what's booked and what's left to pay.`,
       rows: [
         ...live(e).map((b) => {
           const d = dealBreakdown(b);
@@ -188,6 +204,7 @@ export async function sendActDetails(e: FullEvent) {
   for (const b of gigs) {
     const others = gigs.filter((o) => o.id !== b.id).map((o) => `${o.artist.name} ${localTime(o.setStart, o.timezone)}`);
     for (const r of recipients.get(b.artistId) ?? []) {
+      const t = tpl(e, "EVENT_DETAILS", r.firstName);
       const title = `Final details: ${e.name}, ${eventDay(e)}`;
       const base = { kind: "EVENT" as const, agencyId: e.agencyId, bookingId: b.id };
       if (r.userId)
@@ -201,11 +218,12 @@ export async function sendActDetails(e: FullEvent) {
           ...base,
           to,
           replyTo: replyOf(e),
-          subject: title,
+          subject: t.subject ?? title,
           email: {
             brand: brandOf(e),
             title,
-            intro: `Hi ${r.firstName}, here's everything for ${r.isMember ? `${b.artist.name}'s` : "your"} ${isWedding(e) ? "wedding" : "event"} gig.`,
+            intro:
+              t.intro ?? `Hi ${r.firstName}, here's everything for ${r.isMember ? `${b.artist.name}'s` : "your"} ${isWedding(e) ? "wedding" : "event"} gig.`,
             rows: [
               ["Where", where || "To be confirmed"],
               ["Arrive by", localTime(b.arriveBy, b.timezone)],
@@ -230,18 +248,21 @@ export async function sendActDetails(e: FullEvent) {
 async function sendThanks(e: FullEvent) {
   if (!e.customer?.email) return false;
   const review = e.agency.settings?.reviewLink;
+  const t = tpl(e, "THANKS", e.customer.name.split(" ")[0]);
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
     to: e.customer.email,
     replyTo: replyOf(e),
-    subject: isWedding(e) ? "Congratulations, and thank you!" : "Thank you!",
+    subject: t.subject ?? (isWedding(e) ? "Congratulations, and thank you!" : "Thank you!"),
     email: {
       brand: brandOf(e),
       title: isWedding(e) ? "Congratulations!" : "Thank you",
-      intro: `Hi ${e.customer.name.split(" ")[0]}, thank you for booking ${withAct(e)
-        .map((b) => b.artist.name)
-        .join(", ")} with us. We hope it was a brilliant day.`,
+      intro:
+        t.intro ??
+        `Hi ${e.customer.name.split(" ")[0]}, thank you for booking ${withAct(e)
+          .map((b) => b.artist.name)
+          .join(", ")} with us. We hope it was a brilliant day.`,
       cta: review ? { label: "Leave us a review", url: review } : undefined,
       outro: review ? "If you have a minute, a review really helps other couples find us." : "We'd love to hear how it went: just reply to this email.",
     },
@@ -272,6 +293,9 @@ export async function runEventMessages(now = new Date()) {
       if (kind === "BALANCE_REMINDER" && (!e.customer?.email || eventTotals(e.bookings).outstanding <= 0)) continue;
       if (kind === "THANKS" && !e.customer?.email) continue;
       if (kind === "ACT_DETAILS" && !withAct(e).length) continue;
+      // Switched off in Settings > Notifications: the automatic email doesn't go.
+      const key = TEMPLATE_OF[kind];
+      if (key && !messageFor(e.agency.settings?.messageTemplates, key, {}).on) continue;
       if (!(await claim(kind, e.id))) continue;
       if (kind === "PLANNER_REQUEST") await sendPlannerEmail(e);
       else if (kind === "PLANNER_CHASE") await sendPlannerEmail(e, true);

@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { actName, ON_STATUSES } from "./constants";
 import { prisma } from "./db";
+import { messageFor } from "./message-templates";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { recipientsForActs, type Recipient } from "./people";
 import { dayReminderAt, partOfDay, weeklyReminderWeek } from "./reminder-time";
@@ -65,10 +66,22 @@ type Delivery = {
   intro: string;
   url: string;
   ttlSeconds: number;
+  /** The business's Notifications settings: reminders can be switched off or reworded. */
+  templates: unknown;
 };
 
 async function deliver(d: Delivery) {
   const first = d.gigs[0];
+  const t = messageFor(d.templates, d.kind === "WEEK" ? "REMINDER_WEEK" : "REMINDER_DAY", {
+    first_name: d.to.firstName,
+    act: actName(first),
+    venue: where(first),
+    date: formatDate(first.arriveBy, first.timezone),
+    time: localTime(first.arriveBy, first.timezone),
+    business: d.agencyName,
+  });
+  if (!t.on) return;
+  d = { ...d, title: t.subject ?? d.title, intro: t.intro ?? d.intro };
   // Members (and anyone in more than one act) need to know which act each gig is for.
   const named = d.to.isMember || new Set(d.gigs.map((g) => g.artistId)).size > 1;
   const label = (b: Gig) => `${named ? `${actName(b)} at ` : ""}${where(b)}`;
@@ -145,6 +158,7 @@ export async function runReminders(now = new Date()) {
           gigs: list,
           agencyName,
           agencyEmail: s.agencyEmail,
+          templates: s.messageTemplates,
           title: `Your ${n === 1 ? "gig" : `${n} gigs`} ${thisWeek ? "this" : "next"} week`,
           intro: `Hi ${who.firstName}, here are your gigs for the week starting ${formatDate(from, s.defaultTimezone)}. Times are when to arrive and when you're on.`,
           url: "/app",
@@ -182,6 +196,7 @@ export async function runReminders(now = new Date()) {
             gigs: list,
             agencyName,
             agencyEmail: s.agencyEmail,
+            templates: s.messageTemplates,
             title: list.length > 1 ? `Don't forget: ${list.length} gigs today` : `Don't forget your gig ${partOfDay(first.arriveBy, first.timezone)}`,
             intro: `Hi ${who.firstName}, a reminder about ${list.length > 1 ? "your gigs" : "your gig"} today. Remember to tap "I've arrived" in the app when you get there.`,
             url: list.length > 1 ? "/app" : `/app/gigs/${first.id}`,

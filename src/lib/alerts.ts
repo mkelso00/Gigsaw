@@ -3,7 +3,9 @@ import { arrivalFor } from "./bookings";
 import { ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendSms } from "./messaging";
-import { formatMinutes, localTime } from "./time";
+import { wants } from "./notify-prefs";
+import { messageFor } from "./message-templates";
+import { formatDate, formatMinutes, localTime } from "./time";
 
 // Arrival messages:
 //  - Overdue alert: once per gig, to the booking's agent and the agency's on-call contact,
@@ -70,8 +72,11 @@ export async function runOverdueCheck(now = new Date()) {
     const subject = `Late: ${b.artist.name} not at ${b.venue?.name ?? "the venue"} yet`;
 
     // Don't message the same address twice if the agent is also the on-call contact.
-    const emails = new Set([b.agent?.email, settings.alertEmail].filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()));
-    const phones = new Set([b.agent?.phone, settings.alertPhone].filter((p): p is string => !!p?.trim()));
+    // The agent can turn these off for themselves; the on-call contact always gets them.
+    const agentEmail = b.agent && wants(b.agent.notifyPrefs, "LATE", "email") ? b.agent.email : null;
+    const agentPhone = b.agent && wants(b.agent.notifyPrefs, "LATE", "text") ? b.agent.phone : null;
+    const emails = new Set([agentEmail, settings.alertEmail].filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()));
+    const phones = new Set([agentPhone, settings.alertPhone].filter((p): p is string => !!p?.trim()));
     for (const to of emails) await sendEmail({ ...base, to, subject, email });
     for (const to of phones) await sendSms({ ...base, to, text: short });
     sent++;
@@ -95,17 +100,26 @@ export async function notifyClientOfArrival(bookingId: string) {
   const first = b.promoter.name.split(" ")[0];
   const arrived = await prisma.checkIn.findFirst({ where: { bookingId: b.id, kind: "ARRIVED" }, orderBy: { at: "asc" } });
   const base = { kind: "CLIENT_ARRIVAL" as const, agencyId: b.agencyId, bookingId: b.id };
+  const t = messageFor(b.agency.settings.messageTemplates, "ARRIVED", {
+    first_name: first,
+    act: b.artist.name,
+    venue: where,
+    date: formatDate(b.arriveBy, b.timezone),
+    time: localTime(b.setStart, b.timezone),
+    business: agencyName,
+  });
+  if (!t.on) return false;
   if (b.promoter.email) {
     await sendEmail({
       ...base,
       to: b.promoter.email,
       replyTo: b.agency.settings.agencyEmail,
-      subject: `${b.artist.name} has arrived`,
+      subject: t.subject ?? `${b.artist.name} has arrived`,
       email: {
         brand: agencyName,
         preheader: `${b.artist.name} is at ${where} and getting set up.`,
         title: `${b.artist.name} has arrived`,
-        intro: `Hi ${first}, good news: ${b.artist.name} is at ${where} and getting set up.`,
+        intro: t.intro ?? `Hi ${first}, good news: ${b.artist.name} is at ${where} and getting set up.`,
         highlight: { label: "Checked in at", value: arrived ? localTime(arrived.at, b.timezone) : "Just now", tone: "good" },
         rows: [
           ["Venue", where],
@@ -119,7 +133,7 @@ export async function notifyClientOfArrival(bookingId: string) {
     await sendSms({
       ...base,
       to: b.promoter.phone,
-      text: `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}`,
+      text: t.text ?? `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}`,
     });
   }
   return true;

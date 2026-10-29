@@ -23,8 +23,8 @@ export type ImportSummary = {
   skipped: number;
 };
 
-export async function importOverture(agencyId: string, rows: CsvRow[]): Promise<ImportSummary> {
-  const data = readOvertureContacts(rows);
+export async function importOverture(agencyId: string, rows: CsvRow[], opts: { allVenues?: boolean } = {}): Promise<ImportSummary> {
+  const data = readOvertureContacts(rows, opts);
   const out: ImportSummary = {
     acts: { added: 0, matched: 0 },
     people: { added: 0, matched: 0 },
@@ -68,7 +68,10 @@ export async function importOverture(agencyId: string, rows: CsvRow[]): Promise<
     const companyId = companyByName.get(key(c.name)) ?? existingCompanies.find((x) => c.ref && x.importRef === c.ref)?.id;
     if (v) {
       out.venues.matched++;
-      const patch = fill(v, { address: c.address, city: c.city, country: c.country, notes: c.notes, importRef: c.ref || undefined });
+      const patch: Record<string, unknown> = fill(v, { address: c.address, city: c.city, country: c.country, importRef: c.ref || undefined });
+      // Notes are added to, line by line, so parking and PA details join what's already there.
+      const newLines = c.notes.split("\n").filter((l) => l && !v.notes.includes(l));
+      if (newLines.length) patch.notes = [v.notes, ...newLines].filter(Boolean).join("\n");
       if (Object.keys(patch).length) await prisma.venue.update({ where: { id: v.id }, data: patch });
       workplace.set(key(c.name), { venueId: v.id });
     } else if (companyId) {

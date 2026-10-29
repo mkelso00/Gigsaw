@@ -1,6 +1,8 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { prisma } from "./db";
+import { messageFor } from "./message-templates";
+import { wants } from "./notify-prefs";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { onConfirmed } from "./confirmations";
@@ -15,7 +17,7 @@ import { formatDate, localTime } from "./time";
 const offerInclude = {
   artist: { select: { name: true } },
   venue: { select: { name: true, city: true } },
-  agent: { select: { email: true, name: true, phone: true } },
+  agent: { select: { email: true, name: true, phone: true, notifyPrefs: true } },
   agency: { include: { settings: true } },
 } as const;
 
@@ -58,6 +60,15 @@ export async function sendOffers(bookingIds: string[]) {
     const title = n === 1 ? `Gig offer: ${first.venue?.name ?? "a gig"}, ${formatDate(first.arriveBy, first.timezone)}` : `${n} gig offers from ${agencyName}`;
     const base = { kind: "BOOKING_CHANGE" as const, agencyId: first.agencyId, bookingId: n === 1 ? first.id : null };
     const named = r.isMember || new Set(list.map((g) => g.artistId)).size > 1;
+    const t = messageFor(first.agency.settings?.messageTemplates, "OFFER", {
+      first_name: r.firstName,
+      act: first.artist?.name,
+      venue: first.venue?.name ?? "a gig",
+      date: formatDate(first.arriveBy, first.timezone),
+      time: localTime(first.arriveBy, first.timezone),
+      business: agencyName,
+    });
+    if (!t.on) continue;
     const reached = r.userId
       ? await sendPush({
           ...base,
@@ -70,12 +81,14 @@ export async function sendOffers(bookingIds: string[]) {
         ...base,
         to,
         replyTo: first.agent?.email || first.agency.settings?.agencyEmail,
-        subject: title,
+        subject: t.subject ?? title,
         email: {
           brand: agencyName,
           preheader: "Please accept or decline",
           title,
-          intro: `Hi ${r.firstName}, ${agencyName} would like to book ${named ? "your act" : "you"} for ${n === 1 ? "this gig" : "these gigs"}. Please accept or decline as soon as you can.`,
+          intro:
+            t.intro ??
+            `Hi ${r.firstName}, ${agencyName} would like to book ${named ? "your act" : "you"} for ${n === 1 ? "this gig" : "these gigs"}. Please accept or decline as soon as you can.`,
           rows: list.map((g) => {
             const fee = dealBreakdown(g).artistMinor;
             return [
@@ -92,7 +105,9 @@ export async function sendOffers(bookingIds: string[]) {
       await sendSms({
         ...base,
         to: r.phone,
-        text: `${agencyName}: ${n === 1 ? `gig offer, ${first.venue?.name ?? ""} ${formatDate(first.arriveBy, first.timezone)}` : `${n} gig offers`}. Accept or decline: ${link}`,
+        text: t.text
+          ? `${t.text} ${link}`
+          : `${agencyName}: ${n === 1 ? `gig offer, ${first.venue?.name ?? ""} ${formatDate(first.arriveBy, first.timezone)}` : `${n} gig offers`}. Accept or decline: ${link}`,
       });
     }
   }
@@ -125,7 +140,9 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
   const agencyName = b.agency.settings?.agencyName || b.agency.name;
   const accepted = answer === "ACCEPTED";
   const subject = `${b.artist.name} ${accepted ? "accepted" : "declined"}: ${b.venue?.name ?? "gig"}, ${formatDate(b.arriveBy, b.timezone)}`;
-  const to = b.agent?.email || b.agency.settings?.agencyEmail;
+  // The lead agent hears about it (unless they've turned this off); with no agent, the business email does.
+  const kind = accepted ? "ACCEPTED" : "DECLINED";
+  const to = b.agent ? (wants(b.agent.notifyPrefs, kind, "email") ? b.agent.email : null) : b.agency.settings?.agencyEmail;
   const base = { kind: "BOOKING_CHANGE" as const, agencyId: b.agencyId, bookingId: b.id };
   if (to) {
     await sendEmail({
@@ -145,7 +162,7 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
     });
   }
   // A decline needs sorting quickly: text the agent too.
-  if (!accepted && b.agent?.phone) {
+  if (!accepted && b.agent?.phone && wants(b.agent.notifyPrefs, "DECLINED", "text")) {
     await sendSms({ ...base, to: b.agent.phone, text: `Gigsaw: ${subject}. ${appUrl()}/bookings/${b.id}` });
   }
   return true;

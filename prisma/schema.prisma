@@ -94,6 +94,8 @@ model Settings {
   // 0 means no default fee. Added to: EVENTS (weddings and private events, once per event) | ALL
   bookingFeeMinor       Int     @default(0)
   bookingFeeFor         String  @default("EVENTS")
+  // Automatic messages: switched off or reworded, by message, e.g. { "OFFER": { "subject": "…" } }.
+  messageTemplates      Json    @default("{}")
   // Secret for the private link new acts use to join (/join/<token>). Null means no link yet.
   joinToken             String? @unique
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
@@ -124,6 +126,9 @@ model User {
   person       Person?  @relation("PersonLogin", fields: [personId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   demo         Boolean  @default(false) // sample data, removable from Settings
+  // Which alerts this internal user wants, by kind and channel, e.g. { "LATE": { "text": false } }.
+  // Anything not mentioned is on.
+  notifyPrefs  Json     @default("{}")
 
   sessions          Session[]
   passwordResets    PasswordReset[]

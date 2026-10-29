@@ -1,5 +1,6 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
 import { CURRENCIES } from "@/lib/constants";
@@ -9,72 +10,85 @@ import { FormError, handleForm, int, num, oneOf, required, str, type FormState }
 import { emailConfigured, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
 import { isHhmm } from "@/lib/reminder-time";
 import { toMinor } from "@/lib/money";
+import { TEMPLATES } from "@/lib/message-templates";
+import { prefsFromForm } from "@/lib/notify-prefs";
 import { isValidTimeZone } from "@/lib/time";
 
+/**
+ * Save one settings page. Each page only sends its own fields, so only the fields present are
+ * changed. A switch sends "<name>__shown" alongside it, so a switch turned off still counts.
+ */
 export async function saveSettings(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireAdmin();
   return handleForm(async () => {
-    const tz = str(form, "defaultTimezone");
-    if (!isValidTimeZone(tz)) throw new FormError("Unknown time zone");
-    const commission = num(form, "defaultCommission") ?? 15;
-    if (commission < 0 || commission > 100) throw new FormError("Commission must be between 0 and 100%");
-    const grace = int(form, "lateGraceMinutes") ?? 5;
-    if (grace < 0 || grace > 240) throw new FormError("Grace period must be between 0 and 240 minutes");
-    const changeover = int(form, "changeoverMinutes") ?? 15;
-    if (changeover < 0 || changeover > 240) throw new FormError("Changeover time must be between 0 and 240 minutes");
-    const geofence = int(form, "geofenceMetres") ?? 500;
-    if (geofence < 25 || geofence > 50_000) throw new FormError("Venue radius must be between 25 m and 50 km");
-    const weeklyReminderTime = str(form, "weeklyReminderTime") || "18:00";
-    const dayReminderTime = str(form, "dayReminderTime") || "12:00";
-    if (!isHhmm(weeklyReminderTime) || !isHhmm(dayReminderTime)) throw new FormError("Enter reminder times like 18:00");
-    const weeklyReminderDay = int(form, "weeklyReminderDay") ?? 7;
-    if (weeklyReminderDay < 1 || weeklyReminderDay > 7) throw new FormError("Choose a day for the weekly reminder");
-    const agencyName = required(form, "agencyName", "Agency name");
-    let bookingFeeMinor: number;
-    try {
-      bookingFeeMinor = toMinor(str(form, "bookingFee"), oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP"));
-    } catch {
-      throw new FormError("Booking fee: use numbers only, like 50.00");
+    const has = (k: string) => form.has(k);
+    const toggle = (k: string) => (form.has(`${k}__shown`) ? { [k]: str(form, k) === "on" } : {});
+    const data: Prisma.SettingsUpdateInput = {};
+
+    if (has("agencyName")) {
+      const agencyName = required(form, "agencyName", "Business name");
+      await prisma.agency.update({ where: { id: user.agencyId }, data: { name: agencyName } });
+      data.agencyName = agencyName;
     }
-    if (bookingFeeMinor < 0) throw new FormError("The booking fee can't be negative");
-    await prisma.agency.update({
-      where: { id: user.agencyId },
-      data: { name: agencyName },
-    });
-    await prisma.settings.upsert({
-      where: { agencyId: user.agencyId },
-      create: { agencyId: user.agencyId },
-      update: {
-        agencyName,
-        agencyEmail: str(form, "agencyEmail"),
-        agencyAddress: str(form, "agencyAddress"),
-        defaultTimezone: tz,
-        defaultCurrency: oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP"),
-        defaultCommission: commission,
-        lateGraceMinutes: grace,
-        changeoverMinutes: changeover,
-        geofenceMetres: geofence,
-        overdueAlerts: str(form, "overdueAlerts") === "on",
-        alertEmail: str(form, "alertEmail").toLowerCase(),
-        alertPhone: str(form, "alertPhone"),
-        clientArrivalMessages: str(form, "clientArrivalMessages") === "on",
-        weeklyReminders: str(form, "weeklyReminders") === "on",
-        weeklyReminderDay,
-        weeklyReminderTime,
-        dayReminders: str(form, "dayReminders") === "on",
-        dayReminderTime,
-        eventEmails: str(form, "eventEmails") === "on",
-        customerConfirmations: oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS"),
-        reviewLink: /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "",
-        bookingFeeMinor,
-        bookingFeeFor: oneOf(str(form, "bookingFeeFor"), ["EVENTS", "ALL"] as const, "EVENTS"),
-        invoiceTerms: str(form, "invoiceTerms"),
-        contractTerms: str(form, "contractTerms"),
-      },
-    });
-    await logActivity(user, "SETTINGS", user.agencyId, "updated agency settings");
+    if (has("agencyEmail")) data.agencyEmail = str(form, "agencyEmail");
+    if (has("agencyAddress")) data.agencyAddress = str(form, "agencyAddress");
+    if (has("defaultTimezone")) {
+      const tz = str(form, "defaultTimezone");
+      if (!isValidTimeZone(tz)) throw new FormError("Unknown time zone");
+      data.defaultTimezone = tz;
+    }
+    if (has("defaultCurrency")) data.defaultCurrency = oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP");
+    if (has("lateGraceMinutes")) {
+      const grace = int(form, "lateGraceMinutes") ?? 5;
+      if (grace < 0 || grace > 240) throw new FormError("Grace period must be between 0 and 240 minutes");
+      data.lateGraceMinutes = grace;
+    }
+    if (has("changeoverMinutes")) {
+      const changeover = int(form, "changeoverMinutes") ?? 15;
+      if (changeover < 0 || changeover > 240) throw new FormError("Changeover time must be between 0 and 240 minutes");
+      data.changeoverMinutes = changeover;
+    }
+    if (has("geofenceMetres")) {
+      const geofence = int(form, "geofenceMetres") ?? 500;
+      if (geofence < 25 || geofence > 50_000) throw new FormError("Venue radius must be between 25 m and 50 km");
+      data.geofenceMetres = geofence;
+    }
+    if (has("alertEmail")) data.alertEmail = str(form, "alertEmail").toLowerCase();
+    if (has("alertPhone")) data.alertPhone = str(form, "alertPhone");
+    if (has("weeklyReminderTime") || has("dayReminderTime")) {
+      const weeklyReminderTime = str(form, "weeklyReminderTime") || "18:00";
+      const dayReminderTime = str(form, "dayReminderTime") || "12:00";
+      if (!isHhmm(weeklyReminderTime) || !isHhmm(dayReminderTime)) throw new FormError("Enter reminder times like 18:00");
+      data.weeklyReminderTime = weeklyReminderTime;
+      data.dayReminderTime = dayReminderTime;
+    }
+    if (has("weeklyReminderDay")) {
+      const day = int(form, "weeklyReminderDay") ?? 7;
+      if (day < 1 || day > 7) throw new FormError("Choose a day for the weekly reminder");
+      data.weeklyReminderDay = day;
+    }
+    if (has("customerConfirmations")) data.customerConfirmations = oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS");
+    if (has("reviewLink")) data.reviewLink = /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "";
+    if (has("bookingFee")) {
+      const settings = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { defaultCurrency: true } });
+      let fee: number;
+      try {
+        fee = toMinor(str(form, "bookingFee"), settings?.defaultCurrency ?? "GBP");
+      } catch {
+        throw new FormError("Booking fee: use numbers only, like 50.00");
+      }
+      if (fee < 0) throw new FormError("The booking fee can't be negative");
+      data.bookingFeeMinor = fee;
+    }
+    if (has("bookingFeeFor")) data.bookingFeeFor = oneOf(str(form, "bookingFeeFor"), ["EVENTS", "ALL"] as const, "EVENTS");
+    if (has("invoiceTerms")) data.invoiceTerms = str(form, "invoiceTerms");
+    if (has("contractTerms")) data.contractTerms = str(form, "contractTerms");
+    Object.assign(data, toggle("overdueAlerts"), toggle("clientArrivalMessages"), toggle("weeklyReminders"), toggle("dayReminders"), toggle("eventEmails"));
+
+    await prisma.settings.upsert({ where: { agencyId: user.agencyId }, create: { agencyId: user.agencyId }, update: data });
+    await logActivity(user, "SETTINGS", user.agencyId, "updated settings");
     revalidatePath("/", "layout");
-    return { ok: "Settings saved." };
+    return { ok: "Saved." };
   });
 }
 
@@ -159,6 +173,39 @@ export async function clearDemoData(_: FormState): Promise<FormState> {
 }
 
 /** Your own name and mobile number (used for overdue alert texts). */
+/** Switch an automatic message on or off, or change its wording (Settings > Notifications). */
+export async function saveMessageTemplate(key: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireAdmin();
+  return handleForm(async () => {
+    if (!TEMPLATES.some((t) => t.key === key)) throw new FormError("Unknown message");
+    const settings = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { messageTemplates: true } });
+    const all = { ...((settings?.messageTemplates as Record<string, unknown>) ?? {}) };
+    const reset = form.get("useDefault") === "1";
+    all[key] = reset
+      ? {}
+      : {
+          off: str(form, "on") !== "on",
+          subject: str(form, "subject").slice(0, 200),
+          intro: str(form, "intro").slice(0, 2000),
+          text: str(form, "text").slice(0, 320),
+        };
+    await prisma.settings.update({ where: { agencyId: user.agencyId }, data: { messageTemplates: all as Prisma.InputJsonValue } });
+    await logActivity(user, "SETTINGS", user.agencyId, reset ? "reset a message to Gigsaw's wording" : "updated a message", key);
+    revalidatePath("/settings/notifications", "layout");
+    return { ok: reset ? "Back to Gigsaw's wording." : "Saved." };
+  });
+}
+
+/** Save which alerts the signed-in user wants, from their profile. */
+export async function saveMyNotifications(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireSignedIn();
+  return handleForm(async () => {
+    await prisma.user.update({ where: { id: user.id }, data: { notifyPrefs: prefsFromForm(form) } });
+    revalidatePath("/profile");
+    return { ok: "Saved." };
+  });
+}
+
 export async function updateMyDetails(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireSignedIn();
   return handleForm(async () => {

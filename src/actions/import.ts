@@ -18,7 +18,7 @@ export async function importOvertureContacts(_: FormState, form: FormData): Prom
     if (!rows.length || !("Contact ID" in rows[0]) || !("Act name" in rows[0])) {
       throw new FormError("That doesn't look like an Overture contacts export. In Overture, go to Contacts and export them as CSV.");
     }
-    const s = await importOverture(user.agencyId!, rows);
+    const s = await importOverture(user.agencyId!, rows, { allVenues: form.get("allVenues") === "on" });
     await logActivity(user, "SETTINGS", user.agencyId!, "imported contacts from Overture", `${rows.length} rows`);
     revalidatePath("/", "layout");
     const part = (label: string, x: { added: number; matched: number }) => `${label}: ${x.added} added${x.matched ? `, ${x.matched} already here` : ""}`;

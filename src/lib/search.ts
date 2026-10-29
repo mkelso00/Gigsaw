@@ -34,7 +34,18 @@ const PAGES: [string, string, string][] = [
   ["Venues", "/venues", "pubs bars places"],
   ["Add a venue", "/venues/new", "new venue"],
   ["Reports", "/reports", "money earnings commission"],
-  ["Settings", "/settings", "account team reminders alerts messages demo"],
+  ["Payments", "/payments", "paid owed collect settle"],
+  ["Import from Overture", "/artists/import", "csv contacts upload"],
+  ["New acts", "/artists/applications", "join link applications onboarding"],
+  ["Settings", "/settings/general", "business details time zone currency"],
+  ["Internal users", "/settings/users", "team staff agents admins login"],
+  ["Notifications", "/settings/notifications", "emails texts messages wording templates sender"],
+  ["Booking fee", "/settings/booking-fee", "fee charge"],
+  ["Act reminders", "/settings/reminders", "weekly day reminder"],
+  ["Arrivals and alerts", "/settings/arrivals", "late overdue grace"],
+  ["Plan", "/settings/plan", "billing bill price"],
+  ["Demo data", "/settings/demo", "sample"],
+  ["Profile", "/profile", "account password my details notifications dark light"],
 ];
 
 export async function globalSearch(agencyId: string, raw: string, opts: { isOwner: boolean }): Promise<SearchHit[]> {

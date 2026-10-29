@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
+import { messageFor } from "./message-templates";
 import { recipientsForActs } from "./people";
 import { formatDate, localTime } from "./time";
 
@@ -34,8 +35,18 @@ export async function onConfirmed(bookingId: string) {
 
   // ---- The act ----
   const fee = dealBreakdown(b).artistMinor;
+  const templates = b.agency.settings?.messageTemplates;
+  const gigVars = {
+    act: b.artist.name,
+    venue: b.venue?.name ?? b.event?.name ?? "the venue",
+    date: formatDate(b.arriveBy, b.timezone),
+    time: localTime(b.arriveBy, b.timezone),
+    business: agencyName,
+  };
+  const actOn = messageFor(templates, "BOOKED", gigVars).on;
   const title = `You're booked: ${b.venue?.name ?? b.event?.name ?? "gig"}, ${formatDate(b.arriveBy, b.timezone)}`;
-  for (const r of (await recipientsForActs([b.artistId])).get(b.artistId) ?? []) {
+  for (const r of actOn ? ((await recipientsForActs([b.artistId])).get(b.artistId) ?? []) : []) {
+    const t = messageFor(templates, "BOOKED", { ...gigVars, first_name: r.firstName });
     const link = r.userId ? `${appUrl()}/app/gigs/${b.id}` : null;
     const reached = r.userId
       ? await sendPush({
@@ -49,12 +60,12 @@ export async function onConfirmed(bookingId: string) {
         ...base,
         to,
         replyTo,
-        subject: title,
+        subject: t.subject ?? title,
         email: {
           brand: agencyName,
           title,
           highlight: { label: "Confirmed", value: "It's in our calendar and yours" },
-          intro: `Hi ${r.firstName}, ${r.isMember ? `${b.artist.name} is` : "you're"} booked. Everything's in place.`,
+          intro: t.intro ?? `Hi ${r.firstName}, ${r.isMember ? `${b.artist.name} is` : "you're"} booked. Everything's in place.`,
           rows: [
             ...(r.isMember ? ([["Act", b.artist.name]] as [string, string][]) : []),
             ["Where", where],
@@ -81,17 +92,19 @@ export async function onConfirmed(bookingId: string) {
   const isEvent = !!b.eventId || CUSTOMER_EVENT_TYPES.includes(b.eventType) || b.promoter?.type === "CLIENT";
   if (mode === "OFF" || (mode === "EVENTS" && !isEvent) || !b.promoter?.email || b.customerToldAt) return;
   const occasion = b.event?.name ?? (b.eventType === "WEDDING" ? "your wedding" : "your event");
+  const c = messageFor(templates, "CUSTOMER_CONFIRMED", { ...gigVars, event: occasion, first_name: b.promoter.name.split(" ")[0] });
+  if (!c.on) return;
   await sendEmail({
     kind: "EVENT",
     agencyId: b.agencyId,
     bookingId: b.id,
     to: b.promoter.email,
     replyTo,
-    subject: `Confirmed: ${b.artist.name} for ${occasion}`,
+    subject: c.subject ?? `Confirmed: ${b.artist.name} for ${occasion}`,
     email: {
       brand: agencyName,
       title: `${b.artist.name} is confirmed`,
-      intro: `Hi ${b.promoter.name.split(" ")[0]}, good news: ${b.artist.name} is confirmed for ${occasion}. Everything's booked in.`,
+      intro: c.intro ?? `Hi ${b.promoter.name.split(" ")[0]}, good news: ${b.artist.name} is confirmed for ${occasion}. Everything's booked in.`,
       rows: [
         ["Date", formatDate(b.arriveBy, b.timezone)],
         ["Where", where],

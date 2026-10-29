@@ -12,6 +12,7 @@ import { defaultTasks, PLAN_FIELDS } from "@/lib/event-plan";
 import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
+import { wants } from "@/lib/notify-prefs";
 import { dealBreakdown, defaultBookingFee, paymentTotals, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { isDateKey } from "@/lib/rota";
@@ -321,8 +322,8 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
       data: { agencyId: e.agencyId, entity: "EVENT", entityId: e.id, action: first ? "customer filled in the planner" : "customer updated the planner" },
     });
     // Let the agency know.
-    const agent = e.agentId ? await prisma.user.findUnique({ where: { id: e.agentId }, select: { email: true } }) : null;
-    const to = agent?.email || e.agency.settings?.agencyEmail;
+    const agent = e.agentId ? await prisma.user.findUnique({ where: { id: e.agentId }, select: { email: true, notifyPrefs: true } }) : null;
+    const to = agent ? (wants(agent.notifyPrefs, "PLANNER", "email") ? agent.email : null) : e.agency.settings?.agencyEmail;
     if (to) {
       await sendEmail({
         kind: "EVENT",

@@ -7,6 +7,7 @@ import { hashPassword, requireAdmin, requireStaff } from "@/lib/auth";
 import { parseActProfile, parseMembers, type JoinMember } from "@/lib/act-profile";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
+import { messageFor } from "@/lib/message-templates";
 import { appUrl, sendEmail } from "@/lib/messaging";
 
 // New acts join through the agency's private link (/join/<token>). What they send waits as an
@@ -85,17 +86,19 @@ export async function submitJoin(token: string, _: FormState, form: FormData): P
 
     // Let the agency know there's someone to look at.
     const to = settings.agencyEmail || settings.alertEmail;
-    if (to) {
+    const t = messageFor(settings.messageTemplates, "NEW_ACT", { act: actName, business: settings.agencyName });
+    if (to && t.on) {
       await sendEmail({
         kind: "JOIN",
         agencyId: settings.agencyId,
         to,
         replyTo: email,
-        subject: `New act wants to join: ${actName}`,
+        subject: t.subject ?? `New act wants to join: ${actName}`,
         email: {
           brand: settings.agencyName,
           preheader: `${contactName} sent their details`,
           title: `${actName} wants to join`,
+          intro: t.intro,
           rows: [
             ["Contact", `${contactName}, ${email}, ${phone}`],
             ["Act", [profile.actType, str(form, "genre"), profile.town].filter(Boolean).join(" · ")],
@@ -173,23 +176,27 @@ export async function approveApplication(id: string, _: FormState): Promise<Form
 
     const settings = await prisma.settings.findUnique({ where: { agencyId: user.agencyId } });
     const agencyName = settings?.agencyName ?? "The agency";
-    await sendEmail({
-      kind: "JOIN",
-      agencyId: user.agencyId,
-      to: a.email,
-      replyTo: user.email || settings?.agencyEmail,
-      subject: `You're on the books with ${agencyName}`,
-      email: {
-        brand: agencyName,
-        preheader: "Your details have been approved",
-        title: `Welcome, ${a.actName}`,
-        intro: loginTaken
-          ? `${agencyName} has approved your details. Log in with your usual Gigsaw account to see your gigs.`
-          : `${agencyName} has approved your details. Log in with this email and the password you chose to see your gigs, accept offers and check in on the night.`,
-        cta: { label: "Log in", url: `${appUrl()}/login` },
-        outro: "Add it to your home screen so it's one tap away on gig nights.",
-      },
-    });
+    const w = messageFor(settings?.messageTemplates, "WELCOME", { act: a.actName, business: agencyName });
+    if (w.on)
+      await sendEmail({
+        kind: "JOIN",
+        agencyId: user.agencyId,
+        to: a.email,
+        replyTo: user.email || settings?.agencyEmail,
+        subject: w.subject ?? `You're on the books with ${agencyName}`,
+        email: {
+          brand: agencyName,
+          preheader: "Your details have been approved",
+          title: `Welcome, ${a.actName}`,
+          intro:
+            w.intro ??
+            (loginTaken
+              ? `${agencyName} has approved your details. Log in with your usual Gigsaw account to see your gigs.`
+              : `${agencyName} has approved your details. Log in with this email and the password you chose to see your gigs, accept offers and check in on the night.`),
+          cta: { label: "Log in", url: `${appUrl()}/login` },
+          outro: "Add it to your home screen so it's one tap away on gig nights.",
+        },
+      });
   });
   if (res?.error) return res;
   revalidatePath("/", "layout");

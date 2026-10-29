@@ -18,7 +18,7 @@ export default async function ImportPage() {
           </Link>
         }
         title="Import from Overture"
-        subtitle="Bring your acts, the people in them, venues, companies and customers across in one go."
+        subtitle="Bring your acts, the people in them, venues, companies and customers across. Import your full contacts export, or a venues export with their parking, PA and arrival notes."
       />
       <section className="card card-pad space-y-5">
         <ol className="list-decimal space-y-2 pl-5 text-sm text-ink-600">
@@ -43,6 +43,13 @@ export default async function ImportPage() {
         </ul>
         <ActionForm action={importOvertureContacts} className="space-y-4">
           <input type="file" name="file" accept=".csv,text/csv" required className="input" />
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" name="allVenues" className="mt-0.5 h-4 w-4 accent-ink-950" />
+            <span>
+              <span className="font-medium text-ink-950">This file is just venues</span>
+              <span className="block text-ink-500">Treat every company in it as a venue, except obvious businesses like a Ltd company or an agency.</span>
+            </span>
+          </label>
           <SubmitButton pendingText="Importing… this can take a minute">Import</SubmitButton>
         </ActionForm>
       </section>

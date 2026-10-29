@@ -82,7 +82,7 @@ function address(r: CsvRow, n = 1) {
 }
 
 /** Sort an export's rows into acts, people and companies. */
-export function readOvertureContacts(rows: CsvRow[]) {
+export function readOvertureContacts(rows: CsvRow[], opts: { allVenues?: boolean } = {}) {
   const acts: ImportedAct[] = [];
   const people: ImportedPerson[] = [];
   const companies: ImportedCompany[] = [];
@@ -125,11 +125,15 @@ export function readOvertureContacts(rows: CsvRow[]) {
     } else if (companyNames.length) {
       const name = companyNames[0];
       const hasAddress = !!(address(r) || r["Address 1: City"]);
-      const venue = /venue/i.test(tag) || (!COMPANY_WORDS.test(name) && (hasAddress || VENUE_WORDS.test(name)));
+      // A venues-only export: everything is a venue unless it's plainly a company (Ltd, agency…).
+      const venue = /venue/i.test(tag) || (!COMPANY_WORDS.test(name) && (opts.allVenues || hasAddress || VENUE_WORDS.test(name)));
       const notes = [
         r["Parking"] && `Parking: ${r["Parking"]}`,
         r["PA Setup"] && `PA: ${r["PA Setup"]}`,
         r["Arrival Time"] && `Arrival: ${r["Arrival Time"]}`,
+        r["Email 1"] && `Email: ${r["Email 1"]}`,
+        r["Phone number 1"] && `Phone: ${tidyPhone(r["Phone number 1"])}`,
+        r["Website 1"] && `Website: ${r["Website 1"]}`,
         /wedding/i.test(tag) && "Wedding venue",
       ]
         .filter(Boolean)

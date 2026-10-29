@@ -3,6 +3,7 @@ import type { Booking, Venue } from "@prisma/client";
 import { describeChanges, type BookingSnapshot, type Change } from "./changes";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
+import { messageFor } from "./message-templates";
 import { recipientsForActs, type Recipient } from "./people";
 import { dealBreakdown } from "./money";
 import { formatDate, localTime } from "./time";
@@ -54,6 +55,16 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
   const act = b.artist;
   const recipients = (await recipientsForActs([b.artistId])).get(b.artistId) ?? [];
   for (const r of recipients) {
+    // Cancellations always go out; other changes follow the business's Notifications settings.
+    const t = messageFor(b.agency.settings?.messageTemplates, "GIG_CHANGE", {
+      first_name: r.firstName,
+      act: act.name,
+      venue: where,
+      date: formatDate(b.arriveBy, tz),
+      time: localTime(b.arriveBy, tz),
+      business: agencyName,
+    });
+    if (!cancelled && !t.on) continue;
     const whose = r.isMember ? `${act.name}'s` : "your";
     const link = r.userId ? `${appUrl()}/app/gigs/${b.id}` : null;
     if (r.userId) {
@@ -68,14 +79,14 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
         ...base,
         to,
         replyTo,
-        subject: title,
+        subject: (!cancelled && t.subject) || title,
         email: {
           brand: agencyName,
           preheader: changes.map(([k, , v]) => `${k}: ${v}`).join(" · "),
           title,
           intro: cancelled
             ? `Hi ${r.firstName}, ${r.isMember ? `${act.name}'s gig` : "this gig"} has been cancelled.`
-            : `Hi ${r.firstName}, ${agencyName} has updated ${whose} gig. Here's what's different:`,
+            : (t.intro ?? `Hi ${r.firstName}, ${agencyName} has updated ${whose} gig. Here's what's different:`),
           changes,
           rows: cancelled
             ? []
@@ -130,6 +141,15 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
     const line = (b: (typeof gigs)[number]) =>
       `${formatDate(b.arriveBy, b.timezone)}: ${named ? `${b.artist!.name} at ` : ""}${b.venue?.name ?? "venue to be confirmed"}, ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""} (arrive ${localTime(b.arriveBy, b.timezone)})`;
     const n = gigs.length;
+    const t = messageFor(first.agency.settings?.messageTemplates, "GIG_CHANGE", {
+      first_name: r.firstName,
+      act: first.artist?.name,
+      venue: first.venue?.name ?? "the venue",
+      date: formatDate(first.arriveBy, first.timezone),
+      time: localTime(first.arriveBy, first.timezone),
+      business: agencyName,
+    });
+    if (!t.on) continue;
     const title = n === 1 ? `New gig: ${first.venue?.name ?? "booked"}, ${formatDate(first.arriveBy, first.timezone)}` : `You've been booked for ${n} gigs`;
     const link = r.userId ? `${appUrl()}/app` : null;
     const base = { kind: "BOOKING_CHANGE" as const, agencyId: first.agencyId, bookingId: n === 1 ? first.id : null };
@@ -139,12 +159,12 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
         ...base,
         to,
         replyTo: first.agent?.email || first.agency.settings?.agencyEmail,
-        subject: title,
+        subject: t.subject ?? title,
         email: {
           brand: agencyName,
           preheader: line(first),
           title,
-          intro: `Hi ${r.firstName}, ${agencyName} has booked you for:`,
+          intro: t.intro ?? `Hi ${r.firstName}, ${agencyName} has booked you for:`,
           rows: gigs.slice(0, 40).map((b) => [formatDate(b.arriveBy, b.timezone), line(b).split(": ").slice(1).join(": ")]),
           cta: link ? { label: "See your gigs", url: link } : undefined,
           outro: "Times are the venue's local time. Reply to this email if anything doesn't work for you.",
