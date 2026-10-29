@@ -32,9 +32,14 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
         title="Venues"
         subtitle="Add a map pin to each venue so arrivals can be verified."
         actions={
-          <Link href="/venues/new" className="btn btn-primary">
-            Add venue
-          </Link>
+          <>
+            <Link href="/artists/import#template-venues" className="btn">
+              Import from a spreadsheet
+            </Link>
+            <Link href="/venues/new" className="btn btn-primary">
+              Add venue
+            </Link>
+          </>
         }
       />
       <form className="card mb-4 flex gap-3 p-3">

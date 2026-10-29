@@ -49,9 +49,14 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         title="People"
         subtitle="Musicians, venue managers and anyone you work with. A person can be in several acts and work at a venue or company."
         actions={
-          <Link href="/people/new" className="btn btn-primary">
-            Add person
-          </Link>
+          <>
+            <Link href="/artists/import#template-people" className="btn">
+              Import from a spreadsheet
+            </Link>
+            <Link href="/people/new" className="btn btn-primary">
+              Add person
+            </Link>
+          </>
         }
       />
       <ContactsTabs active="people" />
