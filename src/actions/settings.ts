@@ -8,6 +8,7 @@ import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
 import { emailConfigured, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
 import { isHhmm } from "@/lib/reminder-time";
+import { toMinor } from "@/lib/money";
 import { isValidTimeZone } from "@/lib/time";
 
 export async function saveSettings(_: FormState, form: FormData): Promise<FormState> {
@@ -29,6 +30,13 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     const weeklyReminderDay = int(form, "weeklyReminderDay") ?? 7;
     if (weeklyReminderDay < 1 || weeklyReminderDay > 7) throw new FormError("Choose a day for the weekly reminder");
     const agencyName = required(form, "agencyName", "Agency name");
+    let bookingFeeMinor: number;
+    try {
+      bookingFeeMinor = toMinor(str(form, "bookingFee"), oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP"));
+    } catch {
+      throw new FormError("Booking fee: use numbers only, like 50.00");
+    }
+    if (bookingFeeMinor < 0) throw new FormError("The booking fee can't be negative");
     await prisma.agency.update({
       where: { id: user.agencyId },
       data: { name: agencyName },
@@ -58,6 +66,8 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         eventEmails: str(form, "eventEmails") === "on",
         customerConfirmations: oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS"),
         reviewLink: /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "",
+        bookingFeeMinor,
+        bookingFeeFor: oneOf(str(form, "bookingFeeFor"), ["EVENTS", "ALL"] as const, "EVENTS"),
         invoiceTerms: str(form, "invoiceTerms"),
         contractTerms: str(form, "contractTerms"),
       },

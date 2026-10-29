@@ -171,6 +171,8 @@ export function BookingForm({
           sale={minorToInput(booking?.feeMinor, cur)}
           cost={booking ? minorToInput(booking.dealType === "BUY_SELL" ? booking.artistFeeMinor : dealBreakdown(booking).artistMinor, cur) : ""}
           vatPct={booking?.vatPct ?? 0}
+          bookingFee={booking ? minorToInput(booking.bookingFeeMinor || null, cur) : ""}
+          feeDefaults={booking ? undefined : { bookingFeeMinor: settings.bookingFeeMinor, bookingFeeFor: settings.bookingFeeFor }}
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Deposit">

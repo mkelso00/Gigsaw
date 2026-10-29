@@ -49,6 +49,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             </td>
             <td className="py-3 text-right">{money(d.grossMinor)}</td>
           </tr>
+          {d.bookingFeeMinor > 0 && (
+            <tr className="border-b border-slate-100">
+              <td className="py-3">Booking fee</td>
+              <td className="py-3 text-right">{money(d.bookingFeeMinor)}</td>
+            </tr>
+          )}
           {d.vatMinor > 0 && (
             <tr className="border-b border-slate-100">
               <td className="py-2 text-right text-slate-500">VAT at {b.vatPct}%</td>

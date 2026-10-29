@@ -134,6 +134,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       money: d.grossMinor
         ? [
             ["Total fee", `${m(d.grossMinor)}${d.vatMinor ? ` + VAT ${m(d.vatMinor)}` : ""}`],
+            ...(d.bookingFeeMinor ? [["Booking fee", m(d.bookingFeeMinor)] as [string, string]] : []),
             ["Received", m(received)],
             ["Outstanding", m(Math.max(0, d.totalDueMinor - received))],
             ["Act's pay", m(d.artistMinor)],

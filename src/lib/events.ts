@@ -18,6 +18,7 @@ type MoneyBooking = DealInput & { status: string; currency: string; payments: Pa
 export function eventTotals(bookings: MoneyBooking[]) {
   const live = bookings.filter((b) => b.status !== "CANCELLED");
   let sale = 0;
+  let fees = 0;
   let vat = 0;
   let cost = 0;
   let received = 0;
@@ -25,6 +26,7 @@ export function eventTotals(bookings: MoneyBooking[]) {
   for (const b of live) {
     const d = dealBreakdown(b);
     sale += d.grossMinor;
+    fees += d.bookingFeeMinor;
     vat += d.vatMinor;
     cost += d.artistMinor;
     const t = paymentTotals(b.payments);
@@ -35,13 +37,15 @@ export function eventTotals(bookings: MoneyBooking[]) {
   return {
     currency,
     sale,
+    /** Booking fees on top of the acts' fees, all ours. */
+    fees,
     vat,
-    total: sale + vat,
+    total: sale + fees + vat,
     cost,
-    margin: sale - cost,
+    margin: sale + fees - cost,
     received,
     deposits,
-    outstanding: Math.max(0, sale + vat - received),
+    outstanding: Math.max(0, sale + fees + vat - received),
     acts: live.length,
   };
 }

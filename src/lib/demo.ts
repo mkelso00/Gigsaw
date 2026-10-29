@@ -333,6 +333,8 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     status: string;
     sale: number;
     cost: number | null;
+    /** Booking fee on top, all the agency's (once per wedding). */
+    bookingFee?: number;
     promoter?: Contact | null;
     eventType?: string;
     slotId?: string;
@@ -420,6 +422,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
         currency: "GBP",
         feeMinor: o.sale * 100,
         vatPct: o.vatPct ?? 0,
+        bookingFeeMinor: (o.bookingFee ?? 0) * 100,
         dealType: "BUY_SELL",
         artistFeeMinor: o.cost != null ? o.cost * 100 : null,
         dayContact: o.venue ? `${o.venue.name}: ask for the manager on duty` : "",
@@ -513,8 +516,26 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   const busyToday = new Set(slots.filter((sl) => sl.weekday === weekdayOf(todayKey)).map((sl) => sl.artistId));
   const free = [ellie, jo, finn, diarmuid, jade, sean].filter((a) => !busyToday.has(a.id));
   const [onTime, late, overdue, onTheWay] = [free[0] ?? ellie, free[1] ?? jo, free[2] ?? finn, free[3] ?? diarmuid];
-  await gig({ venue: swan, arriveAt: at(-90), act: onTime, status: "CONFIRMED", sale: 180, cost: 130, eventName: "Afternoon session", arrival: { offsetMin: -12 } });
-  await gig({ venue: oldBank, arriveAt: at(-60), act: late, status: "CONFIRMED", sale: 180, cost: 130, eventName: "Afternoon session", arrival: { offsetMin: 22 } });
+  await gig({
+    venue: swan,
+    arriveAt: at(-90),
+    act: onTime,
+    status: "CONFIRMED",
+    sale: 180,
+    cost: 130,
+    eventName: "Afternoon session",
+    arrival: { offsetMin: -12 },
+  });
+  await gig({
+    venue: oldBank,
+    arriveAt: at(-60),
+    act: late,
+    status: "CONFIRMED",
+    sale: 180,
+    cost: 130,
+    eventName: "Afternoon session",
+    arrival: { offsetMin: 22 },
+  });
   await gig({ venue: bridge, arriveAt: at(-30), act: overdue, status: "CONFIRMED", sale: 200, cost: 140, eventName: "Afternoon session" });
   await gig({
     venue: lantern,
@@ -564,6 +585,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     status: "CONFIRMED",
     sale: 450,
     cost: 320,
+    bookingFee: 150,
     promoter: hannah,
     eventType: "WEDDING",
     eventId: w1.id,
@@ -633,6 +655,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     status: "AWAITING",
     sale: 550,
     cost: 400,
+    bookingFee: 150,
     promoter: priyaDev,
     eventType: "WEDDING",
     eventId: w2.id,
@@ -666,6 +689,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     status: "CONFIRMED",
     sale: 1200,
     cost: 900,
+    bookingFee: 75,
     promoter: sophie,
     eventType: "PRIVATE_PARTY",
     eventName: "Sophie's 40th",

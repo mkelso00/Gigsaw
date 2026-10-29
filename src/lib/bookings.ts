@@ -120,15 +120,17 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   let feeMinor: number;
   let artistFeeMinor: number | null;
   let depositMinor: number;
+  let bookingFeeMinor: number;
   try {
     feeMinor = toMinor(str(form, "fee"), currency);
     artistFeeMinor = str(form, "artistFee") ? toMinor(str(form, "artistFee"), currency) : null;
     depositMinor = toMinor(str(form, "deposit"), currency);
+    bookingFeeMinor = toMinor(str(form, "bookingFee"), currency);
   } catch {
     throw new FormError("Check the money amounts: use numbers only, like 1250.00");
   }
-  if (feeMinor < 0 || depositMinor < 0 || (artistFeeMinor ?? 0) < 0) throw new FormError("Amounts cannot be negative");
-  if (depositMinor > feeMinor && feeMinor > 0) throw new FormError("Deposit cannot be more than the fee");
+  if (feeMinor < 0 || depositMinor < 0 || bookingFeeMinor < 0 || (artistFeeMinor ?? 0) < 0) throw new FormError("Amounts cannot be negative");
+  if (depositMinor > feeMinor + bookingFeeMinor && feeMinor > 0) throw new FormError("Deposit cannot be more than the fee");
 
   const depositDue = str(form, "depositDueDate");
   const radiusKm = int(form, "radiusKm");
@@ -156,6 +158,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
     artistFeeMinor: dealType === "BUY_SELL" ? artistFeeMinor : null,
     commissionPct,
     vatPct,
+    bookingFeeMinor,
     depositMinor,
     depositDueDate: depositDue ? zonedToUtc(depositDue, "23:59", timezone) : null,
     dealNotes: str(form, "dealNotes"),

@@ -87,7 +87,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         <Stat
           label="Customer pays"
           value={t.total ? m(t.total) : "–"}
-          hint={t.vat ? `${m(t.sale)} + VAT ${m(t.vat)}` : `${t.acts} act${t.acts === 1 ? "" : "s"}`}
+          hint={[t.fees ? `incl. ${m(t.fees)} booking fee` : "", t.vat ? `VAT ${m(t.vat)}` : "", `${t.acts} act${t.acts === 1 ? "" : "s"}`]
+            .filter(Boolean)
+            .join(" · ")}
         />
         <Stat label="Received" value={m(t.received)} hint={t.deposits ? `Deposits ${m(t.deposits)}` : "No payments yet"} />
         <Stat
@@ -96,7 +98,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           value={m(t.outstanding)}
           hint={t.total && !t.outstanding ? "Paid in full" : undefined}
         />
-        <Stat tone="dark" label="Acts cost · your margin" value={m(t.margin)} hint={`Acts are paid ${m(t.cost)}`} />
+        <Stat tone="dark" label="We make" value={m(t.margin)} hint={`Acts are paid ${m(t.cost)}${t.fees ? ` · booking fee ${m(t.fees)}` : ""}`} />
       </div>
 
       <div className="grid gap-8 xl:grid-cols-[1fr_380px]">

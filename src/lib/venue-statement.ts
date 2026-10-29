@@ -36,7 +36,16 @@ export async function venueStatement(agencyId: string, venueId: string, from: st
   const rows = gigs.map((b) => {
     const d = dealBreakdown(b);
     const p = paymentTotals(b.payments);
-    return { b, sale: d.grossMinor, vat: d.vatMinor, due: d.totalDueMinor, cost: d.artistMinor, received: p.receivedMinor, paidOut: p.paidOutMinor };
+    // The sale here includes any booking fee, so the venue sees one line per gig.
+    return {
+      b,
+      sale: d.grossMinor + d.bookingFeeMinor,
+      vat: d.vatMinor,
+      due: d.totalDueMinor,
+      cost: d.artistMinor,
+      received: p.receivedMinor,
+      paidOut: p.paidOutMinor,
+    };
   });
   const sum = (k: "sale" | "vat" | "due" | "cost" | "received" | "paidOut") => rows.reduce((t, r) => t + r[k], 0);
   const totals = {

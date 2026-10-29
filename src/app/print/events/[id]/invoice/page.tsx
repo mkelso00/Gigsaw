@@ -72,9 +72,15 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
               <td className="py-3 text-right">{money(dealBreakdown(b).grossMinor)}</td>
             </tr>
           ))}
+          {t.fees > 0 && (
+            <tr className="border-b border-slate-100">
+              <td className="py-3">Booking fee</td>
+              <td className="py-3 text-right">{money(t.fees)}</td>
+            </tr>
+          )}
           <tr>
             <td className="py-2 text-right text-slate-500">Subtotal</td>
-            <td className="py-2 text-right">{money(t.sale)}</td>
+            <td className="py-2 text-right">{money(t.sale + t.fees)}</td>
           </tr>
           {t.vat > 0 && (
             <tr>

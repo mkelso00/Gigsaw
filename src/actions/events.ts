@@ -12,7 +12,7 @@ import { defaultTasks, PLAN_FIELDS } from "@/lib/event-plan";
 import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
-import { dealBreakdown, paymentTotals, toMinor } from "@/lib/money";
+import { dealBreakdown, defaultBookingFee, paymentTotals, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { isDateKey } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
@@ -163,6 +163,11 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       );
       if (warnings.length) return { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Add anyway" } };
     }
+    // The booking fee is charged once per event, so it goes on the first gig only.
+    const eventHasFee = !!(await prisma.booking.findFirst({
+      where: { eventId, status: { not: "CANCELLED" }, bookingFeeMinor: { gt: 0 } },
+      select: { id: true },
+    }));
     const b = await createBookingWithReference(user.agencyId, {
       ...schedule,
       eventId,
@@ -180,6 +185,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       vatPct: Number(str(form, "vatPct")) || 0,
       ...(cost != null ? { dealType: "BUY_SELL", artistFeeMinor: cost } : {}),
       commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
+      bookingFeeMinor: defaultBookingFee(settings, { eventType: e.type, eventHasFee }),
       dayContact: e.dayContact,
       demo: e.demo || !!artist?.demo,
       notifyClientOnArrival: false,

@@ -14,8 +14,8 @@ export const metadata: Metadata = { title: "Reports" };
 // What the acts earned, what venues and clients paid, and what we made, for a week, month,
 // year or any dates. Only gigs that are on (confirmed or settled) count.
 
-type Totals = { gigs: number; sale: number; cost: number; profit: number; received: number; owed: number; paidOut: number; toPay: number };
-const empty = (): Totals => ({ gigs: 0, sale: 0, cost: 0, profit: 0, received: 0, owed: 0, paidOut: 0, toPay: 0 });
+type Totals = { gigs: number; sale: number; fees: number; cost: number; profit: number; received: number; owed: number; paidOut: number; toPay: number };
+const empty = (): Totals => ({ gigs: 0, sale: 0, fees: 0, cost: 0, profit: 0, received: 0, owed: 0, paidOut: 0, toPay: 0 });
 
 const valid = (s?: string) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined);
 const PERIOD_LABELS: Record<Period | "custom", string> = { week: "Week", month: "Month", year: "Year", custom: "Pick dates" };
@@ -71,7 +71,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const add = (t: Totals, d: ReturnType<typeof dealBreakdown>, p: ReturnType<typeof paymentTotals>) => {
     t.gigs++;
-    t.sale += d.grossMinor;
+    // What the venue or client paid includes any booking fee; it all counts towards what we made.
+    t.sale += d.grossMinor + d.bookingFeeMinor;
+    t.fees += d.bookingFeeMinor;
     t.cost += d.artistMinor;
     t.profit += d.agencyMinor;
     t.received += p.receivedMinor;
@@ -190,7 +192,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Stat
           label="We made"
           value={m(total.profit)}
-          hint={total.sale ? `${Math.round((total.profit / total.sale) * 100)}% of what was paid` : undefined}
+          hint={
+            total.sale
+              ? `${Math.round((total.profit / total.sale) * 100)}% of what was paid${total.fees ? ` · ${m(total.fees)} in booking fees` : ""}`
+              : undefined
+          }
           tone="dark"
         />
       </div>

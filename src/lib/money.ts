@@ -35,15 +35,20 @@ export type DealInput = {
   artistFeeMinor: number | null;
   commissionPct: number;
   vatPct: number;
+  /** Charged to the venue or client on top of the performance fee, kept in full by the agency. */
+  bookingFeeMinor?: number;
 };
 
 export type DealBreakdown = {
-  /** What the promoter pays, before VAT. */
+  /** The performance fee the venue or client pays (the sale), before VAT. */
   grossMinor: number;
+  /** The booking fee on top, all the agency's. */
+  bookingFeeMinor: number;
+  /** VAT on the performance fee and the booking fee. */
   vatMinor: number;
-  /** What the promoter pays including VAT. */
+  /** What the venue or client pays in all: performance fee, booking fee and VAT. */
   totalDueMinor: number;
-  /** What the agency keeps (commission, or margin on buy/sell deals). */
+  /** What the agency keeps (commission, or margin on sale and cost deals), plus the booking fee. */
   agencyMinor: number;
   /** What the artist is owed. */
   artistMinor: number;
@@ -52,7 +57,8 @@ export type DealBreakdown = {
 /** Work out who gets what from a booking's fee. */
 export function dealBreakdown(d: DealInput): DealBreakdown {
   const gross = d.feeMinor;
-  const vat = Math.round((gross * d.vatPct) / 100);
+  const fee = d.bookingFeeMinor ?? 0;
+  const vat = Math.round(((gross + fee) * d.vatPct) / 100);
   let agency: number;
   let artist: number;
   switch (d.dealType) {
@@ -72,7 +78,7 @@ export function dealBreakdown(d: DealInput): DealBreakdown {
       artist = gross - agency;
     }
   }
-  return { grossMinor: gross, vatMinor: vat, totalDueMinor: gross + vat, agencyMinor: agency, artistMinor: artist };
+  return { grossMinor: gross, bookingFeeMinor: fee, vatMinor: vat, totalDueMinor: gross + fee + vat, agencyMinor: agency + fee, artistMinor: artist };
 }
 
 export type PaymentLike = { direction: string; kind: string; amountMinor: number };
@@ -90,4 +96,14 @@ export function paymentTotals(payments: PaymentLike[]) {
     }
   }
   return { receivedMinor, paidOutMinor, depositReceivedMinor };
+}
+
+/**
+ * The agency's default booking fee for a new booking, if it gets one. Weddings and private events
+ * are charged once per event, so a gig joining an event that already carries the fee gets none.
+ */
+export function defaultBookingFee(settings: { bookingFeeMinor: number; bookingFeeFor: string }, gig: { eventType: string; eventHasFee?: boolean }): number {
+  if (settings.bookingFeeMinor <= 0 || gig.eventHasFee) return 0;
+  if (settings.bookingFeeFor === "ALL") return settings.bookingFeeMinor;
+  return gig.eventType !== "GIG" ? settings.bookingFeeMinor : 0;
 }

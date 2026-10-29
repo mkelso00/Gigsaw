@@ -8,7 +8,7 @@ import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, type BookingS
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { findClashes } from "@/lib/clash-check";
-import { minorToInput, toMinor } from "@/lib/money";
+import { defaultBookingFee, minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { sendOffers } from "@/lib/offers";
 import { dateInWeek, isDateKey, weekdayOf } from "@/lib/rota";
@@ -257,6 +257,7 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
     // Sale and cost when the slot has a cost; otherwise commission.
     ...(slot.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: slot.costMinor } : {}),
     commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
+    bookingFeeMinor: defaultBookingFee(settings, { eventType: slot.eventType }),
   });
   await logActivity(user, "BOOKING", booking.id, "booked from venue schedule", `${slot.venue.name} ${date}`);
   return booking.id;
@@ -436,6 +437,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         feeMinor: fields.feeMinor,
         ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
         commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
+        bookingFeeMinor: defaultBookingFee(settings, { eventType: fields.eventType }),
       });
       await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
       id = booking.id;

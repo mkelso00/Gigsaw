@@ -19,7 +19,7 @@ import { monthLabel, unresolvedPastWhere } from "@/lib/billing";
 import { CURRENCIES, TIMEZONES } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { emailConfigured, smsConfigured } from "@/lib/messaging";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, minorToInput } from "@/lib/money";
 import { WEEKDAYS } from "@/lib/rota";
 import { usageForMonth } from "@/lib/usage";
 
@@ -98,6 +98,7 @@ export default async function SettingsPage() {
         ["plan", "Your plan"],
         ["you", "Your details"],
         ["agency", "Agency"],
+        ["booking-fee", "Booking fee"],
         ["arrivals", "Arrivals and alerts"],
         ["reminders", "Gig reminders"],
         ["weddings", "Weddings and events"],
@@ -212,6 +213,30 @@ export default async function SettingsPage() {
                   </Field>
                   <Field label="Default commission %">
                     <input name="defaultCommission" inputMode="decimal" defaultValue={settings.defaultCommission} className="input" />
+                  </Field>
+                </div>
+              </Section>
+
+              <Section
+                id="booking-fee"
+                title="Booking fee"
+                description="A fee on top of the act's fee, paid by the venue or client and kept in full by us. It fills in on new bookings and can be changed or cleared on any booking. Acts never see it."
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Default booking fee" hint="Leave blank or 0 for no booking fee">
+                    <input
+                      name="bookingFee"
+                      inputMode="decimal"
+                      defaultValue={settings.bookingFeeMinor ? minorToInput(settings.bookingFeeMinor, settings.defaultCurrency) : ""}
+                      placeholder="0.00"
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="Add it to">
+                    <select name="bookingFeeFor" defaultValue={settings.bookingFeeFor} className="input">
+                      <option value="EVENTS">Weddings and private events (once per event)</option>
+                      <option value="ALL">Every booking, bar gigs too</option>
+                    </select>
                   </Field>
                 </div>
               </Section>

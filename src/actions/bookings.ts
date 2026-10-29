@@ -268,6 +268,7 @@ export async function copyBooking(bookingId: string, dates: string[], status: st
       artistFeeMinor: b.artistFeeMinor,
       commissionPct: b.commissionPct,
       vatPct: b.vatPct,
+      bookingFeeMinor: b.bookingFeeMinor,
       depositMinor: b.depositMinor,
       dealNotes: b.dealNotes,
       radiusKm: b.radiusKm,

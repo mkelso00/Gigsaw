@@ -83,6 +83,10 @@ model Settings {
   // Tell the customer when an act is confirmed: EVENTS (weddings and private events) | ALL | OFF
   customerConfirmations String  @default("EVENTS")
   reviewLink            String  @default("")
+  // A booking fee added to what the client pays, kept in full by the agency (no act's share).
+  // 0 means no default fee. Added to: EVENTS (weddings and private events, once per event) | ALL
+  bookingFeeMinor       Int     @default(0)
+  bookingFeeFor         String  @default("EVENTS")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
   weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
@@ -254,14 +258,15 @@ model Booking {
   setEnd       DateTime?
 
   // Money is stored in minor units (pence / cents) to avoid rounding errors.
-  currency       String    @default("GBP")
-  feeMinor       Int       @default(0)
-  artistFeeMinor Int? // buy/sell deals: what the agency pays the artist
-  commissionPct  Float     @default(15)
-  vatPct         Float     @default(0)
-  depositMinor   Int       @default(0)
-  depositDueDate DateTime?
-  dealNotes      String    @default("")
+  currency        String    @default("GBP")
+  feeMinor        Int       @default(0)
+  artistFeeMinor  Int? // buy/sell deals: what the agency pays the artist
+  commissionPct   Float     @default(15)
+  vatPct          Float     @default(0)
+  bookingFeeMinor Int       @default(0) // charged to the venue or client on top, all ours; acts never see it
+  depositMinor    Int       @default(0)
+  depositDueDate  DateTime?
+  dealNotes       String    @default("")
 
   // Radius clause: no other show for this artist within radiusKm for radiusDays either side.
   radiusKm   Int?

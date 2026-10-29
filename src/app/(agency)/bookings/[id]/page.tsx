@@ -431,6 +431,12 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                   </span>
                 )}
               </Row>
+              {deal.bookingFeeMinor > 0 && (
+                <Row label="Booking fee">
+                  {money(deal.bookingFeeMinor)}
+                  <span className="block text-xs text-slate-500">on top, all ours</span>
+                </Row>
+              )}
               <Row label="Act is paid">
                 {booking.dealType === "BUY_SELL" && booking.artistFeeMinor === null ? <span className="text-amber-500">Not set</span> : money(deal.artistMinor)}
               </Row>

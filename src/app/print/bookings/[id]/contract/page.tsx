@@ -41,6 +41,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
         rows={[
           ["Deal", b.dealType === "BUY_SELL" ? "" : (DEAL_TYPE_LABELS[b.dealType as DealType] ?? b.dealType)],
           ["Fee", money(d.grossMinor)],
+          ["Booking fee", d.bookingFeeMinor ? money(d.bookingFeeMinor) : ""],
           ["VAT", d.vatMinor ? `${money(d.vatMinor)} (${b.vatPct}%)` : ""],
           ["Total payable", money(d.totalDueMinor)],
           ["Deposit", b.depositMinor ? `${money(b.depositMinor)}${b.depositDueDate ? `, due by ${formatDate(b.depositDueDate, tz)}` : ""}` : ""],
