@@ -3,7 +3,7 @@
 
 import { distanceMetres } from "./arrival";
 import { LIVE_STATUSES, type BookingStatus } from "./constants";
-import { localDateKey } from "./time";
+import { assessPair, describeAssessment, type ClashAssessment } from "./clash";
 
 export type ChecklistLevel = "error" | "warning" | "ok";
 export type ChecklistItem = { level: ChecklistLevel; label: string; detail?: string };
@@ -51,32 +51,21 @@ function isLive(status: string) {
   return LIVE_STATUSES.includes(status as BookingStatus);
 }
 
-/** From call time to end of set (or three hours after going on stage if no end time). */
-function busyWindow(x: { arriveBy: Date; setStart: Date; setEnd: Date | null }) {
-  const end = x.setEnd && x.setEnd > x.setStart ? x.setEnd : new Date(x.setStart.getTime() + 3 * 3_600_000);
-  return [x.arriveBy.getTime(), end.getTime()] as const;
+export type ClashFinding = { other: OtherBooking; assessment: ClashAssessment };
+
+/** Every other live gig for the same artist within a day, with whether there's time to travel between them. */
+export function assessOtherGigs(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes: number): ClashFinding[] {
+  const day = 86_400_000;
+  return others
+    .filter((o) => o.id !== b.id && o.artistId === b.artistId && isLive(o.status) && Math.abs(o.arriveBy.getTime() - b.arriveBy.getTime()) < day)
+    .map((o) => ({ other: o, assessment: assessPair(b, o, changeoverMinutes) }));
 }
 
-/**
- * Other bookings for the same artist whose times overlap this one. Two gigs on the same
- * evening are fine (e.g. 16:00-19:00 and 20:00-22:00); overlapping ones are not.
- */
-export function findDateClashes(b: ChecklistBooking, others: OtherBooking[]): OtherBooking[] {
-  const [start, end] = busyWindow(b);
-  return others.filter((o) => {
-    if (o.id === b.id || o.artistId !== b.artistId || !isLive(o.status)) return false;
-    const [oStart, oEnd] = busyWindow(o);
-    return start < oEnd && oStart < end;
-  });
-}
-
-/** Other gigs for the same artist on the same local day that don't overlap (worth knowing). */
-export function sameDayGigs(b: ChecklistBooking, others: OtherBooking[]): OtherBooking[] {
-  const day = localDateKey(b.arriveBy, b.timezone);
-  const clashing = new Set(findDateClashes(b, others).map((o) => o.id));
-  return others.filter(
-    (o) => o.id !== b.id && o.artistId === b.artistId && isLive(o.status) && !clashing.has(o.id) && localDateKey(o.arriveBy, b.timezone) === day,
-  );
+/** Other gigs for the same artist that overlap this one or leave too little time to travel. */
+export function findDateClashes(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes = 15): OtherBooking[] {
+  return assessOtherGigs(b, others, changeoverMinutes)
+    .filter((f) => f.assessment.level !== "ok")
+    .map((f) => f.other);
 }
 
 /**
@@ -103,24 +92,20 @@ export function buildChecklist(
   others: OtherBooking[],
   depositReceivedMinor: number,
   now: Date,
+  changeoverMinutes = 15,
 ): ChecklistItem[] {
   const items: ChecklistItem[] = [];
   if (b.status === "CANCELLED") return [{ level: "ok", label: "Booking is cancelled" }];
 
-  const clashes = findDateClashes(b, others);
-  items.push(
-    clashes.length
-      ? { level: "error", label: "Double booking", detail: `Times overlap with ${clashes.map((c) => c.reference).join(", ")}` }
-      : { level: "ok", label: "No double booking" },
-  );
-  const sameDay = sameDayGigs(b, others);
-  if (sameDay.length) {
-    items.push({
-      level: "warning",
-      label: "Another gig the same day",
-      detail: `Also playing ${sameDay.map((c) => `${c.reference}${c.venue ? ` (${c.venue.name})` : ""}`).join(", ")}. Check there's time to travel.`,
-    });
-  }
+  const label = (o: OtherBooking) => `${o.reference}${o.venue ? ` at ${o.venue.name}` : ""}`;
+  const findings = assessOtherGigs(b, others, changeoverMinutes);
+  const clashes = findings.filter((f) => f.assessment.level === "clash");
+  const tight = findings.filter((f) => f.assessment.level === "tight");
+  const fine = findings.filter((f) => f.assessment.level === "ok");
+  for (const f of clashes) items.push({ level: "error", label: "Double booking", detail: describeAssessment(f.assessment, label(f.other)) });
+  for (const f of tight) items.push({ level: "error", label: "May not have time to get there", detail: describeAssessment(f.assessment, label(f.other)) });
+  for (const f of fine) items.push({ level: "ok", label: "Another gig the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
+  if (!findings.length) items.push({ level: "ok", label: "No double booking" });
 
   const breaches = findRadiusBreaches(b, others);
   if (breaches.length) {

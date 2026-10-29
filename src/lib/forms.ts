@@ -50,7 +50,16 @@ export function splitTags(raw: string): string[] {
 /** An error whose message is safe to show to the user. */
 export class FormError extends Error {}
 
-export type FormState = { error?: string; ok?: string } | undefined;
+/**
+ * What a form action returns. `confirm` asks the user to check something before saving
+ * (e.g. a possible double booking); submitting again with "Save anyway" sends confirmed=yes.
+ */
+export type FormState = { error?: string; ok?: string; confirm?: { title: string; items: string[]; button?: string } } | undefined;
+
+/** True when the user pressed "Save anyway" on a confirm box. */
+export function confirmed(form: FormData) {
+  return form.get("confirmed") === "yes";
+}
 
 /** Run a form action, turning FormErrors (and only those) into a message for the user. */
 export async function handleForm(fn: () => Promise<FormState | void>): Promise<FormState> {

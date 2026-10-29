@@ -47,11 +47,17 @@ describe("clashes", () => {
   it("spots overlapping bookings for the same artist", () => {
     expect(findDateClashes(booking, [other({})])).toHaveLength(1);
   });
-  it("allows an earlier and a later gig on the same evening", () => {
-    const early = other({ arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
+  it("allows an earlier gig across town when there's time to travel", () => {
+    const early = other({ venue: nearby, arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
     expect(findDateClashes(booking, [early])).toHaveLength(0);
     const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
-    expect(items.find((i) => i.label === "Another gig the same day")?.level).toBe("warning");
+    expect(items.find((i) => i.label === "Another gig the same day, with time to travel")?.level).toBe("ok");
+  });
+  it("flags an earlier gig too far away to get back in time", () => {
+    const early = other({ venue: manchester, arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
+    expect(findDateClashes(booking, [early])).toHaveLength(1);
+    const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
+    expect(items.find((i) => i.label === "May not have time to get there")?.level).toBe("error");
   });
   it("ignores other artists and cancelled bookings", () => {
     expect(findDateClashes(booking, [other({ artistId: "a2" }), other({ status: "CANCELLED" })])).toHaveLength(0);

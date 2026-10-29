@@ -1,6 +1,7 @@
 import "server-only";
 import type { AgencyUser } from "./auth";
-import { logActivity, prisma } from "./db";
+import { findClashes } from "./clash-check";
+import { getSettings, logActivity, prisma } from "./db";
 import { FormError } from "./forms";
 import { toMinor } from "./money";
 import { notifyArtistIfChanged, snapshotOf } from "./notify";
@@ -29,6 +30,8 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
   });
   let updated = 0;
   let notified = 0;
+  const mayClash: string[] = [];
+  const changeover = (await getSettings(user.agencyId)).changeoverMinutes;
   for (const b of bookings) {
     const before = snapshotOf(b);
     const tz = b.timezone;
@@ -64,6 +67,11 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       const changes = await notifyArtistIfChanged(before, b.id);
       if (changes.length) notified++;
     }
+    const warnings = await findClashes(
+      { agencyId: user.agencyId, artistId: b.artistId, venueId: b.venueId, timezone: tz, excludeId: b.id, ...schedule },
+      changeover,
+    );
+    if (warnings.length) mayClash.push(b.reference);
   }
-  return { updated, notified };
+  return { updated, notified, mayClash };
 }

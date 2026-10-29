@@ -16,7 +16,7 @@ const LINKS = [
   { href: "/reports", label: "Reports", icon: "reports" },
 ];
 
-export function NavLinks({ isAdmin, isOwner }: { isAdmin: boolean; isOwner: boolean }) {
+export function NavLinks({ isAdmin, isOwner, badges = {} }: { isAdmin: boolean; isOwner: boolean; badges?: Record<string, number> }) {
   const path = usePathname();
   const links = [
     ...LINKS,
@@ -38,6 +38,11 @@ export function NavLinks({ isAdmin, isOwner }: { isAdmin: boolean; isOwner: bool
             {active && <span className="absolute top-2 bottom-2 left-0 hidden w-[3px] rounded-full bg-volt-400 lg:block" />}
             <Icon name={l.icon} className={`h-[18px] w-[18px] ${active ? "text-volt-400" : "text-ink-500 group-hover:text-ink-300"}`} />
             {l.label}
+            {badges[l.href] ? (
+              <span className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-ink-950" title="Gigs in the next 7 days with no artist">
+                {badges[l.href]}
+              </span>
+            ) : null}
             {"live" in l && l.live && (
               <span className="ml-auto flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-volt-400 uppercase">
                 <span className="relative flex h-1.5 w-1.5">

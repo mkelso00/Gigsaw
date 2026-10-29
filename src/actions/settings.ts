@@ -18,6 +18,8 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     if (commission < 0 || commission > 100) throw new FormError("Commission must be between 0 and 100%");
     const grace = int(form, "lateGraceMinutes") ?? 5;
     if (grace < 0 || grace > 240) throw new FormError("Grace period must be between 0 and 240 minutes");
+    const changeover = int(form, "changeoverMinutes") ?? 15;
+    if (changeover < 0 || changeover > 240) throw new FormError("Changeover time must be between 0 and 240 minutes");
     const geofence = int(form, "geofenceMetres") ?? 500;
     if (geofence < 25 || geofence > 50_000) throw new FormError("Venue radius must be between 25 m and 50 km");
     const agencyName = required(form, "agencyName", "Agency name");
@@ -33,6 +35,7 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
         defaultCurrency: oneOf(str(form, "defaultCurrency"), CURRENCIES, "GBP"),
         defaultCommission: commission,
         lateGraceMinutes: grace,
+        changeoverMinutes: changeover,
         geofenceMetres: geofence,
         overdueAlerts: str(form, "overdueAlerts") === "on",
         alertEmail: str(form, "alertEmail").toLowerCase(),

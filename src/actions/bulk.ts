@@ -20,7 +20,9 @@ export async function bulkUpdateBookings(_: FormState, form: FormData): Promise<
     });
     revalidatePath("/", "layout");
     return {
-      ok: `Updated ${res.updated} gig${res.updated === 1 ? "" : "s"}.${form.get("notifyArtists") ? ` ${res.notified} artist message${res.notified === 1 ? "" : "s"} sent about the changes.` : ""}`,
+      ok: `Updated ${res.updated} gig${res.updated === 1 ? "" : "s"}.${form.get("notifyArtists") ? ` ${res.notified} artist message${res.notified === 1 ? "" : "s"} sent about the changes.` : ""}${
+        res.mayClash.length ? ` Check ${res.mayClash.join(", ")}: the new times may clash with the artist's other gigs.` : ""
+      }`,
     };
   });
 }

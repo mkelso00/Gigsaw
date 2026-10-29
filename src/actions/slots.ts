@@ -6,7 +6,8 @@ import { createBookingWithReference } from "@/lib/bookings";
 import { applyBulkChange } from "@/lib/bulk";
 import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { FormError, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
+import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
+import { findClashes } from "@/lib/clash-check";
 import { minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { dateInWeek, isDateKey } from "@/lib/rota";
@@ -132,6 +133,19 @@ export async function deleteSlot(slotId: string) {
   revalidatePath("/rota");
 }
 
+function slotSchedule(slot: Awaited<ReturnType<typeof ownSlot>>, date: string) {
+  return buildSchedule(date, { arrive: slot.arriveTime, setStart: slot.startTime, setEnd: slot.endTime }, slot.venue.timezone);
+}
+
+/** Possible double bookings if this artist played this slot on this date. */
+async function slotClashes(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string) {
+  const settings = await getSettings(user.agencyId);
+  return findClashes(
+    { agencyId: user.agencyId, artistId, venueId: slot.venueId, timezone: slot.venue.timezone, ...slotSchedule(slot, date) },
+    settings.changeoverMinutes,
+  );
+}
+
 /** Create the booking for one slot on one date. Returns null if it's already booked. */
 async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlot>>, date: string, artistId: string) {
   const tz = slot.venue.timezone;
@@ -145,7 +159,7 @@ async function bookSlot(user: AgencyUser, slot: Awaited<ReturnType<typeof ownSlo
   const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId } });
   if (!artist) throw new FormError("Choose an artist");
   const settings = await getSettings(user.agencyId);
-  const schedule = buildSchedule(date, { arrive: slot.arriveTime, setStart: slot.startTime, setEnd: slot.endTime }, tz);
+  const schedule = slotSchedule(slot, date);
   const booking = await createBookingWithReference(user.agencyId, {
     ...schedule,
     artistId: artist.id,
@@ -176,6 +190,12 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
     const slot = await ownSlot(user, slotId);
     const artistId = optStr(form, "artistId");
     if (!artistId) throw new FormError("Choose an artist");
+    if (!confirmed(form)) {
+      const warnings = await slotClashes(user, slot, date, artistId);
+      if (warnings.length) {
+        return { confirm: { title: "Hold on: this artist may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } };
+      }
+    }
     const id = await bookSlot(user, slot, date, artistId);
     if (!id) throw new FormError("This slot is already booked for that date");
     if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
@@ -197,11 +217,18 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
     });
     const today = localDateKey(new Date(), (await getSettings(user.agencyId)).defaultTimezone);
     const created: string[] = [];
+    const skipped: string[] = [];
     for (let w = 0; w < weeks; w++) {
       const monday = dateInWeek(weekStart, 1 + w * 7);
       for (const slot of slots) {
         const date = dateInWeek(monday, slot.weekday);
         if (date < today) continue;
+        // Never quietly double-book a regular: leave the slot empty for a person to decide.
+        const warnings = await slotClashes(user, slot, date, slot.artistId!);
+        if (warnings.length) {
+          skipped.push(`${slot.venue.name} ${date} ${slot.startTime}`);
+          continue;
+        }
         const id = await bookSlot(user, slot, date, slot.artistId!);
         if (id) created.push(id);
       }
@@ -210,7 +237,11 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
     revalidatePath("/", "layout");
     if (!slots.length) return { ok: "No slots have a regular artist yet. Set one on each venue's schedule." };
     return {
-      ok: `Booked ${created.length} gig${created.length === 1 ? "" : "s"} over ${weeks} week${weeks === 1 ? "" : "s"}.${told ? ` ${told} artist${told === 1 ? "" : "s"} sent a list of their new gigs.` : ""} Slots already booked were left alone.`,
+      ok: `Booked ${created.length} gig${created.length === 1 ? "" : "s"} over ${weeks} week${weeks === 1 ? "" : "s"}.${told ? ` ${told} artist${told === 1 ? "" : "s"} sent a list of their new gigs.` : ""} Slots already booked were left alone.${
+        skipped.length
+          ? ` ${skipped.length} left empty because the regular artist is busy elsewhere then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}. They're in “Needs an artist”.`
+          : ""
+      }`,
     };
   });
 }

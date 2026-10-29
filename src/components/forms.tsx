@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, startTransition, useActionState, useContext, useEffect, useRef } from "react";
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { FormState } from "@/lib/forms";
 
@@ -42,8 +42,15 @@ export function ActionForm({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const ref = useRef<HTMLFormElement>(null);
+  const [dismissed, setDismissed] = useState<FormState>(undefined);
   useEffect(() => {
     if (state?.ok) ref.current?.reset();
+  }, [state]);
+  const confirm = state?.confirm && dismissed !== state ? state.confirm : null;
+  // On long forms the message sits at the top, far from the button that was pressed: bring it into view.
+  const messageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state?.error || state?.confirm) messageRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [state]);
   return (
     <form
@@ -51,13 +58,40 @@ export function ActionForm({
       className={className}
       onSubmit={(e) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
+        // Include the button that was pressed, so "Save anyway" can send confirmed=yes.
+        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
         startTransition(() => formAction(data));
       }}
     >
+      <div ref={messageRef} className="scroll-mt-24" />
       {state?.error && (
         <div role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {state.error}
+        </div>
+      )}
+      {confirm && (
+        <div role="alert" className="mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 p-4 text-sm text-amber-950">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-400 font-bold text-ink-950">!</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{confirm.title}</div>
+              <ul className="mt-2 space-y-2">
+                {confirm.items.map((item) => (
+                  <li key={item} className="leading-relaxed">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="submit" name="confirmed" value="yes" className="btn btn-sm border-amber-500 bg-amber-400 text-ink-950 hover:bg-amber-300" disabled={pending}>
+                  {confirm.button ?? "Save anyway"}
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => setDismissed(state)}>
+                  Go back
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       {state?.ok && (

@@ -6,9 +6,10 @@ import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, snapshotOf } from "@/lib/notify";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, PAYMENT_KINDS } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
+import { findClashes } from "@/lib/clash-check";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { FormError, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
+import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { formatMoney, toMinor } from "@/lib/money";
 import { localDateKey, zonedToUtc } from "@/lib/time";
 
@@ -19,16 +20,33 @@ async function ownBooking(user: AgencyUser, bookingId: string) {
   return booking;
 }
 
+/** Ask the user to check possible double bookings before saving, unless they already said "Save anyway". */
+async function clashCheck(user: AgencyUser, form: FormData, data: { artistId: string; venueId: string | null; arriveBy: Date; setStart: Date; setEnd: Date | null; timezone: string; status: string }, changeoverMinutes: number, excludeId?: string): Promise<FormState | null> {
+  if (confirmed(form) || !LIVE_STATUSES.includes(data.status as BookingStatus)) return null;
+  const warnings = await findClashes({ ...data, agencyId: user.agencyId, excludeId }, changeoverMinutes);
+  if (!warnings.length) return null;
+  return {
+    confirm: {
+      title: warnings.some((w) => w.level === "clash") ? "Hold on: this artist is already booked at that time" : "Hold on: check there's time to get between gigs",
+      items: warnings.map((w) => w.text),
+      button: "Save anyway",
+    },
+  };
+}
+
 export async function createBooking(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   let id = "";
   const result = await handleForm(async () => {
-    const data = await parseBookingForm(form, await getSettings(user.agencyId), user.agencyId);
+    const settings = await getSettings(user.agencyId);
+    const data = await parseBookingForm(form, settings, user.agencyId);
+    const hold = await clashCheck(user, form, data, settings.changeoverMinutes);
+    if (hold) return hold;
     const booking = await createBookingWithReference(user.agencyId, { ...data, createdById: user.id, agentId: data.agentId ?? user.id });
     await logActivity(user, "BOOKING", booking.id, "created", booking.reference);
     id = booking.id;
   });
-  if (result?.error) return result;
+  if (result?.error || result?.confirm) return result;
   revalidatePath("/", "layout");
   redirect(`/bookings/${id}`);
 }
@@ -37,7 +55,10 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
   const user = await requireStaff();
   const result = await handleForm(async () => {
     const before = snapshotOf(await ownBooking(user, bookingId));
-    const data = await parseBookingForm(form, await getSettings(user.agencyId), user.agencyId);
+    const settings = await getSettings(user.agencyId);
+    const data = await parseBookingForm(form, settings, user.agencyId);
+    const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
+    if (hold) return hold;
     await prisma.booking.update({ where: { id: bookingId }, data });
     await logActivity(user, "BOOKING", bookingId, "updated");
     if (str(form, "notifyArtist") === "on") {
@@ -45,7 +66,7 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
       if (changes.length) await logActivity(user, "BOOKING", bookingId, "artist told about changes", changes.map((c) => c[0]).join(", "));
     }
   });
-  if (result?.error) return result;
+  if (result?.error || result?.confirm) return result;
   revalidatePath("/", "layout");
   redirect(`/bookings/${bookingId}`);
 }

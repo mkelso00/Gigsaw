@@ -87,7 +87,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
 
   const deal = dealBreakdown(booking);
   const totals = paymentTotals(booking.payments);
-  const checklist = buildChecklist(booking, others, totals.depositReceivedMinor, now);
+  const checklist = buildChecklist(booking, others, totals.depositReceivedMinor, now, settings.changeoverMinutes);
   const arrival = arrivalFor(booking, settings, now);
   const money = (m: number) => formatMoney(m, booking.currency);
   const zone = zoneLabel(booking.arriveBy, tz);

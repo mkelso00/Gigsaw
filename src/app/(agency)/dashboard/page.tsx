@@ -8,7 +8,8 @@ import { LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { unresolvedPastWhere } from "@/lib/billing";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
-import { formatDate, formatDateTime, localTime } from "@/lib/time";
+import { addDaysToKey, formatDate, formatDateTime, localDateKey, localTime } from "@/lib/time";
+import { unfilledSlots } from "@/lib/unfilled";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -60,6 +61,8 @@ export default async function DashboardPage() {
     }
   }
 
+  const unfilled = await unfilledSlots(user.agencyId, settings.defaultTimezone, 14);
+  const unfilledSoon = unfilled.filter((u) => u.date <= addDaysToKey(localDateKey(now, settings.defaultTimezone), 6)).length;
   const todayRows = today.map((b) => ({ b, a: arrivalFor(b, settings, now) }));
   const overdue = todayRows.filter((r) => r.a.state === "OVERDUE").length;
 
@@ -81,6 +84,20 @@ export default async function DashboardPage() {
           </Link>
         }
       />
+
+      {unfilled.length > 0 && (
+        <Link
+          href="/rota#needs-artist"
+          className={`mb-4 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm hover:brightness-95 ${
+            unfilledSoon ? "border-rose-300 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+        >
+          <span className={`badge ${unfilledSoon ? "bg-rose-600 text-white" : "bg-amber-400 text-ink-950"}`}>{unfilled.length}</span>
+          gig{unfilled.length === 1 ? "" : "s"} in the next 14 days still need{unfilled.length === 1 ? "s" : ""} an artist
+          {unfilledSoon ? `, ${unfilledSoon} of them in the next 7 days` : ""}.
+          <span className="ml-auto font-medium">Fill them →</span>
+        </Link>
+      )}
 
       {unresolved > 0 && (
         <Link

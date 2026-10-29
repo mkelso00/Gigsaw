@@ -151,6 +151,13 @@ export default async function SettingsPage() {
               <Field label="Venue radius (metres)" hint="A check-in within this distance of the venue's map pin counts as verified">
                 <input name="geofenceMetres" inputMode="numeric" defaultValue={settings.geofenceMetres} className="input" />
               </Field>
+              <Field
+                label="Changeover time between gigs (minutes)"
+                hint="Time to pack down and get going, added to the travel estimate when checking an artist can make two gigs"
+              >
+                <input name="changeoverMinutes" inputMode="numeric" defaultValue={settings.changeoverMinutes} className="input" />
+              </Field>
+              <div />
               <Toggle
                 name="overdueAlerts"
                 defaultChecked={settings.overdueAlerts}

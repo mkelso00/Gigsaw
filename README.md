@@ -16,7 +16,8 @@ Most agency work is weekly slots at the same venues, so Gigsaw is built around t
 - **Phone calendars**: artists tap once in their app to add their gigs to Apple, Google or Outlook calendar; it updates by itself.
 - **Venue line-up links**: each venue can have a private link (`/v/…`) showing who's playing and when, slots still to be confirmed, and arrivals on the night, plus a calendar feed. It never shows fees, deals, contacts or other venues. Make, replace or turn off the link on the venue's page.
 - **Branded emails** in the agency's name; replies go to the agent or agency, not a no-reply address.
-- **Double-booking check** looks at overlapping times, so an early and a late gig on the same evening are fine.
+- **"Hold on" before double-booking**: saving a booking, filling a rota slot or changing times checks the artist's other gigs. If times overlap, or there isn't enough time to pack down and travel between venues (estimated from the venues' map pins plus a changeover time set in Settings), a clear warning explains why, with **Save anyway** or **Go back**. Gigs with plenty of time between them aren't flagged. "Book regulars" never double-books: it leaves the slot empty and says why.
+- **Gigs without an artist are hard to miss**: a count on Rota in the menu (next 7 days), a dashboard banner (next 14 days), and a "Needs an artist" list on the Rota, soonest first, where each can be filled in one step.
 
 ## Owner area and agencies
 

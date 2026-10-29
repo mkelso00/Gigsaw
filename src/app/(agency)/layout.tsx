@@ -7,10 +7,12 @@ import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
+import { unfilledSlots } from "@/lib/unfilled";
 
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
   const user = await requireStaff();
   const settings = await getSettings(user.agencyId);
+  const unfilledThisWeek = (await unfilledSlots(user.agencyId, settings.defaultTimezone, 7)).length;
   const initials = user.name
     .split(" ")
     .map((w) => w[0])
@@ -28,7 +30,7 @@ export default async function AgencyLayout({ children }: { children: React.React
             <button className="text-xs text-ink-400 hover:text-white">Sign out</button>
           </form>
         </div>
-        <NavLinks isAdmin={user.role === "ADMIN"} isOwner={user.isOwner} />
+        <NavLinks isAdmin={user.role === "ADMIN"} isOwner={user.isOwner} badges={{ "/rota": unfilledThisWeek }} />
         <div className="mt-auto hidden border-t border-white/[0.06] p-4 lg:block">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink-800 text-xs font-semibold text-volt-300">{initials}</span>

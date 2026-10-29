@@ -66,6 +66,8 @@ model Settings {
   defaultCommission     Float   @default(15)
   // Minutes after the call time before an arrival counts as late.
   lateGraceMinutes      Int     @default(5)
+  // Minutes an artist needs to pack down and get going between two gigs, on top of travel.
+  changeoverMinutes     Int     @default(15)
   // How close (in metres) a check-in must be to the venue to count as "on site".
   geofenceMetres        Int     @default(500)
   // Arrival alerts. The booking's agent is always alerted; these add an on-call contact.

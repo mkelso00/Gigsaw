@@ -9,6 +9,7 @@ import { eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { WEEKDAYS, dateInWeek, isDateKey, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
+import { unfilledSlots } from "@/lib/unfilled";
 
 export const metadata: Metadata = { title: "Rota" };
 export const dynamic = "force-dynamic";
@@ -25,13 +26,14 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
   const weekStart = weekStartOf(isDateKey(sp.week) ? sp.week : today);
   const weekEnd = addDaysToKey(weekStart, 7);
 
-  const [slots, artists] = await Promise.all([
+  const [slots, artists, needs] = await Promise.all([
     prisma.venueSlot.findMany({
       where: { agencyId: user.agencyId, active: true },
       include: { venue: true, artist: { select: { id: true, name: true, colour: true } } },
       orderBy: [{ startTime: "asc" }],
     }),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    unfilledSlots(user.agencyId, tz, 28),
   ]);
   const bookings = slots.length
     ? await prisma.booking.findMany({
@@ -107,6 +109,52 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
               </div>
             </ActionForm>
           </div>
+
+          {needs.length > 0 && (
+            <section id="needs-artist" className="mb-6 scroll-mt-6 overflow-hidden rounded-[var(--radius-card)] border-2 border-amber-300 bg-white">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 bg-amber-50 px-5 py-3">
+                <h2 className="section-title">
+                  Needs an artist <span className="font-normal text-ink-500">· {needs.length} in the next 4 weeks</span>
+                </h2>
+                <span className="text-xs text-ink-500">Soonest first. Picking an artist books them and tells them.</span>
+              </div>
+              <ul className="divide-y divide-ink-100">
+                {needs.slice(0, 40).map(({ date, slot }) => (
+                  <li key={`${slot.id}-${date}`} className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-3 text-sm">
+                    <div className={`w-32 shrink-0 font-medium ${date <= addDaysToKey(today, 2) ? "text-rose-700" : ""}`}>
+                      {date === today ? "Today" : date === addDaysToKey(today, 1) ? "Tomorrow" : dayLabel(date)}
+                    </div>
+                    <div className="w-28 shrink-0 tabular-nums">
+                      {slot.startTime}–{slot.endTime}
+                    </div>
+                    <div className="flex min-w-48 flex-1 items-center gap-2">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: venueColour(slot.venue) }} />
+                      <span className="font-medium">{slot.venue.name}</span>
+                      <span className="text-ink-500">
+                        {slot.venue.city ? `${slot.venue.city} · ` : ""}
+                        {slot.label || "Live music"}
+                      </span>
+                    </div>
+                    <ActionForm action={assignSlot.bind(null, slot.id, date)} className="flex flex-wrap items-start gap-2">
+                      <input type="hidden" name="notify" value="on" />
+                      <select name="artistId" defaultValue={slot.artistId ?? ""} className="input h-9 w-48">
+                        <option value="">Choose artist…</option>
+                        {artists.map((ar) => (
+                          <option key={ar.id} value={ar.id}>
+                            {ar.name}
+                          </option>
+                        ))}
+                      </select>
+                      <SubmitButton className="btn btn-primary" pendingText="Booking…">
+                        Book
+                      </SubmitButton>
+                    </ActionForm>
+                  </li>
+                ))}
+              </ul>
+              {needs.length > 40 && <p className="border-t border-ink-100 px-5 py-3 text-xs text-ink-500">And {needs.length - 40} more further ahead.</p>}
+            </section>
+          )}
 
           <div className="card overflow-x-auto">
             <table className="w-full min-w-[1100px] table-fixed border-collapse text-sm">
