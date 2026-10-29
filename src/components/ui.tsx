@@ -91,12 +91,25 @@ export function Field({
   hint,
   children,
   className = "",
+  htmlFor,
 }: {
   label: string;
   hint?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** For a field with its own buttons or list (e.g. a Combobox): the label points at the box instead of wrapping it. */
+  htmlFor?: string;
 }) {
+  if (htmlFor)
+    return (
+      <div className={`block ${className}`}>
+        <label htmlFor={htmlFor} className="label">
+          {label}
+        </label>
+        {children}
+        {hint && <span className="hint block">{hint}</span>}
+      </div>
+    );
   return (
     <label className={`block ${className}`}>
       <span className="label">{label}</span>

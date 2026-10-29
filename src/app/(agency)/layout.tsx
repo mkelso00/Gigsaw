@@ -21,8 +21,8 @@ export default async function AgencyLayout({ children }: { children: React.React
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
     oneOffsNeedingAct(user.agencyId, 7),
     prisma.artist.findMany(pick),
-    prisma.venue.findMany(pick),
-    prisma.contact.findMany(pick),
+    prisma.venue.findMany({ ...pick, select: { id: true, name: true, city: true } }),
+    prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
@@ -103,8 +103,8 @@ export default async function AgencyLayout({ children }: { children: React.React
               <div className="ml-auto">
                 <QuickBooking
                   acts={acts}
-                  venues={venues}
-                  contacts={contacts}
+                  venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city }))}
+                  contacts={contacts.map((c) => ({ id: c.id, name: c.name, detail: c.company }))}
                   currency={settings.defaultCurrency}
                   today={localDateKey(new Date(), settings.defaultTimezone)}
                 />
