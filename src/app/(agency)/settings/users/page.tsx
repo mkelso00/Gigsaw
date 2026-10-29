@@ -62,20 +62,20 @@ export default async function UsersSettings() {
             <Field label="Email">
               <input name="email" type="email" required className="input" />
             </Field>
-            <Field label="Mobile">
+            <Field label="Mobile" hint="Optional. Used for texts about late acts on their gigs.">
               <input name="phone" type="tel" className="input" />
             </Field>
-            <Field label="Password" hint="They can change it in their profile">
-              <input name="password" type="text" minLength={8} required className="input" autoComplete="off" />
+            <Field label="Password" hint="At least 8 characters. Send it to them; they can change it in their profile.">
+              <input name="password" type="text" minLength={8} required className="input" autoComplete="new-password" />
             </Field>
-            <Field label="Role">
+            <Field label="Role" hint="Admins can also change settings and users">
               <select name="role" className="input">
                 <option value="AGENT">Agent</option>
                 <option value="ADMIN">Admin</option>
               </select>
             </Field>
-            <div className="flex items-end">
-              <SubmitButton>Add user</SubmitButton>
+            <div className="flex justify-end border-t border-ink-100 pt-4 sm:col-span-2">
+              <SubmitButton pendingText="Adding…">Add user</SubmitButton>
             </div>
           </ActionForm>
         </SettingsCard>

@@ -40,7 +40,7 @@ export default async function PlanSettings() {
               {seats.extra > 0 && agency.extraUserYearlyMinor > 0 ? ` · ${seats.extra} extra at ${price(agency.extraUserYearlyMinor)} a year each` : ""}
             </div>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className="text-[13px] text-white/60">{monthLabel(month)} so far</div>
             <div className="mt-2 text-3xl font-semibold tracking-tight text-volt-400 tabular-nums">
               {price(gigs * agency.pricePerGigMinor + seats.monthlyMinor)}
@@ -77,26 +77,28 @@ export default async function PlanSettings() {
         </SettingsCard>
       </SettingsSection>
 
-      {statements.length > 0 && (
-        <SettingsSection title="Statements">
-          <SettingsCard>
-            {statements.map((s) => (
+      <SettingsSection title="Statements" description="Each month's bill, made once the month is over.">
+        <SettingsCard>
+          {statements.length ? (
+            statements.map((s) => (
               <SettingsRow
                 key={s.id}
                 icon="billing"
                 title={monthLabel(s.month)}
-                sub={`${s.gigCount} gigs${s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}`}
+                sub={`${s.gigCount} gig${s.gigCount === 1 ? "" : "s"}${s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}`}
                 right={
-                  <span className="text-right text-sm">
+                  <span className="block text-sm sm:text-right">
                     <span className="block font-medium tabular-nums">{formatMoney(s.amountMinor, s.currency)}</span>
                     <span className={s.status === "PAID" ? "text-emerald-600" : "text-amber-600"}>{s.status === "PAID" ? "Paid" : "Due"}</span>
                   </span>
                 }
               />
-            ))}
-          </SettingsCard>
-        </SettingsSection>
-      )}
+            ))
+          ) : (
+            <p className="px-5 py-6 text-sm text-ink-500">No statements yet. Your first one appears here after the end of {monthLabel(month)}.</p>
+          )}
+        </SettingsCard>
+      </SettingsSection>
       <p className="text-sm text-ink-500">
         Questions about your bill?{" "}
         <Link href="mailto:hello@gigsaw.live" className="link">

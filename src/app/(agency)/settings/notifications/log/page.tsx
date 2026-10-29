@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MessageList } from "@/components/message-list";
-import { SettingsCard, SettingsPage } from "@/components/settings-ui";
+import { SettingsPage } from "@/components/settings-ui";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 
@@ -15,17 +14,10 @@ export default async function MessageLog() {
     prisma.message.findMany({ where: { agencyId: user.agencyId }, orderBy: { createdAt: "desc" }, take: 100 }),
   ]);
   return (
-    <SettingsPage
-      title="Message log"
-      actions={
-        <Link href="/settings/notifications" className="btn">
-          Back to notifications
-        </Link>
-      }
-    >
-      <SettingsCard pad>
-        <MessageList messages={messages} timezone={settings.defaultTimezone} />
-      </SettingsCard>
+    <SettingsPage title="Message log" back={{ href: "/settings/notifications", label: "Notifications" }}>
+      <p className="-mt-5 text-sm text-ink-500">The last 100 emails, texts and phone notifications, newest first.</p>
+      {/* The list is its own card. */}
+      <MessageList messages={messages} timezone={settings.defaultTimezone} />
     </SettingsPage>
   );
 }
