@@ -19,6 +19,12 @@ Most agency work is weekly slots at the same venues, so Gigsaw is built around t
 - **Branded emails** in the agency's name; replies go to the agent or agency, not a no-reply address.
 - **"Hold on" before double-booking**: saving a booking, filling a rota slot or changing times checks the artist's other gigs. If times overlap, or there isn't enough time to pack down and travel between venues (estimated from the venues' map pins plus a changeover time set in Settings), a clear warning explains why, with **Save anyway** or **Go back**. Gigs with plenty of time between them aren't flagged. "Book regulars" never double-books: it leaves the slot empty and says why.
 - **Gig reminders**: each act gets a list of the coming week's gigs (default Sunday 18:00) and a "Don't forget your gig this evening" reminder on the day (default 12:00, or 3 hours before an afternoon call time). They go as phone notifications once turned on in the artist app, and by email; acts without phone notifications get a text instead. Set days and times, or turn them off, in **Settings → Gig reminders**. Each reminder only ever goes once.
+- **People, companies and acts** (like Overture's contacts): a person has a company, either a **venue** (so venue managers are simply people at that venue) or another company such as a promoter, plus any number of **acts**, each with a job title. One person can be in several acts (e.g. Wonderlust and their solo act). Typing a new company or act name creates it. Add members from an act's page; add people from a venue's or company's page.
+  - A person can have **their own app login**: they see the gigs for every act they're in, labelled by act, with one calendar link for all of them.
+  - Reminders and gig changes go to each **member** (an act with no members yet uses its own email and phone).
+  - **Double-booking checks follow the people**: a gig for one act is checked against gigs for any act that shares a member.
+- **Acts only see their own pay**: the artist app shows the act's fee after commission, never what the venue or customer pays, the deal or deposits. Contracts, invoices and exports are agency-only.
+- **Calendar**: a gig that runs past midnight stays on the day it starts, with a ☾ moon. Hover a gig for its details: times, total fee, received, outstanding, the act's pay, act, venue, who booked it and the act's contact.
 - **Dark mode** by default for the agency pages; the sun/moon button by your name switches to light (remembered on that device).
 - **Gigs without an artist are hard to miss**: a count on Rota in the menu (next 7 days), a dashboard banner (next 14 days), and a "Needs an artist" list on the Rota, soonest first, where each can be filled in one step.
 
@@ -129,7 +135,8 @@ Demo logins (password `gigsaw123` for all):
 
 - `admin@gigsaw.test`: owner (Owner area) and admin of Northern Lights Agency
 - `agent@gigsaw.test`: agent at Northern Lights
-- `maya@gigsaw.test`: artist app for Northern Lights (open it on a phone-sized window)
+- `maya@gigsaw.test`: artist app for Northern Lights as an act login (open it on a phone-sized window)
+- `tom@gigsaw.test`: artist app as a person who plays in two acts (Maya Okafor Trio and The Velvet Owls)
 - `harbour@gigsaw.test`: admin of Harbour Music, a second agency that can't see Northern Lights' data
 
 `npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.

@@ -34,6 +34,7 @@ model Agency {
   statements BillingStatement[]
   messages   Message[]
   slots      VenueSlot[]
+  people     Person[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -99,6 +100,9 @@ model User {
   agency       Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   artistId     String?  @unique
   artist       Artist?  @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
+  // A person's own login: they see the gigs of every act they're in.
+  personId     String?  @unique
+  person       Person?  @relation("PersonLogin", fields: [personId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   demo         Boolean  @default(false) // sample data, removable from Settings
 
@@ -140,11 +144,11 @@ model Artist {
   createdAt         DateTime @default(now())
   demo              Boolean  @default(false) // sample data, removable from Settings
 
-  login     User?       @relation("ArtistLogin")
-  slots     VenueSlot[]
-  reminders Reminder[]
-  bookings  Booking[]
-  checkIns  CheckIn[]
+  login    User?       @relation("ArtistLogin")
+  slots    VenueSlot[]
+  bookings Booking[]
+  checkIns CheckIn[]
+  members  PersonAct[]
 
   @@index([agencyId])
 }
@@ -167,6 +171,7 @@ model Contact {
   notes    ContactNote[]
   slots    VenueSlot[]
   bookings Booking[]
+  people   Person[]
 
   @@index([agencyId])
 }
@@ -202,6 +207,7 @@ model Venue {
 
   slots    VenueSlot[]
   bookings Booking[]
+  people   Person[]
 
   @@index([agencyId])
 }
@@ -407,14 +413,58 @@ model AppSecret {
   createdAt DateTime @default(now())
 }
 
-// Records each reminder sent so it only goes once, e.g. ("WEEK", artist, "2026-11-02").
+// Records each reminder sent so it only goes once, e.g. ("WEEK", "person:abc", "2026-11-02").
+// The recipient is "person:<id>" for an act member, or "act:<id>" for an act with no members.
 model Reminder {
   id        String   @id @default(cuid())
   kind      String // WEEK | DAY
-  artistId  String
-  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  recipient String
   key       String
   createdAt DateTime @default(now())
 
-  @@unique([kind, artistId, key])
+  @@unique([kind, recipient, key])
+}
+
+// A person: a musician in one or more acts, a venue manager, someone at a promoter, and so on.
+// Their company is either a venue or another company (a contact).
+model Person {
+  id            String      @id @default(cuid())
+  agencyId      String
+  agency        Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  firstName     String
+  surname       String      @default("")
+  alias         String      @default("") // stage or known-as name
+  pronouns      String      @default("")
+  email         String      @default("")
+  phone         String      @default("")
+  social        String      @default("")
+  website       String      @default("")
+  address       String      @default("")
+  notes         String      @default("")
+  venueId       String?
+  venue         Venue?      @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  companyId     String?
+  company       Contact?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobTitle      String      @default("") // their role at the venue or company, e.g. "General manager"
+  calendarToken String      @unique @default(cuid())
+  demo          Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  acts          PersonAct[]
+  login         User?       @relation("PersonLogin")
+
+  @@index([agencyId])
+  @@index([venueId])
+}
+
+// A person's place in an act, e.g. Graham McKee, lead vocals, in Wonderlust.
+model PersonAct {
+  id       String @id @default(cuid())
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  artistId String
+  act      Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  jobTitle String @default("")
+
+  @@unique([personId, artistId])
+  @@index([artistId])
 }

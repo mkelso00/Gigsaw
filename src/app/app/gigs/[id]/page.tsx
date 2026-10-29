@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { actIdsFor } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
 
@@ -17,10 +18,15 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
   const user = await requireUser(["ARTIST"]);
   const { id } = await params;
   const [b, settings] = await Promise.all([
-    prisma.booking.findFirst({ where: { id, agencyId: user.agencyId }, include: { venue: true, promoter: true, agent: true, checkIns: { orderBy: { at: "asc" } } } }),
+    prisma.booking.findFirst({
+      where: { id, agencyId: user.agencyId },
+      include: { venue: true, promoter: true, agent: true, artist: { select: { name: true } }, checkIns: { orderBy: { at: "asc" } } },
+    }),
     getSettings(user.agencyId),
   ]);
-  if (!b || b.artistId !== user.artistId || b.status === "ENQUIRY") notFound();
+  // Only gigs for the act(s) this login belongs to; never enquiries.
+  const actIds = await actIdsFor(user);
+  if (!b || !actIds.includes(b.artistId) || b.status === "ENQUIRY") notFound();
 
   const now = new Date();
   const tz = b.timezone;
@@ -33,6 +39,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
       ? `https://www.google.com/maps/dir/?api=1&destination=${v.latitude},${v.longitude}`
       : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
     : null;
+  // Acts only ever see their own pay (after commission), never what the venue or customer is charged.
   const yourFee = dealBreakdown(b).artistMinor;
 
   const panel = "rounded-2xl border border-white/[0.06] bg-ink-900 p-5";
@@ -63,9 +70,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
             hasDeparted={b.checkIns.some((c) => c.kind === "DEPARTED")}
             windowOpen={now >= w.opensAt && now <= w.closesAt}
             windowMessage={
-              now < w.opensAt
-                ? `Check-in opens ${formatDate(w.opensAt, tz)} at ${localTime(w.opensAt, tz)}.`
-                : "Check-in for this gig has closed."
+              now < w.opensAt ? `Check-in opens ${formatDate(w.opensAt, tz)} at ${localTime(w.opensAt, tz)}.` : "Check-in for this gig has closed."
             }
           />
           {b.checkIns.length > 0 && (
@@ -104,7 +109,12 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           <p>{address}</p>
           {v.notes && <p className="whitespace-pre-line text-ink-400">{v.notes}</p>}
           {mapsUrl && (
-            <a href={mapsUrl} target="_blank" rel="noreferrer" className="flex h-11 w-full items-center justify-center rounded-xl bg-white text-sm font-medium text-ink-950 hover:bg-ink-100">
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-11 w-full items-center justify-center rounded-xl bg-white text-sm font-medium text-ink-950 hover:bg-ink-100"
+            >
               Get directions
             </a>
           )}
@@ -120,7 +130,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           ["Hospitality", b.hospitality],
           ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? ` · ${b.promoter.phone}` : ""}` : ""],
           ["Your agent", b.agent ? `${b.agent.name} · ${b.agent.email}` : ""],
-          ["Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
+          [user.personId ? `${b.artist.name} fee` : "Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
         ]
           .filter(([, val]) => val)
           .map(([k, val]) => (

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
+import { ContactsTabs } from "@/components/contacts-tabs";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, type ContactType } from "@/lib/constants";
@@ -36,18 +37,19 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Contacts"
-        subtitle="Promoters, private customers (weddings and parties), venue staff and collaborators."
+        subtitle="Companies, promoters and private customers (weddings and parties). People who work at them are under People."
         actions={
           <>
             <Link href="/contacts/new?type=CLIENT" className="btn">
               Add private customer
             </Link>
             <Link href="/contacts/new" className="btn btn-primary">
-              Add contact
+              Add company or contact
             </Link>
           </>
         }
       />
+      <ContactsTabs active="companies" />
       <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm">
         {[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, `${CONTACT_TYPE_LABELS[t]}s`])].map(([t, label]) => (
           <Link
@@ -84,7 +86,11 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
             All
           </Link>
           {tags.map((t) => (
-            <Link key={t} href={`/contacts?tag=${encodeURIComponent(t)}`} className={`badge ${sp.tag === t ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+            <Link
+              key={t}
+              href={`/contacts?tag=${encodeURIComponent(t)}`}
+              className={`badge ${sp.tag === t ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
+            >
               #{t}
             </Link>
           ))}
@@ -115,9 +121,19 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
                     {c.company && <div className="text-xs text-slate-500">{c.company}</div>}
                   </td>
                   <td>{CONTACT_TYPE_LABELS[c.type as ContactType] ?? c.type}</td>
-                  <td>{c.email && <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a>}</td>
+                  <td>
+                    {c.email && (
+                      <a href={`mailto:${c.email}`} className="hover:underline">
+                        {c.email}
+                      </a>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap">{c.phone}</td>
-                  <td className="text-xs text-slate-500">{splitTags(c.tags).map((t) => `#${t}`).join(" ")}</td>
+                  <td className="text-xs text-slate-500">
+                    {splitTags(c.tags)
+                      .map((t) => `#${t}`)
+                      .join(" ")}
+                  </td>
                   <td className="text-right">{c._count.bookings}</td>
                 </tr>
               ))}

@@ -6,6 +6,7 @@ import { notifyClientOfArrival } from "@/lib/alerts";
 import { requireUser } from "@/lib/auth";
 import { CHECK_IN_KINDS, type CheckInKind } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
+import { actIdsFor } from "@/lib/people";
 
 export type CheckInPayload = {
   kind: CheckInKind;
@@ -31,8 +32,8 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
     where: { id: bookingId, agencyId: user.agencyId },
     include: { venue: true, checkIns: { select: { kind: true } } },
   });
-  // Artists can only check in to their own gigs.
-  if (!booking || !user.artistId || booking.artistId !== user.artistId) return { ok: false, message: "Gig not found." };
+  // Artists can only check in to their own gigs (any act they're in).
+  if (!booking || !(await actIdsFor(user)).includes(booking.artistId)) return { ok: false, message: "Gig not found." };
   if (booking.status === "CANCELLED") return { ok: false, message: "This gig has been cancelled." };
 
   const now = new Date();

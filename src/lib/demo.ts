@@ -57,7 +57,10 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   ];
   const artists: Artist[] = [];
   for (const a of artistSeed) {
-    const slug = a.name.toLowerCase().replace(/[^a-z]+/g, ".").replace(/^\.|\.$/g, "");
+    const slug = a.name
+      .toLowerCase()
+      .replace(/[^a-z]+/g, ".")
+      .replace(/^\.|\.$/g, "");
     artists.push(await prisma.artist.create({ data: { ...a, agencyId, email: `${slug}@example.com`, demo: true } }));
   }
 
@@ -68,13 +71,33 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     { name: "King Tut's Wah Wah Hut", city: "Glasgow", country: "UK", latitude: 55.8622, longitude: -4.2654, capacity: 300, address: "272a St Vincent Street" },
     { name: "Brudenell Social Club", city: "Leeds", country: "UK", latitude: 53.8146, longitude: -1.5737, capacity: 400, address: "33 Queens Road" },
     { name: "Concorde 2", city: "Brighton", country: "UK", latitude: 50.8167, longitude: -0.1197, capacity: 600, address: "Madeira Drive" },
-    { name: "Whelan's", city: "Dublin", country: "Ireland", latitude: 53.3361, longitude: -6.2655, capacity: 450, address: "25 Wexford Street", timezone: "Europe/Dublin" },
-    { name: "Paradiso", city: "Amsterdam", country: "Netherlands", latitude: 52.3622, longitude: 4.8838, capacity: 1500, address: "Weteringschans 6-8", timezone: "Europe/Amsterdam" },
+    {
+      name: "Whelan's",
+      city: "Dublin",
+      country: "Ireland",
+      latitude: 53.3361,
+      longitude: -6.2655,
+      capacity: 450,
+      address: "25 Wexford Street",
+      timezone: "Europe/Dublin",
+    },
+    {
+      name: "Paradiso",
+      city: "Amsterdam",
+      country: "Netherlands",
+      latitude: 52.3622,
+      longitude: 4.8838,
+      capacity: 1500,
+      address: "Weteringschans 6-8",
+      timezone: "Europe/Amsterdam",
+    },
     { name: "The Village Hall", city: "Hebden Bridge", country: "UK", latitude: null, longitude: null, capacity: 120, address: "Market Street" },
   ];
   const venues: Venue[] = [];
   for (const [i, v] of venueSeed.entries()) {
-    venues.push(await prisma.venue.create({ data: { timezone: "Europe/London", ...v, colour: VENUE_PALETTE[i % VENUE_PALETTE.length], agencyId, demo: true } }));
+    venues.push(
+      await prisma.venue.create({ data: { timezone: "Europe/London", ...v, colour: VENUE_PALETTE[i % VENUE_PALETTE.length], agencyId, demo: true } }),
+    );
   }
 
   const promoterSeed = [
@@ -92,8 +115,37 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
       }),
     );
   }
-  await prisma.contact.create({ data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", agencyId, demo: true } });
-  await prisma.contactNote.create({ data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." } });
+  await prisma.contact.create({
+    data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", agencyId, demo: true },
+  });
+  await prisma.contactNote.create({
+    data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." },
+  });
+
+  // People: the members of two bands (Tom plays in both, so clashes are checked across them),
+  // and a manager at three venues.
+  const person = (firstName: string, surname: string, extra: Record<string, string | null> = {}) =>
+    prisma.person.create({ data: { agencyId, firstName, surname, demo: true, ...extra } });
+  const mayaP = await person("Maya", "Okafor", { phone: "07700 900211", email: "maya.okafor@example.com", pronouns: "she/her" });
+  const tomP = await person("Tom", "Price", { phone: "07700 900212", email: "tom.price@example.com" });
+  const adeP = await person("Ade", "Bello", { phone: "07700 900213" });
+  const lucyP = await person("Lucy", "Hart", { phone: "07700 900214", alias: "Lucy Owl" });
+  await prisma.personAct.createMany({
+    data: [
+      { personId: mayaP.id, artistId: artists[0].id, jobTitle: "Lead vocals" },
+      { personId: tomP.id, artistId: artists[0].id, jobTitle: "Piano" },
+      { personId: adeP.id, artistId: artists[0].id, jobTitle: "Double bass" },
+      { personId: lucyP.id, artistId: artists[1].id, jobTitle: "Vocals, guitar" },
+      { personId: tomP.id, artistId: artists[1].id, jobTitle: "Keys" },
+    ],
+  });
+  for (const [i, [first, last, title]] of [
+    ["Sam", "Whitaker", "General manager"],
+    ["Rosie", "Adams", "Bar manager"],
+    ["Callum", "Reid", "Venue manager"],
+  ].entries()) {
+    await person(first, last, { venueId: venues[i].id, jobTitle: title, phone: `07700 9003${10 + i}`, email: `${first.toLowerCase()}@venue.example` });
+  }
 
   // Weekly music schedules for three venues, so the rota has something to show.
   const [elena, maya, kestrel, owls] = [artists[4], artists[0], artists[2], artists[1]];
@@ -185,20 +237,34 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
 
     // Payments: deposits and settlements for past shows, some deposits for future ones.
     if ((o.status === "SETTLED" || o.status === "CONFIRMED") && arriveBy < now) {
-      await prisma.payment.create({ data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: b.depositMinor, paidAt: new Date(arriveBy.getTime() - 40 * DAY) } });
+      await prisma.payment.create({
+        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: b.depositMinor, paidAt: new Date(arriveBy.getTime() - 40 * DAY) },
+      });
       if (o.status === "SETTLED") {
-        await prisma.payment.create({ data: { bookingId: b.id, direction: "IN", kind: "BALANCE", amountMinor: b.feeMinor - b.depositMinor, paidAt: arriveBy } });
+        await prisma.payment.create({
+          data: { bookingId: b.id, direction: "IN", kind: "BALANCE", amountMinor: b.feeMinor - b.depositMinor, paidAt: arriveBy },
+        });
         const artistShare = b.feeMinor - Math.round((b.feeMinor * commissionPct) / 100);
-        await prisma.payment.create({ data: { bookingId: b.id, direction: "OUT", kind: "SETTLEMENT", amountMinor: artistShare, paidAt: new Date(arriveBy.getTime() + 7 * DAY) } });
+        await prisma.payment.create({
+          data: { bookingId: b.id, direction: "OUT", kind: "SETTLEMENT", amountMinor: artistShare, paidAt: new Date(arriveBy.getTime() + 7 * DAY) },
+        });
       }
     } else if (o.status === "CONFIRMED" && rand() > 0.4) {
       await prisma.payment.create({
-        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: b.depositMinor, paidAt: new Date(Math.min(now.getTime(), arriveBy.getTime() - 35 * DAY)) },
+        data: {
+          bookingId: b.id,
+          direction: "IN",
+          kind: "DEPOSIT",
+          amountMinor: b.depositMinor,
+          paidAt: new Date(Math.min(now.getTime(), arriveBy.getTime() - 35 * DAY)),
+        },
       });
     }
 
     if (o.onTheWay) {
-      await prisma.checkIn.create({ data: { bookingId: b.id, artistId: o.artist.id, kind: "ON_THE_WAY", source: "APP", at: o.onTheWay.at, etaMinutes: o.onTheWay.eta } });
+      await prisma.checkIn.create({
+        data: { bookingId: b.id, artistId: o.artist.id, kind: "ON_THE_WAY", source: "APP", at: o.onTheWay.at, etaMinutes: o.onTheWay.eta },
+      });
     }
     if (o.arrival && o.arrival !== "none") {
       const at = new Date(arriveBy.getTime() + o.arrival.offsetMin * MIN);
@@ -219,12 +285,17 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
             latitude: byAgent ? null : lat,
             longitude: byAgent ? null : lng,
             accuracyM: byAgent ? null : 12,
-            distanceM: !byAgent && lat !== null && lng !== null && v.latitude !== null && v.longitude !== null ? distanceMetres(lat, lng, v.latitude, v.longitude) : null,
+            distanceM:
+              !byAgent && lat !== null && lng !== null && v.latitude !== null && v.longitude !== null
+                ? distanceMetres(lat, lng, v.latitude, v.longitude)
+                : null,
             note: byAgent ? "Promoter rang to confirm" : "",
           },
         });
         if (setEnd < now) {
-          await prisma.checkIn.create({ data: { bookingId: b.id, artistId: o.artist.id, kind: "DEPARTED", source: "APP", at: new Date(setEnd.getTime() + 45 * MIN) } });
+          await prisma.checkIn.create({
+            data: { bookingId: b.id, artistId: o.artist.id, kind: "DEPARTED", source: "APP", at: new Date(setEnd.getTime() + 45 * MIN) },
+          });
         }
       }
     }
@@ -260,7 +331,14 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
   await book({ artist: artists[0], venue: venues[0], status: "CONFIRMED", fee: 1800, arriveAt: at(-90), arrival: { offsetMin: -12, onSite: true } });
   await book({ artist: artists[1], venue: venues[1], status: "CONFIRMED", fee: 2200, arriveAt: at(-60), arrival: { offsetMin: 22, onSite: true } });
   await book({ artist: artists[2], venue: venues[5], status: "CONFIRMED", fee: 1500, arriveAt: at(-25) });
-  await book({ artist: artists[3], venue: venues[2], status: "CONFIRMED", fee: 3000, arriveAt: at(50), onTheWay: { at: new Date(now.getTime() - 15 * MIN), eta: 45 } });
+  await book({
+    artist: artists[3],
+    venue: venues[2],
+    status: "CONFIRMED",
+    fee: 3000,
+    arriveAt: at(50),
+    onTheWay: { at: new Date(now.getTime() - 15 * MIN), eta: 45 },
+  });
   await book({ artist: artists[4], venue: venues[4], status: "CONFIRMED", fee: 900, arriveAt: at(240) });
 
   // Next three months.
@@ -285,17 +363,19 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
 /** Remove every demo record, plus anything hanging off the demo artists. Real data is left alone. */
 export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
   const artistIds = (await prisma.artist.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((a) => a.id);
-  const bookingIds = (
-    await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })
-  ).map((b) => b.id);
+  const bookingIds = (await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })).map(
+    (b) => b.id,
+  );
   const contactIds = (await prisma.contact.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((c) => c.id);
   const venueIds = (await prisma.venue.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((v) => v.id);
+  const personIds = (await prisma.person.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((p) => p.id);
 
   await prisma.$transaction([
     // Payments and check-ins go with their bookings.
     prisma.booking.deleteMany({ where: { id: { in: bookingIds } } }),
     // Demo agents, and any app logins made for demo artists.
-    prisma.user.deleteMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] } }),
+    prisma.user.deleteMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }, { personId: { in: personIds } }] } }),
+    prisma.person.deleteMany({ where: { id: { in: personIds } } }),
     prisma.artist.deleteMany({ where: { id: { in: artistIds } } }),
     prisma.contact.deleteMany({ where: { id: { in: contactIds } } }),
     prisma.venue.deleteMany({ where: { id: { in: venueIds } } }),
@@ -306,6 +386,7 @@ export async function removeDemoData(prisma: PrismaClient, agencyId: string) {
           { entity: "ARTIST", entityId: { in: artistIds } },
           { entity: "CONTACT", entityId: { in: contactIds } },
           { entity: "VENUE", entityId: { in: venueIds } },
+          { entity: "PERSON", entityId: { in: personIds } },
         ],
       },
     }),

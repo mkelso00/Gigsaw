@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resetCalendarToken, setArtistLogin } from "@/actions/crm";
+import { addActMember, removeActMember } from "@/actions/people";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
@@ -12,6 +13,7 @@ import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
+import { personName } from "@/lib/person-name";
 import { formatDate, formatMinutes, localTime } from "@/lib/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -27,11 +29,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [artist, settings] = await Promise.all([
+  const [artist, settings, peopleRows] = await Promise.all([
     prisma.artist.findFirst({
       where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
+        members: { include: { person: { include: { login: { select: { id: true } } } } }, orderBy: { person: { firstName: "asc" } } },
         login: {
           select: {
             email: true,
@@ -63,7 +66,9 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       },
     }),
     getSettings(user.agencyId),
+    prisma.person.findMany({ where: { agencyId: user.agencyId }, select: { firstName: true, surname: true, alias: true } }),
   ]);
+  const people = [...new Set(peopleRows.map(personName))].sort();
   if (!artist) notFound();
 
   const now = new Date();
@@ -138,6 +143,53 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-6">
+          <section className="card card-pad" id="members">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="section-title">Members</h2>
+              <Link href={`/people/new?actId=${artist.id}`} className="text-sm text-ink-500 hover:text-ink-950">
+                Add with full details →
+              </Link>
+            </div>
+            <p className="mt-1 mb-4 text-sm text-ink-500">
+              {artist.members.length
+                ? "Reminders and gig changes go to each member. Anyone in another act too is checked for clashes across both."
+                : "The people in this act. Until you add members, reminders and changes go to the act's own email and phone."}
+            </p>
+            {artist.members.length > 0 && (
+              <ul className="mb-4 divide-y divide-ink-100 text-sm">
+                {artist.members.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <Link href={`/people/${m.person.id}`} className="link">
+                        {personName(m.person)}
+                      </Link>
+                      {m.jobTitle && <span className="text-ink-500"> · {m.jobTitle}</span>}
+                      <div className="truncate text-xs text-ink-500">
+                        {[m.person.phone, m.person.email].filter(Boolean).join(" · ") || "No phone or email yet"}
+                        {m.person.login ? " · has app login" : ""}
+                      </div>
+                    </div>
+                    <form action={removeActMember.bind(null, m.id)}>
+                      <ConfirmButton message={`Take ${personName(m.person)} out of ${artist.name}?`} className="btn btn-sm">
+                        Remove
+                      </ConfirmButton>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <datalist id="people-names">
+              {people.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+            <ActionForm action={addActMember.bind(null, artist.id)} className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+              <input name="person" list="people-names" required placeholder="Name" aria-label="Name" className="input" autoComplete="off" />
+              <input name="jobTitle" placeholder="Role" aria-label="Role" className="input" />
+              <SubmitButton className="btn">Add</SubmitButton>
+            </ActionForm>
+          </section>
+
           <section className="card card-pad">
             <h2 className="section-title">Artist app login</h2>
             <p className="mt-1 text-sm text-slate-500">

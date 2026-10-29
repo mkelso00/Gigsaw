@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  addPayment,
-  deleteBooking,
-  deleteCheckIn,
-  deletePayment,
-  logCheckInForArtist,
-  setBookingStatus,
-} from "@/actions/bookings";
+import { addPayment, deleteBooking, deleteCheckIn, deletePayment, logCheckInForArtist, setBookingStatus } from "@/actions/bookings";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { buildChecklist } from "@/lib/checklist";
+import { linkedActIds } from "@/lib/people";
 import {
   BOOKING_STATUSES,
   BOOKING_STATUS_LABELS,
@@ -61,14 +55,16 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const tz = booking.timezone;
   const windowStart = new Date(booking.setStart.getTime() - 400 * 86_400_000);
   const windowEnd = new Date(booking.setStart.getTime() + 400 * 86_400_000);
+  const linked = await linkedActIds(booking.artistId);
   const [others, activity] = await Promise.all([
     prisma.booking.findMany({
-      where: { agencyId: user.agencyId, artistId: booking.artistId, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
+      where: { agencyId: user.agencyId, artistId: { in: linked }, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
       select: {
         id: true,
         reference: true,
         status: true,
         artistId: true,
+        artist: { select: { name: true } },
         arriveBy: true,
         setStart: true,
         setEnd: true,
@@ -87,7 +83,13 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
 
   const deal = dealBreakdown(booking);
   const totals = paymentTotals(booking.payments);
-  const checklist = buildChecklist(booking, others, totals.depositReceivedMinor, now, settings.changeoverMinutes);
+  const checklist = buildChecklist(
+    { ...booking, linkedArtistIds: linked },
+    others.map((o) => ({ ...o, artistName: o.artist.name })),
+    totals.depositReceivedMinor,
+    now,
+    settings.changeoverMinutes,
+  );
   const arrival = arrivalFor(booking, settings, now);
   const money = (m: number) => formatMoney(m, booking.currency);
   const zone = zoneLabel(booking.arriveBy, tz);
@@ -136,8 +138,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <h2 className="section-title mb-4">Log a check-in for the artist</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Use this if the artist can&apos;t use the app, for example the promoter rang to say they&apos;re in. It is marked as logged by
-              the agency.
+              Use this if the artist can&apos;t use the app, for example the promoter rang to say they&apos;re in. It is marked as logged by the agency.
             </p>
             <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
               <Field label="Type">
@@ -165,8 +166,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 {booking.checkIns.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3 py-2">
                     <span>
-                      <strong>{CHECK_IN_KIND_LABELS[c.kind as keyof typeof CHECK_IN_KIND_LABELS] ?? c.kind}</strong> at{" "}
-                      {formatDateTime(c.at, tz)} {c.source === "AGENT" ? `· logged by ${c.user?.name ?? "agency"}` : "· from the artist app"}
+                      <strong>{CHECK_IN_KIND_LABELS[c.kind as keyof typeof CHECK_IN_KIND_LABELS] ?? c.kind}</strong> at {formatDateTime(c.at, tz)}{" "}
+                      {c.source === "AGENT" ? `· logged by ${c.user?.name ?? "agency"}` : "· from the artist app"}
                       {c.note && <span className="text-slate-500"> · “{c.note}”</span>}
                     </span>
                     <form action={deleteCheckIn.bind(null, c.id)}>
@@ -225,10 +226,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 ["Day of show contact", booking.dayContact],
                 ["Hospitality", booking.hospitality],
                 ["Internal notes", booking.notes],
-                [
-                  "Radius clause",
-                  booking.radiusKm !== null ? `${booking.radiusKm} km, ${booking.radiusDays} days either side` : "",
-                ],
+                ["Radius clause", booking.radiusKm !== null ? `${booking.radiusKm} km, ${booking.radiusDays} days either side` : ""],
               ]}
             />
           </section>
@@ -343,9 +341,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <Row label="Fee">{money(deal.grossMinor)}</Row>
               {deal.vatMinor > 0 && <Row label={`VAT (${booking.vatPct}%)`}>{money(deal.vatMinor)}</Row>}
               <Row label="Promoter pays">{money(deal.totalDueMinor)}</Row>
-              <Row label={booking.dealType === "BUY_SELL" ? "Agency margin" : `Commission (${booking.commissionPct}%)`}>
-                {money(deal.agencyMinor)}
-              </Row>
+              <Row label={booking.dealType === "BUY_SELL" ? "Agency margin" : `Commission (${booking.commissionPct}%)`}>{money(deal.agencyMinor)}</Row>
               <Row label="Artist earns">{money(deal.artistMinor)}</Row>
               <hr className="border-slate-100" />
               {booking.depositMinor > 0 && (

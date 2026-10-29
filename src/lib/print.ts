@@ -2,6 +2,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { requireUser } from "./auth";
 import { getSettings, prisma } from "./db";
+import { actIdsFor } from "./people";
 
 /** Load a booking for a printable document. Artists may only open their own itinerary. */
 export async function loadPrintable(id: string, allowArtist = false) {
@@ -14,6 +15,6 @@ export async function loadPrintable(id: string, allowArtist = false) {
     getSettings(user.agencyId),
   ]);
   if (!booking) notFound();
-  if (user.role === "ARTIST" && booking.artistId !== user.artistId) notFound();
+  if (user.role === "ARTIST" && !(await actIdsFor(user)).includes(booking.artistId)) notFound();
   return { booking, settings, user };
 }

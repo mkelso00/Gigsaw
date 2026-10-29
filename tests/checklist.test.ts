@@ -48,13 +48,23 @@ describe("clashes", () => {
     expect(findDateClashes(booking, [other({})])).toHaveLength(1);
   });
   it("allows an earlier gig across town when there's time to travel", () => {
-    const early = other({ venue: nearby, arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
+    const early = other({
+      venue: nearby,
+      arriveBy: new Date("2026-11-05T15:30:00Z"),
+      setStart: new Date("2026-11-05T16:00:00Z"),
+      setEnd: new Date("2026-11-05T18:30:00Z"),
+    });
     expect(findDateClashes(booking, [early])).toHaveLength(0);
     const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
     expect(items.find((i) => i.label === "Another gig the same day, with time to travel")?.level).toBe("ok");
   });
   it("flags an earlier gig too far away to get back in time", () => {
-    const early = other({ venue: manchester, arriveBy: new Date("2026-11-05T15:30:00Z"), setStart: new Date("2026-11-05T16:00:00Z"), setEnd: new Date("2026-11-05T18:30:00Z") });
+    const early = other({
+      venue: manchester,
+      arriveBy: new Date("2026-11-05T15:30:00Z"),
+      setStart: new Date("2026-11-05T16:00:00Z"),
+      setEnd: new Date("2026-11-05T18:30:00Z"),
+    });
     expect(findDateClashes(booking, [early])).toHaveLength(1);
     const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
     expect(items.find((i) => i.label === "May not have time to get there")?.level).toBe("error");
@@ -65,11 +75,20 @@ describe("clashes", () => {
   it("ignores itself", () => {
     expect(findDateClashes(booking, [other({ id: "b1" })])).toHaveLength(0);
   });
+
+  it("flags a clash with another act that shares a member", () => {
+    // Tom plays in both acts: a gig for the other act at the same time is a double booking.
+    const linked = { ...booking, linkedArtistIds: [booking.artistId, "a2"] };
+    expect(findDateClashes(linked, [other({ artistId: "a2" })])).toHaveLength(1);
+    expect(findDateClashes(linked, [other({ artistId: "a3" })])).toHaveLength(0);
+  });
 });
 
 describe("radius clause", () => {
   it("flags a nearby show inside the window", () => {
-    expect(findRadiusBreaches(booking, [other({ venue: nearby, arriveBy: new Date("2026-11-20T19:00:00Z"), setStart: new Date("2026-11-20T20:00:00Z") })])).toHaveLength(1);
+    expect(
+      findRadiusBreaches(booking, [other({ venue: nearby, arriveBy: new Date("2026-11-20T19:00:00Z"), setStart: new Date("2026-11-20T20:00:00Z") })]),
+    ).toHaveLength(1);
   });
   it("allows a far away show", () => {
     expect(findRadiusBreaches(booking, [other({ venue: manchester, setStart: new Date("2026-11-20T20:00:00Z") })])).toHaveLength(0);

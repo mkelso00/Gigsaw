@@ -6,6 +6,7 @@ import { VenueForm } from "@/components/crm-forms";
 import { ConfirmButton } from "@/components/forms";
 import { ScheduleEditor } from "@/components/schedule-editor";
 import { VenueShareCard } from "@/components/venue-share-card";
+import { personName } from "@/lib/person-name";
 import { appUrl } from "@/lib/messaging";
 import { PageHeader, StatusBadge } from "@/components/ui";
 import { venueColour } from "@/lib/rota";
@@ -22,6 +23,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
     prisma.venue.findFirst({
       where: { id, agencyId: user.agencyId },
       include: {
+        people: { orderBy: { firstName: "asc" } },
         bookings: {
           orderBy: { setStart: "desc" },
           take: 50,
@@ -73,6 +75,36 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
           </form>
         </div>
         <div className="space-y-6">
+          <section className="card card-pad" id="people">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="section-title">People</h2>
+              <Link href={`/people/new?venueId=${venue.id}`} className="btn btn-sm">
+                + Add person
+              </Link>
+            </div>
+            {venue.people.length ? (
+              <ul className="mt-3 divide-y divide-ink-100 text-sm">
+                {venue.people.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <Link href={`/people/${p.id}`} className="link">
+                        {personName(p)}
+                      </Link>
+                      {p.jobTitle && <span className="text-ink-500"> · {p.jobTitle}</span>}
+                      {p.email && <div className="truncate text-xs text-ink-500">{p.email}</div>}
+                    </div>
+                    {p.phone && (
+                      <a href={`tel:${p.phone.replace(/\s/g, "")}`} className="btn btn-sm shrink-0">
+                        Call
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-ink-500">The manager and anyone else you deal with here. Add them so their number is one tap away.</p>
+            )}
+          </section>
           <VenueShareCard venueId={venue.id} url={venue.shareToken ? `${appUrl()}/v/${venue.shareToken}` : null} />
           <section>
             <h2 className="section-title mb-3">Shows here</h2>

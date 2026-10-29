@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { addContactNote, deleteContactNote } from "@/actions/crm";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { DefinitionList, Empty, PageHeader, StatusBadge } from "@/components/ui";
+import { personName } from "@/lib/person-name";
 import { requireStaff } from "@/lib/auth";
 import { CONTACT_TYPE_LABELS, type ContactType } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
@@ -21,6 +22,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       where: { id, agencyId: user.agencyId },
       include: {
         notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
+        people: { orderBy: { firstName: "asc" } },
         bookings: { orderBy: { setStart: "desc" }, include: { artist: { select: { name: true } }, venue: { select: { name: true } } } },
       },
     }),
@@ -51,12 +53,56 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <DefinitionList
               items={[
-                ["Email", contact.email && <a href={`mailto:${contact.email}`} className="link">{contact.email}</a>],
-                ["Phone", contact.phone && <a href={`tel:${contact.phone}`} className="link">{contact.phone}</a>],
+                [
+                  "Email",
+                  contact.email && (
+                    <a href={`mailto:${contact.email}`} className="link">
+                      {contact.email}
+                    </a>
+                  ),
+                ],
+                [
+                  "Phone",
+                  contact.phone && (
+                    <a href={`tel:${contact.phone}`} className="link">
+                      {contact.phone}
+                    </a>
+                  ),
+                ],
                 ["Address", contact.address],
-                ["Tags", splitTags(contact.tags).map((t) => `#${t}`).join(" ")],
+                [
+                  "Tags",
+                  splitTags(contact.tags)
+                    .map((t) => `#${t}`)
+                    .join(" "),
+                ],
               ]}
             />
+          </section>
+          <section className="card card-pad">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="section-title">People here</h2>
+              <Link href={`/people/new?companyId=${contact.id}`} className="btn btn-sm">
+                + Add person
+              </Link>
+            </div>
+            {contact.people.length ? (
+              <ul className="mt-3 divide-y divide-ink-100 text-sm">
+                {contact.people.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <span>
+                      <Link href={`/people/${p.id}`} className="link">
+                        {personName(p)}
+                      </Link>
+                      {p.jobTitle && <span className="text-ink-500"> · {p.jobTitle}</span>}
+                    </span>
+                    <span className="text-xs text-ink-500">{[p.phone, p.email].filter(Boolean).join(" · ")}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-sm text-ink-500">Nobody linked yet. People whose company is {contact.company || contact.name} appear here.</p>
+            )}
           </section>
           <section>
             <h2 className="section-title mb-3">Bookings</h2>

@@ -11,7 +11,8 @@ const LINKS = [
   { href: "/calendar", label: "Calendar", icon: "calendar" },
   { href: "/bookings", label: "Bookings", icon: "bookings" },
   { href: "/artists", label: "Acts", icon: "artists" },
-  { href: "/contacts", label: "Contacts", icon: "contacts" },
+  { href: "/people", label: "People", icon: "contacts" },
+  { href: "/contacts", label: "Contacts", icon: "company" },
   { href: "/venues", label: "Venues", icon: "venues" },
   { href: "/reports", label: "Reports", icon: "reports" },
 ];

@@ -39,7 +39,13 @@ async function main() {
     data: { name: "Northern Lights Agency", pricePerGigMinor: 300, billingCurrency: "GBP", billingEmail: "accounts@northernlights.example" },
   });
   await prisma.settings.create({
-    data: { agencyId: northern.id, agencyName: northern.name, agencyEmail: "bookings@northernlights.example", agencyAddress: "12 Example Street\nManchester M1 1AA", contractTerms },
+    data: {
+      agencyId: northern.id,
+      agencyName: northern.name,
+      agencyEmail: "bookings@northernlights.example",
+      agencyAddress: "12 Example Street\nManchester M1 1AA",
+      contractTerms,
+    },
   });
   const admin = await prisma.user.create({
     data: { email: "admin@gigsaw.test", name: "Alex Morgan", role: "ADMIN", isOwner: true, agencyId: northern.id, passwordHash: hash },
@@ -49,6 +55,11 @@ async function main() {
   // Maya can sign in to the artist app.
   await prisma.user.create({
     data: { email: "maya@gigsaw.test", name: "Maya Okafor", role: "ARTIST", agencyId: northern.id, artistId: demo.artists[0].id, passwordHash: hash },
+  });
+  // Tom plays in two acts and signs in as himself, so he sees both acts' gigs.
+  const tom = await prisma.person.findFirstOrThrow({ where: { agencyId: northern.id, firstName: "Tom", surname: "Price" } });
+  await prisma.user.create({
+    data: { email: "tom@gigsaw.test", name: "Tom Price", role: "ARTIST", agencyId: northern.id, personId: tom.id, passwordHash: hash },
   });
 
   // Agency two: a separate customer, to show agencies can't see each other.
@@ -60,7 +71,9 @@ async function main() {
   const demo2 = await addDemoData(prisma, { agencyId: harbour.id, leadAgentId: harbourAdmin.id });
 
   console.log(`Seeded 2 agencies: ${demo.bookings} and ${demo2.bookings} bookings.`);
-  console.log("Owner + Northern Lights admin: admin@gigsaw.test · Agent: agent@gigsaw.test · Artist app: maya@gigsaw.test");
+  console.log(
+    "Owner + Northern Lights admin: admin@gigsaw.test · Agent: agent@gigsaw.test · Artist app: maya@gigsaw.test (an act), tom@gigsaw.test (a person in two acts)",
+  );
   console.log("Harbour Music admin: harbour@gigsaw.test · Password for all: gigsaw123");
 }
 

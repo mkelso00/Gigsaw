@@ -1,12 +1,13 @@
 import "server-only";
 import { prisma } from "./db";
+import { personName } from "./person-name";
 import { venueColour } from "./rota";
 import { formatDate, localTime } from "./time";
 
 // Search across everything an agency has: acts, venues, contacts and bookings (any date),
 // plus the pages of the app. Used by the live search box at the top of every page.
 
-export type SearchHit = { kind: "act" | "venue" | "contact" | "booking" | "page"; href: string; title: string; sub: string; colour?: string };
+export type SearchHit = { kind: "act" | "person" | "venue" | "contact" | "booking" | "page"; href: string; title: string; sub: string; colour?: string };
 
 const PAGES: [string, string, string][] = [
   ["Dashboard", "/dashboard", "home overview"],
@@ -16,6 +17,8 @@ const PAGES: [string, string, string][] = [
   ["Bookings", "/bookings", "gigs list"],
   ["New booking", "/bookings/new", "add create gig"],
   ["Acts", "/artists", "artists singers bands roster"],
+  ["People", "/people", "musicians members managers staff"],
+  ["Add a person", "/people/new", "new musician member manager"],
   ["Add an act", "/artists/new", "new artist singer band"],
   ["Contacts", "/contacts", "promoters customers clients"],
   ["Add a private customer", "/contacts/new?type=CLIENT", "wedding client new contact"],
@@ -43,7 +46,17 @@ export async function globalSearch(agencyId: string, raw: string, opts: { isOwne
     ],
   };
   const bookingInclude = { artist: { select: { name: true } }, venue: { select: { id: true, name: true, city: true, colour: true } } } as const;
-  const [acts, venues, contacts, upcoming, past] = await Promise.all([
+  const [people, acts, venues, contacts, upcoming, past] = await Promise.all([
+    prisma.person.findMany({
+      where: { agencyId, OR: [{ firstName: contains }, { surname: contains }, { alias: contains }, { email: contains }, { phone: contains }] },
+      take: 4,
+      orderBy: { firstName: "asc" },
+      include: {
+        acts: { include: { act: { select: { name: true } } }, take: 2 },
+        venue: { select: { name: true } },
+        company: { select: { name: true, company: true } },
+      },
+    }),
     prisma.artist.findMany({
       where: { agencyId, OR: [{ name: contains }, { email: contains }, { phone: contains }, { genre: contains }] },
       take: 4,
@@ -79,6 +92,15 @@ export async function globalSearch(agencyId: string, raw: string, opts: { isOwne
       title: a.name,
       sub: [a.genre, a.phone].filter(Boolean).join(" · ") || "Act",
       colour: a.colour,
+    })),
+    ...people.map<SearchHit>((p) => ({
+      kind: "person",
+      href: `/people/${p.id}`,
+      title: personName(p),
+      sub:
+        [p.acts.map((a) => a.act.name).join(", "), [p.jobTitle, p.venue?.name ?? p.company?.company ?? p.company?.name].filter(Boolean).join(" at "), p.phone]
+          .filter(Boolean)
+          .join(" · ") || "Person",
     })),
     ...venues.map<SearchHit>((v) => ({ kind: "venue", href: `/venues/${v.id}`, title: v.name, sub: v.city || "Venue", colour: venueColour(v) })),
     ...contacts.map<SearchHit>((c) => ({ kind: "contact", href: `/contacts/${c.id}`, title: c.name, sub: c.company || c.email || "Contact" })),

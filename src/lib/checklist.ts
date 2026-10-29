@@ -15,6 +15,8 @@ export type ChecklistBooking = {
   reference: string;
   status: string;
   artistId: string;
+  /** Acts sharing a member with this one; their gigs count as double bookings too. */
+  linkedArtistIds?: string[];
   timezone: string;
   arriveBy: Date;
   setStart: Date;
@@ -37,6 +39,8 @@ export type OtherBooking = {
   reference: string;
   status: string;
   artistId: string;
+  /** The act's name, shown when the clash is with another act that shares a member. */
+  artistName?: string;
   arriveBy: Date;
   setStart: Date;
   setEnd: Date | null;
@@ -53,11 +57,12 @@ function isLive(status: string) {
 
 export type ClashFinding = { other: OtherBooking; assessment: ClashAssessment };
 
-/** Every other live gig for the same artist within a day, with whether there's time to travel between them. */
+/** Every other live gig for the same act (or an act sharing a member) within a day, with whether there's time to travel between them. */
 export function assessOtherGigs(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes: number): ClashFinding[] {
   const day = 86_400_000;
+  const acts = b.linkedArtistIds ?? [b.artistId];
   return others
-    .filter((o) => o.id !== b.id && o.artistId === b.artistId && isLive(o.status) && Math.abs(o.arriveBy.getTime() - b.arriveBy.getTime()) < day)
+    .filter((o) => o.id !== b.id && acts.includes(o.artistId) && isLive(o.status) && Math.abs(o.arriveBy.getTime() - b.arriveBy.getTime()) < day)
     .map((o) => ({ other: o, assessment: assessPair(b, o, changeoverMinutes) }));
 }
 
@@ -87,24 +92,20 @@ export function findRadiusBreaches(b: ChecklistBooking, others: OtherBooking[]):
   });
 }
 
-export function buildChecklist(
-  b: ChecklistBooking,
-  others: OtherBooking[],
-  depositReceivedMinor: number,
-  now: Date,
-  changeoverMinutes = 15,
-): ChecklistItem[] {
+export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depositReceivedMinor: number, now: Date, changeoverMinutes = 15): ChecklistItem[] {
   const items: ChecklistItem[] = [];
   if (b.status === "CANCELLED") return [{ level: "ok", label: "Booking is cancelled" }];
 
-  const label = (o: OtherBooking) => `${o.reference}${o.venue ? ` at ${o.venue.name}` : ""}`;
+  const label = (o: OtherBooking) =>
+    `${o.reference}${o.artistId !== b.artistId ? ` (${o.artistName ?? "another act"}, which shares a member)` : ""}${o.venue ? ` at ${o.venue.name}` : ""}`;
   const findings = assessOtherGigs(b, others, changeoverMinutes);
   const clashes = findings.filter((f) => f.assessment.level === "clash");
   const tight = findings.filter((f) => f.assessment.level === "tight");
   const fine = findings.filter((f) => f.assessment.level === "ok");
   for (const f of clashes) items.push({ level: "error", label: "Double booking", detail: describeAssessment(f.assessment, label(f.other)) });
   for (const f of tight) items.push({ level: "error", label: "May not have time to get there", detail: describeAssessment(f.assessment, label(f.other)) });
-  for (const f of fine) items.push({ level: "ok", label: "Another gig the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
+  for (const f of fine)
+    items.push({ level: "ok", label: "Another gig the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
   if (!findings.length) items.push({ level: "ok", label: "No double booking" });
 
   const breaches = findRadiusBreaches(b, others);

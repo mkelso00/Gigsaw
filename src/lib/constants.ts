@@ -50,12 +50,13 @@ export function eventTypeLabel(t: string) {
   return EVENT_TYPE_LABELS[t as EventType] ?? t;
 }
 
-export const CONTACT_TYPES = ["PROMOTER", "CLIENT", "VENUE_CONTACT", "COLLABORATOR", "OTHER"] as const;
+export const CONTACT_TYPES = ["PROMOTER", "CLIENT", "COMPANY", "VENUE_CONTACT", "COLLABORATOR", "OTHER"] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
 export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   PROMOTER: "Promoter",
   CLIENT: "Private customer",
+  COMPANY: "Company",
   VENUE_CONTACT: "Venue contact",
   COLLABORATOR: "Collaborator",
   OTHER: "Other",

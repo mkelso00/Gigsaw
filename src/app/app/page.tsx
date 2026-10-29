@@ -8,6 +8,8 @@ import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
+import { actIdsFor } from "@/lib/people";
+import { personName } from "@/lib/person-name";
 import { vapidKeys } from "@/lib/push";
 import { getSettings, prisma } from "@/lib/db";
 import { formatDate, localTime } from "@/lib/time";
@@ -16,27 +18,33 @@ export const dynamic = "force-dynamic";
 
 export default async function ArtistHome() {
   const user = await requireUser(["ARTIST"]);
-  if (!user.artistId) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an artist. Ask your agent to check it.</p>;
+  // A person's login sees every act they're in; an act's own login sees that act.
+  const actIds = await actIdsFor(user);
+  if (!actIds.length) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
   const settings = await getSettings(user.agencyId);
   const now = new Date();
-  const artist = await prisma.artist.findFirst({
-    where: { id: user.artistId, agencyId: user.agencyId },
-    select: { calendarToken: true, name: true },
-  });
+  const feedOwner = user.personId
+    ? await prisma.person.findFirst({
+        where: { id: user.personId, agencyId: user.agencyId },
+        select: { calendarToken: true, firstName: true, surname: true, alias: true },
+      })
+    : await prisma.artist.findFirst({ where: { id: user.artistId!, agencyId: user.agencyId }, select: { calendarToken: true, name: true } });
+  const feedName = feedOwner ? ("name" in feedOwner ? feedOwner.name : personName(feedOwner)) : "";
+  const manyActs = actIds.length > 1 || !!user.personId;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const pushKey = (await vapidKeys()).publicKey;
-  const feedUrl = artist ? `${proto}://${host}/api/calendar/${artist.calendarToken}.ics` : null;
+  const feedUrl = feedOwner ? `${proto}://${host}/api/calendar/${feedOwner.calendarToken}.ics` : null;
 
   const bookings = await prisma.booking.findMany({
     // Artists don't see early-stage enquiries.
     where: {
       agencyId: user.agencyId,
-      artistId: user.artistId,
+      artistId: { in: actIds },
       status: { notIn: ["ENQUIRY"] },
     },
-    include: { venue: true, checkIns: true },
+    include: { venue: true, checkIns: true, artist: { select: { name: true } } },
     orderBy: { arriveBy: "asc" },
   });
   const rows = bookings.map((b) => ({
@@ -63,7 +71,7 @@ export default async function ArtistHome() {
         <section className="overflow-hidden rounded-3xl border border-white/[0.06] bg-ink-900">
           <div className="p-5 pb-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next gig</span>
+              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next gig{manyActs ? ` · ${next.b.artist.name}` : ""}</span>
               <ArrivalBadge state={next.a.state} />
             </div>
             <div className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{next.b.venue?.name ?? "Venue to be confirmed"}</div>
@@ -105,6 +113,7 @@ export default async function ArtistHome() {
                   <div className="min-w-0">
                     <div className="truncate font-medium">{b.venue?.name ?? "Venue to be confirmed"}</div>
                     <div className="text-xs text-ink-400">
+                      {manyActs ? `${b.artist.name} · ` : ""}
                       {formatDate(b.arriveBy, b.timezone)} · arrive by {localTime(b.arriveBy, b.timezone)}
                     </div>
                   </div>
@@ -118,7 +127,7 @@ export default async function ArtistHome() {
 
       <PushSetup publicKey={pushKey} />
 
-      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${artist!.name} gigs`} />}
+      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${feedName} gigs`} />}
 
       {stats.tracked > 0 && (
         <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
@@ -145,7 +154,10 @@ export default async function ArtistHome() {
               <li key={b.id}>
                 <Link href={`/app/gigs/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-white/[0.03]">
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{b.venue?.name ?? "No venue"}</div>
+                    <div className="truncate font-medium">
+                      {b.venue?.name ?? "No venue"}
+                      {manyActs ? <span className="font-normal text-ink-400"> · {b.artist.name}</span> : null}
+                    </div>
                     <div className="text-xs text-ink-400">{formatDate(b.arriveBy, b.timezone)}</div>
                   </div>
                   <ArrivalBadge state={a.state} />

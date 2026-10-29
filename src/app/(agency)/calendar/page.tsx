@@ -8,11 +8,15 @@ import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel } from "@/lib/c
 import { getSettings, prisma } from "@/lib/db";
 import { isDateKey, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
+import { GigHover, type GigCard } from "@/components/gig-hover";
+import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
+import { personName } from "@/lib/person-name";
 
 export const metadata: Metadata = { title: "Calendar" };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const dayLabel = (key: string, opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
+const dayLabel = (key: string, opts: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
@@ -69,8 +73,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     prisma.booking.findMany({
       where,
       include: {
-        artist: { select: { name: true, colour: true, phone: true } },
+        artist: {
+          select: {
+            name: true,
+            colour: true,
+            phone: true,
+            members: { take: 1, include: { person: { select: { firstName: true, surname: true, alias: true, phone: true } } } },
+          },
+        },
         venue: { select: { id: true, name: true, city: true, colour: true, latitude: true, longitude: true } },
+        promoter: { select: { name: true, company: true, type: true } },
+        payments: { select: { direction: true, kind: true, amountMinor: true } },
         checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
       },
       orderBy: { setStart: "asc" },
@@ -82,9 +95,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const byArtist = sp.colour === "artist";
   const colourOf = (b: (typeof bookings)[number]) => (byArtist ? b.artist.colour : b.venue ? venueColour(b.venue) : "#a2a199");
   const legend = [
-    ...new Map(
-      bookings.map((b) => (byArtist ? [b.artist.name, b.artist.colour] : [b.venue?.name ?? "No venue", b.venue ? venueColour(b.venue) : "#a2a199"])),
-    ),
+    ...new Map(bookings.map((b) => (byArtist ? [b.artist.name, b.artist.colour] : [b.venue?.name ?? "No venue", b.venue ? venueColour(b.venue) : "#a2a199"]))),
   ].sort((a, b) => a[0].localeCompare(b[0]));
 
   const byDay = new Map<string, typeof bookings>();
@@ -97,8 +108,51 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const qs = (extra: Record<string, string>) =>
     "?" + new URLSearchParams(Object.entries({ ...keep, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
   const dashed = (s: string) => (s === "HOLD" || s === "ENQUIRY" ? "border-dashed" : "border-solid");
-  const tip = (b: (typeof bookings)[number]) =>
-    `${b.artist.name} · ${eventTypeLabel(b.eventType)} · ${b.venue?.name ?? "No venue"} · ${BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}`;
+  type Gig = (typeof bookings)[number];
+  // A gig that finishes after midnight stays on the day it starts, with a moon to show it runs late.
+  const overnight = (b: Gig) =>
+    b.setEnd && localDateKey(b.setEnd, b.timezone) !== gigDateKey(b) ? `Finishes after midnight, at ${localTime(b.setEnd, b.timezone)}` : null;
+  const Moon = ({ b }: { b: Gig }) =>
+    overnight(b) ? (
+      <span className="shrink-0 text-ink-500" title={overnight(b)!} aria-label="Finishes after midnight">
+        ☾
+      </span>
+    ) : null;
+  const card = (b: Gig): GigCard => {
+    const d = dealBreakdown(b);
+    const received = paymentTotals(b.payments).receivedMinor;
+    const m = (x: number) => formatMoney(x, b.currency);
+    const contact = b.artist.members[0]?.person;
+    return {
+      when: `${dayLabel(gigDateKey(b), { weekday: "short", day: "numeric", month: "short" })} · ${localTime(b.setStart, b.timezone)}${b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}`,
+      overnight: overnight(b),
+      status: BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS] ?? b.status,
+      money: d.grossMinor
+        ? [
+            ["Total fee", `${m(d.grossMinor)}${d.vatMinor ? ` + VAT ${m(d.vatMinor)}` : ""}`],
+            ["Received", m(received)],
+            ["Outstanding", m(Math.max(0, d.totalDueMinor - received))],
+            ["Act's pay", m(d.artistMinor)],
+          ]
+        : [],
+      people: [
+        ["Act", b.artist.name],
+        ["Venue", b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "Not set"],
+        ...(b.promoter
+          ? ([
+              [
+                b.promoter.type === "CLIENT" ? "Customer" : "Booked by",
+                b.promoter.company && b.promoter.company !== "Private client" ? `${b.promoter.name}, ${b.promoter.company}` : b.promoter.name,
+              ],
+            ] as [string, string][])
+          : []),
+        ...(contact || b.artist.phone
+          ? ([["Act contact", contact ? `${personName(contact)}${contact.phone ? ` · ${contact.phone}` : ""}` : b.artist.phone]] as [string, string][])
+          : []),
+        ["Type", eventTypeLabel(b.eventType)],
+      ],
+    };
+  };
 
   return (
     <div>
@@ -202,7 +256,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const items = byDay.get(key) ?? [];
               return (
                 <div key={key} className={`min-h-[480px] border-r border-ink-100 last:border-r-0 ${key === todayKey ? "bg-volt-100/30" : ""}`}>
-                  <div className={`sticky top-0 flex items-baseline justify-between border-b border-ink-200 px-3 py-3 ${key === todayKey ? "bg-volt-100" : "bg-white"}`}>
+                  <div
+                    className={`sticky top-0 flex items-baseline justify-between border-b border-ink-200 px-3 py-3 ${key === todayKey ? "bg-volt-100" : "bg-white"}`}
+                  >
                     <Link href={`/calendar${qs({ view: "day", date: key })}`} className="hover:underline">
                       <span className="text-xs text-ink-500">{dayLabel(key, { weekday: "short" })}</span>{" "}
                       <span className="text-lg font-semibold tabular-nums">{dayLabel(key, { day: "numeric" })}</span>
@@ -211,23 +267,26 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   </div>
                   <div className="space-y-1.5 p-2">
                     {items.map((b) => (
-                      <Link
-                        key={b.id}
-                        href={`/bookings/${b.id}`}
-                        title={tip(b)}
-                        className={`block rounded-lg border bg-white px-2.5 py-2 text-xs hover:shadow-sm ${dashed(b.status)}`}
-                        style={{ borderColor: `${colourOf(b)}66`, borderLeft: `4px solid ${colourOf(b)}` }}
-                      >
-                        <div className="font-semibold tabular-nums">
-                          {localTime(b.setStart, b.timezone)}
-                          {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
-                        </div>
-                        <div className="mt-0.5 truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</div>
-                        <div className="truncate text-ink-500">
-                          {byArtist ? b.venue?.name ?? "No venue" : b.artist.name}
-                          {b.venue?.city && !byArtist ? ` · ${b.venue.city}` : ""}
-                        </div>
-                      </Link>
+                      <GigHover key={b.id} card={card(b)}>
+                        <Link
+                          href={`/bookings/${b.id}`}
+                          className={`block rounded-lg border bg-white px-2.5 py-2 text-xs hover:shadow-sm ${dashed(b.status)}`}
+                          style={{ borderColor: `${colourOf(b)}66`, borderLeft: `4px solid ${colourOf(b)}` }}
+                        >
+                          <div className="flex items-center justify-between gap-1 font-semibold tabular-nums">
+                            <span>
+                              {localTime(b.setStart, b.timezone)}
+                              {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                            </span>
+                            <Moon b={b} />
+                          </div>
+                          <div className="mt-0.5 truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</div>
+                          <div className="truncate text-ink-500">
+                            {byArtist ? (b.venue?.name ?? "No venue") : b.artist.name}
+                            {b.venue?.city && !byArtist ? ` · ${b.venue.city}` : ""}
+                          </div>
+                        </Link>
+                      </GigHover>
                     ))}
                     <Link
                       href={`/bookings/new?date=${key}${sp.artist ? `&artistId=${sp.artist}` : ""}`}
@@ -270,17 +329,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   </div>
                   <div className="space-y-1">
                     {items.slice(0, 4).map((b) => (
-                      <Link
-                        key={b.id}
-                        href={`/bookings/${b.id}`}
-                        title={tip(b)}
-                        className={`flex items-center gap-1 truncate rounded px-1.5 py-1 text-[11px] leading-tight hover:brightness-95 ${dashed(b.status)} border`}
-                        style={{ backgroundColor: `${colourOf(b)}1a`, borderColor: `${colourOf(b)}55` }}
-                      >
-                        <ArtistDot colour={colourOf(b)} />
-                        <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span>
-                        <span className="truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</span>
-                      </Link>
+                      <GigHover key={b.id} card={card(b)}>
+                        <Link
+                          href={`/bookings/${b.id}`}
+                          className={`flex items-center gap-1 truncate rounded px-1.5 py-1 text-[11px] leading-tight hover:brightness-95 ${dashed(b.status)} border`}
+                          style={{ backgroundColor: `${colourOf(b)}1a`, borderColor: `${colourOf(b)}55` }}
+                        >
+                          <ArtistDot colour={colourOf(b)} />
+                          <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span>
+                          <span className="truncate font-medium">{byArtist ? b.artist.name : (b.venue?.name ?? "No venue")}</span>
+                          <Moon b={b} />
+                        </Link>
+                      </GigHover>
                     ))}
                     {items.length > 4 && (
                       <Link href={`/calendar${qs({ view: "week", date: key })}`} className="block px-1.5 text-[11px] font-medium text-ink-600 hover:underline">
@@ -318,7 +378,10 @@ function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
   if (!items.length) {
     return (
       <Empty>
-        No gigs this day. <Link href={addHref} className="link">Add one</Link>
+        No gigs this day.{" "}
+        <Link href={addHref} className="link">
+          Add one
+        </Link>
       </Empty>
     );
   }
@@ -342,6 +405,11 @@ function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
                   <div className="w-28 shrink-0 font-semibold tabular-nums">
                     {localTime(b.setStart, b.timezone)}
                     {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+                    {b.setEnd && localDateKey(b.setEnd, b.timezone) !== localDateKey(b.arriveBy, b.timezone) && (
+                      <span className="ml-1 font-normal text-ink-500" title="Finishes after midnight">
+                        ☾
+                      </span>
+                    )}
                     <div className="text-xs font-normal text-ink-500">arrive {localTime(b.arriveBy, b.timezone)}</div>
                   </div>
                   <Link href={`/bookings/${b.id}`} className="min-w-48 flex-1">
