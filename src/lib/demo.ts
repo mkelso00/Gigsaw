@@ -1,26 +1,33 @@
-// Sample agency data: artists, venues, promoters and about 80 bookings spread over the past
-// six months, today and the next three months, with arrivals and payments.
+// Sample agency data, shaped like a busy bar-circuit agency: solo singers, duos, a DJ, a party
+// band with its own members and a band built from two solo acts; venues with weekly music
+// schedules (sale and cost), managers and the pub companies that pay; six weeks of gigs played
+// (with check-ins and payments), live arrivals today, the next fortnight mostly confirmed with
+// offers out (one declined) and some gigs still needing an act, and two weddings, a birthday
+// party and a staff party.
 // Used by the "Load demo data" button in Settings and by the local seed script.
-// Every record is flagged `demo: true` so removeDemoData can take it all out again.
+// Every record is flagged `demo: true` so removeDemoData can take it all out again, and demo
+// data is never billed or messaged.
 
 import { randomBytes } from "node:crypto";
-import type { Artist, Contact, PrismaClient, Venue } from "@prisma/client";
+import type { Artist, Contact, Prisma, PrismaClient, Venue, VenueSlot } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
-import { VENUE_PALETTE } from "./rota";
+import { defaultTasks } from "./event-plan";
+import { VENUE_PALETTE, dateInWeek, weekStartOf, weekdayOf } from "./rota";
 import { buildSchedule } from "./schedule";
-import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
+import { addDaysToKey, localDateKey } from "./time";
 
 const MIN = 60_000;
 const DAY = 86_400_000;
+const TZ = "Europe/London";
 
 export async function hasDemoData(prisma: PrismaClient, agencyId: string) {
   return (await prisma.artist.count({ where: { agencyId, demo: true } })) > 0;
 }
 
 /**
- * Add the sample data. `leadAgentId` looks after some of the artists. If `secondAgentId` is
- * not given, a demo agent who cannot sign in is created to look after the rest.
+ * Add the sample data. `leadAgentId` looks after most acts. If `secondAgentId` is not given, a
+ * demo agent who cannot sign in is created to look after the rest.
  */
 export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string; leadAgentId: string; secondAgentId?: string }) {
   const agencyId = opts.agencyId;
@@ -30,7 +37,7 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
     seed = (seed * 1664525 + 1013904223) % 4294967296;
     return seed / 4294967296;
   };
-  const pick = <T>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
+  const pick = <T>(xs: readonly T[]) => xs[Math.floor(rand() * xs.length)];
 
   const lead = opts.leadAgentId;
   const second =
@@ -49,468 +56,660 @@ export async function addDemoData(prisma: PrismaClient, opts: { agencyId: string
       })
     ).id;
 
-  const artistSeed = [
-    { name: "Maya Okafor Trio", phone: "07700 900201", genre: "Jazz", colour: "#7c3aed", agentId: lead },
-    { name: "The Velvet Owls", phone: "07700 900202", genre: "Indie rock", colour: "#0ea5e9", agentId: second },
-    { name: "DJ Kestrel", phone: "07700 900203", genre: "House", colour: "#f97316", agentId: second, defaultCommission: 12 },
-    { name: "Brass Tacks Collective", phone: "07700 900204", genre: "Brass / funk", colour: "#16a34a", agentId: lead },
-    { name: "Elena Ruiz", phone: "07700 900205", genre: "Singer-songwriter", colour: "#e11d48", agentId: lead },
-  ];
-  const artists: Artist[] = [];
-  for (const a of artistSeed) {
-    const slug = a.name
-      .toLowerCase()
-      .replace(/[^a-z]+/g, ".")
-      .replace(/^\.|\.$/g, "");
-    artists.push(await prisma.artist.create({ data: { ...a, agencyId, email: `${slug}@example.com`, demo: true } }));
-  }
-
-  const venueSeed = [
-    { name: "Jazz Cafe", city: "London", country: "UK", latitude: 51.5392, longitude: -0.1426, capacity: 440, address: "5 Parkway, Camden" },
-    { name: "Band on the Wall", city: "Manchester", country: "UK", latitude: 53.4851, longitude: -2.2353, capacity: 500, address: "25 Swan Street" },
-    { name: "Thekla", city: "Bristol", country: "UK", latitude: 51.4493, longitude: -2.5927, capacity: 400, address: "The Grove, East Mud Dock" },
-    { name: "King Tut's Wah Wah Hut", city: "Glasgow", country: "UK", latitude: 55.8622, longitude: -4.2654, capacity: 300, address: "272a St Vincent Street" },
-    { name: "Brudenell Social Club", city: "Leeds", country: "UK", latitude: 53.8146, longitude: -1.5737, capacity: 400, address: "33 Queens Road" },
-    { name: "Concorde 2", city: "Brighton", country: "UK", latitude: 50.8167, longitude: -0.1197, capacity: 600, address: "Madeira Drive" },
-    {
-      name: "Whelan's",
-      city: "Dublin",
-      country: "Ireland",
-      latitude: 53.3361,
-      longitude: -6.2655,
-      capacity: 450,
-      address: "25 Wexford Street",
-      timezone: "Europe/Dublin",
-    },
-    {
-      name: "Paradiso",
-      city: "Amsterdam",
-      country: "Netherlands",
-      latitude: 52.3622,
-      longitude: 4.8838,
-      capacity: 1500,
-      address: "Weteringschans 6-8",
-      timezone: "Europe/Amsterdam",
-    },
-    { name: "The Village Hall", city: "Hebden Bridge", country: "UK", latitude: null, longitude: null, capacity: 120, address: "Market Street" },
-  ];
-  const venues: Venue[] = [];
-  for (const [i, v] of venueSeed.entries()) {
-    venues.push(
-      await prisma.venue.create({ data: { timezone: "Europe/London", ...v, colour: VENUE_PALETTE[i % VENUE_PALETTE.length], agencyId, demo: true } }),
-    );
-  }
-
-  const promoterSeed = [
-    { name: "Priya Shah", company: "Lantern Live", tags: "uk, jazz", email: "priya@lantern.example", phone: "07700 900111" },
-    { name: "Tom Fletcher", company: "Fletcher Promotions", tags: "uk, rock", email: "tom@fletcher.example", phone: "07700 900222" },
-    { name: "Aoife Byrne", company: "Liffey Sounds", tags: "ireland", email: "aoife@liffey.example", phone: "+353 1 555 0100" },
-    { name: "Jasper de Vries", company: "Canal Concerts", tags: "europe, festival", email: "jasper@canal.example", phone: "+31 20 555 0199" },
-    { name: "Hannah Brooks", company: "Private client", tags: "private, wedding", email: "hannah@example.com", phone: "07700 900333" },
-  ];
-  const promoters: Contact[] = [];
-  for (const p of promoterSeed) {
-    promoters.push(
-      await prisma.contact.create({
-        data: { ...p, type: p.company === "Private client" ? "CLIENT" : "PROMOTER", address: "1 Example Road\nExample Town", agencyId, demo: true },
-      }),
-    );
-  }
-  await prisma.contact.create({
-    data: { type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "production", phone: "07700 900444", agencyId, demo: true },
-  });
-  await prisma.contactNote.create({
-    data: { contactId: promoters[0].id, authorId: lead, body: "Keen on a second Maya date in the spring. Prefers contracts by email." },
-  });
-
-  // A band built from two solo acts: each solo act sees the band's gigs, and clashes are
-  // checked between the band and its members' solo gigs.
-  const soloA = await prisma.artist.create({
-    data: {
-      agencyId,
-      name: "Graham McKee Solo",
-      genre: "Acoustic covers",
-      colour: "#0d9488",
-      phone: "07700 900206",
-      email: "graham.solo@example.com",
-      agentId: lead,
-      demo: true,
-    },
-  });
-  const soloB = await prisma.artist.create({
-    data: {
-      agencyId,
-      name: "Jo Drummond Solo",
-      genre: "Acoustic covers",
-      colour: "#ca8a04",
-      phone: "07700 900207",
-      email: "jo.solo@example.com",
-      agentId: lead,
-      demo: true,
-    },
-  });
-  const band = await prisma.artist.create({
-    data: { agencyId, name: "Wonderlust", genre: "Party band", colour: "#9333ea", email: "wonderlust@example.com", agentId: lead, demo: true },
-  });
+  // ---------- Acts ----------
+  const act = (name: string, genre: string, colour: string, phone: string, agentId = lead, extra: Partial<Prisma.ArtistUncheckedCreateInput> = {}) =>
+    prisma.artist.create({
+      data: {
+        agencyId,
+        name,
+        genre,
+        colour,
+        phone,
+        email: `${name
+          .toLowerCase()
+          .replace(/[^a-z]+/g, ".")
+          .replace(/^\.|\.$/g, "")}@example.com`,
+        agentId,
+        demo: true,
+        ...extra,
+      },
+    });
+  const graham = await act("Graham McKee", "Acoustic covers", "#0d9488", "07700 900206");
+  const jo = await act("Jo Drummond", "Acoustic covers", "#ca8a04", "07700 900207");
+  const ellie = await act("Ellie Rose", "Pop and soul", "#db2777", "07700 900208");
+  const sean = await act("Sean Reaves", "Indie acoustic", "#2563eb", "07700 900209", second);
+  const diarmuid = await act("Diarmuid Byrne", "Irish and folk", "#16a34a", "07700 900210", second);
+  const finn = await act("Finn Carter", "Acoustic covers", "#ea580c", "07700 900211");
+  const jade = await act("Jade Duncan", "Soul and Motown", "#7c3aed", "07700 900212", second);
+  const rogues = await act("The Rogues Duo", "Acoustic duo", "#0891b2", "07700 900213");
+  const sunset = await act("Sunset Sessions Duo", "Chilled acoustic duo", "#c2410c", "07700 900214", second);
+  const kestrel = await act("DJ Kestrel", "House and party", "#f97316", "07700 900215", second, { defaultCommission: 12 });
+  const partyBand = await act("The Ultimate Party Band", "Party band", "#9333ea", "07700 900216");
+  const wonderlust = await act("Wonderlust", "Party band", "#4f46e5", "07700 900217");
+  // Wonderlust is built from two solo acts: each sees the band's gigs, and clashes are checked
+  // between the band and their solo gigs.
   await prisma.actLink.createMany({
     data: [
-      { parentId: band.id, childId: soloA.id, role: "Lead vocals, guitar" },
-      { parentId: band.id, childId: soloB.id, role: "Vocals, drums" },
+      { parentId: wonderlust.id, childId: graham.id, role: "Lead vocals, guitar" },
+      { parentId: wonderlust.id, childId: jo.id, role: "Vocals, drums" },
     ],
   });
+  const artists: Artist[] = [graham, jo, ellie, sean, diarmuid, finn, jade, rogues, sunset, kestrel, partyBand, wonderlust];
+  const solos = [graham, jo, ellie, sean, diarmuid, finn, jade];
+  const duos = [rogues, sunset];
 
-  // People: the members of two bands (Tom plays in both, so clashes are checked across them),
-  // and a manager at three venues.
-  const person = (firstName: string, surname: string, extra: Record<string, string | null> = {}) =>
+  // ---------- Who pays: pub companies, and private customers ----------
+  const company = (name: string, contact: string, email: string, phone: string, tags = "") =>
+    prisma.contact.create({
+      data: { agencyId, type: "COMPANY", name: contact, company: name, email, phone, tags, address: "1 Example Road\nBristol BS1 1AA", demo: true },
+    });
+  const crownCo = await company("Harbourside Inns", "Rachel Green", "accounts@harbourside.example", "0117 496 0001", "pub group");
+  const bonniesCo = await company("Bonnies Bars Ltd", "Michael Shaw", "invoices@bonnies.example", "0121 496 0002", "pub group");
+  const bathCo = await company("Old Bank Taverns", "Hannah Lee", "hello@oldbank.example", "01225 496003");
+  const bridgeCo = await company("Bridge Inns Cardiff", "Owen Davies", "owen@bridgeinns.example", "029 2049 6004");
+  const lanternCo = await company("Lantern Group", "Priya Shah", "priya@lantern.example", "0161 496 0005", "nightlife");
+  await prisma.contactNote.create({
+    data: { contactId: bonniesCo.id, authorId: lead, body: "Pays monthly on invoice. Wants the party band every other Saturday from November." },
+  });
+  const client = (name: string, email: string, phone: string, tags: string) =>
+    prisma.contact.create({ data: { agencyId, type: "CLIENT", name, company: "Private client", email, phone, tags, demo: true } });
+  const hannah = await client("Hannah Brooks", "hannah@example.com", "07700 900333", "wedding");
+  const priyaDev = await client("Priya Mistry", "priya.mistry@example.com", "07700 900334", "wedding");
+  const sophie = await client("Sophie Turner", "sophie@example.com", "07700 900335", "party");
+  await prisma.contact.create({
+    data: { agencyId, type: "COLLABORATOR", name: "Chris Lowe", company: "Lowe Sound Hire", tags: "PA hire", phone: "07700 900444", demo: true },
+  });
+
+  // ---------- Venues, their managers and who pays for them ----------
+  const venueSeed: {
+    name: string;
+    city: string;
+    address: string;
+    lat: number | null;
+    lng: number | null;
+    capacity: number;
+    payer: Contact;
+    manager?: [string, string, string];
+  }[] = [
+    {
+      name: "The Crown",
+      city: "Bristol",
+      address: "12 Corn Street",
+      lat: 51.4545,
+      lng: -2.5928,
+      capacity: 180,
+      payer: crownCo,
+      manager: ["Sam", "Whitaker", "General manager"],
+    },
+    {
+      name: "The Swan",
+      city: "Bristol",
+      address: "4 Park Street",
+      lat: 51.4553,
+      lng: -2.6031,
+      capacity: 140,
+      payer: crownCo,
+      manager: ["Rosie", "Adams", "Bar manager"],
+    },
+    {
+      name: "Bonnies",
+      city: "Birmingham",
+      address: "88 Broad Street",
+      lat: 52.4776,
+      lng: -1.9112,
+      capacity: 400,
+      payer: bonniesCo,
+      manager: ["Callum", "Reid", "Venue manager"],
+    },
+    {
+      name: "The Old Bank",
+      city: "Bath",
+      address: "1 Milsom Street",
+      lat: 51.3846,
+      lng: -2.3612,
+      capacity: 220,
+      payer: bathCo,
+      manager: ["Amy", "Fox", "Manager"],
+    },
+    { name: "The Bridge Inn", city: "Cardiff", address: "20 Mill Lane", lat: 51.4766, lng: -3.1762, capacity: 260, payer: bridgeCo },
+    {
+      name: "The Lantern",
+      city: "Manchester",
+      address: "5 Peter Street",
+      lat: 53.4778,
+      lng: -2.2475,
+      capacity: 500,
+      payer: lanternCo,
+      manager: ["Dan", "Howe", "Events manager"],
+    },
+    { name: "Hollins Hall", city: "Harrogate", address: "Hollins Lane", lat: 53.9921, lng: -1.5418, capacity: 200, payer: hannah },
+    { name: "The Village Hall", city: "Hebden Bridge", address: "Market Street", lat: null, lng: null, capacity: 120, payer: sophie },
+  ];
+  const venues: Venue[] = [];
+  const payerOf = new Map<string, Contact>();
+  for (const [i, v] of venueSeed.entries()) {
+    const venue = await prisma.venue.create({
+      data: {
+        agencyId,
+        demo: true,
+        name: v.name,
+        city: v.city,
+        country: "UK",
+        address: v.address,
+        latitude: v.lat,
+        longitude: v.lng,
+        capacity: v.capacity,
+        timezone: TZ,
+        colour: VENUE_PALETTE[i % VENUE_PALETTE.length],
+      },
+    });
+    venues.push(venue);
+    payerOf.set(venue.id, v.payer);
+    if (v.manager) {
+      const [first, last, title] = v.manager;
+      await prisma.person.create({
+        data: {
+          agencyId,
+          demo: true,
+          firstName: first,
+          surname: last,
+          jobTitle: title,
+          venueId: venue.id,
+          phone: `07700 9003${String(10 + i).padStart(2, "0")}`,
+          email: `${first.toLowerCase()}@${v.name.toLowerCase().replace(/[^a-z]+/g, "")}.example`,
+        },
+      });
+    }
+  }
+  const [crown, swan, bonnies, oldBank, bridge, lantern, hollins, villageHall] = venues;
+  // People at the pub companies (Overture-style: a person works at a company).
+  await prisma.person.create({
+    data: {
+      agencyId,
+      demo: true,
+      firstName: "Rachel",
+      surname: "Green",
+      jobTitle: "Area manager",
+      companyId: crownCo.id,
+      phone: "07700 900401",
+      email: "rachel@harbourside.example",
+    },
+  });
+  await prisma.person.create({
+    data: {
+      agencyId,
+      demo: true,
+      firstName: "Michael",
+      surname: "Shaw",
+      jobTitle: "Operations director",
+      companyId: bonniesCo.id,
+      phone: "07700 900402",
+      email: "michael@bonnies.example",
+    },
+  });
+
+  // ---------- People in acts ----------
+  const person = (firstName: string, surname: string, extra: Partial<Prisma.PersonUncheckedCreateInput> = {}) =>
     prisma.person.create({ data: { agencyId, firstName, surname, demo: true, ...extra } });
-  const mayaP = await person("Maya", "Okafor", { phone: "07700 900211", email: "maya.okafor@example.com", pronouns: "she/her" });
-  const tomP = await person("Tom", "Price", { phone: "07700 900212", email: "tom.price@example.com" });
-  const adeP = await person("Ade", "Bello", { phone: "07700 900213" });
-  const lucyP = await person("Lucy", "Hart", { phone: "07700 900214", alias: "Lucy Owl" });
+  const grahamP = await person("Graham", "McKee", { phone: "07700 900501", email: "graham.mckee@example.com", pronouns: "he/him" });
+  const joP = await person("Jo", "Drummond", { phone: "07700 900502", email: "jo.drummond@example.com", pronouns: "she/her" });
+  const michaelP = await person("Michael", "White", { phone: "07700 900503", email: "michael.white@example.com" });
+  const kerryP = await person("Kerry", "Lane", { phone: "07700 900504", alias: "Kez" });
+  const devP = await person("Dev", "Sharma", { phone: "07700 900505" });
   await prisma.personAct.createMany({
     data: [
-      { personId: mayaP.id, artistId: artists[0].id, jobTitle: "Lead vocals" },
-      { personId: tomP.id, artistId: artists[0].id, jobTitle: "Piano" },
-      { personId: adeP.id, artistId: artists[0].id, jobTitle: "Double bass" },
-      { personId: lucyP.id, artistId: artists[1].id, jobTitle: "Vocals, guitar" },
-      { personId: tomP.id, artistId: artists[1].id, jobTitle: "Keys" },
+      { personId: grahamP.id, artistId: graham.id, jobTitle: "Vocals, guitar" },
+      { personId: joP.id, artistId: jo.id, jobTitle: "Vocals" },
+      { personId: michaelP.id, artistId: partyBand.id, jobTitle: "Lead vocals (main contact)" },
+      { personId: kerryP.id, artistId: partyBand.id, jobTitle: "Bass" },
+      { personId: devP.id, artistId: partyBand.id, jobTitle: "Drums" },
+      // Dev also plays in a duo, so the duo's gigs are checked against the party band's.
+      { personId: devP.id, artistId: rogues.id, jobTitle: "Guitar" },
     ],
   });
-  for (const [i, [first, last, title]] of [
-    ["Sam", "Whitaker", "General manager"],
-    ["Rosie", "Adams", "Bar manager"],
-    ["Callum", "Reid", "Venue manager"],
-  ].entries()) {
-    await person(first, last, { venueId: venues[i].id, jobTitle: title, phone: `07700 9003${10 + i}`, email: `${first.toLowerCase()}@venue.example` });
-  }
 
-  // Weekly music schedules for three venues, so the rota has something to show.
-  const [elena, maya, kestrel, owls] = [artists[4], artists[0], artists[2], artists[1]];
-  const slotRows: { v: Venue; days: number[]; label: string; arrive: string; start: string; end: string; fee: number; artist: Artist | null }[] = [
-    { v: venues[0], days: [1, 2, 4], label: "Solo", arrive: "18:30", start: "19:00", end: "21:00", fee: 150, artist: elena },
-    { v: venues[0], days: [3], label: "Solo", arrive: "17:30", start: "18:00", end: "20:00", fee: 150, artist: elena },
-    { v: venues[0], days: [5], label: "Duo", arrive: "15:30", start: "16:00", end: "19:00", fee: 220, artist: maya },
-    { v: venues[0], days: [5], label: "Band", arrive: "18:30", start: "19:00", end: "22:00", fee: 450, artist: owls },
-    { v: venues[1], days: [4, 5, 6], label: "Solo", arrive: "18:30", start: "19:00", end: "22:00", fee: 180, artist: null },
-    { v: venues[5], days: [6], label: "DJ", arrive: "21:30", start: "22:00", end: "02:00", fee: 300, artist: kestrel },
+  // ---------- Weekly music schedules (the bulk of the work) ----------
+  // [venue, weekdays, label, arrive, start, end, sale, cost, regular act]
+  const slotSeed: [Venue, number[], string, string, string, string, number, number, Artist | null][] = [
+    [crown, [1, 2, 3, 4], "Solo", "18:30", "19:00", "21:00", 180, 130, graham],
+    [crown, [5], "Solo", "18:30", "19:00", "21:00", 200, 140, graham],
+    [crown, [6], "Duo", "20:00", "20:30", "23:00", 320, 240, rogues],
+    [swan, [3, 5], "Solo", "19:30", "20:00", "22:00", 180, 130, ellie],
+    [swan, [6], "Solo", "15:30", "16:00", "18:00", 160, 120, null],
+    [swan, [7], "Solo", "16:30", "17:00", "19:00", 160, 120, diarmuid],
+    [bonnies, [4], "Solo", "18:30", "19:00", "21:00", 200, 140, sean],
+    [bonnies, [5], "Solo", "16:30", "17:00", "19:00", 200, 140, jade],
+    [bonnies, [5], "Duo", "18:30", "19:00", "22:00", 340, 250, sunset],
+    [bonnies, [5], "Band", "21:30", "22:00", "01:00", 950, 750, wonderlust],
+    [bonnies, [6], "Solo", "18:30", "19:00", "21:00", 200, 140, null],
+    [bonnies, [6], "Band", "21:00", "21:30", "00:30", 1100, 850, partyBand],
+    [oldBank, [5, 6], "Duo", "19:30", "20:00", "23:00", 340, 250, null],
+    [bridge, [6], "Band", "20:30", "21:00", "00:00", 900, 700, partyBand],
+    [lantern, [5, 6], "DJ", "21:30", "22:00", "02:00", 380, 280, kestrel],
   ];
-  for (const r of slotRows) {
-    await prisma.venueSlot.createMany({
-      data: r.days.map((weekday) => ({
-        agencyId,
-        venueId: r.v.id,
-        weekday,
-        label: r.label,
-        arriveTime: r.arrive,
-        startTime: r.start,
-        endTime: r.end,
-        feeMinor: r.fee * 100,
-        currency: "GBP",
-        eventType: r.label === "DJ" ? "CLUB_NIGHT" : "GIG",
-        promoterId: promoters[0].id,
-        artistId: r.artist?.id ?? null,
-      })),
-    });
+  const slots: (VenueSlot & { venue: Venue })[] = [];
+  for (const [venue, days, label, arrive, start, end, sale, cost, regular] of slotSeed) {
+    for (const weekday of days) {
+      const s = await prisma.venueSlot.create({
+        data: {
+          agencyId,
+          venueId: venue.id,
+          weekday,
+          label,
+          arriveTime: arrive,
+          startTime: start,
+          endTime: end,
+          feeMinor: sale * 100,
+          costMinor: cost * 100,
+          currency: "GBP",
+          eventType: label === "DJ" ? "CLUB_NIGHT" : "GIG",
+          bookingStatus: "CONFIRMED",
+          promoterId: payerOf.get(venue.id)!.id,
+          artistId: regular?.id ?? null,
+        },
+      });
+      slots.push({ ...s, venue });
+    }
   }
 
+  // ---------- Gigs ----------
   // Carry on numbering after any real bookings.
   const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });
   let refN = last ? Number(last.reference.replace(/\D/g, "")) : 0;
   const nextRef = () => `GS-${String(++refN).padStart(4, "0")}`;
-
   const now = new Date();
+  const todayKey = localDateKey(now, TZ);
 
-  async function book(o: {
-    artist: Artist;
-    venue: Venue;
-    status: string;
-    fee: number;
-    /** Local date and times, or an exact call time for today's gigs. */
+  type Arrival = { offsetMin: number; onSite?: boolean; byAgent?: boolean } | "none" | null;
+  async function gig(o: {
+    venue: Venue | null;
     date?: string;
     arrive?: string;
-    set?: string;
+    start?: string;
+    end?: string;
+    /** Or exact times, for today's live arrivals. */
     arriveAt?: Date;
-    arrival?: { offsetMin: number; onSite: boolean; byAgent?: boolean } | "none";
+    act: Artist | null;
+    status: string;
+    sale: number;
+    cost: number | null;
+    promoter?: Contact | null;
+    eventType?: string;
+    slotId?: string;
+    eventId?: string;
+    eventName?: string;
+    offer?: "open" | "declined";
+    arrival?: Arrival;
     onTheWay?: { at: Date; eta: number };
+    paid?: { in?: number; out?: number; deposit?: number };
+    customerTold?: boolean;
+    vatPct?: number;
   }) {
-    const tz = o.venue.timezone;
-    const arriveBy = o.arriveAt ?? zonedToUtc(o.date!, o.arrive!, tz);
-    const setStart = o.arriveAt ? new Date(arriveBy.getTime() + 180 * MIN) : zonedToUtc(localDateKey(arriveBy, tz), o.set!, tz);
-    const setEnd = new Date(setStart.getTime() + 90 * MIN);
-    const promoter = pick(promoters);
-    const festival = rand() > 0.7;
-    const eventType =
-      promoter.type === "CLIENT" ? pick(["WEDDING", "PRIVATE_PARTY", "CORPORATE"]) : o.artist.genre === "House" ? "CLUB_NIGHT" : festival ? "FESTIVAL" : "GIG";
-    const commissionPct = o.artist.defaultCommission ?? 15;
-    const b = await prisma.booking.create({
-      data: {
-        reference: nextRef(),
-        agencyId,
-        demo: true,
-        artistId: o.artist.id,
-        venueId: o.venue.id,
-        promoterId: promoter.id,
-        agentId: o.artist.agentId,
-        createdById: o.artist.agentId,
-        status: o.status,
-        eventType,
-        timezone: tz,
-        arriveBy,
-        soundcheckAt: new Date(arriveBy.getTime() + 60 * MIN),
-        setStart,
-        setEnd,
-        currency: tz === "Europe/London" ? "GBP" : "EUR",
-        feeMinor: o.fee * 100,
-        commissionPct,
-        depositMinor: Math.round(o.fee * 0.5) * 100,
-        depositDueDate: new Date(arriveBy.getTime() - 30 * DAY),
-        travel: "Train from home station. Tickets in the shared folder.",
-        accommodation: rand() > 0.5 ? "Premier Inn, 5 minutes' walk. Booked under the artist's name." : "",
-        dayContact: `${promoter.name} · ${promoter.phone}`,
-        hospitality: "Rider: hot meal for the band, 12 bottles of water, 1 bottle of red.",
-        tags: eventType === "FESTIVAL" ? "festival" : "",
-      },
-    });
-
-    // Payments: deposits and settlements for past shows, some deposits for future ones.
-    if ((o.status === "SETTLED" || o.status === "CONFIRMED") && arriveBy < now) {
-      await prisma.payment.create({
-        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: b.depositMinor, paidAt: new Date(arriveBy.getTime() - 40 * DAY) },
-      });
-      if (o.status === "SETTLED") {
-        await prisma.payment.create({
-          data: { bookingId: b.id, direction: "IN", kind: "BALANCE", amountMinor: b.feeMinor - b.depositMinor, paidAt: arriveBy },
-        });
-        const artistShare = b.feeMinor - Math.round((b.feeMinor * commissionPct) / 100);
-        await prisma.payment.create({
-          data: { bookingId: b.id, direction: "OUT", kind: "SETTLEMENT", amountMinor: artistShare, paidAt: new Date(arriveBy.getTime() + 7 * DAY) },
-        });
-      }
-    } else if (o.status === "CONFIRMED" && rand() > 0.4) {
-      await prisma.payment.create({
-        data: {
-          bookingId: b.id,
-          direction: "IN",
-          kind: "DEPOSIT",
-          amountMinor: b.depositMinor,
-          paidAt: new Date(Math.min(now.getTime(), arriveBy.getTime() - 35 * DAY)),
-        },
-      });
-    }
-
-    if (o.onTheWay) {
-      await prisma.checkIn.create({
-        data: { bookingId: b.id, artistId: o.artist.id, kind: "ON_THE_WAY", source: "APP", at: o.onTheWay.at, etaMinutes: o.onTheWay.eta },
-      });
-    }
-    if (o.arrival && o.arrival !== "none") {
-      const at = new Date(arriveBy.getTime() + o.arrival.offsetMin * MIN);
+    const tz = TZ;
+    const sched = o.arriveAt
+      ? { arriveBy: o.arriveAt, soundcheckAt: null, setStart: new Date(o.arriveAt.getTime() + 30 * MIN), setEnd: new Date(o.arriveAt.getTime() + 150 * MIN) }
+      : buildSchedule(o.date!, { arrive: o.arrive!, setStart: o.start!, setEnd: o.end ?? null }, tz);
+    const checkIns: Prisma.CheckInCreateWithoutBookingInput[] = [];
+    if (o.act && o.onTheWay)
+      checkIns.push({ artist: { connect: { id: o.act.id } }, kind: "ON_THE_WAY", source: "APP", at: o.onTheWay.at, etaMinutes: o.onTheWay.eta });
+    if (o.act && o.arrival && o.arrival !== "none") {
+      const at = new Date(sched.arriveBy.getTime() + o.arrival.offsetMin * MIN);
       if (at <= now) {
         const v = o.venue;
-        // Put the phone either at the venue or a couple of km away.
-        const lat = v.latitude !== null ? v.latitude + (o.arrival.onSite ? 0.0008 : 0.02) : null;
-        const lng = v.longitude !== null ? v.longitude + (o.arrival.onSite ? 0.0005 : 0.01) : null;
+        const onSite = o.arrival.onSite ?? true;
+        const lat = v?.latitude != null ? v.latitude + (onSite ? 0.0008 : 0.02) : null;
+        const lng = v?.longitude != null ? v.longitude + (onSite ? 0.0005 : 0.01) : null;
         const byAgent = o.arrival.byAgent ?? false;
-        await prisma.checkIn.create({
-          data: {
-            bookingId: b.id,
-            artistId: o.artist.id,
-            kind: "ARRIVED",
-            source: byAgent ? "AGENT" : "APP",
-            userId: byAgent ? o.artist.agentId : null,
-            at,
-            latitude: byAgent ? null : lat,
-            longitude: byAgent ? null : lng,
-            accuracyM: byAgent ? null : 12,
-            distanceM:
-              !byAgent && lat !== null && lng !== null && v.latitude !== null && v.longitude !== null
-                ? distanceMetres(lat, lng, v.latitude, v.longitude)
-                : null,
-            note: byAgent ? "Promoter rang to confirm" : "",
-          },
+        checkIns.push({
+          artist: { connect: { id: o.act.id } },
+          kind: "ARRIVED",
+          source: byAgent ? "AGENT" : "APP",
+          ...(byAgent ? { user: { connect: { id: lead } }, note: "Venue rang to confirm" } : {}),
+          at,
+          latitude: byAgent ? null : lat,
+          longitude: byAgent ? null : lng,
+          accuracyM: byAgent ? null : 12,
+          distanceM:
+            !byAgent && lat !== null && lng !== null && v?.latitude != null && v.longitude != null ? distanceMetres(lat, lng, v.latitude, v.longitude) : null,
         });
-        if (setEnd < now) {
-          await prisma.checkIn.create({
-            data: { bookingId: b.id, artistId: o.artist.id, kind: "DEPARTED", source: "APP", at: new Date(setEnd.getTime() + 45 * MIN) },
-          });
+        if (sched.setEnd && sched.setEnd < now) {
+          checkIns.push({ artist: { connect: { id: o.act.id } }, kind: "DEPARTED", source: "APP", at: new Date(sched.setEnd.getTime() + 30 * MIN) });
         }
       }
     }
-  }
-
-  const todayKey = localDateKey(now, "Europe/London");
-  const times = { arrive: ["16:00", "17:00", "17:30", "18:00"], set: ["20:00", "20:30", "21:00"], fee: [800, 1200, 1500, 2000, 2500, 3500] };
-
-  // Past six months: mostly on time, some late, a few with no check-in.
-  // Each artist has a different timekeeping habit.
-  const lateBias = [0.05, 0.25, 0.4, 0.1, 0.15];
-  for (let i = 0; i < 45; i++) {
-    const artist = artists[i % artists.length];
-    const daysAgo = 3 + Math.floor(rand() * 180);
-    const r = rand();
-    const late = r < 0.08 + lateBias[i % artists.length];
-    const arrival =
-      r < 0.08 ? ("none" as const) : { offsetMin: late ? 8 + Math.floor(rand() * 40) : -Math.floor(rand() * 45), onSite: rand() > 0.1, byAgent: rand() > 0.9 };
-    await book({
-      artist,
-      venue: pick(venues),
-      date: addDaysToKey(todayKey, -daysAgo),
-      arrive: pick(times.arrive),
-      set: pick(times.set),
-      status: rand() > 0.2 ? "SETTLED" : "CONFIRMED",
-      fee: pick(times.fee),
-      arrival,
-    });
-  }
-
-  // Today: one of each live arrival state for the board.
-  const at = (mins: number) => new Date(Math.round((now.getTime() + mins * MIN) / (5 * MIN)) * 5 * MIN);
-  await book({ artist: artists[0], venue: venues[0], status: "CONFIRMED", fee: 1800, arriveAt: at(-90), arrival: { offsetMin: -12, onSite: true } });
-  await book({ artist: artists[1], venue: venues[1], status: "CONFIRMED", fee: 2200, arriveAt: at(-60), arrival: { offsetMin: 22, onSite: true } });
-  await book({ artist: artists[2], venue: venues[5], status: "CONFIRMED", fee: 1500, arriveAt: at(-25) });
-  await book({
-    artist: artists[3],
-    venue: venues[2],
-    status: "CONFIRMED",
-    fee: 3000,
-    arriveAt: at(50),
-    onTheWay: { at: new Date(now.getTime() - 15 * MIN), eta: 45 },
-  });
-  await book({ artist: artists[4], venue: venues[4], status: "CONFIRMED", fee: 900, arriveAt: at(240) });
-
-  // Next three months.
-  for (let i = 0; i < 28; i++) {
-    await book({
-      artist: artists[i % artists.length],
-      venue: pick(venues),
-      date: addDaysToKey(todayKey, 2 + Math.floor(rand() * 90)),
-      arrive: pick(times.arrive),
-      set: pick(times.set),
-      status: pick(["HOLD", "HOLD", "PENDING", "CONFIRMED", "CONFIRMED", "CONFIRMED", "ENQUIRY"]),
-      fee: pick(times.fee),
-    });
-  }
-  // A gig tomorrow so the artist app has something to show, and one cancelled show.
-  await book({ artist: artists[0], venue: venues[1], date: addDaysToKey(todayKey, 1), arrive: "17:00", set: "20:30", status: "CONFIRMED", fee: 2000 });
-  await book({ artist: artists[2], venue: venues[7], date: addDaysToKey(todayKey, 20), arrive: "22:00", set: "23:59", status: "CANCELLED", fee: 2500 });
-
-  // The booking flow: gigs set up with no act yet (Pending), offers waiting for an answer
-  // (Awaiting confirmation), and one the act turned down.
-  const flow = async (o: {
-    venue: Venue;
-    days: number;
-    start: string;
-    end: string;
-    sale: number;
-    cost: number;
-    artist?: Artist;
-    status: string;
-    declined?: boolean;
-  }) => {
-    const date = addDaysToKey(todayKey, o.days);
-    const [h, m] = o.start.split(":").map(Number);
-    const arrive = `${String(h - 1).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-    const sched = buildSchedule(date, { arrive, setStart: o.start, setEnd: o.end }, o.venue.timezone);
-    await prisma.booking.create({
+    const payments: Prisma.PaymentCreateWithoutBookingInput[] = [];
+    if (o.paid?.deposit)
+      payments.push({
+        direction: "IN",
+        kind: "DEPOSIT",
+        amountMinor: o.paid.deposit * 100,
+        paidAt: new Date(Math.min(now.getTime(), sched.arriveBy.getTime() - 30 * DAY)),
+      });
+    if (o.paid?.in)
+      payments.push({
+        direction: "IN",
+        kind: "BALANCE",
+        amountMinor: o.paid.in,
+        paidAt: new Date(Math.min(now.getTime(), sched.arriveBy.getTime() + 10 * DAY)),
+      });
+    if (o.paid?.out)
+      payments.push({
+        direction: "OUT",
+        kind: "SETTLEMENT",
+        amountMinor: o.paid.out,
+        paidAt: new Date(Math.min(now.getTime(), sched.arriveBy.getTime() + 7 * DAY)),
+      });
+    const promoter = o.promoter === undefined ? (o.venue ? (payerOf.get(o.venue.id) ?? null) : null) : o.promoter;
+    return prisma.booking.create({
       data: {
         reference: nextRef(),
         agencyId,
         demo: true,
-        artistId: o.artist?.id ?? null,
-        venueId: o.venue.id,
-        agentId: lead,
+        artistId: o.act?.id ?? null,
+        venueId: o.venue?.id ?? null,
+        promoterId: promoter?.id ?? null,
+        agentId: o.act?.agentId ?? lead,
         createdById: lead,
         status: o.status,
-        eventType: "GIG",
-        timezone: o.venue.timezone,
+        eventType: o.eventType ?? "GIG",
+        eventName: o.eventName ?? "",
+        eventId: o.eventId ?? null,
+        slotId: o.slotId ?? null,
+        timezone: tz,
         ...sched,
         currency: "GBP",
         feeMinor: o.sale * 100,
-        dealType: "BUY_SELL",
-        artistFeeMinor: o.cost * 100,
-        ...(o.status === "AWAITING"
+        vatPct: o.vatPct ?? 0,
+        ...(o.cost != null ? { dealType: "BUY_SELL", artistFeeMinor: o.cost * 100 } : { commissionPct: o.act?.defaultCommission ?? 15 }),
+        dayContact: o.venue ? `${o.venue.name}: ask for the manager on duty` : "",
+        hospitality: "Two drinks each from the bar, and a meal if you're on for 3 hours or more.",
+        notifyClientOnArrival: false,
+        ...(o.offer
           ? {
               offerToken: randomBytes(18).toString("base64url"),
-              offeredAt: new Date(Date.now() - 5 * 3_600_000),
-              ...(o.declined ? { offerResponse: "DECLINED", respondedAt: new Date(Date.now() - 3_600_000) } : {}),
+              offeredAt: new Date(now.getTime() - (o.offer === "declined" ? 26 : 5) * 3_600_000),
+              ...(o.offer === "declined" ? { offerResponse: "DECLINED", respondedAt: new Date(now.getTime() - 2 * 3_600_000) } : {}),
             }
           : {}),
+        ...(o.customerTold ? { customerToldAt: new Date(now.getTime() - 3 * DAY) } : {}),
+        checkIns: { create: checkIns },
+        payments: { create: payments },
       },
     });
-  };
-  await flow({ venue: venues[2], days: 5, start: "20:00", end: "22:00", sale: 250, cost: 180, status: "PENDING" });
-  await flow({ venue: venues[0], days: 6, start: "19:30", end: "22:30", sale: 400, cost: 300, status: "PENDING" });
-  await flow({ venue: venues[5], days: 8, start: "20:00", end: "23:00", sale: 300, cost: 220, artist: artists[4], status: "AWAITING" });
-  await flow({ venue: venues[4], days: 9, start: "21:00", end: "23:00", sale: 350, cost: 260, artist: artists[1], status: "AWAITING", declined: true });
+  }
 
-  // A wedding with three acts on one booking for the customer, each on sale and cost.
-  const weddingDate = addDaysToKey(todayKey, 60);
-  const hall = venues[8];
-  const wedding = await prisma.event.create({
+  // An act for a slot on a date: the regular, or someone suitable for that kind of slot.
+  const actFor = (s: VenueSlot) => {
+    const regular = artists.find((a) => a.id === s.artistId);
+    if (regular && rand() > 0.15) return regular;
+    return s.label === "Duo" ? pick(duos) : s.label === "Band" ? pick([partyBand, wonderlust]) : s.label === "DJ" ? kestrel : pick(solos);
+  };
+
+  // The weekly slots, from six weeks ago to four weeks ahead.
+  const thisMonday = weekStartOf(todayKey);
+  // Each act's timekeeping habit: how often they're late.
+  const lateness = new Map(artists.map((a, i) => [a.id, [0.05, 0.25, 0.1, 0.4, 0.15, 0.05, 0.2, 0.1, 0.3, 0.2, 0.1, 0.15][i]]));
+  let declinedDone = false;
+  for (let w = -6; w <= 3; w++) {
+    const monday = addDaysToKey(thisMonday, w * 7);
+    for (const s of slots) {
+      const date = dateInWeek(monday, s.weekday);
+      const daysAhead = Math.round((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${todayKey}T12:00:00Z`)) / DAY);
+      const base = {
+        venue: s.venue,
+        date,
+        arrive: s.arriveTime,
+        start: s.startTime,
+        end: s.endTime,
+        sale: s.feeMinor / 100,
+        cost: (s.costMinor ?? 0) / 100,
+        slotId: s.id,
+        eventType: s.eventType,
+      };
+      if (daysAhead < 0) {
+        // Played: settled once a fortnight old (venue paid, act paid), otherwise confirmed and still to invoice.
+        const a = actFor(s);
+        const old = daysAhead < -14;
+        const r = rand();
+        const lateP = lateness.get(a.id) ?? 0.1;
+        const arrival: Arrival =
+          r < 0.04
+            ? "none"
+            : { offsetMin: r < 0.04 + lateP ? 6 + Math.floor(rand() * 35) : -Math.floor(rand() * 40), onSite: rand() > 0.08, byAgent: rand() > 0.93 };
+        await gig({
+          ...base,
+          act: a,
+          status: old ? "SETTLED" : "CONFIRMED",
+          arrival,
+          paid: old ? { in: s.feeMinor, out: s.costMinor ?? 0 } : rand() > 0.5 ? { out: s.costMinor ?? 0 } : undefined,
+        });
+      } else if (daysAhead === 0) {
+        // Today's regular gigs: anyone whose call time has passed has checked in (the live
+        // board's other states come from the gigs added below).
+        await gig({ ...base, act: actFor(s), status: "CONFIRMED", arrival: { offsetMin: -Math.floor(rand() * 20) } });
+      } else if (daysAhead <= 13) {
+        // The next fortnight: mostly confirmed, some offers out (one declined), a few with no act yet.
+        const r = rand();
+        if (r < 0.7) await gig({ ...base, act: actFor(s), status: "CONFIRMED" });
+        else if (r < 0.85) {
+          const offer = !declinedDone && daysAhead > 3 ? "declined" : "open";
+          if (offer === "declined") declinedDone = true;
+          await gig({ ...base, act: actFor(s), status: "AWAITING", offer });
+        } else await gig({ ...base, act: null, status: "PENDING" });
+      } else {
+        // Weeks three and four: in the calendar, most still to sort.
+        const r = rand();
+        if (r < 0.3) await gig({ ...base, act: actFor(s), status: "CONFIRMED" });
+        else if (r < 0.55) await gig({ ...base, act: actFor(s), status: "AWAITING", offer: "open" });
+        else await gig({ ...base, act: null, status: "PENDING" });
+      }
+    }
+  }
+
+  // Today on the arrivals board: one of each live state, at times around now.
+  const at = (mins: number) => new Date(Math.round((now.getTime() + mins * MIN) / (5 * MIN)) * 5 * MIN);
+  // (Acts with no other gig today, so the demo doesn't double-book anyone.)
+  const busyToday = new Set(slots.filter((sl) => sl.weekday === weekdayOf(todayKey)).map((sl) => sl.artistId));
+  const free = [ellie, jo, finn, diarmuid, jade, sean].filter((a) => !busyToday.has(a.id));
+  const [onTime, late, overdue, onTheWay] = [free[0] ?? ellie, free[1] ?? jo, free[2] ?? finn, free[3] ?? diarmuid];
+  await gig({ venue: swan, arriveAt: at(-90), act: onTime, status: "CONFIRMED", sale: 180, cost: 130, eventName: "Afternoon session", arrival: { offsetMin: -12 } });
+  await gig({ venue: oldBank, arriveAt: at(-60), act: late, status: "CONFIRMED", sale: 180, cost: 130, eventName: "Afternoon session", arrival: { offsetMin: 22 } });
+  await gig({ venue: bridge, arriveAt: at(-30), act: overdue, status: "CONFIRMED", sale: 200, cost: 140, eventName: "Afternoon session" });
+  await gig({
+    venue: lantern,
+    arriveAt: at(45),
+    act: onTheWay,
+    status: "CONFIRMED",
+    sale: 200,
+    cost: 140,
+    eventName: "Early evening",
+    onTheWay: { at: new Date(now.getTime() - 15 * MIN), eta: 40 },
+  });
+
+  // ---------- Weddings and private events ----------
+  // A wedding six weeks away, nearly all sorted: three acts on one booking for the couple.
+  const weddingDate = addDaysToKey(todayKey, 45);
+  const w1 = await prisma.event.create({
     data: {
       agencyId,
       demo: true,
       name: "Hannah & Sam's wedding",
       type: "WEDDING",
       date: weddingDate,
-      timezone: hall.timezone,
-      customerId: promoters[4].id,
-      venueId: hall.id,
+      timezone: TZ,
+      customerId: hannah.id,
+      venueId: hollins.id,
       agentId: lead,
-      plannerToken: `demo-${agencyId}-wedding-planner`,
+      plannerToken: `demo-${agencyId}-hannah-sam`,
+      plannerSentAt: new Date(now.getTime() - 10 * DAY),
+      plannerDoneAt: new Date(now.getTime() - 4 * DAY),
       guestCount: 120,
       timeline: "13:30 Ceremony\n14:15 Drinks reception\n16:00 Wedding breakfast\n18:00 Speeches\n19:30 First dance, then the band\n23:00 DJ until 00:30",
       dayContact: "Kate (best friend), 07700 900555",
       arrivalInfo: "Park behind the hall. Load in through the side door from 17:30.",
       dressCode: "Smart, dark colours",
-      songRequests: "First dance: At Last (Etta James). No Macarena, please!",
-      tasks: {
-        create: [
-          { key: "CONTRACT", title: "Contract sent and signed", sort: 1, doneAt: new Date() },
-          { key: "DEPOSIT", title: "Deposit received", sort: 2 },
-          { key: "PLANNER", title: "Details from the couple (planner filled in)", dueDate: addDaysToKey(weddingDate, -42), sort: 3 },
-          { key: "BALANCE", title: "Balance paid", dueDate: addDaysToKey(weddingDate, -14), sort: 4 },
-          { key: "ITINERARY", title: "Final details sent to the acts", dueDate: addDaysToKey(weddingDate, -7), sort: 5 },
-          { key: "THANKS", title: "Thank-you and review request sent", dueDate: addDaysToKey(weddingDate, 2), sort: 6 },
-        ],
-      },
+      meals: "Hot meal for all acts at 17:00 in the snug",
+      songRequests: "First dance: At Last (Etta James). Last song: Mr Brightside. No Macarena, please!",
+      tasks: { create: defaultTasks("WEDDING", weddingDate).map((t) => ({ ...t, doneAt: t.key === "CONTRACT" ? new Date(now.getTime() - 20 * DAY) : null })) },
     },
   });
-  for (const [artist, arrive, start, end, sale, cost] of [
-    [artists[4], "12:45", "13:30", "14:15", 450, 350],
-    [artists[3], "17:30", "19:30", "23:00", 2200, 1800],
-    [artists[2], "22:30", "23:00", "00:30", 600, 450],
-  ] as const) {
-    const sched = buildSchedule(weddingDate, { arrive, setStart: start, setEnd: end }, hall.timezone);
-    const b = await prisma.booking.create({
-      data: {
-        reference: nextRef(),
-        agencyId,
-        demo: true,
-        eventId: wedding.id,
-        eventName: wedding.name,
-        artistId: artist.id,
-        venueId: hall.id,
-        promoterId: promoters[4].id,
-        agentId: lead,
-        createdById: lead,
-        status: "CONFIRMED",
-        eventType: "WEDDING",
-        timezone: hall.timezone,
-        ...sched,
-        currency: "GBP",
-        feeMinor: sale * 100,
-        dealType: "BUY_SELL",
-        artistFeeMinor: cost * 100,
-        notifyClientOnArrival: false,
-      },
-    });
-    if (artist === artists[4]) {
-      await prisma.payment.create({
-        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: 50000, paidAt: new Date(), note: "Deposit for the whole wedding" },
-      });
-    }
-  }
+  await gig({
+    venue: hollins,
+    date: weddingDate,
+    arrive: "12:45",
+    start: "13:30",
+    end: "14:15",
+    act: ellie,
+    status: "CONFIRMED",
+    sale: 450,
+    cost: 320,
+    promoter: hannah,
+    eventType: "WEDDING",
+    eventId: w1.id,
+    eventName: w1.name,
+    paid: { deposit: 450 },
+    customerTold: true,
+  });
+  await gig({
+    venue: hollins,
+    date: weddingDate,
+    arrive: "17:30",
+    start: "19:30",
+    end: "23:00",
+    act: partyBand,
+    status: "CONFIRMED",
+    sale: 2200,
+    cost: 1700,
+    promoter: hannah,
+    eventType: "WEDDING",
+    eventId: w1.id,
+    eventName: w1.name,
+    paid: { deposit: 500 },
+    customerTold: true,
+  });
+  await gig({
+    venue: hollins,
+    date: weddingDate,
+    arrive: "22:30",
+    start: "23:00",
+    end: "00:30",
+    act: kestrel,
+    status: "AWAITING",
+    sale: 600,
+    cost: 420,
+    promoter: hannah,
+    eventType: "WEDDING",
+    eventId: w1.id,
+    eventName: w1.name,
+    offer: "open",
+  });
+
+  // A wedding later in the year, early days: one act offered, one still to find.
+  const wedding2 = addDaysToKey(todayKey, 150);
+  const w2 = await prisma.event.create({
+    data: {
+      agencyId,
+      demo: true,
+      name: "Priya & Dev's wedding",
+      type: "WEDDING",
+      date: wedding2,
+      timezone: TZ,
+      customerId: priyaDev.id,
+      venueText: "Marquee at Lower Farm, Hebden Bridge HX7 6AA",
+      agentId: second,
+      plannerToken: `demo-${agencyId}-priya-dev`,
+      notes: "Wants a sax player with the DJ if we can find one.",
+      tasks: { create: defaultTasks("WEDDING", wedding2) },
+    },
+  });
+  await gig({
+    venue: null,
+    date: wedding2,
+    arrive: "13:00",
+    start: "14:00",
+    end: "15:00",
+    act: sunset,
+    status: "AWAITING",
+    sale: 550,
+    cost: 400,
+    promoter: priyaDev,
+    eventType: "WEDDING",
+    eventId: w2.id,
+    eventName: w2.name,
+    offer: "open",
+  });
+  await gig({
+    venue: null,
+    date: wedding2,
+    arrive: "19:00",
+    start: "20:00",
+    end: "23:30",
+    act: null,
+    status: "PENDING",
+    sale: 1900,
+    cost: 1450,
+    promoter: priyaDev,
+    eventType: "WEDDING",
+    eventId: w2.id,
+    eventName: w2.name,
+  });
+
+  // A 40th birthday party (one act, so just a booking) and a staff party on hold.
+  await gig({
+    venue: villageHall,
+    date: addDaysToKey(todayKey, 20),
+    arrive: "19:00",
+    start: "20:00",
+    end: "23:00",
+    act: wonderlust,
+    status: "CONFIRMED",
+    sale: 1200,
+    cost: 900,
+    promoter: sophie,
+    eventType: "PRIVATE_PARTY",
+    eventName: "Sophie's 40th",
+    paid: { deposit: 300 },
+    customerTold: true,
+  });
+  await gig({
+    venue: lantern,
+    date: addDaysToKey(todayKey, 34),
+    arrive: "18:30",
+    start: "19:30",
+    end: "22:30",
+    act: rogues,
+    status: "HOLD",
+    sale: 650,
+    cost: 480,
+    promoter: lanternCo,
+    eventType: "CORPORATE",
+    eventName: "Lantern Group staff party",
+  });
+  // An enquiry, and a gig that was called off.
+  await gig({
+    venue: bridge,
+    date: addDaysToKey(todayKey, 60),
+    arrive: "19:00",
+    start: "20:00",
+    end: "23:00",
+    act: null,
+    status: "ENQUIRY",
+    sale: 900,
+    cost: null,
+    eventName: "St David's Day",
+  });
+  await gig({
+    venue: oldBank,
+    date: addDaysToKey(todayKey, 9),
+    arrive: "19:30",
+    start: "20:00",
+    end: "23:00",
+    act: sunset,
+    status: "CANCELLED",
+    sale: 340,
+    cost: 250,
+    eventName: "Venue closed for refurbishment",
+  });
 
   return { artists, venues: venues.length, bookings: await prisma.booking.count({ where: { agencyId, demo: true } }) };
 }

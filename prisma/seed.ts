@@ -52,14 +52,15 @@ async function main() {
   });
   const agent = await prisma.user.create({ data: { email: "agent@gigsaw.test", name: "Sam Patel", role: "AGENT", agencyId: northern.id, passwordHash: hash } });
   const demo = await addDemoData(prisma, { agencyId: northern.id, leadAgentId: admin.id, secondAgentId: agent.id });
-  // Maya can sign in to the artist app.
+  // Ellie Rose (a solo act) can sign in to the artist app with the act's own login.
+  const ellie = demo.artists.find((a) => a.name === "Ellie Rose")!;
   await prisma.user.create({
-    data: { email: "maya@gigsaw.test", name: "Maya Okafor", role: "ARTIST", agencyId: northern.id, artistId: demo.artists[0].id, passwordHash: hash },
+    data: { email: "ellie@gigsaw.test", name: "Ellie Rose", role: "ARTIST", agencyId: northern.id, artistId: ellie.id, passwordHash: hash },
   });
-  // Tom plays in two acts and signs in as himself, so he sees both acts' gigs.
-  const tom = await prisma.person.findFirstOrThrow({ where: { agencyId: northern.id, firstName: "Tom", surname: "Price" } });
+  // Graham signs in as himself: he sees his solo gigs and Wonderlust's (a band built from his act and Jo's).
+  const graham = await prisma.person.findFirstOrThrow({ where: { agencyId: northern.id, firstName: "Graham", surname: "McKee" } });
   await prisma.user.create({
-    data: { email: "tom@gigsaw.test", name: "Tom Price", role: "ARTIST", agencyId: northern.id, personId: tom.id, passwordHash: hash },
+    data: { email: "graham@gigsaw.test", name: "Graham McKee", role: "ARTIST", agencyId: northern.id, personId: graham.id, passwordHash: hash },
   });
 
   // Agency two: a separate customer, to show agencies can't see each other.
@@ -72,7 +73,7 @@ async function main() {
 
   console.log(`Seeded 2 agencies: ${demo.bookings} and ${demo2.bookings} bookings.`);
   console.log(
-    "Owner + Northern Lights admin: admin@gigsaw.test · Agent: agent@gigsaw.test · Artist app: maya@gigsaw.test (an act), tom@gigsaw.test (a person in two acts)",
+    "Owner + Northern Lights admin: admin@gigsaw.test · Agent: agent@gigsaw.test · Artist app: ellie@gigsaw.test (a solo act), graham@gigsaw.test (a person whose act is in a band)",
   );
   console.log("Harbour Music admin: harbour@gigsaw.test · Password for all: gigsaw123");
 }

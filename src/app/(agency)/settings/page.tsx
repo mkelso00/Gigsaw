@@ -418,8 +418,10 @@ export default async function SettingsPage() {
               ) : (
                 <>
                   <p className="mb-4 text-sm text-ink-500">
-                    Fill Gigsaw with sample artists, venues, promoters and about 80 bookings, including live arrivals for today, so you can see how everything
-                    works. It sits alongside your own data, is never billed or messaged, and can be removed in one click.
+                    Fill Gigsaw with a bar-circuit agency: 12 acts (solos, duos, a DJ and two bands, one built from solo acts), 8 venues with weekly music
+                    schedules, managers and the pub companies that pay, six weeks of gigs played, live arrivals today, the next month of gigs with offers out
+                    and gigs still needing an act, two weddings and two private events. It sits alongside your own data, is never billed or messaged, and can be
+                    removed in one click.
                   </p>
                   <ActionForm action={loadDemoData}>
                     <SubmitButton pendingText="Loading demo data…">Load demo data</SubmitButton>

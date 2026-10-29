@@ -117,7 +117,7 @@ Upgrading an existing single-agency install: the migration moves all existing da
 
 Railway runs `npm run build` and `npm start` on its own and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
 
-To try Gigsaw with sample data, go to **Settings → Demo data → Load demo data**. It adds five artists, nine venues, five promoters and about 80 bookings (including live arrivals for today) alongside your own data, and **Remove demo data** takes it all out again. Sample logins with published passwords are only created by the local seed script, never on the live site.
+To try Gigsaw with sample data, go to **Settings → Demo data → Load demo data**. It adds a bar-circuit agency: 12 acts (solos, duos, a DJ and two bands, one built from solo acts), 8 venues with weekly music schedules, managers and the pub companies that pay, six weeks of gigs played, live arrivals today, the next month of gigs with offers out and gigs still needing an act, two weddings and two private events, alongside your own data, and **Remove demo data** takes it all out again. Sample logins with published passwords are only created by the local seed script, never on the live site.
 
 ## Running it locally
 
@@ -145,16 +145,14 @@ npm run setup
 npm run dev
 ```
 
-Open http://localhost:3000. `npm run setup` creates the tables and fills them with demo data (an agency, five artists, venues, promoters and about 80 bookings, including live arrivals for today). It refuses to run over a database that already has data.
+Open http://localhost:3000. `npm run setup` creates the tables and fills them with demo data (two agencies, each with 12 acts (solos, duos, a DJ and two bands, one built from solo acts), 8 venues with weekly music schedules, managers and the pub companies that pay, six weeks of gigs played, live arrivals today, the next month of gigs with offers out and gigs still needing an act, two weddings and two private events). It refuses to run over a database that already has data.
 
 Demo logins (password `gigsaw123` for all):
 
 - `admin@gigsaw.test`: owner (Owner area) and admin of Northern Lights Agency
 - `agent@gigsaw.test`: agent at Northern Lights
-- `maya@gigsaw.test`: artist app for Northern Lights as an act login (open it on a phone-sized window)
-- `tom@gigsaw.test`: artist app as a person who plays in two acts (Maya Okafor Trio and The Velvet Owls)
-
-The demo data also has a wedding with three acts (Weddings), and a band built from two solo acts (Wonderlust).
+- `ellie@gigsaw.test`: artist app as a solo act's login (open it on a phone-sized window)
+- `graham@gigsaw.test`: artist app as a person: Graham sees his solo gigs and those of Wonderlust, a band built from his act and Jo Drummond's
 - `harbour@gigsaw.test`: admin of Harbour Music, a second agency that can't see Northern Lights' data
 
 `npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.
