@@ -96,7 +96,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     tab === "history"
       ? await prisma.payment.findMany({
           where: {
-            booking: { agencyId: user.agencyId },
+            booking: { agencyId: user.agencyId, archivedAt: null },
             paidAt: { gte: zonedToUtc(range.from, "00:00", tz), lt: zonedToUtc(addDaysToKey(range.to, 1), "00:00", tz) },
           },
           include: {

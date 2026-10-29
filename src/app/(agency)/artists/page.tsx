@@ -43,7 +43,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         login: { select: { id: true } },
         partActs: { include: { child: { select: { id: true, name: true, colour: true } } } },
         partOf: { include: { parent: { select: { id: true, name: true } } } },
-        _count: { select: { members: true, bookings: { where: { setStart: { gte: now }, status: { not: "CANCELLED" } } } } },
+        _count: { select: { members: true, bookings: { where: { archivedAt: null, setStart: { gte: now }, status: { not: "CANCELLED" } } } } },
       },
     }),
     punctualityByArtist(settings, new Date(now.getTime() - 365 * 86_400_000)),

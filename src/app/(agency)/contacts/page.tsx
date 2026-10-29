@@ -28,7 +28,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     ];
   }
   const [contacts, allTags] = await Promise.all([
-    prisma.contact.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { bookings: true } } } }),
+    prisma.contact.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { bookings: { where: { archivedAt: null } } } } } }),
     prisma.contact.findMany({ where: { agencyId: user.agencyId }, select: { tags: true } }),
   ]);
   const tags = [...new Set(allTags.flatMap((c) => splitTags(c.tags)))].sort();

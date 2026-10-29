@@ -117,7 +117,8 @@ export async function updateEvent(eventId: string, _: FormState, form: FormData)
     });
     // Keep the acts' gigs on the event's venue and customer.
     await prisma.booking.updateMany({
-      where: { eventId, agencyId: user.agencyId },
+      // Archived gigs too, so they're right if brought back.
+      where: { eventId, agencyId: user.agencyId, archivedAt: undefined },
       data: { venueId: basics.venueId, promoterId: basics.customerId, eventName: basics.name },
     });
     await logActivity(user, "EVENT", eventId, "updated");

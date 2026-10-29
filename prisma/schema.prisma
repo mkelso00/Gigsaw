@@ -362,8 +362,9 @@ model Booking {
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
+  @@index([agencyId, arriveBy])
   @@index([artistId, setStart])
-  @@index([slotId])
+  @@index([slotId, arriveBy])
   @@index([eventId])
 }
 
@@ -415,6 +416,7 @@ model Activity {
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
+  @@index([agencyId, createdAt])
 }
 
 // One-time password reset links. Only a hash of the token is stored.
@@ -508,6 +510,7 @@ model Reminder {
   createdAt DateTime @default(now())
 
   @@unique([kind, recipient, key])
+  @@index([recipient])
 }
 
 // A person: a musician in one or more acts, a venue manager, someone at a promoter, and so on.

@@ -24,7 +24,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
         : {}),
     },
     orderBy: { name: "asc" },
-    include: { _count: { select: { bookings: true } } },
+    include: { _count: { select: { bookings: { where: { archivedAt: null } } } } },
   });
   return (
     <div>
