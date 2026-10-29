@@ -184,7 +184,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
                 <th>Members / part of</th>
                 <th>Phone</th>
                 <th>Email</th>
-                <th>Agent</th>
+                <th>Lead agent</th>
                 <th className="text-right">Upcoming</th>
                 <th>On time</th>
                 <th>App</th>

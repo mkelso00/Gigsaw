@@ -7,7 +7,7 @@ import { requireOwner } from "@/lib/auth";
 export const metadata: Metadata = { title: { default: "Owner", template: "%s · Gigsaw owner" } };
 
 const LINKS = [
-  ["/owner", "Agencies"],
+  ["/owner", "Businesses"],
   ["/owner/billing", "Billing"],
   ["/owner/messages", "Outbox"],
 ];
@@ -29,7 +29,7 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
             ))}
             {user.agencyId && (
               <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-volt-400 hover:bg-white/[0.06]">
-                My agency →
+                My business →
               </Link>
             )}
           </nav>

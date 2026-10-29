@@ -68,7 +68,7 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Agent">
+          <Field label="Lead agent" hint="The internal user looking after it">
             <select name="agentId" defaultValue={booking?.agentId ?? ""} className="input">
               <option value="">Me</option>
               {agents.map((a) => (

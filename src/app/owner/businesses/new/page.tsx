@@ -5,18 +5,18 @@ import { Field, PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { CURRENCIES } from "@/lib/constants";
 
-export const metadata: Metadata = { title: "New agency" };
+export const metadata: Metadata = { title: "New business" };
 
 export default async function NewAgencyPage() {
   await requireOwner();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="New agency" subtitle="Creates the company and its first admin login. Send them the email and password to get started." />
+      <PageHeader title="New business" subtitle="Creates the business and its first admin login. Send them the email and password to get started." />
       <ActionForm action={createAgency} className="space-y-6">
         <section className="card card-pad space-y-4">
           <h2 className="section-title">Company</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Agency name">
+            <Field label="Business name">
               <input name="name" required className="input" />
             </Field>
             <Field label="Billing email" hint="Where statements go. Defaults to the admin's email.">
@@ -24,6 +24,12 @@ export default async function NewAgencyPage() {
             </Field>
             <Field label="Price per gig" hint="Charged for each gig that goes ahead">
               <input name="pricePerGig" inputMode="decimal" required placeholder="2.50" className="input" />
+            </Field>
+            <Field label="Internal users included" hint="Admins and agents who log in to book">
+              <input name="includedUsers" inputMode="numeric" defaultValue={2} className="input" />
+            </Field>
+            <Field label="Each extra internal user, per year" hint="Leave at 0 for no charge">
+              <input name="extraUserYearly" inputMode="decimal" defaultValue="0" placeholder="500.00" className="input" />
             </Field>
             <Field label="Currency">
               <select name="billingCurrency" defaultValue="GBP" className="input">
@@ -56,7 +62,7 @@ export default async function NewAgencyPage() {
           </label>
         </section>
         <div className="flex justify-end">
-          <SubmitButton pendingText="Creating…">Create agency</SubmitButton>
+          <SubmitButton pendingText="Creating…">Create business</SubmitButton>
         </div>
       </ActionForm>
     </div>

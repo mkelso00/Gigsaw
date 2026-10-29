@@ -20,6 +20,8 @@ import { CURRENCIES, TIMEZONES } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { emailConfigured, smsConfigured } from "@/lib/messaging";
 import { formatMoney, minorToInput } from "@/lib/money";
+import { internalUserCounts } from "@/lib/seat-counts";
+import { userCharge } from "@/lib/seats";
 import { WEEKDAYS } from "@/lib/rota";
 import { usageForMonth } from "@/lib/usage";
 
@@ -92,6 +94,7 @@ export default async function SettingsPage() {
   ]);
   const gigsThisMonth = usage.get(user.agencyId)?.count ?? 0;
   const agency = user.agency!;
+  const seats = userCharge(agency, (await internalUserCounts([user.agencyId])).get(user.agencyId) ?? 0);
   const price = (m: number) => formatMoney(m, agency.billingCurrency);
   const menu: [string, string][] = isAdmin
     ? [
@@ -104,7 +107,7 @@ export default async function SettingsPage() {
         ["weddings", "Weddings and events"],
         ["documents", "Documents"],
         ["messages", "Messages"],
-        ["team", "Team"],
+        ["team", "Internal users"],
         ["demo", "Demo data"],
         ["password", "Password"],
       ]
@@ -145,18 +148,28 @@ export default async function SettingsPage() {
                   <div className="mt-2 text-3xl font-semibold tracking-tight">
                     {price(agency.pricePerGigMinor)} <span className="text-base font-normal text-white/60">per gig</span>
                   </div>
+                  <div className="mt-1 text-xs text-white/60">
+                    {seats.users} internal user{seats.users === 1 ? "" : "s"}, {agency.includedUsers} included
+                    {seats.extra > 0 && agency.extraUserYearlyMinor > 0
+                      ? ` · ${seats.extra} extra at ${price(agency.extraUserYearlyMinor)} a year each (${price(seats.monthlyMinor)} a month)`
+                      : ""}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-[13px] text-white/60">{monthLabel(month)} so far</div>
-                  <div className="mt-2 text-3xl font-semibold tracking-tight text-volt-400 tabular-nums">{price(gigsThisMonth * agency.pricePerGigMinor)}</div>
+                  <div className="mt-2 text-3xl font-semibold tracking-tight text-volt-400 tabular-nums">
+                    {price(gigsThisMonth * agency.pricePerGigMinor + seats.monthlyMinor)}
+                  </div>
                   <div className="text-xs text-white/60">
                     {gigsThisMonth} billable gig{gigsThisMonth === 1 ? "" : "s"}
+                    {seats.monthlyMinor > 0 ? ` + ${price(seats.monthlyMinor)} for extra users` : ""}
                   </div>
                 </div>
               </div>
               <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-white/60">
                 A gig counts when it&apos;s confirmed or settled, when the artist checks in, or when it&apos;s still on hold or pending after its date.
-                Cancelled gigs, enquiries and demo data are free.
+                Cancelled gigs, enquiries and demo data are free. Internal users are you and your staff who log in to make bookings; acts, venue managers and
+                customers are free.
               </p>
               {unresolved > 0 && (
                 <p className="mt-3 text-sm">
@@ -380,7 +393,11 @@ export default async function SettingsPage() {
           )}
 
           {isAdmin && (
-            <Section id="team" title="Team" description="Admins can change settings and manage the team. Agents can do everything else.">
+            <Section
+              id="team"
+              title="Internal users"
+              description="You and your staff who make bookings. Admins can change settings and manage internal users; agents can do everything else. Whoever makes a booking is its lead agent. Acts, venue managers and customers are external users and don't count here."
+            >
               <ul className="mb-5 divide-y divide-ink-100 text-sm">
                 {team.map((u) => (
                   <li key={u.id} className="flex items-center justify-between gap-3 py-3">
@@ -402,7 +419,7 @@ export default async function SettingsPage() {
                   </li>
                 ))}
               </ul>
-              <h3 className="mb-3 text-sm font-medium text-ink-800">Add someone</h3>
+              <h3 className="mb-3 text-sm font-medium text-ink-800">Add an internal user</h3>
               <ActionForm action={createStaffUser} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-end">
                 <Field label="Name">
                   <input name="name" required className="input" />

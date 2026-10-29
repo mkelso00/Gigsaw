@@ -44,7 +44,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
           ["Day of show contact", b.dayContact],
           ["Hospitality", b.hospitality],
           ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? `, ${b.promoter.phone}` : ""}` : ""],
-          ["Agent", b.agent ? `${b.agent.name}, ${b.agent.email}` : ""],
+          ["Your agent", b.agent ? `${b.agent.name}, ${b.agent.email}` : ""],
         ]}
       />
       <p className="mt-8 rounded-lg bg-brand-50 p-4 text-sm text-brand-700">

@@ -9,6 +9,8 @@ import { logActivity, prisma } from "@/lib/db";
 import { addDemoData } from "@/lib/demo";
 import { FormError, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { toMinor } from "@/lib/money";
+import { internalUserCounts } from "@/lib/seat-counts";
+import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
 
 function priceFrom(form: FormData, currency: string) {
@@ -20,6 +22,20 @@ function priceFrom(form: FormData, currency: string) {
     if (e instanceof FormError) throw e;
     throw new FormError("Enter the price per gig as a number, like 2.50");
   }
+}
+
+/** Internal users included, and the yearly price of each extra one. */
+function seatsFrom(form: FormData, currency: string) {
+  const included = Number(str(form, "includedUsers") || "2");
+  if (!Number.isInteger(included) || included < 0 || included > 1000) throw new FormError("Included internal users must be a whole number");
+  let yearly = 0;
+  try {
+    yearly = toMinor(str(form, "extraUserYearly") || "0", currency);
+  } catch {
+    throw new FormError("Enter the yearly price per extra user as a number, like 500");
+  }
+  if (yearly < 0) throw new FormError("Price can't be negative");
+  return { includedUsers: included, extraUserYearlyMinor: yearly };
 }
 
 async function newPasswordHash(form: FormData) {
@@ -37,7 +53,7 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
   const owner = await requireOwner();
   let id = "";
   const res = await handleForm(async () => {
-    const name = required(form, "name", "Agency name");
+    const name = required(form, "name", "Business name");
     const currency = oneOf(str(form, "billingCurrency"), CURRENCIES, "GBP");
     const pricePerGigMinor = priceFrom(form, currency);
     const adminName = required(form, "adminName", "Admin name");
@@ -47,7 +63,14 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
 
     const { agency, admin } = await prisma.$transaction(async (tx) => {
       const agency = await tx.agency.create({
-        data: { name, pricePerGigMinor, billingCurrency: currency, billingEmail: str(form, "billingEmail") || adminEmail, ownerNotes: str(form, "ownerNotes") },
+        data: {
+          name,
+          pricePerGigMinor,
+          ...seatsFrom(form, currency),
+          billingCurrency: currency,
+          billingEmail: str(form, "billingEmail") || adminEmail,
+          ownerNotes: str(form, "ownerNotes"),
+        },
       });
       await tx.settings.create({ data: { agencyId: agency.id, agencyName: name, agencyEmail: adminEmail, defaultCurrency: currency } });
       const admin = await tx.user.create({ data: { email: adminEmail, name: adminName, role: "ADMIN", agencyId: agency.id, passwordHash } });
@@ -59,20 +82,21 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
   });
   if (res?.error) return res;
   revalidatePath("/owner", "layout");
-  redirect(`/owner/agencies/${id}?created=1`);
+  redirect(`/owner/businesses/${id}?created=1`);
 }
 
 export async function updateAgency(agencyId: string, _: FormState, form: FormData): Promise<FormState> {
   await requireOwner();
   return handleForm(async () => {
     const currency = oneOf(str(form, "billingCurrency"), CURRENCIES, "GBP");
-    const name = required(form, "name", "Agency name");
+    const name = required(form, "name", "Business name");
     await prisma.agency.update({
       where: { id: agencyId },
       data: {
         name,
         status: str(form, "status") === "SUSPENDED" ? "SUSPENDED" : "ACTIVE",
         pricePerGigMinor: priceFrom(form, currency),
+        ...seatsFrom(form, currency),
         billingCurrency: currency,
         billingEmail: str(form, "billingEmail"),
         ownerNotes: str(form, "ownerNotes"),
@@ -80,7 +104,7 @@ export async function updateAgency(agencyId: string, _: FormState, form: FormDat
     });
     await prisma.settings.upsert({ where: { agencyId }, update: { agencyName: name }, create: { agencyId, agencyName: name } });
     revalidatePath("/owner", "layout");
-    return { ok: "Agency saved." };
+    return { ok: "Business saved." };
   });
 }
 
@@ -94,7 +118,7 @@ export async function addAgencyAdmin(agencyId: string, _: FormState, form: FormD
     await prisma.user.create({
       data: { email, name: required(form, "name", "Name"), role: "ADMIN", agencyId, passwordHash: await newPasswordHash(form) },
     });
-    revalidatePath(`/owner/agencies/${agencyId}`);
+    revalidatePath(`/owner/businesses/${agencyId}`);
     return { ok: `${email} can now sign in as an admin of this agency.` };
   });
 }
@@ -119,11 +143,15 @@ export async function issueStatements(month: string, _: FormState): Promise<Form
   if (!isMonthKey(month)) return { error: "Unknown month" };
   if (!monthIsOver(month)) return { error: "You can issue statements once the month is over." };
   const usage = await usageForMonth(month);
-  const agencies = await prisma.agency.findMany({ where: { id: { in: [...usage.keys()] } } });
+  // Businesses with billable gigs, or paying for extra internal users.
+  const agencies = await prisma.agency.findMany({ where: { OR: [{ id: { in: [...usage.keys()] } }, { status: "ACTIVE", extraUserYearlyMinor: { gt: 0 } }] } });
+  const users = await internalUserCounts(agencies.map((a) => a.id));
   let issued = 0;
   let skipped = 0;
   for (const a of agencies) {
-    const u = usage.get(a.id)!;
+    const u = usage.get(a.id) ?? { count: 0, references: [] };
+    const seats = userCharge(a, users.get(a.id) ?? 0);
+    if (!u.count && !seats.monthlyMinor) continue;
     const existing = await prisma.billingStatement.findUnique({ where: { agencyId_month: { agencyId: a.id, month } } });
     if (existing?.status === "PAID") {
       skipped++;
@@ -132,7 +160,9 @@ export async function issueStatements(month: string, _: FormState): Promise<Form
     const data = {
       gigCount: u.count,
       pricePerGigMinor: a.pricePerGigMinor,
-      amountMinor: u.count * a.pricePerGigMinor,
+      extraUsers: seats.extra,
+      userChargeMinor: seats.monthlyMinor,
+      amountMinor: u.count * a.pricePerGigMinor + seats.monthlyMinor,
       currency: a.billingCurrency,
       references: u.references.join(", "),
       issuedAt: new Date(),
@@ -145,7 +175,7 @@ export async function issueStatements(month: string, _: FormState): Promise<Form
     issued++;
   }
   revalidatePath("/owner", "layout");
-  if (!issued && !skipped) return { ok: "No agency had billable gigs that month, so there's nothing to bill." };
+  if (!issued && !skipped) return { ok: "Nothing to bill that month: no billable gigs or extra internal users." };
   return { ok: `Issued ${issued} statement(s).${skipped ? ` ${skipped} already paid, left as they were.` : ""}` };
 }
 
@@ -154,4 +184,3 @@ export async function setStatementPaid(statementId: string, paid: boolean) {
   await prisma.billingStatement.update({ where: { id: statementId }, data: { status: paid ? "PAID" : "ISSUED", paidAt: paid ? new Date() : null } });
   revalidatePath("/owner", "layout");
 }
-

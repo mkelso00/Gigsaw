@@ -14,15 +14,18 @@ datasource db {
 // A company using Gigsaw. Every artist, contact, venue and booking belongs to one agency,
 // and agency staff only ever see their own agency's records.
 model Agency {
-  id               String   @id @default(cuid())
-  name             String
-  status           String   @default("ACTIVE") // ACTIVE | SUSPENDED
+  id                   String   @id @default(cuid())
+  name                 String
+  status               String   @default("ACTIVE") // ACTIVE | SUSPENDED
   // What the platform owner charges this agency for each billable gig.
-  pricePerGigMinor Int      @default(0)
-  billingCurrency  String   @default("GBP")
-  billingEmail     String   @default("")
-  ownerNotes       String   @default("") // only the platform owner sees this
-  createdAt        DateTime @default(now())
+  pricePerGigMinor     Int      @default(0)
+  billingCurrency      String   @default("GBP")
+  // Internal users (admins and agents): this many are included, each extra one costs this a year.
+  includedUsers        Int      @default(2)
+  extraUserYearlyMinor Int      @default(0)
+  billingEmail         String   @default("")
+  ownerNotes           String   @default("") // only the platform owner sees this
+  createdAt            DateTime @default(now())
 
   settings     Settings?
   users        User[]
@@ -47,6 +50,9 @@ model BillingStatement {
   month            String // "YYYY-MM"
   gigCount         Int
   pricePerGigMinor Int
+  // Extra internal users that month, charged at a twelfth of the yearly price each.
+  extraUsers       Int       @default(0)
+  userChargeMinor  Int       @default(0)
   amountMinor      Int
   currency         String
   // Booking references counted, so a bill can be checked later.

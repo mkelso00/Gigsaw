@@ -272,7 +272,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                   ),
                 ],
                 ["Booking type", eventTypeLabel(booking.eventType)],
-                ["Agent", booking.agent?.name ?? ""],
+                ["Lead agent", booking.agent?.name ?? ""],
                 ["Tags", booking.tags],
                 ["Travel", booking.travel],
                 ["Accommodation", booking.accommodation],
