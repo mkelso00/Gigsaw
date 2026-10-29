@@ -19,6 +19,12 @@ const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
 const MIN = 60_000;
 
 async function main() {
+  // The demo wipes everything, so never run it over real data by accident.
+  if ((await prisma.user.count()) > 0 && !process.argv.includes("--force")) {
+    console.error("This database already has data. The demo seed would delete it all.");
+    console.error("If you really want that, run: npx tsx prisma/seed.ts --force");
+    process.exit(1);
+  }
   await prisma.$transaction([
     prisma.activity.deleteMany(),
     prisma.checkIn.deleteMany(),

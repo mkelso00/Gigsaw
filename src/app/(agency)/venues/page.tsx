@@ -10,7 +10,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
   await requireStaff();
   const { q } = await searchParams;
   const venues = await prisma.venue.findMany({
-    where: q ? { OR: [{ name: { contains: q } }, { city: { contains: q } }, { country: { contains: q } }] } : undefined,
+    where: q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { city: { contains: q, mode: "insensitive" } }, { country: { contains: q, mode: "insensitive" } }] } : undefined,
     orderBy: { name: "asc" },
     include: { _count: { select: { bookings: true } } },
   });

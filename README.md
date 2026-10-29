@@ -33,9 +33,28 @@ Booking management for music agencies and their artists, modelled on [Overture](
 
 The grace period and venue radius are set in **Settings**. The rules live in `src/lib/arrival.ts` and are covered by unit tests.
 
+## Deploying on Railway
+
+1. In your Railway project, add the GitHub repo as a service and deploy from the `main` branch.
+2. Add a database: **+ New → Database → PostgreSQL**.
+3. In the Gigsaw service, open **Variables** and add `DATABASE_URL` with the value `${{Postgres.DATABASE_URL}}` (Railway offers this as a reference variable).
+4. In **Settings → Networking**, click **Generate Domain** to get a public web address.
+5. Redeploy. On each start, Gigsaw creates or updates its database tables automatically (`prisma migrate deploy`).
+6. Open the web address. The first visit shows a setup page where you name the agency and create the admin login. It only appears once.
+
+Railway runs `npm run build` and `npm start` on its own and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
+
+The demo data is not loaded on Railway, because its logins use a published password. Add your own artists, venues and team from the app.
+
 ## Running it locally
 
-You need Node.js 20 or newer.
+You need Node.js 20 or newer and a Postgres database. The quickest way to get Postgres is Docker:
+
+```bash
+docker run -d --name gigsaw-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gigsaw -p 5432:5432 postgres:16
+```
+
+Then:
 
 ```bash
 npm install
@@ -53,7 +72,7 @@ npm run setup
 npm run dev
 ```
 
-Then open http://localhost:3000. `npm run setup` creates a local SQLite database and fills it with demo data (an agency, five artists, venues, promoters and about 80 bookings, including live arrivals for today).
+Open http://localhost:3000. `npm run setup` creates the tables and fills them with demo data (an agency, five artists, venues, promoters and about 80 bookings, including live arrivals for today). It refuses to run over a database that already has data.
 
 Demo logins (password `gigsaw123` for all):
 
@@ -61,7 +80,7 @@ Demo logins (password `gigsaw123` for all):
 - `agent@gigsaw.test`: agent
 - `maya@gigsaw.test`: artist app (open it on a phone-sized window)
 
-`npm run db:reset` wipes the database and reloads the demo data.
+`npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.
 
 ## Checks
 
@@ -79,13 +98,7 @@ npm run build
 
 ## Tech
 
-Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind CSS 4, Prisma with SQLite for local use. Money is stored in pence/cents, times in UTC with the venue's time zone alongside.
-
-## Going live
-
-- **Database:** change `provider` in `prisma/schema.prisma` to `postgresql` and set `DATABASE_URL` to a Postgres database (for example Neon, Supabase or Railway). SQLite is fine for trying it out, not for a live multi-user service. Note: text search is case-insensitive on SQLite but case-sensitive on Postgres, so search queries would need `mode: "insensitive"` added.
-- **Hosting:** any Node host works (Vercel, Railway, Render, Fly.io). Location sharing in browsers only works over HTTPS.
-- **Accounts:** change or remove the demo logins before going live.
+Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind CSS 4, Prisma with Postgres. Money is stored in pence/cents, times in UTC with the venue's time zone alongside.
 
 ## Not built yet
 

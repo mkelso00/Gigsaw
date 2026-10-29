@@ -25,13 +25,13 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
     where.OR = [
-      { reference: { contains: sp.q } },
-      { eventName: { contains: sp.q } },
-      { tags: { contains: sp.q.toLowerCase() } },
-      { venue: { name: { contains: sp.q } } },
-      { venue: { city: { contains: sp.q } } },
-      { promoter: { name: { contains: sp.q } } },
-      { artist: { name: { contains: sp.q } } },
+      { reference: { contains: sp.q, mode: "insensitive" } },
+      { eventName: { contains: sp.q, mode: "insensitive" } },
+      { tags: { contains: sp.q, mode: "insensitive" } },
+      { venue: { name: { contains: sp.q, mode: "insensitive" } } },
+      { venue: { city: { contains: sp.q, mode: "insensitive" } } },
+      { promoter: { name: { contains: sp.q, mode: "insensitive" } } },
+      { artist: { name: { contains: sp.q, mode: "insensitive" } } },
     ];
   }
 

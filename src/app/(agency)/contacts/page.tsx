@@ -14,16 +14,16 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const where: Prisma.ContactWhereInput = {};
   if (sp.type && (CONTACT_TYPES as readonly string[]).includes(sp.type)) where.type = sp.type;
-  if (sp.tag) where.tags = { contains: sp.tag };
+  if (sp.tag) where.tags = { contains: sp.tag, mode: "insensitive" };
   if (sp.q) {
     where.OR = [
-      { name: { contains: sp.q } },
-      { company: { contains: sp.q } },
-      { email: { contains: sp.q.toLowerCase() } },
-      { phone: { contains: sp.q } },
-      { tags: { contains: sp.q.toLowerCase() } },
+      { name: { contains: sp.q, mode: "insensitive" } },
+      { company: { contains: sp.q, mode: "insensitive" } },
+      { email: { contains: sp.q, mode: "insensitive" } },
+      { phone: { contains: sp.q, mode: "insensitive" } },
+      { tags: { contains: sp.q, mode: "insensitive" } },
       // Search the note archive too.
-      { notes: { some: { body: { contains: sp.q } } } },
+      { notes: { some: { body: { contains: sp.q, mode: "insensitive" } } } },
     ];
   }
   const [contacts, allTags] = await Promise.all([

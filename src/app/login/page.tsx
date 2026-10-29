@@ -3,12 +3,16 @@ import { redirect } from "next/navigation";
 import { login } from "@/actions/auth";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { currentUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Sign in" };
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const user = await currentUser();
   if (user) redirect(user.role === "ARTIST" ? "/app" : "/dashboard");
+  // A brand new install has no logins yet: create the first admin.
+  if ((await prisma.user.count()) === 0) redirect("/setup");
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-500 p-4">

@@ -1,6 +1,5 @@
 // Gigsaw data model.
-// SQLite is used for local development. To run on Postgres, change the
-// provider below and point DATABASE_URL at your Postgres instance.
+// Postgres in production (Railway) and in local development.
 // Enum-like fields are stored as strings; allowed values live in src/lib/constants.ts.
 
 generator client {
@@ -8,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
