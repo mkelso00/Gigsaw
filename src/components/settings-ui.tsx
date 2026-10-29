@@ -18,9 +18,26 @@ export const SETTINGS_PAGES: { href: string; label: string; icon: string; hint: 
   { href: "/settings/demo", label: "Demo data", icon: "sparkle", hint: "Sample acts, venues and bookings to try things out" },
 ];
 
-export function SettingsPage({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
+export function SettingsPage({
+  title,
+  children,
+  actions,
+  back,
+}: {
+  title: string;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+  /** The page one level up, shown as a small link above the title. */
+  back?: { href: string; label: string };
+}) {
   return (
     <div className="mx-auto max-w-[880px] pb-16">
+      {back && (
+        <Link href={back.href} className="-mt-2 mb-2 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-950">
+          <Icon name="back" className="h-4 w-4" />
+          {back.label}
+        </Link>
+      )}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-ink-950">{title}</h1>
         {actions}
@@ -94,17 +111,40 @@ export function SettingsRow({
   );
 }
 
-/** A switch row. Sends "<name>__shown" so turning it off is saved too. */
-export function SettingsToggle({ name, defaultChecked, label, hint }: { name: string; defaultChecked: boolean; label: string; hint?: string }) {
-  return (
+/**
+ * A switch row. Sends "<name>__shown" so turning it off is saved too. Anything in `children`
+ * (e.g. the day and time for a reminder) only shows while the switch is on.
+ */
+export function SettingsToggle({
+  name,
+  defaultChecked,
+  label,
+  hint,
+  children,
+}: {
+  name: string;
+  defaultChecked: boolean;
+  label: string;
+  hint?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  const row = (
     <label className="flex cursor-pointer items-start justify-between gap-4 px-5 py-4 hover:bg-ink-50">
       <input type="hidden" name={`${name}__shown`} value="1" />
       <span>
         <span className="block text-sm font-medium text-ink-950">{label}</span>
         {hint && <span className="mt-0.5 block text-sm text-ink-500">{hint}</span>}
       </span>
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="switch mt-0.5" />
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="switch mt-0.5" data-toggle />
     </label>
+  );
+  if (!children) return row;
+  // Hidden with CSS rather than removed, so the fields are still sent (and kept) while the switch is off.
+  return (
+    <div className="group/toggle divide-y divide-ink-100">
+      {row}
+      <div className="group-has-[[data-toggle]:not(:checked)]/toggle:hidden">{children}</div>
+    </div>
   );
 }
 

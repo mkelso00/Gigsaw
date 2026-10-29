@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, SettingsCard, SettingsPage, SettingsRow } from "@/components/settings-ui";
 import { requireAdmin } from "@/lib/auth";
@@ -15,14 +14,8 @@ export default async function TemplateGroupPage({ params }: { params: Promise<{ 
   if (!group) notFound();
   const settings = await getSettings(user.agencyId!);
   return (
-    <SettingsPage
-      title={TEMPLATE_GROUPS[group].label}
-      actions={
-        <Link href="/settings/notifications" className="btn">
-          Back
-        </Link>
-      }
-    >
+    <SettingsPage title={TEMPLATE_GROUPS[group].label} back={{ href: "/settings/notifications", label: "Notifications" }}>
+      <p className="-mt-5 text-sm text-ink-500">{TEMPLATE_GROUPS[group].hint}. Click one to switch it off or change its wording.</p>
       <SettingsCard>
         {TEMPLATES.filter((t) => t.group === group).map((t) => {
           const s = templateSettings(settings.messageTemplates, t.key);
@@ -33,7 +26,7 @@ export default async function TemplateGroupPage({ params }: { params: Promise<{ 
               sub={t.hint}
               href={`/settings/notifications/${slug}/${t.key.toLowerCase()}`}
               right={
-                <span className="flex gap-1.5">
+                <span className="flex gap-1.5 sm:justify-end">
                   {(s.subject || s.intro || s.text) && <Badge>Reworded</Badge>}
                   <Badge tone={s.off ? "red" : "green"}>{s.off ? "Off" : "On"}</Badge>
                 </span>

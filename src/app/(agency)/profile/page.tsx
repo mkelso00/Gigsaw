@@ -26,7 +26,7 @@ export default async function ProfilePage() {
     >
       <SettingsSection title="Your details" description="Your mobile is used for texts about late acts and turned-down gigs.">
         <SettingsCard pad>
-          <ActionForm action={updateMyDetails} className="grid gap-4 sm:grid-cols-2">
+          <ActionForm action={updateMyDetails} saveBar className="grid gap-4 sm:grid-cols-2">
             <Field label="Name">
               <input name="name" required defaultValue={user.name} className="input" />
             </Field>
@@ -36,9 +36,6 @@ export default async function ProfilePage() {
             <Field label="Email" hint="Your login. Ask an admin to change it.">
               <input value={user.email} readOnly className="input opacity-70" />
             </Field>
-            <div className="flex items-end">
-              <SubmitButton>Save</SubmitButton>
-            </div>
           </ActionForm>
         </SettingsCard>
       </SettingsSection>
@@ -48,7 +45,7 @@ export default async function ProfilePage() {
         title="Notifications"
         description="What you hear about on the gigs and events you look after. Turning one off here only affects you."
       >
-        <ActionForm action={saveMyNotifications} className="space-y-4">
+        <ActionForm action={saveMyNotifications} saveBar className="space-y-4">
           <SettingsCard>
             {STAFF_ALERTS.map((a) => (
               <div key={a.key} className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
@@ -71,7 +68,6 @@ export default async function ProfilePage() {
               </div>
             ))}
           </SettingsCard>
-          <SubmitButton>Save notifications</SubmitButton>
         </ActionForm>
       </SettingsSection>
 
@@ -84,7 +80,9 @@ export default async function ProfilePage() {
             <Field label="New password" hint="At least 8 characters">
               <input name="next" type="password" required minLength={8} autoComplete="new-password" className="input" />
             </Field>
-            <SubmitButton>Change password</SubmitButton>
+            <div className="flex justify-end sm:col-span-2">
+              <SubmitButton>Change password</SubmitButton>
+            </div>
           </ActionForm>
         </SettingsCard>
       </SettingsSection>

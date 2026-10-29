@@ -1,4 +1,5 @@
 import type { Booking, Settings } from "@prisma/client";
+import { Combobox } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
 import { MoneyFields } from "@/components/money-fields";
@@ -37,15 +38,15 @@ export function BookingForm({
       <section className="card card-pad space-y-4">
         <h2 className="section-title">The booking</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Act" hint="Leave empty while you set the gig up; add the act later">
-            <select name="artistId" defaultValue={booking?.artistId ?? defaults.artistId ?? ""} className="input">
-              <option value="">No act yet (needs an act)</option>
-              {artists.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+          <Field label="Act" htmlFor="bf-act" hint="Leave empty while you set the gig up; add the act later">
+            <Combobox
+              id="bf-act"
+              name="artistId"
+              options={artists}
+              defaultValue={booking?.artistId ?? defaults.artistId ?? ""}
+              emptyLabel="No act yet (needs an act)"
+              placeholder="Type an act's name"
+            />
           </Field>
           <Field label="Booking type">
             <select name="eventType" defaultValue={booking?.eventType ?? "GIG"} className="input">
@@ -78,19 +79,19 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Venue" hint={venues.length ? "The venue's time zone is used for all times" : "Add venues under Venues"}>
-            <select name="venueId" defaultValue={booking?.venueId ?? defaults.venueId ?? ""} className="input">
-              <option value="">No venue yet</option>
-              {venues.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.city ? `, ${v.city}` : ""}
-                </option>
-              ))}
-            </select>
+          <Field label="Venue" htmlFor="bf-venue" hint={venues.length ? "The venue's time zone is used for all times" : "Add venues under Venues"}>
+            <Combobox
+              id="bf-venue"
+              name="venueId"
+              options={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city }))}
+              defaultValue={booking?.venueId ?? defaults.venueId ?? ""}
+              emptyLabel="No venue yet"
+              placeholder="Type a venue or town"
+            />
           </Field>
           <Field
             label="Who pays"
+            htmlFor="bf-payer"
             hint={
               <>
                 The venue&apos;s company, or the couple or client for weddings and parties.{" "}
@@ -100,15 +101,14 @@ export function BookingForm({
               </>
             }
           >
-            <select name="promoterId" defaultValue={booking?.promoterId ?? defaults.promoterId ?? ""} className="input">
-              <option value="">Not set yet</option>
-              {promoters.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.company ? ` (${p.company})` : ""}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              id="bf-payer"
+              name="promoterId"
+              options={promoters.map((p) => ({ id: p.id, name: p.name, detail: p.company }))}
+              defaultValue={booking?.promoterId ?? defaults.promoterId ?? ""}
+              emptyLabel="Not set yet"
+              placeholder="Type a company or customer"
+            />
           </Field>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ink-200 p-4 hover:border-ink-300">
