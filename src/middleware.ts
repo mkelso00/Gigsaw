@@ -24,6 +24,8 @@ const PUBLIC = [
   "/apple-icon",
   "/sw.js",
   "/api/stripe/webhook",
+  "/api/stripe/connect-webhook",
+  "/pay/",
 ];
 
 export function middleware(req: NextRequest) {

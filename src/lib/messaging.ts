@@ -10,7 +10,7 @@ import { pushTo, type PushPayload } from "./push";
 //   Email: RESEND_API_KEY, MAIL_FROM (e.g. "Gigsaw <bookings@send.gigsaw.live>")
 //   Texts: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (e.g. +447700900000)
 
-export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "REMINDER" | "EVENT" | "JOIN" | "TEST";
+export type MessageKind = "PASSWORD_RESET" | "OVERDUE_ALERT" | "CLIENT_ARRIVAL" | "BOOKING_CHANGE" | "REMINDER" | "EVENT" | "JOIN" | "PAYMENT" | "TEST";
 
 type Base = {
   kind: MessageKind;

@@ -15,6 +15,8 @@ import {
 } from "@/actions/events";
 import { CopyField } from "@/components/client-bits";
 import { EventForm } from "@/components/event-form";
+import { PayLinksCard } from "@/components/pay-links-card";
+import { cardPaymentsReady } from "@/lib/card-payments";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArtistDot, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -44,13 +46,14 @@ const AUTO: { kind: EventMessage; label: string; from: number; to: number; who: 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [e, settings, options, acts, tasks, sent] = await Promise.all([
+  const [e, settings, options, acts, tasks, sent, payLinks] = await Promise.all([
     prisma.event.findFirst({ where: { id, agencyId: user.agencyId }, include: eventInclude }),
     getSettings(user.agencyId),
     eventFormOptions(user.agencyId),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.eventTask.findMany({ where: { eventId: id, event: { agencyId: user.agencyId } }, orderBy: [{ sort: "asc" }, { dueDate: "asc" }] }),
     sentEventMessages(id),
+    prisma.payLink.findMany({ where: { eventId: id, agencyId: user.agencyId } }),
   ]);
   if (!e) notFound();
   const today = localDateKey(new Date(), e.timezone);
@@ -374,6 +377,20 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               </SubmitButton>
             </ActionForm>
           </section>
+
+          {e.status === "ACTIVE" && (
+            <PayLinksCard
+              target="event"
+              id={e.id}
+              gigs={e.bookings.filter((b) => b.status !== "CANCELLED")}
+              links={payLinks}
+              currency={t.currency}
+              ready={cardPaymentsReady(user.agency!)}
+              isAdmin={user.role === "ADMIN"}
+              email={e.customer?.email ?? ""}
+              timezone={e.timezone}
+            />
+          )}
 
           <section className="card card-pad">
             <h2 className="section-title mb-3">Record a payment</h2>

@@ -36,6 +36,11 @@ model Agency {
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   currentPeriodEnd     DateTime?
+  // Card payments from venues and customers, paid into the agency's own Stripe account
+  // (Stripe Connect, a Standard account the agency owns). Kept in step by the Connect webhook.
+  stripeAccountId      String?   @unique
+  stripeChargesEnabled Boolean   @default(false)
+  stripeDetailsDone    Boolean   @default(false)
   createdAt            DateTime  @default(now())
 
   settings     Settings?
@@ -51,6 +56,8 @@ model Agency {
   people       Person[]
   events       Event[]
   applications ActApplication[]
+  payLinks     PayLink[]
+  cardPayments CardPayment[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -359,6 +366,7 @@ model Booking {
 
   payments Payment[]
   checkIns CheckIn[]
+  payLinks PayLink[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -369,15 +377,65 @@ model Booking {
 }
 
 model Payment {
-  id          String   @id @default(cuid())
-  bookingId   String
-  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  direction   String // IN (from promoter) | OUT (paid to artist)
-  kind        String   @default("BALANCE") // DEPOSIT | BALANCE | SETTLEMENT | EXPENSE | OTHER
-  amountMinor Int
-  paidAt      DateTime
-  note        String   @default("")
-  createdAt   DateTime @default(now())
+  id            String       @id @default(cuid())
+  bookingId     String
+  booking       Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  direction     String // IN (from promoter) | OUT (paid to artist)
+  kind          String       @default("BALANCE") // DEPOSIT | BALANCE | SETTLEMENT | EXPENSE | OTHER
+  amountMinor   Int
+  paidAt        DateTime
+  note          String       @default("")
+  createdAt     DateTime     @default(now())
+  // Set when the venue or customer paid by card through a pay link.
+  cardPaymentId String?
+  cardPayment   CardPayment? @relation(fields: [cardPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([cardPaymentId])
+}
+
+// A private "Pay now" link (/pay/<token>) for a booking's or an event's deposit or balance.
+// The amount isn't stored: the page works out what's still due each time it's opened.
+model PayLink {
+  id        String    @id @default(cuid())
+  agencyId  String
+  agency    Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  bookingId String?
+  booking   Booking?  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  eventId   String?
+  event     Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind      String // DEPOSIT | BALANCE
+  sentAt    DateTime? // last emailed
+  createdAt DateTime  @default(now())
+
+  cardPayments CardPayment[]
+
+  @@unique([bookingId, kind])
+  @@unique([eventId, kind])
+}
+
+// One completed Stripe Checkout payment on an agency's connected account. The session id is
+// unique, so a webhook Stripe sends twice is only recorded once. The money is logged as
+// ordinary Payments (one per gig it was shared across) that point back here.
+model CardPayment {
+  id              String   @id @default(cuid())
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  payLinkId       String?
+  payLink         PayLink? @relation(fields: [payLinkId], references: [id], onDelete: SetNull)
+  stripeSessionId String   @unique
+  stripePaymentId String   @default("") // the payment intent
+  stripeAccountId String
+  kind            String // DEPOSIT | BALANCE
+  amountMinor     Int
+  currency        String
+  email           String   @default("") // who paid, as given at checkout
+  paidAt          DateTime
+  createdAt       DateTime @default(now())
+
+  payments Payment[]
+
+  @@index([agencyId, paidAt])
 }
 
 // A musician marking where they are for a gig. ARRIVED is the one that counts for punctuality.
@@ -599,6 +657,7 @@ model Event {
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
   tasks      EventTask[]
+  payLinks   PayLink[]
 
   @@index([agencyId, date])
 }

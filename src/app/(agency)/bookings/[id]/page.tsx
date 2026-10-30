@@ -13,6 +13,8 @@ import {
 } from "@/actions/bookings";
 import { CopyField } from "@/components/client-bits";
 import { CopyBooking } from "@/components/copy-booking";
+import { PayLinksCard } from "@/components/pay-links-card";
+import { cardPaymentsReady } from "@/lib/card-payments";
 import { appUrl } from "@/lib/messaging";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
@@ -58,6 +60,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
         event: { select: { id: true, name: true } },
         agent: { select: { name: true } },
         payments: { orderBy: { paidAt: "asc" } },
+        payLinks: true,
         checkIns: { orderBy: { at: "asc" }, include: { user: { select: { name: true } } } },
       },
     }),
@@ -209,7 +212,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <h2 className="section-title mb-4">Log a check-in for the act</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as logged by you.
+              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as
+              logged by you.
             </p>
             <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
               <Field label="Type">
@@ -483,6 +487,20 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
             </dl>
             {booking.dealNotes && <p className="mt-3 text-xs whitespace-pre-line text-slate-500">{booking.dealNotes}</p>}
           </section>
+
+          {deal.totalDueMinor > 0 && booking.status !== "CANCELLED" && !booking.archivedAt && (
+            <PayLinksCard
+              target="booking"
+              id={booking.id}
+              gigs={[booking]}
+              links={booking.payLinks}
+              currency={booking.currency}
+              ready={cardPaymentsReady(user.agency!)}
+              isAdmin={user.role === "ADMIN"}
+              email={booking.promoter?.email ?? ""}
+              timezone={settings.defaultTimezone}
+            />
+          )}
 
           <section className="card card-pad">
             <h2 className="section-title mb-3">Activity</h2>

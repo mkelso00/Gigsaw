@@ -4,6 +4,8 @@ import { DocumentShell } from "@/components/document";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { eventTotals } from "@/lib/events";
+import { cardPaymentsReady, payUrl } from "@/lib/card-payments";
+import { receivedOnInvoice } from "@/lib/pay-links";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
@@ -31,6 +33,12 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
   ]);
   if (!e) notFound();
   const t = eventTotals(e.bookings);
+  const received = receivedOnInvoice(e.bookings.flatMap((b) => b.payments));
+  // The card payment link, if one's been made and there's something to pay.
+  const payLink =
+    t.outstanding > 0 && cardPaymentsReady(user.agency!)
+      ? await prisma.payLink.findFirst({ where: { eventId: e.id, kind: "BALANCE", agencyId: user.agencyId } })
+      : null;
   const money = (m: number) => formatMoney(m, t.currency);
   const day = formatDate(new Date(`${e.date}T12:00:00Z`), "UTC");
   const ref = e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase();
@@ -96,10 +104,16 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
             <td className="py-2 text-right font-semibold">Total</td>
             <td className="py-2 text-right font-semibold">{money(t.total)}</td>
           </tr>
-          {t.received > 0 && (
+          {received.card.map((c, i) => (
+            <tr key={i}>
+              <td className="py-1 text-right text-slate-500">Paid by card, {formatDate(c.paidAt, e.timezone)}</td>
+              <td className="py-1 text-right">−{money(c.amountMinor)}</td>
+            </tr>
+          ))}
+          {received.otherMinor > 0 && (
             <tr>
-              <td className="py-1 text-right text-slate-500">Paid so far</td>
-              <td className="py-1 text-right">−{money(t.received)}</td>
+              <td className="py-1 text-right text-slate-500">{received.card.length ? "Other payments" : "Paid so far"}</td>
+              <td className="py-1 text-right">−{money(received.otherMinor)}</td>
             </tr>
           )}
           <tr className="border-t-2 border-slate-300">
@@ -108,6 +122,11 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
           </tr>
         </tbody>
       </table>
+      {payLink && (
+        <p className="mt-6 text-sm">
+          <span className="font-medium">Pay by card:</span> <span className="break-all">{payUrl(payLink.token)}</span>
+        </p>
+      )}
       {settings.invoiceTerms && <p className="mt-8 text-sm whitespace-pre-line text-slate-600">{settings.invoiceTerms}</p>}
     </DocumentShell>
   );

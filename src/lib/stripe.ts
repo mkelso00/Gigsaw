@@ -41,7 +41,16 @@ export function encodeForm(params: Params, prefix = ""): string {
   return parts.filter(Boolean).join("&");
 }
 
-export async function stripe<T = Record<string, unknown>>(method: "GET" | "POST" | "DELETE", path: string, params: Params = {}): Promise<T> {
+/**
+ * Call Stripe. `account` makes the call on an agency's own connected account (Stripe Connect),
+ * e.g. a Checkout Session whose money goes to the agency rather than to Gigsaw.
+ */
+export async function stripe<T = Record<string, unknown>>(
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  params: Params = {},
+  opts: { account?: string } = {},
+): Promise<T> {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new StripeError("Stripe isn't connected yet");
   const body = encodeForm(params);
@@ -49,7 +58,12 @@ export async function stripe<T = Record<string, unknown>>(method: "GET" | "POST"
   const url = `${process.env.STRIPE_API_BASE ?? "https://api.stripe.com"}/v1/${path}${method === "GET" && body ? `?${body}` : ""}`;
   const res = await fetch(url, {
     method,
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/x-www-form-urlencoded", "Stripe-Version": "2024-06-20" },
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": "2024-06-20",
+      ...(opts.account ? { "Stripe-Account": opts.account } : {}),
+    },
     body: method === "GET" ? undefined : body,
     signal: AbortSignal.timeout(15_000),
   });

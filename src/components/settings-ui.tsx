@@ -11,6 +11,7 @@ export const SETTINGS_PAGES: { href: string; label: string; icon: string; hint: 
   { href: "/settings/users", label: "Internal users", icon: "contacts", hint: "Admins and agents who log in to make bookings" },
   { href: "/settings/notifications", label: "Notifications", icon: "bell", hint: "Emails and texts to acts, customers and your team" },
   { href: "/settings/booking-fee", label: "Booking fee", icon: "payments", hint: "A fee on top for venues or clients, all yours" },
+  { href: "/settings/card-payments", label: "Card payments", icon: "billing", hint: "Venues and customers pay deposits and invoices by card" },
   { href: "/settings/arrivals", label: "Arrivals and alerts", icon: "arrivals", hint: "Late arrivals, grace period and venue radius" },
   { href: "/settings/reminders", label: "Act reminders", icon: "clock", hint: "Weekly gig list and on-the-day reminders" },
   { href: "/settings/weddings", label: "Weddings and events", icon: "heart", hint: "Planner emails, customer confirmations and reviews" },
