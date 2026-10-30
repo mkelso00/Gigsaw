@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/icons";
 import { Empty, PageHeader, Stat } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { monthLabel, unresolvedPastWhere } from "@/lib/billing";
@@ -47,11 +48,16 @@ export default async function OwnerHome() {
           </Link>
         }
       />
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Active businesses" value={agencies.filter((a) => a.status === "ACTIVE").length} hint={`${agencies.length} in total`} />
         <Stat label={`Billable gigs, ${monthLabel(month)}`} value={totalGigs} hint="So far this month" />
         <Stat label="This month so far" value={money(byCurrency)} hint="At each business's prices" href="/owner/billing" />
-        <Stat label="Unpaid statements" value={money(unpaidByCurrency)} hint={`${unpaid.length} statement(s)`} href="/owner/billing" />
+        <Stat
+          label="Unpaid statements"
+          value={money(unpaidByCurrency)}
+          hint={`${unpaid.length} statement${unpaid.length === 1 ? "" : "s"}`}
+          href="/owner/billing"
+        />
       </div>
 
       {agencies.length === 0 ? (
@@ -62,69 +68,52 @@ export default async function OwnerHome() {
           </Link>
         </Empty>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Business</th>
-                <th>Status</th>
-                <th className="text-right">Internal users</th>
-                <th className="text-right">Acts</th>
-                <th className="text-right">Price or plan</th>
-                <th className="text-right">Gigs this month</th>
-                <th className="text-right">Bill so far</th>
-                <th className="text-right">Never confirmed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agencies.map((a) => {
-                const gigs = usage.get(a.id)?.count ?? 0;
-                return (
-                  <tr key={a.id} className="hover:bg-slate-50">
-                    <td>
-                      <Link href={`/owner/businesses/${a.id}`} className="link">
-                        {a.name}
-                      </Link>
-                      <div className="text-xs text-slate-500">Since {a.createdAt.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</div>
-                    </td>
-                    <td>
-                      <span className={`badge ${a.status === "ACTIVE" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                        {a.status === "ACTIVE" ? "Active" : "Suspended"}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      {a._count.users}
-                      <span className="text-xs text-slate-500"> / {a.includedUsers} incl.</span>
-                    </td>
-                    <td className="text-right">{a._count.artists}</td>
-                    <td className="text-right">
-                      {a.billingMode === "STRIPE" ? (
-                        <span className="text-xs">
-                          {a.plan ?? "No plan"} · {billingState(a).label}
-                        </span>
-                      ) : (
-                        formatMoney(a.pricePerGigMinor, a.billingCurrency)
-                      )}
-                    </td>
-                    <td className="text-right">{gigs}</td>
-                    <td className="text-right font-medium">
+        <ul className="overflow-hidden rounded-[var(--radius-card)] border border-ink-200 bg-white">
+          {agencies.map((a, i) => {
+            const gigs = usage.get(a.id)?.count ?? 0;
+            const plan =
+              a.billingMode === "STRIPE"
+                ? `${a.plan ? a.plan.charAt(0) + a.plan.slice(1).toLowerCase() : "No plan"} · ${billingState(a).label}`
+                : `${formatMoney(a.pricePerGigMinor, a.billingCurrency)} per gig`;
+            return (
+              <li key={a.id} className={i > 0 ? "border-t border-ink-100" : ""}>
+                <Link href={`/owner/businesses/${a.id}`} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-ink-50">
+                  <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-950 text-xs font-semibold text-volt-300">
+                    {a.name
+                      .split(/\s+/)
+                      .map((w) => w[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                    <span
+                      className={`absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white ${a.status === "ACTIVE" ? "bg-volt-400" : "bg-cue-500"}`}
+                      title={a.status === "ACTIVE" ? "Active" : "Suspended"}
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{a.name}</span>
+                    <span className="block truncate text-sm text-ink-500">
+                      {plan} · {a._count.users} user{a._count.users === 1 ? "" : "s"} · since{" "}
+                      {a.createdAt.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}
+                      {unresolved.get(a.id) ? <span className="text-amber-700"> · {unresolved.get(a.id)} never confirmed</span> : null}
+                    </span>
+                  </span>
+                  <span className="hidden w-24 text-right sm:block">
+                    <span className="block font-mono text-[10px] tracking-[0.12em] text-ink-400 uppercase">Gigs</span>
+                    <span className="font-mono text-sm tabular-nums">{gigs}</span>
+                  </span>
+                  <span className="w-24 text-right">
+                    <span className="block font-mono text-[10px] tracking-[0.12em] text-ink-400 uppercase">So far</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums">
                       {formatMoney(gigs * a.pricePerGigMinor + userCharge(a, a._count.users).monthlyMinor, a.billingCurrency)}
-                    </td>
-                    <td className="text-right">
-                      {unresolved.get(a.id) ? (
-                        <span className="badge bg-amber-50 text-amber-800" title="Past gigs still on enquiry, hold or pending">
-                          {unresolved.get(a.id)}
-                        </span>
-                      ) : (
-                        <span className="text-ink-300">0</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                  </span>
+                  <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-ink-600" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

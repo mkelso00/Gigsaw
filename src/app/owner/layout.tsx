@@ -1,45 +1,55 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
+import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { requireOwner } from "@/lib/auth";
+import { OwnerNav } from "./owner-nav";
 
 export const metadata: Metadata = { title: { default: "Owner", template: "%s · Gigsaw owner" } };
 
-const LINKS = [
-  ["/owner", "Businesses"],
-  ["/owner/billing", "Billing"],
-  ["/owner/stripe", "Stripe"],
-  ["/owner/messages", "Outbox"],
-];
-
+// The Owner area wears the same frame as the main app: a dark sidebar and the page in a light panel.
 export default async function OwnerLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOwner();
   return (
-    <div className="min-h-screen">
-      <header className="no-print bg-ink-950">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-4 sm:px-8">
+    <div className="min-h-screen bg-[#0b0d0f] lg:flex">
+      <aside className="no-print bg-[#0b0d0f] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col">
+        <div className="px-5 pt-5 pb-4">
           <Link href="/owner">
             <Logo sub="Owner area" />
           </Link>
-          <nav className="flex gap-1 text-sm">
-            {LINKS.map(([href, label]) => (
-              <Link key={href} href={href} className="rounded-lg px-3 py-1.5 text-ink-300 hover:bg-white/[0.06] hover:text-white">
-                {label}
-              </Link>
-            ))}
-            {user.agencyId && (
-              <Link href="/dashboard" className="rounded-lg px-3 py-1.5 text-volt-400 hover:bg-white/[0.06]">
-                My business →
-              </Link>
-            )}
-          </nav>
-          <form action={logout} className="ml-auto">
-            <button className="text-xs text-ink-400 hover:text-white">Sign out ({user.name.split(" ")[0]})</button>
+        </div>
+        <OwnerNav />
+        <div className="mt-auto hidden space-y-1 p-3 lg:block">
+          {user.agencyId && (
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink-400 transition-colors hover:bg-white/[0.04] hover:text-white"
+            >
+              <Icon name="back" className="h-[18px] w-[18px] text-volt-400" />
+              Back to my business
+            </Link>
+          )}
+          <form action={logout}>
+            <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-400 hover:bg-white/[0.04] hover:text-white">
+              <span className="flex h-[18px] w-[18px] items-center justify-center rounded bg-ink-800 text-[9px] font-semibold text-volt-300">
+                {user.name.slice(0, 1).toUpperCase()}
+              </span>
+              Sign out
+            </button>
           </form>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-8">{children}</main>
+      </aside>
+      <div className="min-w-0 flex-1 lg:py-2 lg:pr-2">
+        <main className="min-h-screen overflow-x-clip bg-ink-50 px-4 py-6 sm:px-8 lg:min-h-[calc(100vh-1rem)] lg:rounded-2xl lg:px-10 lg:py-10">
+          <div className="motion-page-in mx-auto max-w-[1100px]">{children}</div>
+          {user.agencyId && (
+            <Link href="/dashboard" className="mt-10 block text-center text-sm text-ink-500 lg:hidden">
+              ← Back to my business
+            </Link>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

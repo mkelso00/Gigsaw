@@ -37,7 +37,7 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
     <div>
       <PageHeader
         title="Billing"
-        subtitle="Each business pays a twelfth of the yearly price for each internal user over its included number, plus its price per gig for every gig in the month that was confirmed or settled, that the artist checked in to, or that was left on hold or pending after its date. Cancelled gigs, enquiries and demo data are never billed."
+        subtitle="What each invoiced business owes for the month: its price per gig for every gig that went ahead, plus any extra internal users. Cancelled gigs, enquiries and demo data are never billed."
         actions={
           <div className="flex items-center gap-2">
             <Link href={`/owner/billing?month=${shiftMonth(month, -1)}`} className="btn" aria-label="Previous month">
