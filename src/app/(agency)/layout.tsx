@@ -5,6 +5,7 @@ import { QuickBooking } from "@/components/quick-booking";
 import { QuickSearch } from "@/components/quick-search";
 import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
+import { MobileTopIcons, SearchSlot } from "@/components/header-actions";
 import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
@@ -49,7 +50,10 @@ export default async function AgencyLayout({ children }: { children: React.React
           <Link href="/dashboard">
             <Logo sub={settings.agencyName} />
           </Link>
-          <MobileMenu {...navProps} logo={<Logo sub={settings.agencyName} />} user={{ name: user.name, email: user.email }} />
+          <span className="flex items-center gap-1">
+            <MobileTopIcons />
+            <MobileMenu {...navProps} logo={<Logo sub={settings.agencyName} />} user={{ name: user.name, email: user.email }} />
+          </span>
         </div>
         {/* Computers: the full sidebar. Phones: only Settings' scrolling strip shows here; the main menu is behind the menu button. */}
         <NavLinks {...navProps} />
@@ -98,12 +102,13 @@ export default async function AgencyLayout({ children }: { children: React.React
           className={`min-h-screen bg-ink-50 px-4 py-5 sm:px-8 lg:min-h-[calc(100vh-1rem)] lg:rounded-2xl lg:ring-1 lg:ring-white/[0.07] lg:px-10 lg:py-6 ${theme === "dark" ? "theme-dark" : ""}`}
         >
           <div className="mx-auto max-w-[1400px]">
-            <div className="no-print mb-8 flex items-start gap-3">
-              <div className="max-w-xl min-w-0 flex-1">
+            {/* On phones search and new booking are icons in the top bar instead; the search box drops in when tapped. */}
+            <div className="no-print flex items-start gap-3 lg:mb-8">
+              <SearchSlot>
                 <Suspense>
                   <QuickSearch />
                 </Suspense>
-              </div>
+              </SearchSlot>
               <div className="ml-auto">
                 <QuickBooking
                   acts={acts}

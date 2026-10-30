@@ -1,3 +1,4 @@
+import { HeaderActions } from "@/components/header-actions";
 import Link from "next/link";
 import { ARRIVAL_STATE_LABELS, ARRIVAL_STATE_STYLES, type ArrivalState } from "@/lib/arrival";
 import { BOOKING_STATUS_LABELS, BOOKING_STATUS_STYLES, type BookingStatus } from "@/lib/constants";
@@ -14,13 +15,14 @@ export function PageHeader({
   eyebrow?: React.ReactNode;
 }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-6 flex items-start justify-between gap-4 sm:mb-8 sm:flex-wrap sm:items-end">
       <div className="min-w-0">
         {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
         <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-ink-950 sm:text-[32px]">{title}</h1>
-        {subtitle && <p className="mt-1.5 max-w-2xl text-[15px] text-ink-500">{subtitle}</p>}
+        {/* The description is hidden on phones to keep the top of the page short. */}
+        {subtitle && <p className="mt-1.5 hidden max-w-2xl text-[15px] text-ink-500 sm:block">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <HeaderActions>{actions}</HeaderActions>}
     </div>
   );
 }

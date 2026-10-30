@@ -74,6 +74,15 @@ export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
   OTHER: "Other",
 };
 
+export const CONTACT_TYPE_PLURALS: Record<ContactType, string> = {
+  PROMOTER: "Promoters",
+  CLIENT: "Private customers",
+  COMPANY: "Companies",
+  VENUE_CONTACT: "Venue contacts",
+  COLLABORATOR: "Collaborators",
+  OTHER: "Others",
+};
+
 export const PAYMENT_KINDS = ["DEPOSIT", "BALANCE", "SETTLEMENT", "EXPENSE", "OTHER"] as const;
 export type PaymentKind = (typeof PAYMENT_KINDS)[number];
 

@@ -47,7 +47,12 @@ export function QuickBooking({
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // The phone top bar's + icon.
+    window.addEventListener("gigsaw:new-booking", open);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("gigsaw:new-booking", open);
+    };
   }, []);
 
   // The form clears itself after a booking: put the controlled bits back too and start again at Act.
@@ -70,7 +75,7 @@ export function QuickBooking({
   const noAct = !actId;
   return (
     <>
-      <button type="button" onClick={open} className="btn btn-volt h-11 shrink-0 rounded-xl px-4" title="New booking (press N)">
+      <button type="button" onClick={open} className="btn btn-volt hidden h-11 shrink-0 rounded-xl px-4 lg:inline-flex" title="New booking (press N)">
         <Icon name="plus" className="h-4 w-4" />
         <span className="hidden sm:inline">New booking</span>
       </button>

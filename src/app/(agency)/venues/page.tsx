@@ -42,7 +42,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
           </>
         }
       />
-      <form className="card mb-4 flex gap-3 p-3">
+      <form className="mb-4 flex gap-2">
         <input name="q" defaultValue={q} placeholder="Search by name, city or country" className="input" />
         <button className="btn">Search</button>
       </form>

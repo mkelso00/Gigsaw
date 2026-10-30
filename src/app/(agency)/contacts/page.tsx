@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { ContactsTabs } from "@/components/contacts-tabs";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { CONTACT_TYPES, CONTACT_TYPE_LABELS, type ContactType } from "@/lib/constants";
+import { CONTACT_TYPES, CONTACT_TYPE_LABELS, type ContactType, CONTACT_TYPE_PLURALS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { splitTags } from "@/lib/forms";
 
@@ -36,7 +36,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader
-        title="Contacts"
+        title="Companies & customers"
         subtitle="Companies (venue owners) and private customers (weddings and parties). People who work at them are under People."
         actions={
           <>
@@ -50,38 +50,32 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         }
       />
       <ContactsTabs active="companies" />
-      <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm">
-        {[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, `${CONTACT_TYPE_LABELS[t]}s`])].map(([t, label]) => (
+      {/* One line that scrolls sideways on a phone, rather than wrapping into rows. */}
+      <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-ink-200 bg-white p-1 text-sm whitespace-nowrap">
+        {[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, CONTACT_TYPE_PLURALS[t]])].map(([t, label]) => (
           <Link
             key={t}
             href={t ? `/contacts?type=${t}` : "/contacts"}
-            className={`rounded-lg px-3 py-1.5 ${(sp.type ?? "") === t ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
+            className={`shrink-0 rounded-lg px-3 py-1.5 ${(sp.type ?? "") === t ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
           >
             {label}
           </Link>
         ))}
       </div>
-      <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
-        <label className="min-w-48 flex-1">
-          <span className="label">Search</span>
-          <input name="q" defaultValue={sp.q} placeholder="Name, company, email, phone, tag or note" className="input" />
-        </label>
-        <label>
-          <span className="label">Type</span>
-          <select name="type" defaultValue={sp.type ?? ""} className="input">
-            <option value="">All types</option>
-            {CONTACT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {CONTACT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
+      <form className="mb-4 flex gap-2">
+        <input
+          name="q"
+          defaultValue={sp.q}
+          placeholder="Search name, company, email, phone or tag"
+          aria-label="Search companies and customers"
+          className="input min-w-0 flex-1"
+        />
+        {sp.type && <input type="hidden" name="type" value={sp.type} />}
         {sp.tag && <input type="hidden" name="tag" value={sp.tag} />}
-        <button className="btn">Search</button>
+        <button className="btn shrink-0">Search</button>
       </form>
       {tags.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 text-xs">
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 text-xs whitespace-nowrap sm:flex-wrap">
           <Link href="/contacts" className={`badge ${!sp.tag ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
             All
           </Link>
