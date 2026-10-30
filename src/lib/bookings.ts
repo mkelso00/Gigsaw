@@ -42,10 +42,15 @@ export function gigDateKey(b: { arriveBy: Date; timezone: string }) {
   return localDateKey(b.arriveBy, b.timezone);
 }
 
+/**
+ * The next free reference, e.g. GS-0232. Counts every booking the agency has ever had, archived
+ * ones included (they keep their numbers), and compares the numbers as numbers so GS-10000
+ * comes after GS-9999.
+ */
 async function nextReference(agencyId: string): Promise<string> {
-  const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });
-  const n = last ? Number(last.reference.replace(/\D/g, "")) + 1 : 1;
-  return `GS-${String(n).padStart(4, "0")}`;
+  const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
+    SELECT MAX(NULLIF(regexp_replace(reference, '[^0-9]', '', 'g'), '')::bigint)::int AS n FROM "Booking" WHERE "agencyId" = ${agencyId}`;
+  return `GS-${String((row?.n ?? 0) + 1).padStart(4, "0")}`;
 }
 
 export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">) {
