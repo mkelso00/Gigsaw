@@ -12,6 +12,8 @@ export type TemplateDef = {
   /** Example of Gigsaw's own wording, shown in the editor. */
   example: { subject: string; intro: string; text?: string };
   placeholders: string[];
+  /** Only ever sent when someone presses a button, so it can't be switched off. */
+  manual?: boolean;
 };
 
 const GIG = ["first_name", "act", "venue", "date", "time", "business"];
@@ -85,6 +87,19 @@ export const TEMPLATES: TemplateDef[] = [
     hint: "Tells a wedding or private customer an act is confirmed. Who gets it is set in Weddings and events.",
     example: { subject: "Confirmed: {act} for {event}", intro: "Hi {first_name}, great news: {act} is confirmed for {event}." },
     placeholders: ["first_name", "act", "event", "date", "business"],
+  },
+  {
+    key: "CONTRACT",
+    group: "CUSTOMERS",
+    label: "Contract to sign",
+    hint: "Sent when you press Send contract to sign on a booking or a wedding or event. The link to read and sign it is always added.",
+    example: {
+      subject: "Your contract to sign: {event}",
+      intro:
+        "Hi {first_name}, here is your contract from {business} for {event} on {date}. Please read it and sign it online. It takes a minute and works on your phone.",
+    },
+    placeholders: ["first_name", "event", "act", "date", "business"],
+    manual: true,
   },
   {
     key: "ARRIVED",

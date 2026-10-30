@@ -34,6 +34,8 @@ export type ChecklistBooking = {
   radiusDays: number | null;
   travel: string;
   dayContact: string;
+  /** The client contract signed online (for a gig inside a wedding, the wedding's contract). Leave out to skip the check. */
+  contract?: { state: "NONE" | "SENT" | "VIEWED" | "SIGNED"; changed: boolean } | null;
 };
 
 export type OtherBooking = {
@@ -136,6 +138,22 @@ export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depo
   const venuePays = !!b.venue && (b.eventType ?? "GIG") === "GIG";
   if (!venuePays)
     items.push(b.promoterId ? { level: "ok", label: "Client set" } : { level: "warning", label: "No client set", detail: "Who is paying for this one?" });
+  if (b.contract) {
+    const { state, changed } = b.contract;
+    const confirmed = b.status === "CONFIRMED" || b.status === "SETTLED";
+    if (state === "SIGNED") {
+      items.push(
+        changed
+          ? { level: "warning", label: "Contract changed since signing", detail: "Send the new version to sign." }
+          : { level: "ok", label: "Contract signed" },
+      );
+    } else if (confirmed && (state !== "NONE" || !venuePays)) {
+      // Regular bar gigs often run without a contract, so they're only chased once one has been sent.
+      const detail =
+        state === "NONE" ? "Send the contract to sign." : state === "VIEWED" ? "The client has opened it but not signed yet." : "Sent, waiting for the client.";
+      items.push({ level: "warning", label: "Contract not signed", detail });
+    }
+  }
   items.push(
     b.feeMinor > 0 ? { level: "ok", label: "Price agreed" } : { level: "warning", label: "No price entered", detail: "What the venue or client pays." },
   );

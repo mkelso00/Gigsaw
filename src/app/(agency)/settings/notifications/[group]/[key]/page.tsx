@@ -24,17 +24,21 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ g
     <SettingsPage title={t.label} back={{ href: `/settings/notifications/${group}`, label: TEMPLATE_GROUPS[t.group].label }}>
       <p className="-mt-5 text-sm text-ink-500">{t.hint}</p>
       <ActionForm action={save} saveBar className="space-y-9">
-        <SettingsCard>
-          <label className="flex cursor-pointer items-start justify-between gap-4 px-5 py-4">
-            <span>
-              <span className="block text-sm font-medium text-ink-950">Send this message</span>
-              <span className="mt-0.5 block text-sm text-ink-500">
-                {critical ? "If it's off, acts won't hear about offers: you'll need to tell them yourself." : "Turn it off and it won't go out."}
+        {t.manual ? (
+          <input type="hidden" name="on" value="on" />
+        ) : (
+          <SettingsCard>
+            <label className="flex cursor-pointer items-start justify-between gap-4 px-5 py-4">
+              <span>
+                <span className="block text-sm font-medium text-ink-950">Send this message</span>
+                <span className="mt-0.5 block text-sm text-ink-500">
+                  {critical ? "If it's off, acts won't hear about offers: you'll need to tell them yourself." : "Turn it off and it won't go out."}
+                </span>
               </span>
-            </span>
-            <input type="checkbox" name="on" defaultChecked={!s.off} className="switch mt-0.5" />
-          </label>
-        </SettingsCard>
+              <input type="checkbox" name="on" defaultChecked={!s.off} className="switch mt-0.5" />
+            </label>
+          </SettingsCard>
+        )}
 
         <SettingsSection
           title="Wording"

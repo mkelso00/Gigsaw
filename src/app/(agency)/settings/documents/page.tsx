@@ -16,7 +16,7 @@ export default async function DocumentSettings() {
       <ActionForm action={saveSettings} saveBar className="space-y-9">
         <SettingsSection
           title="Contracts"
-          description="Your terms are printed on every contract as section 4, just above the signatures. Leave it empty to leave the section out."
+          description="Your terms go at the end of every contract, printed or sent to sign online, just above the signatures. Leave it empty to leave the section out. Changing them doesn't affect contracts already signed."
         >
           <SettingsCard pad>
             <Field label="Contract terms" hint="e.g. cancellation, deposits and what happens if the act can't make it">
