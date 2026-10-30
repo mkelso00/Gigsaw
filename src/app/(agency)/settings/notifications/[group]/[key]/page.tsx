@@ -18,7 +18,13 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ g
   const settings = await getSettings(user.agencyId!);
   const s = templateSettings(settings.messageTemplates, t.key);
   const save = saveMessageTemplate.bind(null, t.key);
-  const critical = t.key === "OFFER";
+  // Without these the act never hears they've been asked, so say what switching off means.
+  const critical =
+    t.key === "OFFER"
+      ? "If it's off, acts won't hear about offers: you'll need to tell them yourself."
+      : t.key === "AVAILABILITY"
+        ? "If it's off, acts won't be asked if they're free: you'll need to send them the link yourself."
+        : null;
   const values = { subject: s.subject ?? "", intro: s.intro ?? "", text: s.text ?? "" };
   return (
     <SettingsPage title={t.label} back={{ href: `/settings/notifications/${group}`, label: TEMPLATE_GROUPS[t.group].label }}>
@@ -31,9 +37,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ g
             <label className="flex cursor-pointer items-start justify-between gap-4 px-5 py-4">
               <span>
                 <span className="block text-sm font-medium text-ink-950">Send this message</span>
-                <span className="mt-0.5 block text-sm text-ink-500">
-                  {critical ? "If it's off, acts won't hear about offers: you'll need to tell them yourself." : "Turn it off and it won't go out."}
-                </span>
+                <span className="mt-0.5 block text-sm text-ink-500">{critical ?? "Turn it off and it won't go out."}</span>
               </span>
               <input type="checkbox" name="on" defaultChecked={!s.off} className="switch mt-0.5" />
             </label>

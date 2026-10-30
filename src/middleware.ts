@@ -12,6 +12,7 @@ const PUBLIC = [
   "/w/",
   "/o/",
   "/c/",
+  "/f/",
   "/join/",
   "/enquire/",
   "/api/venue-calendar",

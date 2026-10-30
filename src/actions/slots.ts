@@ -366,7 +366,7 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
     }
     const span = `over ${weeks} week${weeks === 1 ? "" : "s"}`;
     const left = skipped.length
-      ? ` ${skipped.length} left without an act because the regular act is busy elsewhere then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}.`
+      ? ` ${skipped.length} left without an act because the regular act is busy elsewhere or away then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}.`
       : "";
     if (mode === "pending")
       return {

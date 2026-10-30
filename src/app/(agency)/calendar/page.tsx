@@ -4,6 +4,8 @@ import type { Prisma } from "@prisma/client";
 import { FilterPanel } from "@/components/header-actions";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
+import { coversDate } from "@/lib/availability";
+import { awayBetween, type AwayEntry } from "@/lib/away";
 import { arrivalFor, gigDateKey } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, eventTypeLabel, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
@@ -70,7 +72,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   else where.status = { not: "CANCELLED" };
 
-  const [bookings, artists, towns] = await Promise.all([
+  const [bookings, artists, towns, awayAll] = await Promise.all([
     prisma.booking.findMany({
       where,
       include: {
@@ -92,7 +94,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     }),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.venue.findMany({ where: { agencyId: user.agencyId, city: { not: "" } }, distinct: ["city"], select: { city: true }, orderBy: { city: "asc" } }),
+    awayBetween(user.agencyId, gridStart, addDaysToKey(gridEnd, -1)),
   ]);
+  // Days acts have blocked out. For one act, its own and those of acts inside it (a band is away
+  // while one of its acts is); for everyone, each block once, on the act that added it.
+  const away = sp.artist ? awayAll.filter((e) => e.artistId === sp.artist) : awayAll.filter((e) => e.own);
+  const awayOn = (key: string) => away.filter((e) => coversDate(e, key));
 
   const byArtist = sp.colour === "artist";
   const colourOf = (b: (typeof bookings)[number]) => (byArtist ? (b.artist?.colour ?? "#a2a199") : b.venue ? venueColour(b.venue) : "#a2a199");
@@ -165,7 +172,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Calendar"
-        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "act" : "venue"} · not yet confirmed is dashed`}
+        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "act" : "venue"} · not yet confirmed is dashed${away.length ? " · amber is an act away" : ""}`}
+        actions={
+          <Link href={`/availability/new?date=${anchor >= todayKey ? anchor : todayKey}${sp.artist ? `&artistId=${sp.artist}` : ""}`} className="btn">
+            Ask who&apos;s free
+          </Link>
+        }
       />
 
       {/* Getting around: view, then back, the dates shown, forward and today. Compact so it fits a phone. */}
@@ -254,6 +266,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </div>
       )}
 
+      {view === "day" && awayOn(anchor).length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <span className="font-medium">Away this day:</span> {awayOn(anchor).map(awayText).join("; ")}
+        </div>
+      )}
       {view === "day" ? (
         <DayList
           items={(byDay.get(anchor) ?? []).map((b) => ({ b, a: arrivalFor(b, settings, new Date()), colour: colourOf(b) }))}
@@ -266,7 +283,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const key = addDaysToKey(gridStart, i);
               const items = byDay.get(key) ?? [];
               return (
-                <div key={key} className={`min-h-[480px] border-r border-ink-100 last:border-r-0 ${key === todayKey ? "bg-volt-100/30" : ""}`}>
+                <div
+                  key={key}
+                  className={`min-h-[480px] border-r border-ink-100 last:border-r-0 ${key === todayKey ? "bg-volt-100/30" : ""}`}
+                  style={sp.artist && awayOn(key).length ? AWAY_TINT : undefined}
+                >
                   <div
                     className={`sticky top-0 flex items-baseline justify-between border-b border-ink-200 px-3 py-3 ${key === todayKey ? "bg-volt-100" : "bg-white"}`}
                   >
@@ -277,6 +298,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     <span className="text-xs text-ink-400">{items.length || ""}</span>
                   </div>
                   <div className="space-y-1.5 p-2">
+                    <AwayChips entries={awayOn(key)} max={3} />
                     {items.map((b) => (
                       <GigHover key={b.id} card={card(b)}>
                         <Link
@@ -326,7 +348,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const inMonth = key.startsWith(month);
               const items = byDay.get(key) ?? [];
               return (
-                <div key={key} className={`min-h-28 border-r border-b border-ink-100 p-1.5 ${inMonth ? "" : "bg-ink-50/70"}`}>
+                <div
+                  key={key}
+                  className={`min-h-28 border-r border-b border-ink-100 p-1.5 ${inMonth ? "" : "bg-ink-50/70"}`}
+                  style={sp.artist && awayOn(key).length ? AWAY_TINT : undefined}
+                >
                   <div className="mb-1 flex items-center justify-between">
                     <Link
                       href={`/calendar${qs({ view: "week", date: key })}`}
@@ -339,6 +365,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} gigs</span>}
                   </div>
                   <div className="space-y-1">
+                    <AwayChips entries={awayOn(key)} max={2} small />
                     {items.slice(0, 4).map((b) => (
                       <GigHover key={b.id} card={card(b)}>
                         <Link
@@ -366,6 +393,38 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </div>
       )}
     </div>
+  );
+}
+
+// Days an act is away: soft amber stripes behind the day when one act is filtered.
+const AWAY_TINT = { backgroundImage: "repeating-linear-gradient(135deg, rgb(251 191 36 / 0.12) 0 8px, transparent 8px 16px)" };
+
+const awayText = (e: AwayEntry) => `${e.own ? e.actName : `${e.actName} (in the band)`}${e.note ? `, ${e.note}` : ""}`;
+
+/** Who's away on a calendar day, e.g. "Away: Ellie Rose". Shown in amber above the gigs, without hiding them. */
+function AwayChips({ entries, max, small = false }: { entries: AwayEntry[]; max: number; small?: boolean }) {
+  if (!entries.length) return null;
+  const shown = entries.slice(0, max);
+  return (
+    <>
+      {shown.map((e) => (
+        <Link
+          key={`${e.id}-${e.artistId}`}
+          href={`/artists/${e.artistId}#away`}
+          title={`Away: ${awayText(e)}`}
+          className={`block truncate rounded-md border border-dashed border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 ${
+            small ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]"
+          }`}
+        >
+          Away: {awayText(e)}
+        </Link>
+      ))}
+      {entries.length > max && (
+        <div className={`px-1 text-amber-800 ${small ? "text-[10px]" : "text-[11px]"}`} title={entries.slice(max).map(awayText).join("; ")}>
+          + {entries.length - max} more away
+        </div>
+      )}
+    </>
   );
 }
 

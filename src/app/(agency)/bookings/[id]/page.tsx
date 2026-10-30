@@ -22,6 +22,8 @@ import { ContractPanel } from "@/components/contract-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
+import { replyCounts } from "@/lib/availability";
+import { awayBetween } from "@/lib/away";
 import { buildChecklist } from "@/lib/checklist";
 import { bookingContractDoc, contractState } from "@/lib/contract-doc";
 import { contractStatusFor, contractSubject, type ContractTarget } from "@/lib/contracts";
@@ -76,7 +78,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const windowStart = new Date(booking.setStart.getTime() - 400 * 86_400_000);
   const windowEnd = new Date(booking.setStart.getTime() + 400 * 86_400_000);
   const linked = booking.artistId ? await linkedActIds(booking.artistId) : [];
-  const [others, activity] = await Promise.all([
+  const gigDay = localDateKey(booking.arriveBy, tz);
+  const [others, activity, away] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, artistId: { in: linked }, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
       select: {
@@ -99,7 +102,17 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       take: 25,
       include: { user: { select: { name: true } } },
     }),
+    booking.artistId ? awayBetween(user.agencyId, gigDay, gigDay) : [],
   ]);
+  // A gig that needs an act: the last time acts were asked if they're free for it.
+  const asked = booking.artistId
+    ? null
+    : await prisma.availabilityRequest.findFirst({
+        where: { agencyId: user.agencyId, bookingId: booking.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, replies: { select: { answer: true } } },
+      });
+  const askedCounts = asked ? replyCounts(asked.replies) : null;
 
   // A gig inside a wedding or event is covered by the event's contract.
   const contractTarget: ContractTarget = booking.eventId ? { kind: "event", id: booking.eventId } : { kind: "booking", id: booking.id };
@@ -112,6 +125,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     {
       ...booking,
       linkedArtistIds: linked,
+      artistName: booking.artist?.name,
+      away,
       contract: contract ? { state: contractState(contract.current), changed: contract.changes.length > 0 } : null,
     },
     others.map((o) => ({ ...o, artistName: actName(o) })),
@@ -399,6 +414,25 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <SubmitButton className="btn">Update</SubmitButton>
             </ActionForm>
             <p className="hint">Pending → Awaiting confirmation (the act is offered the gig) → Confirmed when they accept.</p>
+            {!booking.artistId && booking.status !== "CANCELLED" && (
+              <div className="mt-4 space-y-2 border-t border-ink-100 pt-4 text-sm">
+                {asked && askedCounts ? (
+                  <>
+                    <p className="text-ink-600">
+                      Asked {asked.replies.length} act{asked.replies.length === 1 ? "" : "s"} if they&apos;re free: {askedCounts.yes} free,{" "}
+                      {askedCounts.waiting} waiting.
+                    </p>
+                    <Link href={`/availability/${asked.id}`} className="btn w-full">
+                      See answers or ask more
+                    </Link>
+                  </>
+                ) : (
+                  <Link href={`/availability/new?bookingId=${booking.id}`} className="btn w-full">
+                    Ask acts if they&apos;re free
+                  </Link>
+                )}
+              </div>
+            )}
             {booking.customerToldAt && (
               <p className="mt-2 text-xs font-medium text-emerald-700">Customer told it&apos;s confirmed, {formatDateTime(booking.customerToldAt, tz)}</p>
             )}

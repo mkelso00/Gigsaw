@@ -1,9 +1,11 @@
-// Booking checklist: catches double bookings, radius clause breaches and missing details
-// before a booking moves forward.
+// Booking checklist: catches double bookings, days the act has blocked out, radius clause
+// breaches and missing details before a booking moves forward.
 
 import { distanceMetres } from "./arrival";
+import { awayLine, blocksOn, type AwayBlock } from "./availability";
 import { LIVE_STATUSES, type BookingStatus } from "./constants";
 import { assessPair, describeAssessment, type ClashAssessment } from "./clash";
+import { localDateKey } from "./time";
 
 export type ChecklistLevel = "error" | "warning" | "ok";
 export type ChecklistItem = { level: ChecklistLevel; label: string; detail?: string };
@@ -17,6 +19,13 @@ export type ChecklistBooking = {
   artistId: string | null;
   /** Acts sharing a member with this one; their gigs count as double bookings too. */
   linkedArtistIds?: (string | null)[];
+  /** The act's name, for the "can't play" line. */
+  artistName?: string;
+  /**
+   * Days blocked out (holiday, other work). A band's list includes its acts' blocks, with
+   * `own: false` and the name of the act that is away.
+   */
+  away?: (AwayBlock & { own?: boolean; actName?: string })[];
   timezone: string;
   arriveBy: Date;
   setStart: Date;
@@ -115,6 +124,20 @@ export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depo
   for (const f of fine)
     items.push({ level: "ok", label: "Another gig the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
   if (!findings.length) items.push({ level: "ok", label: "No double booking" });
+
+  if (b.artistId) {
+    const name = b.artistName ?? "The act";
+    const away = blocksOn(b.away ?? [], localDateKey(b.arriveBy, b.timezone), [b.artistId]);
+    if (away.length) {
+      items.push({
+        level: "error",
+        label: "Act has said they can't play that day",
+        detail: away.map((a) => awayLine(name, a)).join(" "),
+      });
+    } else if (b.away) {
+      items.push({ level: "ok", label: "Act hasn't blocked out this day" });
+    }
+  }
 
   const breaches = findRadiusBreaches(b, others);
   if (breaches.length) {

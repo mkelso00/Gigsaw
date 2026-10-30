@@ -739,6 +739,13 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
     cost: 250,
     eventName: "Venue closed for refurbishment",
   });
+  // Days acts can't play: Ellie's holiday (from her app), and a day Jo is busy, which makes Wonderlust away too.
+  await prisma.artistUnavailability.createMany({
+    data: [
+      { agencyId, artistId: ellie.id, startDate: addDaysToKey(todayKey, 22), endDate: addDaysToKey(todayKey, 28), note: "Holiday", source: "ACT" },
+      { agencyId, artistId: jo.id, startDate: addDaysToKey(todayKey, 12), endDate: addDaysToKey(todayKey, 12), note: "Session work", source: "AGENCY" },
+    ],
+  });
 
   return { artists, venues: venues.length, bookings: await prisma.booking.count({ where: { agencyId, demo: true } }) };
 }

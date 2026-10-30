@@ -27,7 +27,18 @@ export function BookingForm({
   promoters: (Option & { company: string })[];
   agents: Option[];
   settings: Settings;
-  defaults?: { artistId?: string; venueId?: string; promoterId?: string; date?: string };
+  /** Starting values for a new booking, e.g. from the calendar or an act who said they're free. */
+  defaults?: {
+    artistId?: string;
+    venueId?: string;
+    promoterId?: string;
+    date?: string;
+    arriveTime?: string;
+    setStartTime?: string;
+    setEndTime?: string;
+    eventType?: string;
+    cost?: string;
+  };
 }) {
   const tz = booking?.timezone ?? settings.defaultTimezone;
   const t = (d: Date | null | undefined) => (d ? localTime(d, tz) : "");
@@ -49,7 +60,7 @@ export function BookingForm({
             />
           </Field>
           <Field label="Booking type">
-            <select name="eventType" defaultValue={booking?.eventType ?? "GIG"} className="input">
+            <select name="eventType" defaultValue={booking?.eventType ?? defaults.eventType ?? "GIG"} className="input">
               {EVENT_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {EVENT_TYPE_LABELS[t]}
@@ -140,16 +151,16 @@ export function BookingForm({
             <input type="date" name="date" required defaultValue={booking ? localDateKey(booking.arriveBy, tz) : defaults.date} className="input" />
           </Field>
           <Field label="Arrive by">
-            <input type="time" name="arriveTime" required defaultValue={t(booking?.arriveBy) || "17:00"} className="input" />
+            <input type="time" name="arriveTime" required defaultValue={t(booking?.arriveBy) || defaults.arriveTime || "17:00"} className="input" />
           </Field>
           <Field label="Soundcheck">
             <input type="time" name="soundcheckTime" defaultValue={t(booking?.soundcheckAt)} className="input" />
           </Field>
           <Field label="On stage">
-            <input type="time" name="setStartTime" required defaultValue={t(booking?.setStart) || "20:00"} className="input" />
+            <input type="time" name="setStartTime" required defaultValue={t(booking?.setStart) || defaults.setStartTime || "20:00"} className="input" />
           </Field>
           <Field label="Off stage">
-            <input type="time" name="setEndTime" defaultValue={t(booking?.setEnd)} className="input" />
+            <input type="time" name="setEndTime" defaultValue={t(booking?.setEnd) || defaults.setEndTime} className="input" />
           </Field>
         </div>
         <Field label="Time zone (only used when no venue is chosen)" className="max-w-xs">
@@ -169,7 +180,9 @@ export function BookingForm({
           currency={cur}
           currencies={CURRENCIES}
           sale={minorToInput(booking?.feeMinor, cur)}
-          cost={booking ? minorToInput(booking.dealType === "BUY_SELL" ? booking.artistFeeMinor : dealBreakdown(booking).artistMinor, cur) : ""}
+          cost={
+            booking ? minorToInput(booking.dealType === "BUY_SELL" ? booking.artistFeeMinor : dealBreakdown(booking).artistMinor, cur) : (defaults.cost ?? "")
+          }
           vatPct={booking?.vatPct ?? 0}
           bookingFee={booking ? minorToInput(booking.bookingFeeMinor || null, cur) : ""}
           feeDefaults={booking ? undefined : { bookingFeeMinor: settings.bookingFeeMinor, bookingFeeFor: settings.bookingFeeFor }}

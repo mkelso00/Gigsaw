@@ -31,6 +31,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
     title: "Roster",
     links: [
       { href: "/artists", label: "Acts", icon: "artists" },
+      { href: "/availability", label: "Who's free", icon: "free" },
       { href: "/people", label: "People", icon: "contacts" },
     ],
   },

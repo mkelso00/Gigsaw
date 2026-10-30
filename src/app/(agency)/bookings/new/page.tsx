@@ -18,14 +18,27 @@ export default async function NewBookingPage({ searchParams }: { searchParams: P
       <PageHeader title="New booking" subtitle="Start with a hold and move it forward as the deal firms up." />
       {options.artists.length === 0 ? (
         <Empty>
-          Add an act first. <Link href="/artists/new" className="link">Add act</Link>
+          Add an act first.{" "}
+          <Link href="/artists/new" className="link">
+            Add act
+          </Link>
         </Empty>
       ) : (
         <BookingForm
           action={createBooking}
           settings={settings}
           {...options}
-          defaults={{ artistId: sp.artistId, venueId: sp.venueId, promoterId: sp.promoterId, date: sp.date }}
+          defaults={{
+            artistId: sp.artistId,
+            venueId: sp.venueId,
+            promoterId: sp.promoterId,
+            date: sp.date,
+            arriveTime: sp.arriveTime,
+            setStartTime: sp.setStartTime,
+            setEndTime: sp.setEndTime,
+            eventType: sp.eventType,
+            cost: sp.cost,
+          }}
         />
       )}
     </div>

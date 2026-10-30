@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addRotaGig } from "@/actions/slots";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Icon } from "@/components/icons";
+import { awayLine, awayOn, type AwayBlock } from "@/lib/availability";
 import { BOOKING_STATUS_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/constants";
 
 /**
@@ -20,12 +21,15 @@ export function QuickBooking({
   contacts,
   currency,
   today,
+  away = [],
 }: {
   acts: ComboOption[];
   venues: ComboOption[];
   contacts: ComboOption[];
   currency: string;
   today: string;
+  /** Days acts have blocked out, from today on (a band's list includes its acts' days). */
+  away?: (AwayBlock & { own: boolean; actName: string })[];
 }) {
   const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
@@ -33,6 +37,14 @@ export function QuickBooking({
   const [type, setType] = useState("GIG");
   const [actId, setActId] = useState("");
   const [status, setStatus] = useState("PENDING");
+  const [date, setDate] = useState(today);
+  // Acts away on the chosen date are marked, not hidden: the agent may know better.
+  const awayToday = useMemo(() => awayOn(away, date), [away, date]);
+  const actOptions = useMemo(
+    () => acts.map((a) => (awayToday.has(a.id) ? { ...a, badge: "Away", badgeTitle: awayLine(a.name, awayToday.get(a.id)!) } : a)),
+    [acts, awayToday],
+  );
+  const chosenAway = actId && awayToday.has(actId) ? awayLine(acts.find((a) => a.id === actId)?.name ?? "This act", awayToday.get(actId)!) : null;
   const open = () => {
     ref.current?.showModal();
     actRef.current?.focus();
@@ -63,11 +75,12 @@ export function QuickBooking({
     const onReset = () => {
       setType("GIG");
       setStatus("PENDING");
+      setDate(today);
       setTimeout(() => actRef.current?.focus(), 0);
     };
     form.addEventListener("reset", onReset);
     return () => form.removeEventListener("reset", onReset);
-  }, []);
+  }, [today]);
   const onActChange = useCallback((id: string) => setActId(id), []);
 
   const field = "input";
@@ -122,16 +135,22 @@ export function QuickBooking({
               <Combobox
                 id="qb-act"
                 name="artistId"
-                options={acts}
+                options={actOptions}
                 emptyLabel="No act yet (add later)"
                 placeholder="Type an act's name"
                 inputRef={actRef}
                 onChange={onActChange}
+                aria-describedby={chosenAway ? "qb-away" : undefined}
               />
+              {chosenAway && (
+                <p id="qb-away" role="status" className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {chosenAway} You can still book them.
+                </p>
+              )}
             </div>
             <label>
               <span className={label}>Date</span>
-              <input name="date" type="date" required min={today} defaultValue={today} className={field} />
+              <input name="date" type="date" required min={today} defaultValue={today} onChange={(e) => setDate(e.target.value)} className={field} />
             </label>
             <div>
               <label htmlFor="qb-venue" className={label}>

@@ -2,19 +2,22 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { CalendarConnect } from "@/components/calendar-connect";
 import { arrivalDetail } from "@/components/arrival-panel";
+import { AvailabilityAnswer } from "@/components/availability-answer";
 import { CheckInPanel } from "@/components/check-in-panel";
 import { InAppOffer } from "@/components/in-app-offer";
 import { PushSetup } from "@/components/push-setup";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
+import { canAnswer, formatRange, requestTimes } from "@/lib/availability";
+import { requestPlace } from "@/lib/availability-requests";
 import { arrivalFor } from "@/lib/bookings";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { vapidKeys } from "@/lib/push";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney } from "@/lib/money";
-import { formatDate, localTime } from "@/lib/time";
+import { addDaysToKey, formatDate, localDateKey, localTime } from "@/lib/time";
 import { actName, ACT_VISIBLE } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +28,9 @@ export default async function ArtistHome() {
   const actIds = await actIdsFor(user);
   if (!actIds.length) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
   const now = new Date();
-  const [settings, feedOwner, keys, bookings] = await Promise.all([
-    getSettings(user.agencyId),
+  const settings = await getSettings(user.agencyId);
+  const today = localDateKey(now, settings.defaultTimezone);
+  const [feedOwner, keys, bookings, asks, awayCount] = await Promise.all([
     user.personId
       ? prisma.person.findFirst({
           where: { id: user.personId, agencyId: user.agencyId },
@@ -48,7 +52,36 @@ export default async function ArtistHome() {
       },
       orderBy: { arriveBy: "asc" },
     }),
+    // "Are you free?" questions still open. Only the date, times, place, note and the act's own fee.
+    prisma.availabilityReply.findMany({
+      where: { artistId: { in: actIds }, request: { agencyId: user.agencyId, closedAt: null, date: { gte: addDaysToKey(today, -1) } } },
+      select: {
+        id: true,
+        answer: true,
+        note: true,
+        artist: { select: { name: true } },
+        request: {
+          select: {
+            date: true,
+            timezone: true,
+            closedAt: true,
+            arriveTime: true,
+            startTime: true,
+            endTime: true,
+            place: true,
+            note: true,
+            costMinor: true,
+            currency: true,
+            venue: { select: { name: true, city: true } },
+          },
+        },
+      },
+      orderBy: { request: { date: "asc" } },
+    }),
+    prisma.artistUnavailability.count({ where: { agencyId: user.agencyId, artistId: { in: actIds }, endDate: { gte: today } } }),
   ]);
+  const openAsks = asks.filter((a) => canAnswer(a.request, localDateKey(now, a.request.timezone)));
+  const unanswered = openAsks.filter((a) => !a.answer).length;
   const feedName = feedOwner ? ("name" in feedOwner ? feedOwner.name : personName(feedOwner)) : "";
   const manyActs = actIds.length > 1 || !!user.personId;
   const h = await headers();
@@ -79,6 +112,39 @@ export default async function ArtistHome() {
 
   return (
     <div className="space-y-8">
+      {openAsks.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-sm font-medium text-volt-400">
+            {unanswered ? `Are you free? · ${unanswered === 1 ? "1 question" : `${unanswered} questions`} to answer` : "Are you free? · you've answered"}
+          </h2>
+          <div className="space-y-3">
+            {openAsks.map((a) => {
+              const r = a.request;
+              const where = requestPlace(r);
+              const times = requestTimes(r);
+              return (
+                <div key={a.id} className={`rounded-2xl border bg-ink-900 p-5 ${a.answer ? "border-white/[0.06]" : "border-volt-400/40"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-lg font-semibold">{formatRange(r.date, r.date)}</div>
+                      <div className="text-sm text-ink-400">
+                        {[times, where, manyActs ? a.artist.name : ""].filter(Boolean).join(" · ") || "Times and place to follow"}
+                      </div>
+                    </div>
+                    {r.costMinor ? (
+                      <div className="shrink-0 text-lg font-semibold text-volt-400 tabular-nums">{formatMoney(r.costMinor, r.currency)}</div>
+                    ) : null}
+                  </div>
+                  {r.note && <p className="mt-3 text-sm whitespace-pre-line text-ink-300">{r.note}</p>}
+                  <div className="mt-4">
+                    <AvailabilityAnswer replyId={a.id} answer={a.answer} note={a.note} dark />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {offers.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-medium text-volt-400">
@@ -164,6 +230,21 @@ export default async function ArtistHome() {
           </ul>
         </section>
       )}
+
+      <Link
+        href="/app/availability"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-ink-900 px-5 py-4 hover:bg-white/[0.03]"
+      >
+        <span className="min-w-0">
+          <span className="block font-medium">Dates you can&apos;t play</span>
+          <span className="block text-sm text-ink-400">
+            {awayCount ? `${awayCount} coming up. Add or change them here.` : "Going on holiday or busy with other work? Let us know."}
+          </span>
+        </span>
+        <span className="shrink-0 text-ink-400" aria-hidden>
+          →
+        </span>
+      </Link>
 
       <PushSetup publicKey={pushKey} />
 
