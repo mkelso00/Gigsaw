@@ -15,7 +15,7 @@ import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
   const user = await requireStaff();
-  const theme = (await cookies()).get("gigsaw_theme")?.value === "light" ? "light" : "dark";
+  const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
   const [unfilled, noAct, acts, venues, contacts, newActs] = await Promise.all([

@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Profile" };
 /** Your own details, alerts, password and look. Separate from the business's Settings. */
 export default async function ProfilePage() {
   const user = await requireStaff();
-  const theme = (await cookies()).get("gigsaw_theme")?.value === "light" ? "light" : "dark";
+  const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   return (
     <SettingsPage
       title="Profile"
