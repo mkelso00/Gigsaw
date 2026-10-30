@@ -207,7 +207,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </span>
       </div>
 
-      <FilterPanel active={[sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
+      <FilterPanel always active={[sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="date" value={anchor} />

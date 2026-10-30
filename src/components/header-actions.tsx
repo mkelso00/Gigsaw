@@ -98,16 +98,50 @@ export function SearchSlot({ children }: { children: React.ReactNode }) {
  * A page's filter box. Always shown on a computer; on a phone it folds behind a "Filters"
  * button (with how many are in use) so the list comes first.
  */
-export function FilterPanel({ active = 0, children }: { active?: number; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function FilterPanel({ active = 0, always = false, children }: { active?: number; always?: boolean; children: React.ReactNode }) {
+  // always: folded behind the button on computers too (and open while any filter is set), for calm busy pages.
+  const [open, setOpen] = useState(always && active > 0);
   return (
     <div className="mb-4">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="btn btn-sm mb-2 sm:hidden" aria-expanded={open}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`btn btn-sm mb-2 ${always ? "" : "sm:hidden"}`} aria-expanded={open}>
         <Icon name="filter" className="h-4 w-4" />
         {open ? "Hide filters" : "Filters"}
         {active > 0 && <span className="rounded-full bg-volt-400 px-1.5 text-[11px] font-semibold text-ink-950">{active}</span>}
       </button>
-      <div className={`${open ? "block" : "hidden"} sm:block [&>form]:mb-0`}>{children}</div>
+      <div className={`${open ? "motion-page-in block" : "hidden"} ${always ? "" : "sm:block"} [&>form]:mb-0`}>{children}</div>
+    </div>
+  );
+}
+
+/** A button that drops down a short list of links, e.g. the printable documents for a booking. */
+export function DropMenu({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="btn w-full" aria-expanded={open}>
+        {label}
+        <Icon name="chevron" className={`h-3.5 w-3.5 transition-transform ${open ? "-rotate-90" : "rotate-90"}`} />
+      </button>
+      {open && (
+        <div
+          onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}
+          className="motion-page-in absolute top-full right-0 z-40 mt-2 flex w-52 flex-col rounded-xl border border-ink-200 bg-white p-1.5 shadow-xl [&>a]:rounded-lg [&>a]:px-3 [&>a]:py-2 [&>a]:text-sm [&>a:hover]:bg-ink-50"
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }

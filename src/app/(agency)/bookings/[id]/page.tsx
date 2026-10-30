@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DropMenu } from "@/components/header-actions";
 import { notFound } from "next/navigation";
 import {
   addPayment,
@@ -183,18 +184,23 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               hasAct={!!booking.artistId}
               actName={actName(booking)}
             />
-            <a href={`/print/bookings/${booking.id}/contract`} target="_blank" className="btn">
-              Contract
-            </a>
-            <a href={`/print/bookings/${booking.id}/invoice`} target="_blank" className="btn">
-              Invoice
-            </a>
-            <a href={`/print/bookings/${booking.id}/itinerary`} target="_blank" className="btn">
-              Itinerary
-            </a>
-            <form action={setBookingArchived.bind(null, booking.id, !booking.archivedAt)}>
-              <button className="btn">{booking.archivedAt ? "Restore" : "Archive"}</button>
-            </form>
+            {/* The printable documents sit in one menu, so the top of the page stays quiet. Archive is at the foot of the page. */}
+            <DropMenu label="Print">
+              <a href={`/print/bookings/${booking.id}/contract`} target="_blank">
+                Contract
+              </a>
+              <a href={`/print/bookings/${booking.id}/invoice`} target="_blank">
+                Invoice
+              </a>
+              <a href={`/print/bookings/${booking.id}/itinerary`} target="_blank">
+                Itinerary for the act
+              </a>
+            </DropMenu>
+            {booking.archivedAt && (
+              <form action={setBookingArchived.bind(null, booking.id, false)}>
+                <button className="btn">Restore</button>
+              </form>
+            )}
           </>
         }
       />
@@ -237,32 +243,38 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <ArrivalPanel booking={booking} arrival={arrival} settings={settings} />
 
           <section className="card card-pad">
-            <h2 className="section-title mb-4">Log a check-in for the act</h2>
-            <p className="mb-4 text-sm text-slate-500">
-              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as
-              logged by you.
-            </p>
-            <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
-              <Field label="Type">
-                <select name="kind" className="input" defaultValue="ARRIVED">
-                  {CHECK_IN_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {CHECK_IN_KIND_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Date">
-                <input type="date" name="date" defaultValue={localDateKey(now, tz)} className="input" />
-              </Field>
-              <Field label={`Time (${zone})`}>
-                <input type="time" name="time" className="input" />
-              </Field>
-              <Field label="Note">
-                <input name="note" className="input" placeholder="Optional" />
-              </Field>
-              <SubmitButton>Log it</SubmitButton>
-            </ActionForm>
+            <h2 className="section-title mb-4">Check-ins</h2>
+            {/* Folded away until needed: most check-ins come from the act app. */}
+            <details className="group">
+              <summary className="btn btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">Log one by hand</summary>
+              <div className="motion-page-in mt-4">
+                <p className="mb-4 text-sm text-slate-500">
+                  Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as
+                  logged by you.
+                </p>
+                <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
+                  <Field label="Type">
+                    <select name="kind" className="input" defaultValue="ARRIVED">
+                      {CHECK_IN_KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {CHECK_IN_KIND_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Date">
+                    <input type="date" name="date" defaultValue={localDateKey(now, tz)} className="input" />
+                  </Field>
+                  <Field label={`Time (${zone})`}>
+                    <input type="time" name="time" className="input" />
+                  </Field>
+                  <Field label="Note">
+                    <input name="note" className="input" placeholder="Optional" />
+                  </Field>
+                  <SubmitButton>Log it</SubmitButton>
+                </ActionForm>
+              </div>
+            </details>
             {booking.checkIns.length > 0 && (
               <ul className="mt-5 divide-y divide-slate-100 border-t border-slate-100 text-sm">
                 {booking.checkIns.map((c) => (
@@ -370,33 +382,38 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 </tbody>
               </table>
             )}
-            <ActionForm action={addPayment.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-6 sm:items-end">
-              <Field label="Direction">
-                <select name="direction" className="input">
-                  <option value="IN">Received</option>
-                  <option value="OUT">Paid out</option>
-                </select>
-              </Field>
-              <Field label="Type">
-                <select name="kind" className="input">
-                  {PAYMENT_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {PAYMENT_KIND_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={`Amount (${booking.currency})`}>
-                <input name="amount" inputMode="decimal" required className="input" />
-              </Field>
-              <Field label="Date">
-                <input type="date" name="paidAt" defaultValue={localDateKey(now, tz)} className="input" />
-              </Field>
-              <Field label="Note">
-                <input name="note" className="input" />
-              </Field>
-              <SubmitButton>Add payment</SubmitButton>
-            </ActionForm>
+            <details className="group">
+              <summary className="btn btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">Add a payment</summary>
+              <div className="motion-page-in mt-4">
+                <ActionForm action={addPayment.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-6 sm:items-end">
+                  <Field label="Direction">
+                    <select name="direction" className="input">
+                      <option value="IN">Received</option>
+                      <option value="OUT">Paid out</option>
+                    </select>
+                  </Field>
+                  <Field label="Type">
+                    <select name="kind" className="input">
+                      {PAYMENT_KINDS.map((k) => (
+                        <option key={k} value={k}>
+                          {PAYMENT_KIND_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label={`Amount (${booking.currency})`}>
+                    <input name="amount" inputMode="decimal" required className="input" />
+                  </Field>
+                  <Field label="Date">
+                    <input type="date" name="paidAt" defaultValue={localDateKey(now, tz)} className="input" />
+                  </Field>
+                  <Field label="Note">
+                    <input name="note" className="input" />
+                  </Field>
+                  <SubmitButton>Add payment</SubmitButton>
+                </ActionForm>
+              </div>
+            </details>
           </section>
         </div>
 
