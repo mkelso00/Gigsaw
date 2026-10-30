@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
+import { FilterPanel } from "@/components/header-actions";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, gigDateKey } from "@/lib/bookings";
@@ -164,79 +165,83 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Calendar"
-        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "artist" : "venue"} · not yet confirmed is dashed`}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-ink-200 bg-white p-0.5 text-sm">
-              {(["day", "week", "month"] as const).map((v) => (
-                <Link
-                  key={v}
-                  href={`/calendar${qs({ view: v, date: anchor })}`}
-                  className={`rounded-md px-3 py-1.5 ${view === v ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
-                >
-                  {v === "day" ? "Day" : v === "week" ? "Week" : "Month"}
-                </Link>
-              ))}
-            </div>
-            <Link href={`/calendar${qs({ date: prev })}`} className="btn" aria-label="Previous">
-              ←
-            </Link>
-            <span className="min-w-40 text-center text-sm font-medium">{title}</span>
-            <Link href={`/calendar${qs({ date: next })}`} className="btn" aria-label="Next">
-              →
-            </Link>
-            <Link href={`/calendar${qs({ date: todayKey })}`} className="btn">
-              Today
-            </Link>
-          </div>
-        }
+        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "act" : "venue"} · not yet confirmed is dashed`}
       />
 
-      <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
-        <input type="hidden" name="view" value={view} />
-        <input type="hidden" name="date" value={anchor} />
-        <label>
-          <span className="label">Town</span>
-          <select name="town" defaultValue={sp.town ?? ""} className="input">
-            <option value="">Everywhere</option>
-            {towns.map((t) => (
-              <option key={t.city} value={t.city}>
-                {t.city}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Artist</span>
-          <select name="artist" defaultValue={sp.artist ?? ""} className="input">
-            <option value="">All artists</option>
-            {artists.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Status</span>
-          <select name="status" defaultValue={sp.status ?? ""} className="input">
-            <option value="">All except cancelled</option>
-            {BOOKING_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {BOOKING_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Colour by</span>
-          <select name="colour" defaultValue={byArtist ? "artist" : "venue"} className="input">
-            <option value="venue">Venue</option>
-            <option value="artist">Artist</option>
-          </select>
-        </label>
-        <button className="btn">Filter</button>
-      </form>
+      {/* Getting around: view, then back, the dates shown, forward and today. Compact so it fits a phone. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-ink-200 bg-white p-0.5 text-sm">
+          {(["day", "week", "month"] as const).map((v) => (
+            <Link
+              key={v}
+              href={`/calendar${qs({ view: v, date: anchor })}`}
+              className={`rounded-md px-3 py-1.5 ${view === v ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
+            >
+              {v === "day" ? "Day" : v === "week" ? "Week" : "Month"}
+            </Link>
+          ))}
+        </div>
+        <span className="flex items-center gap-1 sm:ml-auto">
+          <Link href={`/calendar${qs({ date: prev })}`} className="btn btn-sm" aria-label="Previous">
+            ←
+          </Link>
+          <span className="min-w-32 px-1 text-center text-sm font-medium">{title}</span>
+          <Link href={`/calendar${qs({ date: next })}`} className="btn btn-sm" aria-label="Next">
+            →
+          </Link>
+          <Link href={`/calendar${qs({ date: todayKey })}`} className="btn btn-sm">
+            Today
+          </Link>
+        </span>
+      </div>
+
+      <FilterPanel active={[sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
+        <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="date" value={anchor} />
+          <label>
+            <span className="label">Town</span>
+            <select name="town" defaultValue={sp.town ?? ""} className="input">
+              <option value="">Everywhere</option>
+              {towns.map((t) => (
+                <option key={t.city} value={t.city}>
+                  {t.city}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Act</span>
+            <select name="artist" defaultValue={sp.artist ?? ""} className="input">
+              <option value="">All acts</option>
+              {artists.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Status</span>
+            <select name="status" defaultValue={sp.status ?? ""} className="input">
+              <option value="">All except cancelled</option>
+              {BOOKING_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {BOOKING_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Colour by</span>
+            <select name="colour" defaultValue={byArtist ? "artist" : "venue"} className="input">
+              <option value="venue">Venue</option>
+              <option value="artist">Act</option>
+            </select>
+          </label>
+          <button className="btn">Filter</button>
+        </form>
+      </FilterPanel>
 
       {legend.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600">

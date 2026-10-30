@@ -111,7 +111,7 @@ export default async function VenueStatementPage({
               </a>
             )}
           </div>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat
               label="Venue owes for these gigs"
               value={m(s.totals.due)}
@@ -127,7 +127,8 @@ export default async function VenueStatementPage({
           </div>
           {s.totals.unconfirmed > 0 && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {s.totals.unconfirmed} of these gig{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet, so {s.totals.unconfirmed === 1 ? "it isn't" : "they aren't"} on the printable invoice until confirmed.
+              {s.totals.unconfirmed} of these gig{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet, so{" "}
+              {s.totals.unconfirmed === 1 ? "it isn't" : "they aren't"} on the printable invoice until confirmed.
             </p>
           )}
           {s.rows.length === 0 ? (

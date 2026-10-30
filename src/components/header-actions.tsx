@@ -93,3 +93,21 @@ export function SearchSlot({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+/**
+ * A page's filter box. Always shown on a computer; on a phone it folds behind a "Filters"
+ * button (with how many are in use) so the list comes first.
+ */
+export function FilterPanel({ active = 0, children }: { active?: number; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-4">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="btn btn-sm mb-2 sm:hidden" aria-expanded={open}>
+        <Icon name="filter" className="h-4 w-4" />
+        {open ? "Hide filters" : "Filters"}
+        {active > 0 && <span className="rounded-full bg-volt-400 px-1.5 text-[11px] font-semibold text-ink-950">{active}</span>}
+      </button>
+      <div className={`${open ? "block" : "hidden"} sm:block [&>form]:mb-0`}>{children}</div>
+    </div>
+  );
+}

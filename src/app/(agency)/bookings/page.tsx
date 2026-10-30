@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FilterPanel } from "@/components/header-actions";
 import type { Prisma } from "@prisma/client";
 import { archiveBookings, deleteBookings, restoreBookings } from "@/actions/bookings";
 import { SelectAll, SelectedAction } from "@/components/client-bits";
@@ -88,57 +89,59 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         }
       />
 
-      <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
-        {archived && <input type="hidden" name="view" value="archived" />}
-        <label className="min-w-48 flex-1">
-          <span className="label">Search</span>
-          <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />
-        </label>
-        <label>
-          <span className="label">Artist</span>
-          <select name="artist" defaultValue={sp.artist ?? ""} className="input">
-            <option value="">All acts</option>
-            <option value="none">No act yet</option>
-            {artists.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Status</span>
-          <select name="status" defaultValue={sp.status ?? ""} className="input">
-            <option value="">Any status</option>
-            <option value="UNRESOLVED">Past, never confirmed</option>
-            {BOOKING_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {BOOKING_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Type</span>
-          <select name="type" defaultValue={sp.type ?? ""} className="input">
-            <option value="">Any type</option>
-            {EVENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {EVENT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">When</span>
-          <select name="when" defaultValue={when} className="input">
-            <option value="upcoming">Upcoming</option>
-            <option value="past">Past</option>
-            <option value="all">All dates</option>
-          </select>
-        </label>
-        <button className="btn">Filter</button>
-      </form>
+      <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
+        <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
+          {archived && <input type="hidden" name="view" value="archived" />}
+          <label className="min-w-48 flex-1">
+            <span className="label">Search</span>
+            <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />
+          </label>
+          <label>
+            <span className="label">Artist</span>
+            <select name="artist" defaultValue={sp.artist ?? ""} className="input">
+              <option value="">All acts</option>
+              <option value="none">No act yet</option>
+              {artists.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Status</span>
+            <select name="status" defaultValue={sp.status ?? ""} className="input">
+              <option value="">Any status</option>
+              <option value="UNRESOLVED">Past, never confirmed</option>
+              {BOOKING_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {BOOKING_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">Type</span>
+            <select name="type" defaultValue={sp.type ?? ""} className="input">
+              <option value="">Any type</option>
+              {EVENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {EVENT_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="label">When</span>
+            <select name="when" defaultValue={when} className="input">
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+              <option value="all">All dates</option>
+            </select>
+          </label>
+          <button className="btn">Filter</button>
+        </form>
+      </FilterPanel>
 
       {bookings.length === 0 ? (
         <Empty>

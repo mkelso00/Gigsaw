@@ -166,7 +166,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
       {tab === "history" ? (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <Stat label="Money in" value={m(inTotal)} hint="From venues and clients" />
             <Stat label="Money out" value={m(outTotal)} hint="To acts" />
             <Stat tone="dark" label="Difference" value={m(inTotal - outTotal)} hint={range.label} />
@@ -216,7 +216,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         </>
       ) : (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <Stat
               tone={owedTotal ? "dark" : "default"}
               label={tab === "collect" ? "Still to collect" : "Still to pay acts"}

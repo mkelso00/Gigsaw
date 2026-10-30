@@ -60,8 +60,13 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         }
       />
       <ContactsTabs active="people" />
-      <form className="card mb-4 flex flex-wrap gap-3 p-3">
-        <input name="q" defaultValue={q} placeholder="Search name, act, venue, company, phone or email" className="input min-w-64 flex-1" />
+      <form className="mb-4 flex flex-wrap gap-2">
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder="Search name, act, venue, company, phone or email"
+          className="input min-w-0 flex-1 basis-full sm:basis-auto"
+        />
         <select name="show" defaultValue={show ?? ""} className="input w-auto">
           {SHOW.map(([v, l]) => (
             <option key={v} value={v}>

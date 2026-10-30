@@ -69,9 +69,9 @@ export function Stat({
     alert: "rounded-[var(--radius-card)] bg-rose-600 text-white",
   };
   const body = (
-    <div className={`${tones[tone]} h-full p-5`}>
+    <div className={`${tones[tone]} h-full p-4 sm:p-5`}>
       <div className={`text-[13px] ${tone === "default" ? "text-ink-500" : "text-white/70"}`}>{label}</div>
-      <div className="mt-3 text-[30px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{value}</div>
+      <div className="mt-2 text-[22px] leading-none font-semibold tracking-[-0.03em] tabular-nums sm:mt-3 sm:text-[30px]">{value}</div>
       {hint && <div className={`mt-2 text-xs ${tone === "default" ? "text-ink-500" : "text-white/60"}`}>{hint}</div>}
     </div>
   );

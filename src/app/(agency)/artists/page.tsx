@@ -103,7 +103,12 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         </div>
         <form className="flex flex-1 flex-wrap gap-2">
           <input type="hidden" name="view" value={view} />
-          <input name="q" defaultValue={sp.q} placeholder="Search acts, genre, phone or a member's name" className="input min-w-56 flex-1" />
+          <input
+            name="q"
+            defaultValue={sp.q}
+            placeholder="Search acts, genre, phone or a member's name"
+            className="input min-w-0 flex-1 basis-full sm:basis-auto"
+          />
           <select name="show" defaultValue={sp.show ?? ""} className="input w-auto">
             <option value="">All acts</option>
             <option value="solo">Solo acts and duos</option>

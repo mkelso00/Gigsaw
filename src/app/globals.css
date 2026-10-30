@@ -140,6 +140,12 @@ body {
   .table {
     @apply w-full text-left text-sm;
   }
+  /* On a phone, a table keeps a readable width and swipes sideways in its card rather than squashing every column. */
+  @media (max-width: 639px) {
+    .overflow-x-auto > .table {
+      min-width: 36rem;
+    }
+  }
   .table th {
     @apply border-b border-ink-200 px-4 py-3 text-xs font-medium text-ink-500;
   }

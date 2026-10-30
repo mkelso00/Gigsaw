@@ -160,10 +160,10 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
       ) : (
         <>
           {total > 0 && (
-            <div className="mb-6 grid gap-4 lg:grid-cols-[1fr_1fr_2fr]">
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-[1fr_1fr_2fr]">
               <Stat tone={filledCount === total ? "dark" : "default"} label="Slots with an act this week" value={`${filledCount} / ${total}`} />
               <Stat label="Still to fill" value={total - filledCount} hint={total - filledCount ? "Shown in amber below" : "All done"} />
-              <ActionForm action={bookRegulars} className="card flex flex-col justify-between gap-3 p-5">
+              <ActionForm action={bookRegulars} className="card col-span-2 flex flex-col justify-between gap-3 p-5 lg:col-span-1">
                 <input type="hidden" name="weekStart" value={weekStart} />
                 <div className="text-[13px] text-ink-500">Fill the calendar from the weekly slots</div>
                 <select name="mode" defaultValue="pending" className="input">

@@ -160,7 +160,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 This {period}
               </Link>
             )}
-            <form className="ml-auto flex items-center gap-2">
+            <form className="ml-auto hidden items-center gap-2 sm:flex">
               <input type="hidden" name="period" value={period} />
               <label className="sr-only" htmlFor="report-date">
                 Go to date
@@ -185,7 +185,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         )}
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="Gigs" value={total.gigs} hint={label} />
         <Stat label="Venues and clients paid" value={m(total.sale)} hint={total.owed ? `${m(total.owed)} still owed` : "All paid"} />
         <Stat label="Acts earned" value={m(total.cost)} hint={total.toPay ? `${m(total.toPay)} still to pay` : "All paid"} />
