@@ -104,7 +104,7 @@ export default async function AgencyLayout({ children }: { children: React.React
       </aside>
       <div className="min-w-0 flex-1 lg:py-2 lg:pr-2">
         <main
-          className={`min-h-screen bg-ink-50 px-4 py-5 sm:px-8 lg:min-h-[calc(100vh-1rem)] lg:rounded-2xl lg:ring-1 lg:ring-white/[0.07] lg:px-10 lg:py-6 ${theme === "dark" ? "theme-dark" : ""}`}
+          className={`min-h-screen overflow-x-clip bg-ink-50 px-4 py-5 sm:px-8 lg:min-h-[calc(100vh-1rem)] lg:rounded-2xl lg:ring-1 lg:ring-white/[0.07] lg:px-10 lg:py-6 ${theme === "dark" ? "theme-dark" : ""}`}
         >
           <div className="mx-auto max-w-[1400px]">
             {/* On phones search and new booking are icons in the top bar instead; the search box drops in when tapped. */}

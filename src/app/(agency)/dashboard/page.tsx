@@ -242,7 +242,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-3 [&>*]:min-w-0">
         <section className="xl:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="section-title">Next 24 hours</h2>
