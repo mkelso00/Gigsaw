@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-const { encodeForm, parseLookupKey, priceLookupKey, verifyWebhook } = await import("@/lib/stripe");
+const { encodeForm, parseLookupKey, priceLookupKey, stripe, verifyWebhook } = await import("@/lib/stripe");
 const { billingState, fromStripeStatus } = await import("@/lib/subscription");
 
 describe("Stripe helpers", () => {
@@ -60,5 +60,22 @@ describe("subscription state", () => {
     expect(fromStripeStatus("trialing")).toBe("TRIALING");
     expect(fromStripeStatus("unpaid")).toBe("PAST_DUE");
     expect(fromStripeStatus("incomplete_expired")).toBe("CANCELED");
+  });
+});
+
+describe("calls on an agency's own Stripe account", () => {
+  it("adds the Stripe-Account header only when asked", async () => {
+    process.env.STRIPE_SECRET_KEY = "sk_test_x";
+    const calls: Record<string, string>[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      calls.push(init.headers as Record<string, string>);
+      return new Response(JSON.stringify({ id: "cs_1" }), { status: 200 });
+    });
+    await stripe("POST", "checkout/sessions", { mode: "payment" }, { account: "acct_123" });
+    await stripe("GET", "accounts/acct_123");
+    expect(calls[0]["Stripe-Account"]).toBe("acct_123");
+    expect(calls[1]["Stripe-Account"]).toBeUndefined();
+    vi.unstubAllGlobals();
+    delete process.env.STRIPE_SECRET_KEY;
   });
 });

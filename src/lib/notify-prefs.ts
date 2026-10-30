@@ -6,6 +6,7 @@ export const STAFF_ALERTS = [
   { key: "ACCEPTED", label: "An act accepts a gig", hint: "The gig is confirmed straight away.", channels: ["email"] },
   { key: "SIGNED", label: "A customer signs a contract", hint: "Bookings and weddings where you're the lead agent.", channels: ["email"] },
   { key: "PLANNER", label: "A customer fills in their planner", hint: "Weddings and events: the running order and details are in.", channels: ["email"] },
+  { key: "PAID", label: "A venue or customer pays by card", hint: "From a payment link, on gigs and events you lead.", channels: ["email"] },
 ] as const;
 
 export type StaffAlert = (typeof STAFF_ALERTS)[number]["key"];

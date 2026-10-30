@@ -130,6 +130,17 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: EVENT,
   },
   {
+    key: "PAY_LINK",
+    group: "CUSTOMERS",
+    label: "Payment link",
+    hint: "Sent when you email a venue or customer a link to pay a deposit or balance by card.",
+    example: {
+      subject: "{what}: {amount} to pay",
+      intro: "Hi {first_name}, here's a secure link to pay {amount} by card for {what}.",
+    },
+    placeholders: ["first_name", "what", "amount", "business"],
+  },
+  {
     key: "THANKS",
     group: "CUSTOMERS",
     label: "Thank you",

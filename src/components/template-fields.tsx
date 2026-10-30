@@ -13,6 +13,8 @@ const LABELS: Record<string, string> = {
   time: "Arrive-by time",
   business: "Your business name",
   event: "Wedding or event",
+  what: "What it's for",
+  amount: "Amount to pay",
 };
 
 // Made-up details for the preview.
@@ -23,6 +25,8 @@ const SAMPLE: Record<string, string> = {
   date: "Fri 14 Nov",
   time: "19:30",
   event: "Alex and Jo's wedding",
+  what: "The Late Shows at The Crown, Fri 14 Nov",
+  amount: "£150.00",
 };
 
 const LIMITS: Record<FieldKey, number> = { subject: 200, intro: 2000, text: 320 };
