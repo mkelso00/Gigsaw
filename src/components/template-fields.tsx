@@ -15,6 +15,8 @@ const LABELS: Record<string, string> = {
   event: "Wedding or event",
   what: "What it's for",
   amount: "Amount to pay",
+  name: "Their name",
+  event_type: "Type of event",
 };
 
 // Made-up details for the preview.
@@ -27,6 +29,8 @@ const SAMPLE: Record<string, string> = {
   event: "Alex and Jo's wedding",
   what: "The Late Shows at The Crown, Fri 14 Nov",
   amount: "£150.00",
+  name: "Sam Jones",
+  event_type: "Wedding",
 };
 
 const LIMITS: Record<FieldKey, number> = { subject: 200, intro: 2000, text: 320 };

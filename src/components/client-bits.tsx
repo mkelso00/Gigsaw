@@ -81,6 +81,34 @@ export function CopyField({ value }: { value: string }) {
   );
 }
 
+/** A few lines of code to copy, e.g. the enquiry form's embed code. */
+export function CopyBlock({ value, label = "Copy code" }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="space-y-2">
+      <textarea
+        readOnly
+        value={value}
+        rows={value.split("\n").length}
+        spellCheck={false}
+        onFocus={(e) => e.currentTarget.select()}
+        className="input resize-none font-mono text-xs leading-relaxed whitespace-pre"
+      />
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={async () => {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? "Copied" : label}
+      </button>
+    </div>
+  );
+}
+
 /** A checkbox that ticks or unticks every checkbox with the given name in the same form. */
 export function SelectAll({ name }: { name: string }) {
   return (

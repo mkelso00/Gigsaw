@@ -4,10 +4,12 @@ import { logout } from "@/actions/auth";
 import { changePassword, saveMyNotifications, updateMyDetails } from "@/actions/settings";
 import { toggleTheme } from "@/actions/theme";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { StaffPushSetup } from "@/components/push-setup";
 import { SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { STAFF_ALERTS, wants } from "@/lib/notify-prefs";
+import { CHANNEL_LABELS, STAFF_ALERTS, wants } from "@/lib/notify-prefs";
+import { vapidKeys } from "@/lib/push";
 
 export const metadata: Metadata = { title: "Profile" };
 
@@ -54,14 +56,14 @@ export default async function ProfilePage() {
                   <span className="mt-0.5 block text-sm text-ink-500">{a.hint}</span>
                 </span>
                 <span className="flex gap-5">
-                  {(["email", "text"] as const).map((c) =>
+                  {(["email", "text", "push"] as const).map((c) =>
                     (a.channels as readonly string[]).includes(c) ? (
-                      <label key={c} className="flex items-center gap-2 text-sm text-ink-700">
+                      <label key={c} className="flex w-[78px] items-center gap-2 text-sm text-ink-700">
                         <input type="checkbox" name={`${a.key}:${c}`} defaultChecked={wants(user.notifyPrefs, a.key, c)} className="switch" />
-                        {c === "email" ? "Email" : "Text"}
+                        {CHANNEL_LABELS[c]}
                       </label>
                     ) : (
-                      <span key={c} className="w-[74px]" />
+                      <span key={c} className="w-[78px]" />
                     ),
                   )}
                 </span>
@@ -69,6 +71,9 @@ export default async function ProfilePage() {
             ))}
           </SettingsCard>
         </ActionForm>
+        <SettingsCard className="mt-4">
+          <StaffPushSetup publicKey={(await vapidKeys()).publicKey} />
+        </SettingsCard>
       </SettingsSection>
 
       <SettingsSection title="Password">

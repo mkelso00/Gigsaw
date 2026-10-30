@@ -7,10 +7,17 @@ export const STAFF_ALERTS = [
   { key: "SIGNED", label: "A customer signs a contract", hint: "Bookings and weddings where you're the lead agent.", channels: ["email"] },
   { key: "PLANNER", label: "A customer fills in their planner", hint: "Weddings and events: the running order and details are in.", channels: ["email"] },
   { key: "PAID", label: "A venue or customer pays by card", hint: "From a payment link, on gigs and events you lead.", channels: ["email"] },
+  {
+    key: "ENQUIRY",
+    label: "A new enquiry comes in",
+    hint: "From the enquiry form on your website, if Settings sends them to you. Phone notifications need turning on below.",
+    channels: ["email", "push"],
+  },
 ] as const;
 
 export type StaffAlert = (typeof STAFF_ALERTS)[number]["key"];
-export type Channel = "email" | "text";
+export type Channel = "email" | "text" | "push";
+export const CHANNEL_LABELS: Record<Channel, string> = { email: "Email", text: "Text", push: "Phone" };
 type Prefs = Partial<Record<string, Partial<Record<Channel, boolean>>>>;
 
 /** Whether this person wants this alert by this channel. Everything is on unless turned off. */

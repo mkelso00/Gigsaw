@@ -24,6 +24,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
       { href: "/rota", label: "Rota", icon: "rota" },
       { href: "/bookings", label: "All bookings", icon: "bookings" },
       { href: "/events", label: "Weddings & events", icon: "heart" },
+      { href: "/enquiries", label: "Enquiries", icon: "inbox" },
     ],
   },
   {
@@ -49,6 +50,12 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
     ],
   },
 ];
+
+/** What the count by a menu link means. */
+const BADGE_TITLES: Record<string, string> = {
+  "/artists": "New acts waiting for approval",
+  "/enquiries": "New enquiries from your website",
+};
 
 /** In Settings the sidebar becomes the settings menu, like Shopify's admin. */
 function SettingsNav({ business }: { business: { name: string; email: string } }) {
@@ -152,7 +159,7 @@ export function NavLinks({
                 {badges[l.href] ? (
                   <span
                     className="ml-auto rounded-full bg-cue-500 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white"
-                    title={l.href === "/artists" ? "New acts waiting for approval" : "Gigs in the next 7 days with no act"}
+                    title={BADGE_TITLES[l.href] ?? "Gigs in the next 7 days with no act"}
                   >
                     {badges[l.href]}
                   </span>

@@ -7,6 +7,7 @@ import { arrivalFor, bookingListInclude } from "@/lib/bookings";
 import { LIVE_STATUSES, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { unresolvedPastWhere } from "@/lib/billing";
+import { enquiryTypeLabel, formatDay } from "@/lib/enquiries";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { addDaysToKey, formatDate, formatDateTime, localDateKey, localTime, formatMinutes } from "@/lib/time";
 import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
   const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
 
-  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers] = await Promise.all([
+  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
@@ -73,6 +74,13 @@ export default async function DashboardPage() {
       orderBy: [{ offerResponse: "asc" }, { setStart: "asc" }],
       take: 30,
     }),
+    // New enquiries from the website form, newest first.
+    prisma.enquiry.findMany({
+      where: { agencyId: user.agencyId, status: "NEW" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, eventType: true, date: true },
+      take: 50,
+    }),
   ]);
 
   let owedByPromoters = 0;
@@ -117,6 +125,24 @@ export default async function DashboardPage() {
           </Link>
         }
       />
+
+      {enquiries.length > 0 && (
+        <Link
+          href="/enquiries"
+          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-volt-500/60 bg-volt-100 px-4 py-3 text-sm text-ink-950 hover:brightness-95"
+        >
+          <span className="badge bg-ink-950 text-volt-300">{enquiries.length}</span>
+          <span>
+            new enquir{enquiries.length === 1 ? "y" : "ies"} from your website. Latest:{" "}
+            <span className="font-medium">
+              {[enquiries[0].name, enquiryTypeLabel(enquiries[0].eventType).toLowerCase(), enquiries[0].date ? formatDay(enquiries[0].date) : ""]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+          </span>
+          <span className="ml-auto font-medium">See them →</span>
+        </Link>
+      )}
 
       {unfilled.length > 0 && (
         <Link
@@ -305,6 +331,16 @@ export default async function DashboardPage() {
                     {a.detail && <span className="text-slate-500"> · {a.detail}</span>}
                     {a.entity === "BOOKING" && a.action !== "deleted" && (
                       <Link href={`/bookings/${a.entityId}`} className="link ml-1 text-xs">
+                        view
+                      </Link>
+                    )}
+                    {a.entity === "EVENT" && a.action !== "deleted" && (
+                      <Link href={`/events/${a.entityId}`} className="link ml-1 text-xs">
+                        view
+                      </Link>
+                    )}
+                    {a.entity === "ENQUIRY" && !a.action.includes("deleted") && (
+                      <Link href={`/enquiries?view=all#${a.entityId}`} className="link ml-1 text-xs">
                         view
                       </Link>
                     )}
