@@ -1,14 +1,15 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { stripeKeys } from "./stripe-keys";
-import { CURRENCY, EXTRA_USER_MONTHLY_MINOR, EXTRA_USER_YEARLY_MINOR, planByKey, type PlanKey } from "./plans";
+import { loadCatalogue } from "./plan-store";
+import { CURRENCY, findPlan, type PlanKey } from "./plans";
 
 // A small Stripe client over its REST API (no SDK needed). Setup is just the secret key and the
 // webhook secret, pasted in the Owner area → Stripe (or set as STRIPE_SECRET_KEY and
 // STRIPE_WEBHOOK_SECRET on the server). Products and prices are made in Stripe
 // the first time they're needed, found again by their lookup key, so nothing has to be set up
-// by hand in the Stripe dashboard. A price change in src/lib/plans.ts makes a new Stripe price;
-// existing subscriptions keep theirs until the plan is changed.
+// by hand in the Stripe dashboard. A price change in the Owner area → Plans makes a new Stripe
+// price; existing subscriptions keep theirs until the plan is changed or the owner moves them.
 
 export const stripeConfigured = async () => !!(await stripeKeys()).secretKey;
 
@@ -94,43 +95,53 @@ export function verifyWebhook(body: string, header: string | null, secret: strin
 export type PriceKind = PlanKey | "EXTRA_USER";
 export type Interval = "month" | "year";
 
-/** The lookup key for a price; it includes the amount, so a new price in plans.ts makes a new Stripe price. */
-export function priceLookupKey(kind: PriceKind, interval: Interval) {
-  const amount = priceAmount(kind, interval);
-  return `gigsaw_${kind.toLowerCase()}_${interval}_${amount}`;
+/** The lookup key for a price; it includes the amount, so a new price for a plan makes a new Stripe price. */
+export function priceLookupKey(kind: PriceKind, interval: Interval, amountMinor: number) {
+  return `gigsaw_${kind.toLowerCase()}_${interval}_${amountMinor}`;
 }
 
-export function priceAmount(kind: PriceKind, interval: Interval) {
-  if (kind === "EXTRA_USER") return interval === "year" ? EXTRA_USER_YEARLY_MINOR : EXTRA_USER_MONTHLY_MINOR;
-  const plan = planByKey(kind)!;
+/** Today's price for a plan (or an extra user), in pence. */
+export async function priceAmount(kind: PriceKind, interval: Interval) {
+  const c = await loadCatalogue();
+  if (kind === "EXTRA_USER") return interval === "year" ? c.extraUserYearlyMinor : c.extraUserMonthlyMinor;
+  const plan = findPlan(c.plans, kind);
+  if (!plan) throw new StripeError(`There's no plan called ${kind}`);
   return interval === "year" ? plan.yearlyMinor : plan.monthlyMinor;
 }
 
-/** Which plan and interval a Stripe price is, from its lookup key. */
-export function parseLookupKey(key: string | null | undefined): { kind: PriceKind; interval: Interval } | null {
-  const m = /^gigsaw_(starter|growth|agency|extra_user)_(month|year)_\d+$/.exec(key ?? "");
-  return m ? { kind: m[1].toUpperCase() as PriceKind, interval: m[2] as Interval } : null;
+/** Which plan and interval a Stripe price is, and its amount, from its lookup key. */
+export function parseLookupKey(key: string | null | undefined): { kind: PriceKind; interval: Interval; amountMinor: number } | null {
+  const m = /^gigsaw_([a-z0-9_]+)_(month|year)_(\d+)$/.exec(key ?? "");
+  return m ? { kind: m[1].toUpperCase(), interval: m[2] as Interval, amountMinor: Number(m[3]) } : null;
 }
 
-/** Find this price in Stripe, or make it (and its product) the first time. */
-export async function ensurePrice(kind: PriceKind, interval: Interval): Promise<string> {
-  const lookup = priceLookupKey(kind, interval);
-  const found = await stripe<{ data: { id: string }[] }>("GET", "prices", { lookup_keys: [lookup], active: true, limit: 1 });
-  if (found.data[0]) return found.data[0].id;
-  const productId = `gigsaw_${kind.toLowerCase()}`;
+/** The Stripe product for a plan (or for extra users), e.g. gigsaw_growth. */
+export const productId = (kind: PriceKind) => `gigsaw_${kind.toLowerCase()}`;
+
+/** Make the product in Stripe if it isn't there yet. Returns its id. */
+export async function ensureProduct(kind: PriceKind) {
+  const id = productId(kind);
+  const name = kind === "EXTRA_USER" ? "Gigsaw extra internal user" : `Gigsaw ${findPlan((await loadCatalogue()).plans, kind)?.name ?? kind}`;
   try {
-    await stripe("POST", "products", {
-      id: productId,
-      name: kind === "EXTRA_USER" ? "Gigsaw extra internal user" : `Gigsaw ${planByKey(kind)!.name}`,
-    });
+    await stripe("POST", "products", { id, name });
   } catch (e) {
     // Already made on an earlier run.
     if (!(e instanceof StripeError && e.code === "resource_already_exists")) throw e;
   }
+  return id;
+}
+
+/** Find today's price in Stripe, or make it (and its product) the first time. */
+export async function ensurePrice(kind: PriceKind, interval: Interval): Promise<string> {
+  const amount = await priceAmount(kind, interval);
+  const lookup = priceLookupKey(kind, interval, amount);
+  const found = await stripe<{ data: { id: string }[] }>("GET", "prices", { lookup_keys: [lookup], active: true, limit: 1 });
+  if (found.data[0]) return found.data[0].id;
+  const product = await ensureProduct(kind);
   const price = await stripe<{ id: string }>("POST", "prices", {
-    product: productId,
+    product,
     currency: CURRENCY.toLowerCase(),
-    unit_amount: priceAmount(kind, interval),
+    unit_amount: amount,
     recurring: { interval },
     lookup_key: lookup,
     transfer_lookup_key: true,

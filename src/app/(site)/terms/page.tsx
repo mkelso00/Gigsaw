@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { TRIAL_DAYS } from "@/lib/plans";
+import { loadCatalogue } from "@/lib/plan-store";
 import { LegalPage } from "../legal";
 
 export const metadata: Metadata = {
@@ -8,7 +8,10 @@ export const metadata: Metadata = {
   description: "The terms for using Gigsaw, in plain English. Draft.",
 };
 
-export default function TermsPage() {
+export const revalidate = 300;
+
+export default async function TermsPage() {
+  const { trialDays } = await loadCatalogue();
   return (
     <LegalPage
       title="Terms"
@@ -26,7 +29,7 @@ export default function TermsPage() {
 
       <h2>Free trial</h2>
       <p>
-        You can try Gigsaw free for {TRIAL_DAYS} days. To keep using it after that, choose a plan. [What happens to trial data if no plan is chosen to be
+        You can try Gigsaw free for {trialDays} days. To keep using it after that, choose a plan. [What happens to trial data if no plan is chosen to be
         confirmed.]
       </p>
 

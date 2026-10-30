@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PLANS, TRIAL_DAYS } from "@/lib/plans";
-import { price } from "./format";
+import { loadCatalogue } from "@/lib/plan-store";
+import { choosablePlans } from "@/lib/plans";
+import { planColumns, price } from "./format";
 import { HeroWord } from "./hero-word";
 import {
   DeskWindow,
@@ -94,7 +95,12 @@ const HIGHLIGHTS = [
   },
 ];
 
-export default function HomePage() {
+// Prices come from the Owner area → Plans: the page is rebuilt at most every five minutes, and straight away when they change.
+export const revalidate = 300;
+
+export default async function HomePage() {
+  const catalogue = await loadCatalogue();
+  const plans = choosablePlans(catalogue.plans);
   return (
     <>
       {/* Hero: words on the left, the agency's screen and an act's phone on the right, on a grid of pulsing dots. */}
@@ -126,7 +132,9 @@ export default function HomePage() {
             </div>
             <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
               <StepLights />
-              <p className="font-mono text-[11px] tracking-[0.1em] whitespace-nowrap text-ink-500 uppercase">Free for {TRIAL_DAYS} days · Made in the UK</p>
+              <p className="font-mono text-[11px] tracking-[0.1em] whitespace-nowrap text-ink-500 uppercase">
+                Free for {catalogue.trialDays} days · Made in the UK
+              </p>
             </div>
           </div>
           <div className="relative pb-8 sm:pr-10 lg:pr-12">
@@ -298,8 +306,8 @@ export default function HomePage() {
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-700">
             Pick a plan by how many bookings you make in a month. Acts, venue managers and customers never cost anything, however many you have.
           </p>
-          <div className="mt-12 grid gap-4 md:grid-cols-3">
-            {PLANS.map((p) => (
+          <div className={`mt-12 grid gap-4 ${planColumns(plans.length, "md")}`}>
+            {plans.map((p) => (
               <div key={p.key} className="rounded-2xl border border-ink-200 bg-white p-6 sm:p-7">
                 <p className="text-lg font-semibold">{p.name}</p>
                 <p className="mt-4">
@@ -317,7 +325,7 @@ export default function HomePage() {
         </Container>
       </section>
 
-      <FinalCta />
+      <FinalCta trialDays={catalogue.trialDays} />
     </>
   );
 }

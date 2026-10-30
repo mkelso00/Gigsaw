@@ -23,9 +23,17 @@ export default async function UsersSettings() {
         title={`${team.length} internal user${team.length === 1 ? "" : "s"}`}
         description={
           <>
-            You and your staff who log in to make bookings. Whoever makes a booking is its lead agent. Your plan includes {agency.includedUsers}
-            {agency.extraUserYearlyMinor > 0 ? `; each extra one is ${formatMoney(agency.extraUserYearlyMinor, agency.billingCurrency)} a year` : ""}
-            {extra ? ` (${extra} extra now)` : ""}. Acts, venue managers and customers are external users and are free.
+            You and your staff who log in to make bookings. Whoever makes a booking is its lead agent.{" "}
+            {agency.billingMode === "FREE" ? (
+              "Your account is free, however many you add."
+            ) : (
+              <>
+                Your plan includes {agency.includedUsers}
+                {agency.extraUserYearlyMinor > 0 ? `; each extra one is ${formatMoney(agency.extraUserYearlyMinor, agency.billingCurrency)} a year` : ""}
+                {extra ? ` (${extra} extra now)` : ""}.
+              </>
+            )}{" "}
+            Acts, venue managers and customers are external users and are free.
           </>
         }
       >

@@ -31,6 +31,26 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
   const price = (m: number) => formatMoney(m, agency.billingCurrency);
   const billing = billingState(agency);
   if (billing.mode === "STRIPE") return <SubscriptionPlan agency={agency} gigs={gigs} users={seats.users} subscribed={sp.subscribed === "1"} />;
+  if (billing.mode === "FREE")
+    return (
+      <SettingsPage title="Plan">
+        <section className="rounded-[var(--radius-card)] bg-ink-950 p-6 text-white">
+          <div className="text-[13px] text-white/60">Your Gigsaw plan</div>
+          <div className="mt-2 text-3xl font-semibold tracking-tight">Free account</div>
+          <div className="mt-1 text-sm text-white/70">There&apos;s nothing to pay. Everything in Gigsaw is open to you.</div>
+        </section>
+        <SettingsSection title="This month">
+          <SettingsCard>
+            <SettingsRow
+              icon="bookings"
+              title={`${gigs} booking${gigs === 1 ? "" : "s"}`}
+              sub="Counted the same way as on a paid plan, so you can see how busy you are."
+            />
+            <SettingsRow icon="contacts" title={`${seats.users} internal user${seats.users === 1 ? "" : "s"}`} href="/settings/users" />
+          </SettingsCard>
+        </SettingsSection>
+      </SettingsPage>
+    );
   return (
     <SettingsPage title="Plan">
       <section className="rounded-[var(--radius-card)] bg-ink-950 p-6 text-white">

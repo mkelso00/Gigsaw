@@ -2,26 +2,45 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Agency } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { appUrl } from "@/lib/messaging";
-import { planByKey } from "@/lib/plans";
+import { allPlans } from "@/lib/plan-store";
+import { findPlan } from "@/lib/plans";
 import { INTERNAL_ROLES } from "@/lib/seats";
-import { ensurePrice, parseLookupKey, stripe, stripeConfigured, StripeError, type Interval } from "@/lib/stripe";
-import { applySubscription, type StripeSubscription } from "@/lib/subscription-sync";
+import { ensurePrice, stripe, stripeConfigured, StripeError, type Interval } from "@/lib/stripe";
+import { hasLiveSubscription } from "@/lib/subscription";
+import { moveSubscription } from "@/lib/subscription-sync";
 
 // Settings > Plan: choose a plan, add a card (Stripe Checkout), manage billing (Stripe's billing
 // portal: card, invoices, cancelling) and change plan. Admins only.
 
 const DAY = 86_400_000;
 
+function notByCard(agency: Agency) {
+  if (agency.billingMode === "FREE") return "Your account is free, so there's nothing to pay.";
+  return "Your plan is billed by invoice. Get in touch to change it.";
+}
+
 async function billingAgency() {
   const user = await requireAdmin();
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId! } });
-  if (agency.billingMode !== "STRIPE") throw new FormError("Your plan is billed by invoice. Get in touch to change it.");
+  if (agency.billingMode !== "STRIPE") throw new FormError(notByCard(agency));
   if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on yet. Please try again later.");
   return { user, agency };
+}
+
+/**
+ * A plan this business may pick: one on the website, or the plan it's already on (which the owner
+ * may have hidden, archived, or given it specially).
+ */
+async function choosable(key: string, agency: Agency) {
+  const plan = findPlan(await allPlans(), key);
+  if (!plan) return null;
+  if (plan.key === agency.plan) return plan;
+  return plan.public && !plan.archived ? plan : null;
 }
 
 /** Send the admin to Stripe Checkout to add a card and start the subscription. */
@@ -29,12 +48,11 @@ export async function startCheckout(_: FormState, form: FormData): Promise<FormS
   let url = "";
   const res = await handleForm(async () => {
     const { user, agency } = await billingAgency();
-    const plan = planByKey(str(form, "plan")) ?? planByKey(agency.plan);
+    const plan = (await choosable(str(form, "plan"), agency)) ?? (await choosable(agency.plan ?? "", agency));
     if (!plan) throw new FormError("Choose a plan");
     const chosen = str(form, "interval") || agency.billingInterval;
     const interval: Interval = chosen === "year" ? "year" : "month";
-    if (agency.stripeSubscriptionId && agency.subscriptionStatus !== "CANCELED")
-      throw new FormError("You're already subscribed. Use Change plan or Manage billing.");
+    if (hasLiveSubscription(agency)) throw new FormError("You're already subscribed. Use Change plan or Manage billing.");
 
     // One Stripe customer per business.
     let customer = agency.stripeCustomerId;
@@ -60,6 +78,7 @@ export async function startCheckout(_: FormState, form: FormData): Promise<FormS
       client_reference_id: agency.id,
       line_items: items,
       subscription_data: { metadata: { agencyId: agency.id }, ...(trialEnd ? { trial_end: trialEnd } : {}) },
+      // Customers can type a discount code (Owner area → Discount codes).
       allow_promotion_codes: true,
       billing_address_collection: "required",
       tax_id_collection: { enabled: true },
@@ -95,31 +114,16 @@ export async function changePlan(_: FormState, form: FormData): Promise<FormStat
   return handleForm(async () => {
     const user = await requireAdmin();
     const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId! } });
-    if (agency.billingMode !== "STRIPE") throw new FormError("Your plan is billed by invoice. Get in touch to change it.");
-    const plan = planByKey(str(form, "plan"));
+    if (agency.billingMode !== "STRIPE") throw new FormError(notByCard(agency));
+    const plan = await choosable(str(form, "plan"), agency);
     if (!plan) throw new FormError("Choose a plan");
     const interval: Interval = str(form, "interval") === "year" ? "year" : "month";
-    if (!agency.stripeSubscriptionId || agency.subscriptionStatus === "CANCELED") {
+    if (!hasLiveSubscription(agency)) {
       await prisma.agency.update({ where: { id: agency.id }, data: { plan: plan.key, billingInterval: interval, includedUsers: plan.includedUsers } });
     } else {
       if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on yet.");
-      const sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`);
-      const planItem = sub.items.data.find((i) => {
-        const k = parseLookupKey(i.price.lookup_key);
-        return k && k.kind !== "EXTRA_USER";
-      });
-      const extraItem = sub.items.data.find((i) => parseLookupKey(i.price.lookup_key)?.kind === "EXTRA_USER");
-      const users = await prisma.user.count({ where: { agencyId: agency.id, role: { in: INTERNAL_ROLES }, demo: false } });
-      const extra = Math.max(0, users - plan.includedUsers);
-      const items: Record<string, unknown>[] = [];
-      if (planItem) items.push({ id: planItem.id, price: await ensurePrice(plan.key, interval) });
-      else items.push({ price: await ensurePrice(plan.key, interval) });
-      if (extraItem)
-        items.push(extra ? { id: extraItem.id, price: await ensurePrice("EXTRA_USER", interval), quantity: extra } : { id: extraItem.id, deleted: true });
-      else if (extra) items.push({ price: await ensurePrice("EXTRA_USER", interval), quantity: extra });
       try {
-        const updated = await stripe<StripeSubscription>("POST", `subscriptions/${sub.id}`, { items, proration_behavior: "create_prorations" });
-        await applySubscription(updated);
+        await moveSubscription(agency.id, agency.stripeSubscriptionId!, plan, interval);
       } catch (e) {
         if (e instanceof StripeError) throw new FormError(`Stripe couldn't change the plan: ${e.message}`);
         throw e;

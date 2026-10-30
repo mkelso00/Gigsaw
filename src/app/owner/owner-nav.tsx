@@ -7,6 +7,8 @@ import { Icon } from "@/components/icons";
 const LINKS = [
   { href: "/owner", label: "Businesses", icon: "company" },
   { href: "/owner/billing", label: "Billing", icon: "billing" },
+  { href: "/owner/plans", label: "Plans", icon: "plans" },
+  { href: "/owner/discounts", label: "Discount codes", icon: "tag" },
   { href: "/owner/stripe", label: "Stripe", icon: "payments" },
   { href: "/owner/messages", label: "Outbox", icon: "mail" },
 ];

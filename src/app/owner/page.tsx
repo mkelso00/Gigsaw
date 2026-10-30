@@ -6,29 +6,35 @@ import { monthLabel, unresolvedPastWhere } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { userCharge } from "@/lib/seats";
+import { allPlans } from "@/lib/plan-store";
+import { findPlan } from "@/lib/plans";
 import { billingState } from "@/lib/subscription";
 import { usageForMonth } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
-export default async function OwnerHome() {
+export default async function OwnerHome({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
   await requireOwner();
+  const { plan: planFilter } = await searchParams;
   const now = new Date();
   const month = now.toISOString().slice(0, 7);
-  const [agencies, usage, unpaid, unresolvedRows] = await Promise.all([
+  const [agencies, usage, unpaid, unresolvedRows, plans] = await Promise.all([
     prisma.agency.findMany({
       orderBy: { name: "asc" },
+      where: planFilter ? { plan: planFilter } : undefined,
       include: { _count: { select: { users: { where: { role: { in: ["ADMIN", "AGENT"] }, demo: false } }, artists: true } } },
     }),
     usageForMonth(month),
     prisma.billingStatement.findMany({ where: { status: "ISSUED" } }),
     prisma.booking.groupBy({ by: ["agencyId"], where: unresolvedPastWhere(now), _count: { _all: true } }),
+    allPlans(),
   ]);
   const unresolved = new Map(unresolvedRows.map((r) => [r.agencyId, r._count._all]));
 
   // Revenue is grouped by currency so different currencies are never added together.
   const byCurrency = new Map<string, number>();
   for (const a of agencies) {
+    if (a.billingMode === "FREE") continue; // never charged
     const gigs = usage.get(a.id)?.count ?? 0;
     byCurrency.set(a.billingCurrency, (byCurrency.get(a.billingCurrency) ?? 0) + gigs * a.pricePerGigMinor + userCharge(a, a._count.users).monthlyMinor);
   }
@@ -60,6 +66,14 @@ export default async function OwnerHome() {
         />
       </div>
 
+      {planFilter && (
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-600">
+          On the {findPlan(plans, planFilter)?.name ?? planFilter} plan: {agencies.length} business{agencies.length === 1 ? "" : "es"}.
+          <Link href="/owner" className="link">
+            Show every business
+          </Link>
+        </p>
+      )}
       {agencies.length === 0 ? (
         <Empty>
           No businesses yet.{" "}
@@ -73,8 +87,10 @@ export default async function OwnerHome() {
             const gigs = usage.get(a.id)?.count ?? 0;
             const plan =
               a.billingMode === "STRIPE"
-                ? `${a.plan ? a.plan.charAt(0) + a.plan.slice(1).toLowerCase() : "No plan"} · ${billingState(a).label}`
-                : `${formatMoney(a.pricePerGigMinor, a.billingCurrency)} per booking`;
+                ? `${findPlan(plans, a.plan)?.name ?? a.plan ?? "No plan"} · ${billingState(a).label}`
+                : a.billingMode === "FREE"
+                  ? "Free account"
+                  : `${formatMoney(a.pricePerGigMinor, a.billingCurrency)} per booking`;
             return (
               <li key={a.id} className={i > 0 ? "border-t border-ink-100" : ""}>
                 <Link href={`/owner/businesses/${a.id}`} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-ink-50">
@@ -105,7 +121,7 @@ export default async function OwnerHome() {
                   <span className="w-24 text-right">
                     <span className="block font-mono text-[10px] tracking-[0.12em] text-ink-400 uppercase">So far</span>
                     <span className="font-mono text-sm font-semibold tabular-nums">
-                      {formatMoney(gigs * a.pricePerGigMinor + userCharge(a, a._count.users).monthlyMinor, a.billingCurrency)}
+                      {formatMoney(a.billingMode === "FREE" ? 0 : gigs * a.pricePerGigMinor + userCharge(a, a._count.users).monthlyMinor, a.billingCurrency)}
                     </span>
                   </span>
                   <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-ink-600" />

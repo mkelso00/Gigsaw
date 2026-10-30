@@ -9,12 +9,13 @@ import { Field } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { gigMonth, monthLabel, monthSearchWindow, notBilledReason, shiftMonth } from "@/lib/billing";
 import { formatDate } from "@/lib/time";
-import { BOOKING_STATUS_LABELS, type BookingStatus, CURRENCIES } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, type BookingStatus } from "@/lib/constants";
 import { prisma } from "@/lib/db";
-import { formatMoney, minorToInput } from "@/lib/money";
+import { formatMoney } from "@/lib/money";
 import { userCharge } from "@/lib/seats";
 import { billingState } from "@/lib/subscription";
 import { usageForMonth } from "@/lib/usage";
+import { PlanSection } from "./plan-section";
 
 export const metadata: Metadata = { title: "Business" };
 export const dynamic = "force-dynamic";
@@ -86,7 +87,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
           {agency.status === "ACTIVE" ? "Active" : "Suspended"}
         </span>
         <p className="w-full text-[15px] text-ink-500">
-          {billing.mode === "STRIPE" ? billing.label : `${money(agency.pricePerGigMinor)} per booking, by invoice`} · {agency._count.bookings} bookings ·{" "}
+          {billing.mode !== "INVOICE" ? billing.label : `${money(agency.pricePerGigMinor)} per booking, by invoice`} · {agency._count.bookings} bookings ·{" "}
           {agency._count.artists} acts
         </p>
       </div>
@@ -99,6 +100,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
       )}
 
       <div className="space-y-10">
+        <PlanSection agency={agency} staffCount={staff.length} />
         <SettingsSection title="Usage" description="Bookings that count each month, from three months ago to eight months ahead.">
           <div className="card overflow-x-auto">
             <div className="flex min-w-[640px] items-end gap-1 px-4 pt-5 pb-3">
@@ -129,7 +131,12 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
               })}
             </div>
             <p className="border-t border-ink-100 px-4 py-2.5 text-xs text-ink-500">
-              This month so far: <span className="font-mono font-semibold text-ink-950">{money(usage[3] * agency.pricePerGigMinor + seats.monthlyMinor)}</span>.
+              {billing.mode === "INVOICE" && (
+                <>
+                  This month so far:{" "}
+                  <span className="font-mono font-semibold text-ink-950">{money(usage[3] * agency.pricePerGigMinor + seats.monthlyMinor)}</span>.{" "}
+                </>
+              )}
               Pale bars are bookings already made for the months ahead; they&apos;re billed in their own month.
             </p>
           </div>
@@ -236,68 +243,6 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
               <Field label="Billing email" hint="Where statements go" className="sm:col-span-2">
                 <input name="billingEmail" type="email" defaultValue={agency.billingEmail} className="input" />
               </Field>
-            </div>
-          </SettingsSection>
-
-          <SettingsSection title="Price" description="A new price applies to statements you issue from now on. Statements already issued keep theirs.">
-            <div className="card card-pad grid gap-4 sm:grid-cols-2">
-              <Field label="How they pay" hint={billing.mode === "STRIPE" ? billing.label : "You send statements from Billing"}>
-                <select name="billingMode" defaultValue={agency.billingMode} className="input">
-                  <option value="INVOICE">By invoice (per booking)</option>
-                  <option value="STRIPE">By card (Stripe subscription)</option>
-                </select>
-              </Field>
-              <Field label="Currency">
-                <select name="billingCurrency" defaultValue={agency.billingCurrency} className="input">
-                  {CURRENCIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Price per booking">
-                <input
-                  name="pricePerGig"
-                  inputMode="decimal"
-                  required
-                  defaultValue={minorToInput(agency.pricePerGigMinor, agency.billingCurrency)}
-                  className="input"
-                />
-              </Field>
-              <Field label="Internal users included" hint="Acts, venue managers and customers never count">
-                <input name="includedUsers" inputMode="numeric" defaultValue={agency.includedUsers} className="input" />
-              </Field>
-              <Field
-                label="Each extra internal user, per year"
-                hint={seats.extra ? `${seats.extra} extra now: ${money(seats.monthlyMinor)} a month` : "Billed monthly at a twelfth"}
-              >
-                <input
-                  name="extraUserYearly"
-                  inputMode="decimal"
-                  defaultValue={minorToInput(agency.extraUserYearlyMinor, agency.billingCurrency)}
-                  placeholder="500.00"
-                  className="input"
-                />
-              </Field>
-              <Field
-                label="Free trial ends"
-                hint={agency.plan ? `Plan: ${agency.plan.toLowerCase()}, ${agency.billingInterval}ly` : "Card-paying businesses only"}
-              >
-                <input
-                  name="trialEndsAt"
-                  type="date"
-                  defaultValue={agency.trialEndsAt ? agency.trialEndsAt.toISOString().slice(0, 10) : ""}
-                  className="input"
-                />
-              </Field>
-              {agency.stripeCustomerId && (
-                <p className="text-xs text-ink-500 sm:col-span-2">
-                  Stripe customer{" "}
-                  <a href={`https://dashboard.stripe.com/customers/${agency.stripeCustomerId}`} target="_blank" rel="noreferrer" className="link">
-                    {agency.stripeCustomerId}
-                  </a>
-                  {agency.stripeSubscriptionId ? ` · subscription ${agency.stripeSubscriptionId}` : ""}
-                </p>
-              )}
             </div>
           </SettingsSection>
 

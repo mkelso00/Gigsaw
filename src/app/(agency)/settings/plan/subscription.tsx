@@ -4,8 +4,11 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { formatDate } from "@/lib/time";
 import { formatMoney } from "@/lib/money";
-import { CURRENCY, EXTRA_USER_MONTHLY_MINOR, EXTRA_USER_YEARLY_MINOR, PLANS, planForGigs } from "@/lib/plans";
-import { stripeConfigured } from "@/lib/stripe";
+import { loadCatalogue } from "@/lib/plan-store";
+import { choosablePlans, CURRENCY, findPlan, monthsFree, planForGigs } from "@/lib/plans";
+import { describeDiscount, fromStripeCoupon } from "@/lib/discounts";
+import { parseLookupKey, stripe, stripeConfigured } from "@/lib/stripe";
+import type { StripeSubscription } from "@/lib/subscription-sync";
 import { billingState } from "@/lib/subscription";
 
 // Settings > Plan for a business that pays by card: its trial or subscription, how much of the
@@ -23,12 +26,27 @@ export async function SubscriptionPlan({
   subscribed: boolean;
 }) {
   const b = billingState(agency);
+  const catalogue = await loadCatalogue();
   const m = (x: number) => formatMoney(x, CURRENCY);
   const yearly = agency.billingInterval === "year";
-  const plan = b.plan;
+  const plan = findPlan(catalogue.plans, agency.plan);
+  // Plans on the website, plus the one they're on if the owner gave them a hidden or archived one.
+  const options = choosablePlans(catalogue.plans);
+  if (plan && !options.some((p) => p.key === plan.key)) options.unshift(plan);
   const over = plan?.gigsPerMonth != null && gigs > plan.gigsPerMonth;
-  const suggest = over ? planForGigs(gigs) : null;
+  const suggest = over ? planForGigs(catalogue.plans, gigs) : null;
   const tone = b.status === "PAST_DUE" || b.locked ? "red" : b.subscribed ? "green" : "amber";
+  const stripeOn = await stripeConfigured();
+  // Once subscribed, what they pay is what's on their Stripe subscription: they keep the price they
+  // signed up at when plan prices change, and may have a discount.
+  let paying: number | null = null;
+  let discount = "";
+  if (b.subscribed && stripeOn && agency.stripeSubscriptionId) {
+    const sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`).catch(() => null);
+    const item = sub?.items.data.map((i) => parseLookupKey(i.price.lookup_key)).find((k) => k && k.kind !== "EXTRA_USER");
+    if (item) paying = item.amountMinor;
+    if (sub?.discount) discount = describeDiscount(fromStripeCoupon(sub.discount.coupon));
+  }
   return (
     <SettingsPage title="Plan">
       {justSubscribed && (
@@ -43,10 +61,11 @@ export async function SubscriptionPlan({
             <div className="mt-2 text-3xl font-semibold tracking-tight">{plan?.name ?? "No plan chosen"}</div>
             {plan && (
               <div className="mt-1 text-sm text-white/70">
-                {m(yearly ? plan.yearlyMinor : plan.monthlyMinor)} a {yearly ? "year" : "month"} ·{" "}
+                {m(paying ?? (yearly ? plan.yearlyMinor : plan.monthlyMinor))} a {yearly ? "year" : "month"} ·{" "}
                 {plan.gigsPerMonth ? `up to ${plan.gigsPerMonth} bookings a month` : "unlimited bookings"} · {plan.includedUsers} internal users included
               </div>
             )}
+            {discount && <div className="mt-2 inline-flex rounded-md bg-volt-400/15 px-2 py-0.5 text-xs font-medium text-volt-300">Discount: {discount}</div>}
           </div>
           <div className="text-right">
             <Badge tone={tone}>{b.label}</Badge>
@@ -66,7 +85,7 @@ export async function SubscriptionPlan({
             icon="bookings"
             title={`${gigs} booking${gigs === 1 ? "" : "s"}${plan?.gigsPerMonth ? ` of ${plan.gigsPerMonth}` : ""}`}
             sub={
-              over && suggest
+              over && suggest && suggest.key !== plan?.key
                 ? `You're over your plan's bookings. Nothing stops working, but ${suggest.name} fits better.`
                 : "A booking counts when it's confirmed or settled, the act checks in, or it's left on hold or pending after its date."
             }
@@ -74,13 +93,13 @@ export async function SubscriptionPlan({
           <SettingsRow
             icon="contacts"
             title={`${users} internal user${users === 1 ? "" : "s"}${plan ? ` of ${plan.includedUsers} included` : ""}`}
-            sub={`Each extra one is ${m(yearly ? EXTRA_USER_YEARLY_MINOR : EXTRA_USER_MONTHLY_MINOR)} a ${yearly ? "year" : "month"}. Acts, venue managers and customers are free.`}
+            sub={`Each extra one is ${m(yearly ? catalogue.extraUserYearlyMinor : catalogue.extraUserMonthlyMinor)} a ${yearly ? "year" : "month"}. Acts, venue managers and customers are free.`}
             href="/settings/users"
           />
         </SettingsCard>
       </SettingsSection>
 
-      {!(await stripeConfigured()) ? (
+      {!stripeOn ? (
         <SettingsCard pad>
           <p className="text-sm text-ink-500">Card payments aren&apos;t switched on yet. Your trial carries on as normal in the meantime.</p>
         </SettingsCard>
@@ -126,8 +145,8 @@ export async function SubscriptionPlan({
         title="Change plan"
         description="Changes take effect straight away. If you're subscribed, Stripe adjusts your next bill for the days left."
       >
-        <div className="grid gap-4 md:grid-cols-3">
-          {PLANS.map((p) => {
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {options.map((p) => {
             const current = p.key === plan?.key;
             return (
               <div key={p.key} className={`card flex flex-col p-5 ${current ? "ring-2 ring-volt-400" : ""}`}>
@@ -140,7 +159,9 @@ export async function SubscriptionPlan({
                   {m(p.monthlyMinor)}
                   <span className="text-sm font-normal text-ink-500">/month</span>
                 </div>
-                <div className="text-xs text-ink-500">or {m(p.yearlyMinor)} a year (2 months free)</div>
+                <div className="text-xs text-ink-500">
+                  or {m(p.yearlyMinor)} a year{monthsFree(p) ? ` (${monthsFree(p)} month${monthsFree(p) === 1 ? "" : "s"} free)` : ""}
+                </div>
                 <ul className="mt-3 mb-4 space-y-1 text-sm text-ink-600">
                   {p.highlights.map((h) => (
                     <li key={h}>· {h}</li>

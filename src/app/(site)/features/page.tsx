@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { loadCatalogue } from "@/lib/plan-store";
 import { ArrivalsSketch, Check, Container, Eyebrow, FinalCta, OfferSketch, RotaSketch } from "../site-ui";
 
 export const metadata: Metadata = {
@@ -276,7 +277,10 @@ function Lead({ paragraphs, className = "" }: { paragraphs: string[]; className?
   );
 }
 
-export default function FeaturesPage() {
+export const revalidate = 300;
+
+export default async function FeaturesPage() {
+  const { trialDays } = await loadCatalogue();
   return (
     <>
       <section>
@@ -354,7 +358,7 @@ export default function FeaturesPage() {
         </Container>
       </section>
 
-      <FinalCta title="See it with your own venues and acts." />
+      <FinalCta title="See it with your own venues and acts." trialDays={trialDays} />
     </>
   );
 }

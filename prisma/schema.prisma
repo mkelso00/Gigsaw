@@ -26,9 +26,10 @@ model Agency {
   billingEmail         String    @default("")
   ownerNotes           String    @default("") // only the platform owner sees this
   // How this business pays: INVOICE (the owner bills per gig from the Owner area) or STRIPE
-  // (a self-service subscription chosen on sign-up: a plan by gigs a month, after a free trial).
+  // (a self-service subscription chosen on sign-up: a plan by gigs a month, after a free trial),
+  // or FREE (set by the owner for friends and test accounts: no charge, never locked).
   billingMode          String    @default("INVOICE")
-  plan                 String? // STARTER | GROWTH | AGENCY (see src/lib/plans.ts)
+  plan                 String? // a Plan key, e.g. STARTER (see the Plan model)
   billingInterval      String    @default("month") // month | year
   trialEndsAt          DateTime?
   // NONE | TRIALING | ACTIVE | PAST_DUE | CANCELED, kept in step with Stripe by its webhook
@@ -918,4 +919,50 @@ model AvailabilityReply {
 
   @@unique([requestId, artistId])
   @@index([artistId])
+}
+
+// Gigsaw's subscription plans, edited in the Owner area → Plans. The key is fixed once made: it's
+// stored on each business (Agency.plan) and is part of the Stripe price lookup keys.
+model Plan {
+  key           String   @id
+  name          String
+  tagline       String   @default("")
+  monthlyMinor  Int // pence
+  yearlyMinor   Int // pence
+  gigsPerMonth  Int? // bookings a month included; null means unlimited
+  includedUsers Int      @default(2)
+  highlights    String[] @default([])
+  public        Boolean  @default(true) // shown on the website, sign-up and Settings > Plan
+  sortOrder     Int      @default(0)
+  archived      Boolean  @default(false) // can't be chosen any more; businesses already on it keep it
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+// Prices and the trial that apply to every plan. One row, id "default".
+model BillingSettings {
+  id                    String   @id @default("default")
+  trialDays             Int      @default(30)
+  extraUserMonthlyMinor Int      @default(2000)
+  extraUserYearlyMinor  Int      @default(20000)
+  updatedAt             DateTime @default(now()) @updatedAt
+}
+
+// A discount code customers type at checkout (a Stripe coupon plus a promotion code), made in the
+// Owner area → Discount codes. Times redeemed is read from Stripe.
+model DiscountCode {
+  id                    String    @id @default(cuid())
+  code                  String    @unique
+  percentOff            Float?
+  amountOffMinor        Int?
+  currency              String    @default("GBP")
+  duration              String // once | forever | repeating
+  durationMonths        Int? // for repeating
+  expiresAt             DateTime?
+  maxRedemptions        Int?
+  planKeys              String[]  @default([]) // empty means every plan
+  stripeCouponId        String
+  stripePromotionCodeId String    @unique
+  active                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
 }

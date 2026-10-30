@@ -8,37 +8,12 @@ import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData } from "@/lib/demo";
 import { FormError, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
-import { toMinor } from "@/lib/money";
+import { priceFrom, seatsFrom } from "@/lib/owner-forms";
 import { internalUserCounts } from "@/lib/seat-counts";
 import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
 import { clearStripeKeyCache, STRIPE_KEY_NAMES } from "@/lib/stripe-keys";
 import { sendWelcome } from "@/lib/welcome";
-
-function priceFrom(form: FormData, currency: string) {
-  try {
-    const minor = toMinor(required(form, "pricePerGig", "Price per booking"), currency);
-    if (minor < 0) throw new FormError("Price can't be negative");
-    return minor;
-  } catch (e) {
-    if (e instanceof FormError) throw e;
-    throw new FormError("Enter the price per booking as a number, like 2.50");
-  }
-}
-
-/** Internal users included, and the yearly price of each extra one. */
-function seatsFrom(form: FormData, currency: string) {
-  const included = Number(str(form, "includedUsers") || "2");
-  if (!Number.isInteger(included) || included < 0 || included > 1000) throw new FormError("Included internal users must be a whole number");
-  let yearly = 0;
-  try {
-    yearly = toMinor(str(form, "extraUserYearly") || "0", currency);
-  } catch {
-    throw new FormError("Enter the yearly price per extra user as a number, like 500");
-  }
-  if (yearly < 0) throw new FormError("Price can't be negative");
-  return { includedUsers: included, extraUserYearlyMinor: yearly };
-}
 
 /** A password if one was typed, or none ("") when they'll set their own from the welcome email. */
 async function optionalPasswordHash(form: FormData) {
@@ -97,21 +72,16 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
   redirect(`/owner/businesses/${id}?created=1`);
 }
 
+/** The business's name, status, billing email and notes. How it pays is set in its Plan section (src/actions/owner-plans.ts). */
 export async function updateAgency(agencyId: string, _: FormState, form: FormData): Promise<FormState> {
   await requireOwner();
   return handleForm(async () => {
-    const currency = oneOf(str(form, "billingCurrency"), CURRENCIES, "GBP");
     const name = required(form, "name", "Business name");
     await prisma.agency.update({
       where: { id: agencyId },
       data: {
         name,
         status: str(form, "status") === "SUSPENDED" ? "SUSPENDED" : "ACTIVE",
-        pricePerGigMinor: priceFrom(form, currency),
-        ...seatsFrom(form, currency),
-        billingMode: str(form, "billingMode") === "STRIPE" ? "STRIPE" : "INVOICE",
-        ...(str(form, "trialEndsAt") ? { trialEndsAt: new Date(`${str(form, "trialEndsAt")}T23:59:00Z`) } : {}),
-        billingCurrency: currency,
         billingEmail: str(form, "billingEmail"),
         ownerNotes: str(form, "ownerNotes"),
       },
