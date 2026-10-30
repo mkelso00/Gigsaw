@@ -2,7 +2,15 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-export type ComboOption = { id: string; name: string; /** A second line to tell similar names apart, e.g. a venue's town. */ detail?: string };
+export type ComboOption = {
+  id: string;
+  name: string;
+  /** A second line to tell similar names apart, e.g. a venue's town. */
+  detail?: string;
+  /** A short amber flag, e.g. "Away" for an act who has blocked out the chosen date, with a longer reason on hover. */
+  badge?: string;
+  badgeTitle?: string;
+};
 
 // Lower case without accents, so "cafe" finds "Café".
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -245,6 +253,11 @@ export function Combobox({
                   {o ? o.name : emptyLabel}
                 </span>
                 {o?.detail && <span className="shrink-0 truncate text-xs text-ink-500">{o.detail}</span>}
+                {o?.badge && (
+                  <span className="badge shrink-0 self-center bg-amber-100 text-amber-900" title={o.badgeTitle}>
+                    {o.badge}
+                  </span>
+                )}
                 {selected && (
                   <svg
                     viewBox="0 0 24 24"

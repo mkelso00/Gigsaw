@@ -11,7 +11,7 @@ import { personName } from "./person-name";
  * How acts sit inside each other in an agency (a band built from solo acts), loaded once.
  * Cycles are ignored, so a mistake can't loop forever.
  */
-async function actTree(agencyId: string) {
+export async function actTree(agencyId: string) {
   const links = await prisma.actLink.findMany({ where: { parent: { agencyId } }, select: { parentId: true, childId: true } });
   const parents = new Map<string, string[]>();
   const children = new Map<string, string[]>();
@@ -38,16 +38,18 @@ async function agencyOfAct(artistId: string) {
   return (await prisma.artist.findUnique({ where: { id: artistId }, select: { agencyId: true } }))?.agencyId ?? null;
 }
 
+/** The acts a login is directly in: a person's acts, or the one act an act login belongs to. */
+export async function ownActIds(user: { artistId: string | null; personId: string | null }) {
+  if (user.personId) return (await prisma.personAct.findMany({ where: { personId: user.personId }, select: { artistId: true } })).map((a) => a.artistId);
+  return user.artistId ? [user.artistId] : [];
+}
+
 /**
  * The acts a login can see: a person's acts, or the one act an act login belongs to, plus any
  * band those acts are part of (Graham's solo login also sees Wonderlust's gigs).
  */
 export async function actIdsFor(user: { artistId: string | null; personId: string | null; agencyId?: string | null }) {
-  const own = user.personId
-    ? (await prisma.personAct.findMany({ where: { personId: user.personId }, select: { artistId: true } })).map((a) => a.artistId)
-    : user.artistId
-      ? [user.artistId]
-      : [];
+  const own = await ownActIds(user);
   if (!own.length) return [];
   const agencyId = user.agencyId ?? (await agencyOfAct(own[0]));
   if (!agencyId) return own;

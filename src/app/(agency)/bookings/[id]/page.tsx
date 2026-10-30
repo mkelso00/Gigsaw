@@ -19,6 +19,8 @@ import { ArrivalPanel } from "@/components/arrival-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
+import { replyCounts } from "@/lib/availability";
+import { awayBetween } from "@/lib/away";
 import { buildChecklist } from "@/lib/checklist";
 import { linkedActIds } from "@/lib/people";
 import {
@@ -70,7 +72,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const windowStart = new Date(booking.setStart.getTime() - 400 * 86_400_000);
   const windowEnd = new Date(booking.setStart.getTime() + 400 * 86_400_000);
   const linked = booking.artistId ? await linkedActIds(booking.artistId) : [];
-  const [others, activity] = await Promise.all([
+  const gigDay = localDateKey(booking.arriveBy, tz);
+  const [others, activity, away] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, artistId: { in: linked }, id: { not: booking.id }, setStart: { gte: windowStart, lte: windowEnd } },
       select: {
@@ -93,12 +96,22 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
       take: 25,
       include: { user: { select: { name: true } } },
     }),
+    booking.artistId ? awayBetween(user.agencyId, gigDay, gigDay) : [],
   ]);
+  // A gig that needs an act: the last time acts were asked if they're free for it.
+  const asked = booking.artistId
+    ? null
+    : await prisma.availabilityRequest.findFirst({
+        where: { agencyId: user.agencyId, bookingId: booking.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, replies: { select: { answer: true } } },
+      });
+  const askedCounts = asked ? replyCounts(asked.replies) : null;
 
   const deal = dealBreakdown(booking);
   const totals = paymentTotals(booking.payments);
   const checklist = buildChecklist(
-    { ...booking, linkedArtistIds: linked },
+    { ...booking, linkedArtistIds: linked, artistName: booking.artist?.name, away },
     others.map((o) => ({ ...o, artistName: actName(o) })),
     totals.depositReceivedMinor,
     now,
@@ -209,7 +222,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <h2 className="section-title mb-4">Log a check-in for the act</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as logged by you.
+              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as
+              logged by you.
             </p>
             <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
               <Field label="Type">
@@ -383,6 +397,25 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <SubmitButton className="btn">Update</SubmitButton>
             </ActionForm>
             <p className="hint">Pending → Awaiting confirmation (the act is offered the gig) → Confirmed when they accept.</p>
+            {!booking.artistId && booking.status !== "CANCELLED" && (
+              <div className="mt-4 space-y-2 border-t border-ink-100 pt-4 text-sm">
+                {asked && askedCounts ? (
+                  <>
+                    <p className="text-ink-600">
+                      Asked {asked.replies.length} act{asked.replies.length === 1 ? "" : "s"} if they&apos;re free: {askedCounts.yes} free,{" "}
+                      {askedCounts.waiting} waiting.
+                    </p>
+                    <Link href={`/availability/${asked.id}`} className="btn w-full">
+                      See answers or ask more
+                    </Link>
+                  </>
+                ) : (
+                  <Link href={`/availability/new?bookingId=${booking.id}`} className="btn w-full">
+                    Ask acts if they&apos;re free
+                  </Link>
+                )}
+              </div>
+            )}
             {booking.customerToldAt && (
               <p className="mt-2 text-xs font-medium text-emerald-700">Customer told it&apos;s confirmed, {formatDateTime(booking.customerToldAt, tz)}</p>
             )}

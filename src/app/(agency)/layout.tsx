@@ -8,6 +8,7 @@ import { Logo } from "@/components/logo";
 import { MobileTopIcons, SearchSlot } from "@/components/header-actions";
 import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
+import { awayBetween } from "@/lib/away";
 import { getSettings, prisma } from "@/lib/db";
 import { OPEN_WHEN_LOCKED, billingState } from "@/lib/subscription";
 import { localDateKey } from "@/lib/time";
@@ -18,13 +19,16 @@ export default async function AgencyLayout({ children }: { children: React.React
   const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
-  const [unfilled, noAct, acts, venues, contacts, newActs] = await Promise.all([
+  const today = localDateKey(new Date(), settings.defaultTimezone);
+  const [unfilled, noAct, acts, venues, contacts, newActs, away] = await Promise.all([
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
     oneOffsNeedingAct(user.agencyId, 7),
     prisma.artist.findMany(pick),
     prisma.venue.findMany({ ...pick, select: { id: true, name: true, city: true } }),
     prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
+    // Days acts can't play, so New booking can mark them as away for the chosen date.
+    awayBetween(user.agencyId, today, "9999-12-31"),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
   // A self-service business whose trial has ended (or subscription stopped) can only reach Plan and Profile.
@@ -115,7 +119,8 @@ export default async function AgencyLayout({ children }: { children: React.React
                   venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city }))}
                   contacts={contacts.map((c) => ({ id: c.id, name: c.name, detail: c.company }))}
                   currency={settings.defaultCurrency}
-                  today={localDateKey(new Date(), settings.defaultTimezone)}
+                  today={today}
+                  away={away.map(({ artistId, startDate, endDate, note, actName, own }) => ({ artistId, startDate, endDate, note, actName, own }))}
                 />
               </div>
             </div>

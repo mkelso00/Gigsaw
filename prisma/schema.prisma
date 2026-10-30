@@ -51,6 +51,8 @@ model Agency {
   people       Person[]
   events       Event[]
   applications ActApplication[]
+  away         ArtistUnavailability[]
+  availability AvailabilityRequest[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -197,14 +199,16 @@ model Artist {
   vatRegistered     Boolean @default(false)
   vatNumber         String  @default("")
 
-  login    User?       @relation("ArtistLogin")
+  login    User?                  @relation("ArtistLogin")
   slots    VenueSlot[]
   bookings Booking[]
   checkIns CheckIn[]
   members  PersonAct[]
   // A band built from other acts, e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo.
-  partActs ActLink[]   @relation("ActParent")
-  partOf   ActLink[]   @relation("ActChild")
+  partActs ActLink[]              @relation("ActParent")
+  partOf   ActLink[]              @relation("ActChild")
+  away     ArtistUnavailability[]
+  asked    AvailabilityReply[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -268,10 +272,11 @@ model Venue {
   createdAt  DateTime @default(now())
   demo       Boolean  @default(false) // sample data, removable from Settings
 
-  slots    VenueSlot[]
-  bookings Booking[]
-  people   Person[]
-  events   Event[]
+  slots        VenueSlot[]
+  bookings     Booking[]
+  people       Person[]
+  events       Event[]
+  availability AvailabilityRequest[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -357,8 +362,11 @@ model Booking {
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
 
-  payments Payment[]
-  checkIns CheckIn[]
+  payments             Payment[]
+  checkIns             CheckIn[]
+  // Asking acts if they're free for this gig, and the "Yes" it was booked from.
+  availabilityRequests AvailabilityRequest[]
+  availabilityReplies  AvailabilityReply[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -667,4 +675,76 @@ model ActApplication {
   passwordHash      String
 
   @@index([agencyId, status])
+}
+
+// Dates an act can't play (holiday, other work), blocked out by the act in their app or by the
+// agency. Whole days in the act's own calendar, both ends included. A band is away on a day when
+// any act inside it is (Wonderlust is away while Graham McKee Solo is on holiday).
+model ArtistUnavailability {
+  id          String   @id @default(cuid())
+  agencyId    String
+  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  artistId    String
+  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  startDate   String // "YYYY-MM-DD"
+  endDate     String // "YYYY-MM-DD", the last day away
+  note        String   @default("") // e.g. "Holiday", seen by the act and the agency
+  source      String   @default("AGENCY") // ACT (from their app) | AGENCY
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([agencyId, endDate])
+  @@index([artistId, endDate])
+}
+
+// "Are you free?" sent to several acts for one date. Each act answers Yes or No from a private
+// link or their app, and a Yes can be turned into a booking. Acts see the date, times, place,
+// note and their own fee, never what the venue or customer pays.
+model AvailabilityRequest {
+  id          String              @id @default(cuid())
+  agencyId    String
+  agency      Agency              @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  date        String // "YYYY-MM-DD"
+  timezone    String              @default("Europe/London")
+  arriveTime  String              @default("") // "18:30", blank if not known yet
+  startTime   String              @default("")
+  endTime     String              @default("")
+  venueId     String?
+  venue       Venue?              @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  place       String              @default("") // where, when it isn't a venue on file, e.g. "Wedding near York"
+  eventType   String              @default("GIG")
+  costMinor   Int? // what the act would be paid, shown to them
+  currency    String              @default("GBP")
+  note        String              @default("") // shown to the acts
+  // The gig that needs an act, when asked from a booking. A Yes can fill it.
+  bookingId   String?
+  booking     Booking?            @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  createdById String?
+  closedAt    DateTime? // no more answers once closed
+  createdAt   DateTime            @default(now())
+  replies     AvailabilityReply[]
+
+  @@index([agencyId, date])
+}
+
+// One act's answer to an availability request.
+model AvailabilityReply {
+  id         String              @id @default(cuid())
+  requestId  String
+  request    AvailabilityRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  artistId   String
+  artist     Artist              @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  // Secret for the act's private answer link (/f/<token>).
+  token      String              @unique
+  answer     String? // YES | NO, empty while waiting
+  note       String              @default("")
+  sentAt     DateTime?
+  answeredAt DateTime?
+  // The booking made from this Yes.
+  bookingId  String?
+  booking    Booking?            @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  createdAt  DateTime            @default(now())
+
+  @@unique([requestId, artistId])
+  @@index([artistId])
 }

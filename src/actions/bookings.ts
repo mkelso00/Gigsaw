@@ -38,7 +38,9 @@ async function clashCheck(
     confirm: {
       title: warnings.some((w) => w.level === "clash")
         ? "Hold on: this artist is already booked at that time"
-        : "Hold on: check there's time to get between gigs",
+        : warnings.every((w) => w.level === "away")
+          ? "Hold on: this act has said they can't play that day"
+          : "Hold on: check there's time to get between gigs",
       items: warnings.map((w) => w.text),
       button: "Save anyway",
     },

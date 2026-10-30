@@ -82,6 +82,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <a href={`/api/export/bookings${sp.artist ? `?artist=${sp.artist}` : ""}`} className="btn">
               Export CSV
             </a>
+            <Link href="/availability/new" className="btn">
+              Ask who&apos;s free
+            </Link>
             <Link href="/bookings/new" className="btn btn-primary">
               New booking
             </Link>

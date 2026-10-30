@@ -5,17 +5,19 @@ import { notFound } from "next/navigation";
 import { resetCalendarToken, setArtistLogin } from "@/actions/crm";
 import { addActMember, addActPart, removeActMember, removeActPart } from "@/actions/people";
 import { arrivalDetail } from "@/components/arrival-panel";
+import { AwayCard } from "@/components/away-card";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalBadge, ArtistDot, Empty, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { punctuality } from "@/lib/arrival";
 import { requireStaff } from "@/lib/auth";
+import { awayBetween } from "@/lib/away";
 import { arrivalFor } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
 import { ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { formatMoney } from "@/lib/money";
 import { personName } from "@/lib/person-name";
-import { formatDate, formatMinutes, localTime } from "@/lib/time";
+import { formatDate, formatMinutes, localDateKey, localTime } from "@/lib/time";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -78,6 +80,9 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   if (!artist) notFound();
 
   const now = new Date();
+  const today = localDateKey(now, settings.defaultTimezone);
+  // Days they can't play from today on, including days an act inside this one is away.
+  const away = (await awayBetween(user.agencyId, today, "9999-12-31")).filter((e) => e.artistId === artist.id);
   const rows = artist.bookings.map((b) => ({
     b,
     a: arrivalFor(b, settings, now),
@@ -137,7 +142,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+        <div className="min-w-0 space-y-6 xl:col-span-2">
           <section>
             <h2 className="section-title mb-3">Upcoming</h2>
             {upcoming.length === 0 ? <Empty>No upcoming shows.</Empty> : <BookingTable rows={upcoming} />}
@@ -148,7 +153,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           </section>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {(() => {
             const link = (href: string, text: string) => (
               <a href={href} target="_blank" rel="noreferrer" className="link break-all">
@@ -209,6 +214,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               </section>
             );
           })()}
+          <AwayCard artistId={artist.id} actName={artist.name} entries={away} today={today} />
           <section className="card card-pad" id="line-up">
             <h2 className="section-title">Members</h2>
             <p className="mt-1 mb-4 text-sm text-ink-500">

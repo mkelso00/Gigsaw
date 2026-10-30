@@ -1,9 +1,10 @@
 import "server-only";
+import { awayReasons } from "./away";
 import { describeAssessment, assessPair, type ClashAssessment } from "./clash";
 import { LIVE_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { linkedActIds, sharedMembers } from "./people";
-import { formatDate, localTime } from "./time";
+import { formatDate, localDateKey, localTime } from "./time";
 
 export type Candidate = {
   agencyId: string;
@@ -18,13 +19,15 @@ export type Candidate = {
   excludeId?: string;
 };
 
-export type ClashWarning = { level: "clash" | "tight"; text: string; assessment: ClashAssessment };
+/** "away" is a day the act has blocked out (holiday, other work); it has no travel assessment. */
+export type ClashWarning = { level: "clash" | "tight" | "away"; text: string; assessment?: ClashAssessment };
 
 const DAY = 86_400_000;
 
 /**
  * Other live gigs for the same artist that overlap the candidate or leave too little time to
- * travel between them. Gigs with plenty of time in between are not returned.
+ * travel between them, and any day the act has blocked out. Gigs with plenty of time in between
+ * are not returned.
  */
 export async function findClashes(c: Candidate, changeoverMinutes: number): Promise<ClashWarning[]> {
   if (!c.artistId) return [];
@@ -55,6 +58,9 @@ export async function findClashes(c: Candidate, changeoverMinutes: number): Prom
     }),
   ]);
   const out: ClashWarning[] = [];
+  for (const text of await awayReasons(c.agencyId, c.artistId, localDateKey(c.arriveBy, c.timezone))) {
+    out.push({ level: "away", text: `${text} Check with them before booking.` });
+  }
   for (const o of others) {
     if (!o.artist || !o.artistId) continue;
     const a = assessPair({ arriveBy: c.arriveBy, setStart: c.setStart, setEnd: c.setEnd, venue }, o, changeoverMinutes);

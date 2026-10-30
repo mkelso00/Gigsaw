@@ -31,6 +31,18 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: GIG,
   },
   {
+    key: "AVAILABILITY",
+    group: "ACTS",
+    label: "Are you free?",
+    hint: "Asks the act if they're free on a date, with a link to answer Yes or No. Sent from Who's free.",
+    example: {
+      subject: "Are you free on {date}?",
+      intro: "Hi {first_name}, {business} is looking for an act on {date}. Are you free? Just tap Yes or No.",
+      text: "{business}: are you free on {date}? Tap to answer yes or no: (link)",
+    },
+    placeholders: GIG,
+  },
+  {
     key: "BOOKED",
     group: "ACTS",
     label: "You're booked",
