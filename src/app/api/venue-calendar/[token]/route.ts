@@ -1,9 +1,11 @@
-import { buildIcs } from "@/lib/ics";
+import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { findSharedVenue, venueLineup } from "@/lib/venue-share";
 
+export const dynamic = "force-dynamic";
+
 // Calendar feed for a venue's line-up (names and times only, no money).
-export async function GET(_: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const venue = await findSharedVenue(token.replace(/\.ics$/, ""));
   if (!venue) return new Response("Not found", { status: 404 });
@@ -22,7 +24,5 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
         updated: now,
       })),
   );
-  return new Response(buildIcs(`${venue.name} · what's on`, events), {
-    headers: { "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store" },
-  });
+  return icsResponse(req, buildIcs(`${venue.name} · what's on`, events, { timezone: venue.timezone }), { filename: "whats-on.ics" });
 }

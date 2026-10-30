@@ -1,14 +1,16 @@
 import { BOOKING_STATUS_LABELS, type BookingStatus, actName, ACT_VISIBLE } from "@/lib/constants";
-import { prisma } from "@/lib/db";
+import { getSettings, prisma } from "@/lib/db";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
-import { buildIcs } from "@/lib/ics";
+import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { localTime } from "@/lib/time";
 
+export const dynamic = "force-dynamic";
+
 // Private calendar feed, addressed by a secret token: one act's gigs, or a person's gigs
 // across every act they're in. Never includes money.
-export async function GET(_: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token: raw } = await params;
   const token = raw.replace(/\.ics$/, "");
   const act = await prisma.artist.findUnique({ where: { calendarToken: token }, include: { agency: true } });
@@ -27,6 +29,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
     orderBy: { setStart: "asc" },
   });
 
+  const { defaultTimezone } = await getSettings(owner.agencyId);
   const ics = buildIcs(
     `${calendarName} · Gigsaw`,
     bookings.map((b) => {
@@ -48,10 +51,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
         ]
           .filter(Boolean)
           .join("\n"),
+        url: `${appUrl()}/app/gigs/${b.id}`,
         updated: b.updatedAt,
         cancelled: b.status === "CANCELLED",
       };
     }),
+    { timezone: defaultTimezone },
   );
-  return new Response(ics, { headers: { "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "no-store" } });
+  const lastModified = bookings.reduce<Date | undefined>((max, b) => (!max || b.updatedAt > max ? b.updatedAt : max), undefined);
+  return icsResponse(req, ics, { filename: "gigs.ics", lastModified });
 }

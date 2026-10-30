@@ -21,7 +21,7 @@ function partsFormatter(timeZone: string) {
   return f;
 }
 
-function zonedParts(date: Date, timeZone: string) {
+export function zonedParts(date: Date, timeZone: string) {
   const out: Record<string, number> = {};
   for (const p of partsFormatter(timeZone).formatToParts(date)) {
     if (p.type !== "literal") out[p.type] = Number(p.value);
@@ -81,9 +81,7 @@ export function formatDateTime(date: Date, timeZone: string): string {
 
 /** Short zone label such as "GMT", "BST" or "GMT+1" for display next to times. */
 export function zoneLabel(date: Date, timeZone: string): string {
-  const part = new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "short" })
-    .formatToParts(date)
-    .find((p) => p.type === "timeZoneName");
+  const part = new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: "short" }).formatToParts(date).find((p) => p.type === "timeZoneName");
   return part?.value ?? timeZone;
 }
 

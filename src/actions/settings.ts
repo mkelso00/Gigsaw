@@ -148,15 +148,18 @@ export async function removeStaffUser(userId: string) {
 export async function changePassword(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireSignedIn();
   return handleForm(async () => {
-    const current = required(form, "current", "Current password");
+    // Someone who signed up with Google or Microsoft has no password yet, so there's none to check.
+    const hadPassword = !!user.passwordHash;
+    const current = hadPassword ? required(form, "current", "Current password") : "";
     const next = required(form, "next", "New password");
     if (next.length < 8) throw new FormError("New password must be at least 8 characters");
-    if (!(await verifyPassword(current, user.passwordHash))) throw new FormError("Your current password is wrong");
+    if (hadPassword && !(await verifyPassword(current, user.passwordHash))) throw new FormError("Your current password is wrong");
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash: await hashPassword(next) },
     });
-    return { ok: "Password changed." };
+    revalidatePath("/profile");
+    return { ok: hadPassword ? "Password changed." : "Password set. You can now sign in with your email and password too." };
   });
 }
 

@@ -1,13 +1,12 @@
 import { CopyField } from "@/components/client-bits";
+import { calendarLinks } from "@/lib/calendar-links";
 
 /**
  * One-tap buttons that subscribe the artist's phone calendar to their private gig feed.
  * Subscribed calendars update by themselves when gigs are added or changed.
  */
 export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: string }) {
-  const webcal = feedUrl.replace(/^https?:\/\//, "webcal://");
-  const google = `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}`;
-  const outlook = `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(feedUrl)}&name=${encodeURIComponent(name)}`;
+  const { webcal, google, outlook, outlook365 } = calendarLinks(feedUrl, name);
   const btn = "flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition";
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
@@ -23,10 +22,15 @@ export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: stri
         <a href={outlook} target="_blank" rel="noreferrer" className={`${btn} border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]`}>
           Outlook
         </a>
+        <a href={outlook365} target="_blank" rel="noreferrer" className={`${btn} border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]`}>
+          Outlook (work or school)
+        </a>
       </div>
       <details className="mt-4 text-xs text-ink-400">
         <summary className="cursor-pointer">Other calendars, or if a button doesn&apos;t work</summary>
-        <p className="my-2">Add a calendar &ldquo;from URL&rdquo; or &ldquo;by subscription&rdquo; and paste this link. Keep it private: anyone with it can see your gig dates.</p>
+        <p className="my-2">
+          Add a calendar &ldquo;from URL&rdquo; or &ldquo;by subscription&rdquo; and paste this link. Keep it private: anyone with it can see your gig dates.
+        </p>
         <div className="[&_input]:border-white/10 [&_input]:bg-white/[0.04] [&_input]:text-white">
           <CopyField value={feedUrl} />
         </div>

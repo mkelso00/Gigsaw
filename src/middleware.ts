@@ -21,6 +21,7 @@ const PUBLIC = [
   "/forgot-password",
   "/reset-password",
   "/api/calendar",
+  "/api/auth/",
   "/manifest.webmanifest",
   "/icon.svg",
   "/apple-icon",
