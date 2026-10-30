@@ -139,7 +139,7 @@ export function NavLinks({
   return (
     <nav className={`${drawer ? "flex" : "hidden lg:flex"} min-h-0 flex-col overflow-y-auto px-3 pb-4`}>
       {sections.map((section, i) => (
-        <div key={section.title ?? i} className={`flex flex-col gap-0.5 ${i > 0 ? "mt-5" : ""}`}>
+        <div key={section.title ?? i} className={`flex flex-col gap-px ${i > 0 ? "mt-4" : ""}`}>
           {section.title && <div className="px-3 pb-1.5 font-mono text-[10px] font-medium tracking-[0.14em] text-ink-500 uppercase">{section.title}</div>}
           {section.links.map((l) => {
             // The most specific link wins, so /reports/venues doesn't also light up Reports.
@@ -150,7 +150,7 @@ export function NavLinks({
               <Link
                 key={l.href}
                 href={l.href}
-                className={`group relative ${l.mobileOnly && !drawer ? "hidden" : "flex"} items-center gap-3 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors ${
+                className={`group relative ${l.mobileOnly && !drawer ? "hidden" : "flex"} items-center gap-3 rounded-lg px-3 py-[7px] text-sm whitespace-nowrap transition-colors ${
                   active ? "bg-white/[0.08] font-medium text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white"
                 }`}
               >

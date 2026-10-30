@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { arrivalDetail } from "@/components/arrival-panel";
-import { ArrivalBadge, ArtistDot, Empty, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { ArrivalBadge, ArtistDot, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor, bookingListInclude } from "@/lib/bookings";
 import { LIVE_STATUSES, actName } from "@/lib/constants";
@@ -107,247 +108,290 @@ export default async function DashboardPage() {
   const todayRows = today.map((b) => ({ b, a: arrivalFor(b, settings, now) }));
   const overdue = todayRows.filter((r) => r.a.state === "OVERDUE").length;
 
+  // Everything that needs someone, as one calm list rather than a stack of coloured banners.
+  // urgent: magenta light (this week or already wrong); soon: amber; info: teal.
+  const needs: { key: string; tone: "urgent" | "soon" | "info"; count: number; text: React.ReactNode; href: string; action: string }[] = [];
+  if (overdue > 0)
+    needs.push({
+      key: "late",
+      tone: "urgent",
+      count: overdue,
+      text: `${overdue === 1 ? "act is" : "acts are"} late right now`,
+      href: "/arrivals",
+      action: "Live board",
+    });
+  if (declined.length > 0)
+    needs.push({
+      key: "declined",
+      tone: "urgent",
+      count: declined.length,
+      text: `offer${declined.length === 1 ? " was" : "s were"} turned down: find another act`,
+      href: `/bookings/${declined[0].id}`,
+      action: "Re-offer",
+    });
+  if (unfilled.length > 0)
+    needs.push({
+      key: "unfilled",
+      tone: unfilledSoon ? "urgent" : "soon",
+      count: unfilled.length,
+      text: `weekly slot${unfilled.length === 1 ? "" : "s"} in the next 14 days need${unfilled.length === 1 ? "s" : ""} an act${unfilledSoon ? `, ${unfilledSoon} this week` : ""}`,
+      href: "/rota#needs-artist",
+      action: "Fill",
+    });
+  if (oneOffsNoAct > 0)
+    needs.push({
+      key: "noact",
+      tone: "soon",
+      count: oneOffsNoAct,
+      text: `other gig${oneOffsNoAct === 1 ? "" : "s"} in the next 14 days ${oneOffsNoAct === 1 ? "has" : "have"} no act yet`,
+      href: "/bookings?artist=none",
+      action: "See",
+    });
+  if (enquiries.length > 0)
+    needs.push({
+      key: "enquiries",
+      tone: "info",
+      count: enquiries.length,
+      text: (
+        <>
+          new enquir{enquiries.length === 1 ? "y" : "ies"}
+          <span className="text-ink-500">
+            {" "}
+            · latest{" "}
+            {[enquiries[0].name, enquiryTypeLabel(enquiries[0].eventType).toLowerCase(), enquiries[0].date ? formatDay(enquiries[0].date) : ""]
+              .filter(Boolean)
+              .join(", ")}
+          </span>
+        </>
+      ),
+      href: "/enquiries",
+      action: "Reply",
+    });
+  if (overdueDeposits.length > 0)
+    needs.push({
+      key: "deposits",
+      tone: "soon",
+      count: overdueDeposits.length,
+      text: `deposit${overdueDeposits.length === 1 ? " is" : "s are"} overdue`,
+      href: `/bookings/${overdueDeposits[0].id}`,
+      action: "Chase",
+    });
+  if (unresolved > 0)
+    needs.push({
+      key: "unresolved",
+      tone: "soon",
+      count: unresolved,
+      text: `past gig${unresolved === 1 ? " is" : "s are"} still on enquiry, hold or pending`,
+      href: "/bookings?status=UNRESOLVED&when=all",
+      action: "Tidy up",
+    });
+  const LIGHT = {
+    urgent: "bg-cue-500 shadow-[0_0_8px_var(--color-cue-400)]",
+    soon: "bg-amber-400",
+    info: "bg-volt-400 shadow-[0_0_8px_var(--color-volt-400)]",
+  };
+
   return (
-    <div>
+    <div className="mx-auto max-w-[1180px]">
       <PageHeader
         eyebrow={formatDate(now, settings.defaultTimezone)}
         title={`Hello, ${user.name.split(" ")[0]}`}
         subtitle={
-          overdue > 0
-            ? `${overdue} artist${overdue === 1 ? " is" : "s are"} late right now.`
-            : todayRows.length
-              ? `${todayRows.length} call time${todayRows.length === 1 ? "" : "s"} in the next 24 hours.`
-              : "No call times in the next 24 hours."
-        }
-        actions={
-          <Link href="/bookings/new" className="btn btn-primary">
-            New booking
-          </Link>
+          needs.length === 0
+            ? "Nothing needs you right now."
+            : `${needs.length} thing${needs.length === 1 ? "" : "s"} could use you today${todayRows.length ? `, and ${todayRows.length} call time${todayRows.length === 1 ? "" : "s"} in the next 24 hours` : ""}.`
         }
       />
 
-      {enquiries.length > 0 && (
-        <Link
-          href="/enquiries"
-          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-volt-500/60 bg-volt-100 px-4 py-3 text-sm text-ink-950 hover:brightness-95"
-        >
-          <span className="badge bg-ink-950 text-volt-300">{enquiries.length}</span>
-          <span>
-            new enquir{enquiries.length === 1 ? "y" : "ies"} from your website. Latest:{" "}
-            <span className="font-medium">
-              {[enquiries[0].name, enquiryTypeLabel(enquiries[0].eventType).toLowerCase(), enquiries[0].date ? formatDay(enquiries[0].date) : ""]
-                .filter(Boolean)
-                .join(", ")}
-            </span>
-          </span>
-          <span className="ml-auto font-medium">See them →</span>
-        </Link>
-      )}
-
-      {unfilled.length > 0 && (
-        <Link
-          href="/rota#needs-artist"
-          className={`mb-4 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm hover:brightness-95 ${
-            unfilledSoon ? "border-rose-300 bg-rose-50 text-rose-900" : "border-amber-200 bg-amber-50 text-amber-900"
-          }`}
-        >
-          <span className={`badge ${unfilledSoon ? "bg-rose-600 text-white" : "bg-amber-400 text-ink-950"}`}>{unfilled.length}</span>
-          weekly slot{unfilled.length === 1 ? "" : "s"} in the next 14 days still need{unfilled.length === 1 ? "s" : ""} an act
-          {unfilledSoon ? `, ${unfilledSoon} of them in the next 7 days` : ""}.<span className="ml-auto font-medium">Fill them →</span>
-        </Link>
-      )}
-
-      {oneOffsNoAct > 0 && (
-        <Link
-          href="/bookings?artist=none"
-          className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:brightness-95"
-        >
-          <span className="badge bg-amber-400 text-ink-950">{oneOffsNoAct}</span>
-          other gig{oneOffsNoAct === 1 ? "" : "s"} in the next 14 days {oneOffsNoAct === 1 ? "has" : "have"} no act yet.
-          <span className="ml-auto font-medium">See them →</span>
-        </Link>
-      )}
-
-      {offers.length > 0 && (
-        <section className="card mb-6 overflow-hidden">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-100 px-5 py-3">
-            <h2 className="section-title">
-              Waiting for acts
-              <span className="font-normal text-ink-500">
-                {" "}
-                · {waiting.length} offer{waiting.length === 1 ? "" : "s"} out{declined.length ? `, ${declined.length} declined` : ""}
-              </span>
-            </h2>
-            <span className="text-xs text-ink-500">Accepted offers confirm themselves. Chase or re-offer from here.</span>
+      {/* What needs you */}
+      <section className="mb-10">
+        {needs.length === 0 ? (
+          <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-ink-200 bg-white px-5 py-4 text-sm text-ink-600">
+            <span className="h-2 w-2 rounded-full bg-volt-400 shadow-[0_0_8px_var(--color-volt-400)]" />
+            All clear. Every slot has an act, every offer is answered and nothing is overdue.
           </div>
-          <ul className="divide-y divide-ink-100 text-sm">
-            {offers.slice(0, 12).map((o) => (
-              <li key={o.id} className={`flex flex-wrap items-center gap-x-5 gap-y-1 px-5 py-3 ${o.offerResponse === "DECLINED" ? "bg-rose-50" : ""}`}>
-                <Link href={`/bookings/${o.id}`} className="min-w-48 flex-1">
-                  <span className="font-medium hover:underline">{actName(o)}</span>
-                  <span className="text-ink-500">
-                    {" "}
-                    · {o.venue?.name ?? "No venue"}, {formatDate(o.arriveBy, o.timezone)}
-                  </span>
+        ) : (
+          <ul className="overflow-hidden rounded-[var(--radius-card)] border border-ink-200 bg-white">
+            {needs.map((n, i) => (
+              <li key={n.key} className={i > 0 ? "border-t border-ink-100" : ""}>
+                <Link href={n.href} className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-ink-50">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${LIGHT[n.tone]}`} />
+                  <span className="w-7 shrink-0 font-mono text-[15px] font-semibold tabular-nums">{n.count}</span>
+                  <span className="min-w-0 flex-1 text-sm">{n.text}</span>
+                  <span className="hidden shrink-0 text-sm text-ink-500 transition-colors group-hover:text-ink-950 sm:inline">{n.action} →</span>
+                  <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-300 sm:hidden" />
                 </Link>
-                <span className={`text-xs ${o.offerResponse === "DECLINED" ? "font-semibold text-rose-700" : "text-ink-500"}`}>
-                  {o.offerResponse === "DECLINED"
-                    ? "Declined: find another act"
-                    : o.offeredAt
-                      ? `Offered ${formatMinutes(Math.round((now.getTime() - o.offeredAt.getTime()) / 60_000))} ago`
-                      : "Not sent yet"}
-                </span>
-                {o.artist?.phone && (
-                  <a href={`tel:${o.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
-                    Call
-                  </a>
-                )}
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+      </section>
 
-      {unresolved > 0 && (
-        <Link
-          href="/bookings?status=UNRESOLVED&when=all"
-          className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:border-amber-300"
-        >
-          <span className="badge bg-amber-400 text-ink-950">{unresolved}</span>
-          past gig{unresolved === 1 ? " is" : "s are"} still on enquiry, hold or pending. Confirm or cancel them so your records and bill are right.
-          <span className="ml-auto font-medium">Tidy up →</span>
-        </Link>
-      )}
-
-      <div className="mb-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           tone={overdue > 0 ? "alert" : "dark"}
-          label="Arrivals today"
+          label="Arrived today"
           value={todayRows.filter((r) => r.a.state === "ARRIVED_ON_TIME" || r.a.state === "ARRIVED_LATE").length + ` / ${todayRows.length}`}
           hint={overdue > 0 ? `${overdue} overdue` : "checked in"}
           href="/arrivals"
         />
+        <Stat label="Next 30 days" value={upcoming.length >= 10 ? "10+" : upcoming.length} hint={`${holds} on hold`} href="/calendar" />
+        <Stat label="Owed to you" value={formatMoney(owedByPromoters, cur)} hint="by venues and clients" href="/reports" />
         <Stat
-          label="Shows in next 30 days"
-          value={upcoming.length >= 10 ? "10+" : upcoming.length}
-          hint={`${holds} open hold${holds === 1 ? "" : "s"}`}
-          href="/calendar"
-        />
-        <Stat label="Owed by venues and clients" value={formatMoney(owedByPromoters, cur)} hint={`${cur} bookings`} href="/reports" />
-        <Stat
-          label={`Commission ${now.getUTCFullYear()}`}
+          label={`Made in ${now.getUTCFullYear()}`}
           value={formatMoney(commissionThisYear, cur)}
-          hint={`Owed to artists ${formatMoney(owedToArtists, cur)}`}
+          hint={`${formatMoney(owedToArtists, cur)} owed to acts`}
           href="/reports"
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3 [&>*]:min-w-0">
-        <section className="xl:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="section-title">Next 24 hours</h2>
-            <Link href="/arrivals" className="link text-sm">
-              Open live board
-            </Link>
-          </div>
-          {todayRows.length === 0 ? (
-            <Empty>No call times in the next 24 hours.</Empty>
-          ) : (
-            <ul className="card divide-y divide-slate-100">
-              {todayRows.map(({ b, a }) => (
-                <li key={b.id}>
-                  <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 font-medium">
-                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
-                        {actName(b)}
-                        <span className="truncate font-normal text-slate-500">· {b.venue?.name ?? "No venue"}</span>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Call {localTime(b.arriveBy, b.timezone)} · {arrivalDetail(a, b.timezone) || "Not checked in yet"}
-                      </div>
-                    </div>
-                    <ArrivalBadge state={a.state} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h2 className="section-title mt-8 mb-3">Coming up</h2>
-          {upcoming.length === 0 ? (
-            <Empty>No shows in the next 30 days.</Empty>
-          ) : (
-            <ul className="card divide-y divide-slate-100">
-              {upcoming.map((b) => (
-                <li key={b.id}>
-                  <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 font-medium">
-                        <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />
-                        {actName(b)}
-                      </div>
-                      <div className="truncate text-xs text-slate-500">
-                        {formatDate(b.arriveBy, b.timezone)} · {b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}
-                      </div>
-                    </div>
-                    <StatusBadge status={b.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <div className="space-y-6">
+      <div className="grid gap-x-12 gap-y-12 xl:grid-cols-[1.6fr_1fr] [&>*]:min-w-0">
+        <div className="space-y-12">
+          {/* Today as a running order: time on the left, who and where on the right. */}
           <section>
-            <h2 className="section-title mb-3">Overdue deposits</h2>
-            {overdueDeposits.length === 0 ? (
-              <Empty>All deposits are in.</Empty>
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="section-title">Next 24 hours</h2>
+              <Link href="/arrivals" className="text-sm text-ink-500 hover:text-ink-950">
+                Live board →
+              </Link>
+            </div>
+            {todayRows.length === 0 ? (
+              <p className="text-sm text-ink-500">No call times in the next 24 hours.</p>
             ) : (
-              <ul className="card divide-y divide-slate-100 text-sm">
-                {overdueDeposits.map((b) => (
+              <ol className="relative space-y-1 before:absolute before:top-2 before:bottom-2 before:left-[69.5px] before:w-px before:bg-ink-200">
+                {todayRows.map(({ b, a }) => (
                   <li key={b.id}>
-                    <Link href={`/bookings/${b.id}`} className="block px-4 py-3 hover:bg-slate-50">
-                      <strong>{b.reference}</strong> · {actName(b)}
-                      <div className="text-xs text-slate-500">
-                        {formatMoney(b.depositMinor, b.currency)} from {b.promoter?.name ?? "the client"}, due {formatDate(b.depositDueDate!, b.timezone)}
-                      </div>
+                    <Link href={`/bookings/${b.id}`} className="group flex items-center gap-4 rounded-lg py-2.5 pr-2 transition-colors hover:bg-white">
+                      <span className="w-12 shrink-0 text-right font-mono text-sm text-ink-500 tabular-nums">{localTime(b.arriveBy, b.timezone)}</span>
+                      <span className="relative z-10 flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-ink-50 group-hover:bg-white">
+                        <ArtistDot colour={b.artist?.colour ?? "#8d949c"} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {actName(b)} <span className="font-normal text-ink-500">· {b.venue?.name ?? "No venue"}</span>
+                        </span>
+                        <span className="block truncate text-xs text-ink-500">{arrivalDetail(a, b.timezone) || "Not checked in yet"}</span>
+                      </span>
+                      <ArrivalBadge state={a.state} />
                     </Link>
                   </li>
                 ))}
+              </ol>
+            )}
+          </section>
+
+          <section>
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="section-title">Coming up</h2>
+              <Link href="/calendar" className="text-sm text-ink-500 hover:text-ink-950">
+                Calendar →
+              </Link>
+            </div>
+            {upcoming.length === 0 ? (
+              <p className="text-sm text-ink-500">No shows in the next 30 days.</p>
+            ) : (
+              <ul className="space-y-1">
+                {upcoming.map((b, i) => {
+                  // The day shows once, on its first gig, so the list reads as a running order.
+                  const day = formatDate(b.arriveBy, b.timezone);
+                  const firstOfDay = i === 0 || formatDate(upcoming[i - 1].arriveBy, upcoming[i - 1].timezone) !== day;
+                  return (
+                    <li key={b.id} className={firstOfDay && i > 0 ? "pt-3" : ""}>
+                      <Link href={`/bookings/${b.id}`} className="flex items-center gap-4 rounded-lg py-2.5 pr-2 transition-colors hover:bg-white">
+                        <span className="w-12 shrink-0 text-right leading-tight">
+                          {firstOfDay && (
+                            <>
+                              <span className="block font-mono text-[10px] tracking-wider text-ink-400 uppercase">{day.split(" ")[0].replace(",", "")}</span>
+                              <span className="block font-mono text-sm text-ink-700 tabular-nums">{day.split(" ")[1]}</span>
+                            </>
+                          )}
+                        </span>
+                        <ArtistDot colour={b.artist?.colour ?? "#8d949c"} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{actName(b)}</span>
+                          <span className="block truncate text-xs text-ink-500">
+                            {b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}
+                          </span>
+                        </span>
+                        <StatusBadge status={b.status} />
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
-          <section>
-            <h2 className="section-title mb-3">Recent activity</h2>
-            {activity.length === 0 ? (
-              <Empty>Nothing yet.</Empty>
-            ) : (
-              <ul className="card divide-y divide-slate-100 text-sm">
-                {activity.map((a) => (
-                  <li key={a.id} className="px-4 py-2.5">
-                    <span className="font-medium">{a.user?.name ?? "Someone"}</span> {a.action}
-                    {a.detail && <span className="text-slate-500"> · {a.detail}</span>}
-                    {a.entity === "BOOKING" && a.action !== "deleted" && (
-                      <Link href={`/bookings/${a.entityId}`} className="link ml-1 text-xs">
-                        view
-                      </Link>
+        </div>
+
+        <div className="space-y-12">
+          {waiting.length > 0 && (
+            <section>
+              <div className="mb-4 flex items-baseline justify-between">
+                <h2 className="section-title">Waiting for an answer</h2>
+                <span className="font-mono text-xs text-ink-500">{waiting.length} out</span>
+              </div>
+              <ul className="space-y-1">
+                {waiting.slice(0, 6).map((o) => (
+                  <li key={o.id} className="flex items-center gap-3 rounded-lg py-2 pr-1">
+                    <Link href={`/bookings/${o.id}`} className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium hover:underline">{actName(o)}</span>
+                      <span className="block truncate text-xs text-ink-500">
+                        {o.venue?.name ?? "No venue"}, {formatDate(o.arriveBy, o.timezone)} ·{" "}
+                        {o.offeredAt ? `offered ${formatMinutes(Math.round((now.getTime() - o.offeredAt.getTime()) / 60_000))} ago` : "not sent yet"}
+                      </span>
+                    </Link>
+                    {o.artist?.phone && (
+                      <a href={`tel:${o.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
+                        Call
+                      </a>
                     )}
-                    {a.entity === "EVENT" && a.action !== "deleted" && (
-                      <Link href={`/events/${a.entityId}`} className="link ml-1 text-xs">
-                        view
-                      </Link>
-                    )}
-                    {a.entity === "ENQUIRY" && !a.action.includes("deleted") && (
-                      <Link href={`/enquiries?view=all#${a.entityId}`} className="link ml-1 text-xs">
-                        view
-                      </Link>
-                    )}
-                    <div className="text-xs text-slate-400">{formatDateTime(a.createdAt, settings.defaultTimezone)}</div>
                   </li>
                 ))}
               </ul>
+              {waiting.length > 6 && (
+                <Link href="/bookings?status=AWAITING" className="mt-2 inline-block text-sm text-ink-500 hover:text-ink-950">
+                  {waiting.length - 6} more →
+                </Link>
+              )}
+            </section>
+          )}
+
+          <section>
+            <h2 className="section-title mb-4">Recent activity</h2>
+            {activity.length === 0 ? (
+              <p className="text-sm text-ink-500">Nothing yet.</p>
+            ) : (
+              <ol className="relative space-y-4 border-l border-ink-200 pl-5">
+                {activity.map((a) => {
+                  const href =
+                    a.entity === "BOOKING" && a.action !== "deleted"
+                      ? `/bookings/${a.entityId}`
+                      : a.entity === "EVENT" && a.action !== "deleted"
+                        ? `/events/${a.entityId}`
+                        : a.entity === "ENQUIRY" && !a.action.includes("deleted")
+                          ? `/enquiries?view=all#${a.entityId}`
+                          : null;
+                  const body = (
+                    <>
+                      <span className="font-medium">{a.user?.name ?? "Someone"}</span> {a.action}
+                      {a.detail && <span className="text-ink-500"> · {a.detail}</span>}
+                    </>
+                  );
+                  return (
+                    <li key={a.id} className="relative text-sm">
+                      <span className="absolute top-1.5 -left-[23.5px] h-2 w-2 rounded-full border-2 border-ink-50 bg-ink-300" />
+                      {href ? (
+                        <Link href={href} className="hover:underline">
+                          {body}
+                        </Link>
+                      ) : (
+                        body
+                      )}
+                      <div className="mt-0.5 font-mono text-[11px] text-ink-400">{formatDateTime(a.createdAt, settings.defaultTimezone)}</div>
+                    </li>
+                  );
+                })}
+              </ol>
             )}
           </section>
         </div>

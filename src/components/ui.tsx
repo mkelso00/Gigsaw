@@ -15,7 +15,7 @@ export function PageHeader({
   eyebrow?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-4 sm:mb-8 sm:flex-wrap sm:items-end">
+    <div className="mb-6 flex items-start justify-between gap-4 sm:mb-10 sm:flex-wrap sm:items-end">
       <div className="min-w-0">
         {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
         <h1 className="text-[26px] leading-tight font-bold tracking-[-0.015em] text-ink-950 sm:text-[30px]">{title}</h1>

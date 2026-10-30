@@ -525,3 +525,21 @@ dialog[open]::backdrop {
     transform: none;
   }
 }
+/* The top lit lights of a footer level meter flicker like a signal. */
+@keyframes meter {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.meter-top {
+  animation: meter 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .meter-top {
+    animation: none;
+  }
+}

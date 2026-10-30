@@ -3,6 +3,7 @@ import { Logo } from "@/components/logo";
 import { currentUser, homePath } from "@/lib/auth";
 import { MobileMenu } from "./mobile-menu";
 import { Reveal } from "./reveal";
+import { SiteFooter } from "./footer";
 import { Container } from "./site-ui";
 
 const NAV = [
@@ -58,63 +59,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         <style>{"[data-reveal]{opacity:1!important;transform:none!important}"}</style>
       </noscript>
 
-      <footer className="bg-ink-950 text-ink-300">
-        <Container className="py-16">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-            <div className="col-span-2 max-w-xs md:col-span-1">
-              <Logo size={30} />
-              <p className="mt-5 text-sm leading-relaxed text-ink-400">
-                Booking software for music agencies: weekly bar slots, weddings and private events, with live arrivals from every act.
-              </p>
-            </div>
-            <FooterColumn
-              title="Product"
-              links={[
-                ["/features", "Features"],
-                ["/pricing", "Pricing"],
-                ["/features#arrivals", "Arrivals"],
-                ["/features#imports", "Moving from Overture"],
-              ]}
-            />
-            <FooterColumn
-              title="Account"
-              links={[
-                ["/signup", "Try it free"],
-                ["/login", "Sign in"],
-                ["/forgot-password", "Forgotten password"],
-              ]}
-            />
-            <FooterColumn
-              title="Legal"
-              links={[
-                ["/privacy", "Privacy"],
-                ["/terms", "Terms"],
-              ]}
-            />
-          </div>
-          <div className="mt-14 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-ink-500 sm:flex-row sm:justify-between">
-            <p>© {new Date().getFullYear()} Gigsaw. Made in the UK.</p>
-            <p>gigsaw.live</p>
-          </div>
-        </Container>
-      </footer>
-    </div>
-  );
-}
-
-function FooterColumn({ title, links }: { title: string; links: [string, string][] }) {
-  return (
-    <div>
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <ul className="mt-4 space-y-3 text-sm">
-        {links.map(([href, label]) => (
-          <li key={href}>
-            <Link href={href} className="transition-colors hover:text-volt-300">
-              {label}
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <SiteFooter />
     </div>
   );
 }
