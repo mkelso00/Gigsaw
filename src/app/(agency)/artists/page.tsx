@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DropMenu } from "@/components/header-actions";
+import { Icon } from "@/components/icons";
 import { ArtistDot, Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { punctualityByArtist } from "@/lib/bookings";
@@ -77,48 +79,49 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         subtitle="Your roster: solo singers, duos and bands. A band can be made up of other acts."
         actions={
           <>
-            <Link href="/availability/new" className="btn">
-              Ask who&apos;s free
-            </Link>
-            <Link href="/artists/import" className="btn">
-              Import
-            </Link>
-            <Link href="/artists/applications" className="btn">
-              New acts{newActs ? <span className="badge ml-1.5 bg-amber-400 text-ink-950">{newActs}</span> : null}
-            </Link>
+            {newActs > 0 && (
+              <Link href="/artists/applications" className="btn">
+                <span className="h-1.5 w-1.5 rounded-full bg-cue-500 shadow-[0_0_6px_var(--color-cue-400)]" />
+                {newActs} new {newActs === 1 ? "act" : "acts"} to approve
+              </Link>
+            )}
+            <DropMenu label="More">
+              <Link href="/availability/new">Ask who&apos;s free</Link>
+              <Link href="/artists/import">Import from a spreadsheet</Link>
+              <Link href="/artists/applications">New act sign-ups</Link>
+            </DropMenu>
             <Link href="/artists/new" className="btn btn-primary">
               Add act
             </Link>
           </>
         }
       />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm" role="tablist" aria-label="View">
+      {/* One quiet line: search on the left (Enter to search), the view on the right. */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <form className="relative min-w-0 flex-1 basis-full sm:basis-auto">
+          <input type="hidden" name="view" value={view} />
+          <Icon name="search" className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-ink-400" />
+          <input
+            name="q"
+            type="search"
+            defaultValue={sp.q}
+            placeholder="Search by name, genre, phone or member"
+            aria-label="Search acts"
+            className="input pl-10"
+          />
+        </form>
+        <div className="inline-flex shrink-0 gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 text-sm" role="tablist" aria-label="View">
           {VIEWS.map(([v, label]) => (
             <Link
               key={v}
               href={`/artists${qs({ view: v })}`}
-              className={`rounded-lg px-3.5 py-2 font-medium ${view === v ? "bg-ink-950 text-white" : "text-ink-600 hover:bg-ink-100"}`}
+              aria-current={view === v ? "page" : undefined}
+              className={`rounded-md px-3 py-1.5 font-medium transition-colors ${view === v ? "bg-ink-950 text-white" : "text-ink-500 hover:text-ink-950"}`}
             >
               {label}
             </Link>
           ))}
         </div>
-        <form className="flex flex-1 flex-wrap gap-2">
-          <input type="hidden" name="view" value={view} />
-          <input
-            name="q"
-            defaultValue={sp.q}
-            placeholder="Search acts, genre, phone or a member's name"
-            className="input min-w-0 flex-1 basis-full sm:basis-auto"
-          />
-          <select name="show" defaultValue={sp.show ?? ""} className="input w-auto">
-            <option value="">All acts</option>
-            <option value="solo">Solo acts and duos</option>
-            <option value="bands">Bands made of acts</option>
-          </select>
-          <button className="btn">Search</button>
-        </form>
       </div>
 
       {acts.length === 0 ? (
@@ -192,13 +195,10 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
             <thead>
               <tr>
                 <th>Act</th>
-                <th>Members / part of</th>
+                <th className="hidden sm:table-cell">Members</th>
                 <th>Phone</th>
-                <th>Email</th>
-                <th>Lead agent</th>
                 <th className="text-right">Upcoming</th>
                 <th>On time</th>
-                <th>App</th>
               </tr>
             </thead>
             <tbody>
@@ -213,21 +213,24 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
                       </span>
                     </Link>
                   </td>
-                  <td className="max-w-72 text-sm">
+                  <td className="hidden max-w-72 text-sm sm:table-cell">
                     {a.partActs.length > 0 && <div className="truncate">{a.partActs.map((l) => l.child.name).join(", ")}</div>}
                     {a.partOf.length > 0 && <div className="truncate text-xs text-ink-500">Part of {a.partOf.map((l) => l.parent.name).join(", ")}</div>}
                     {!a.partActs.length &&
                       !a.partOf.length &&
-                      (a._count.members ? <span className="text-ink-500">{a._count.members} people</span> : <span className="text-ink-400">–</span>)}
+                      (a._count.members ? (
+                        <span className="text-ink-500">
+                          {a._count.members} {a._count.members === 1 ? "person" : "people"}
+                        </span>
+                      ) : (
+                        <span className="text-ink-400">–</span>
+                      ))}
                   </td>
                   <td className="whitespace-nowrap">
                     {a.phone ? <a href={`tel:${a.phone.replace(/\s/g, "")}`}>{a.phone}</a> : <span className="text-ink-400">–</span>}
                   </td>
-                  <td className="max-w-56 truncate">{a.email || <span className="text-ink-400">–</span>}</td>
-                  <td>{a.agent?.name ?? <span className="text-ink-400">–</span>}</td>
                   <td className="text-right tabular-nums">{a._count.bookings}</td>
                   <td>{onTime(a.id) ?? <span className="text-ink-400">–</span>}</td>
-                  <td>{a.login ? <span className="badge bg-emerald-50 text-emerald-800">Login</span> : <span className="text-ink-400">–</span>}</td>
                 </tr>
               ))}
             </tbody>
