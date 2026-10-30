@@ -39,7 +39,7 @@ export function SettingsPage({
         </Link>
       )}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-ink-950">{title}</h1>
+        <h1 className="text-[24px] font-bold tracking-[-0.015em] text-ink-950">{title}</h1>
         {actions}
       </div>
       <div className="space-y-9">{children}</div>

@@ -132,7 +132,7 @@ export function NavLinks({
     <nav className={`${drawer ? "flex" : "hidden lg:flex"} min-h-0 flex-col overflow-y-auto px-3 pb-4`}>
       {sections.map((section, i) => (
         <div key={section.title ?? i} className={`flex flex-col gap-0.5 ${i > 0 ? "mt-5" : ""}`}>
-          {section.title && <div className="px-3 pb-1 text-xs font-medium text-ink-500">{section.title}</div>}
+          {section.title && <div className="px-3 pb-1.5 font-mono text-[10px] font-medium tracking-[0.14em] text-ink-500 uppercase">{section.title}</div>}
           {section.links.map((l) => {
             // The most specific link wins, so /reports/venues doesn't also light up Reports.
             const matches = (href: string) => path === href || path.startsWith(`${href}/`);
@@ -146,22 +146,22 @@ export function NavLinks({
                   active ? "bg-white/[0.08] font-medium text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white"
                 }`}
               >
-                {active && <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-volt-400" />}
+                {active && <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-volt-400 shadow-[0_0_8px_var(--color-volt-400)]" />}
                 <Icon name={l.icon} className={`h-[18px] w-[18px] ${active ? "text-volt-400" : "text-ink-500 group-hover:text-ink-300"}`} />
                 {l.label}
                 {badges[l.href] ? (
                   <span
-                    className="ml-auto rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-ink-950"
+                    className="ml-auto rounded-full bg-cue-500 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white"
                     title={l.href === "/artists" ? "New acts waiting for approval" : "Gigs in the next 7 days with no act"}
                   >
                     {badges[l.href]}
                   </span>
                 ) : null}
                 {l.live && (
-                  <span className="ml-auto flex items-center gap-1.5 text-[10px] font-semibold tracking-wider text-volt-400 uppercase">
+                  <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] font-semibold tracking-wider text-cue-400 uppercase">
                     <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-volt-400 opacity-75" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-volt-400" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cue-400 opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-cue-400 shadow-[0_0_6px_var(--color-cue-400)]" />
                     </span>
                     Live
                   </span>
@@ -195,7 +195,7 @@ export function MobileMenu(props: Parameters<typeof NavLinks>[0] & { logo: React
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <button className="absolute inset-0 bg-black/60" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <div className="absolute inset-y-0 left-0 flex w-[84%] max-w-xs flex-col bg-[#060606] shadow-2xl">
+          <div className="absolute inset-y-0 left-0 flex w-[84%] max-w-xs flex-col bg-[#0b0d0f] shadow-2xl">
             <div className="flex items-center justify-between px-5 pt-5 pb-4">
               {props.logo}
               <button onClick={() => setOpen(false)} className="rounded-lg p-2 text-ink-400 hover:bg-white/[0.06] hover:text-white" aria-label="Close menu">

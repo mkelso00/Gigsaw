@@ -9,7 +9,7 @@ export function Container({ children, className = "" }: { children: React.ReactN
 }
 
 export function Eyebrow({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-sm font-semibold tracking-tight text-ink-500 ${className}`}>{children}</p>;
+  return <p className={`font-mono text-xs font-medium tracking-[0.14em] text-ink-500 uppercase ${className}`}>{children}</p>;
 }
 
 /** A volt marker stroke behind a few words of a headline. */

@@ -44,8 +44,8 @@ export default async function AgencyLayout({ children }: { children: React.React
     .slice(0, 2)
     .toUpperCase();
   return (
-    <div className="min-h-screen bg-[#060606] lg:flex">
-      <aside className="no-print bg-[#060606] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col">
+    <div className="min-h-screen bg-[#0b0d0f] lg:flex">
+      <aside className="no-print bg-[#0b0d0f] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col">
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <Link href="/dashboard">
             <Logo sub={settings.agencyName} />

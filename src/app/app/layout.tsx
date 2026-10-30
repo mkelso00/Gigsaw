@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 
 export const metadata: Metadata = { title: { default: "My gigs", template: "%s · Gigsaw" } };
-export const viewport: Viewport = { themeColor: "#0d0d0c" };
+export const viewport: Viewport = { themeColor: "#15181c" };
 
 export default async function ArtistAppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["ARTIST"]);

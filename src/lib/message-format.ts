@@ -39,7 +39,7 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial
 export function renderEmail(c: EmailContent): { html: string; text: string } {
   const brand = c.brand?.trim() || "Gigsaw";
   const para = (s: string, style = "") =>
-    `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#3b3a36;${style}">${esc(s).replace(/\n/g, "<br>")}</p>`;
+    `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#363c43;${style}">${esc(s).replace(/\n/g, "<br>")}</p>`;
   const tones = { good: ["#ecfdf5", "#065f46"], warn: ["#fffbeb", "#92400e"], bad: ["#fff1f2", "#9f1239"] };
   const [hlBg, hlFg] = tones[c.highlight?.tone ?? "good"];
 
@@ -47,7 +47,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;border-collapse:collapse">${c.rows
         .map(
           ([k, v]) =>
-            `<tr><td style="padding:10px 0;border-top:1px solid #efefea;font-size:13px;color:#75746d;width:38%;vertical-align:top">${esc(k)}</td><td style="padding:10px 0;border-top:1px solid #efefea;font-size:14px;color:#0d0d0c;vertical-align:top">${esc(v).replace(/\n/g, "<br>")}</td></tr>`,
+            `<tr><td style="padding:10px 0;border-top:1px solid #e3e6e9;font-size:13px;color:#67707a;width:38%;vertical-align:top">${esc(k)}</td><td style="padding:10px 0;border-top:1px solid #e3e6e9;font-size:14px;color:#15181c;vertical-align:top">${esc(v).replace(/\n/g, "<br>")}</td></tr>`,
         )
         .join("")}</table>`
     : "";
@@ -56,7 +56,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;border-collapse:collapse">${c.changes
         .map(
           ([k, from, to]) =>
-            `<tr><td style="padding:12px 0;border-top:1px solid #efefea;font-size:13px;color:#75746d;width:30%;vertical-align:top">${esc(k)}</td><td style="padding:12px 0;border-top:1px solid #efefea;font-size:14px;vertical-align:top"><span style="color:#a2a199;text-decoration:line-through">${esc(from || "none")}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong style="color:#0d0d0c;background:#ebff9e;padding:2px 6px;border-radius:4px">${esc(to || "none")}</strong></td></tr>`,
+            `<tr><td style="padding:12px 0;border-top:1px solid #e3e6e9;font-size:13px;color:#67707a;width:30%;vertical-align:top">${esc(k)}</td><td style="padding:12px 0;border-top:1px solid #e3e6e9;font-size:14px;vertical-align:top"><span style="color:#8d949c;text-decoration:line-through">${esc(from || "none")}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong style="color:#15181c;background:#a9ebdc;padding:2px 6px;border-radius:4px">${esc(to || "none")}</strong></td></tr>`,
         )
         .join("")}</table>`
     : "";
@@ -66,24 +66,24 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
     : "";
 
   const cta = c.cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr><td style="border-radius:10px;background:#0d0d0c"><a href="${esc(c.cta.url)}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;font-family:${FONT}">${esc(c.cta.label)}</a></td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr><td style="border-radius:10px;background:#15181c"><a href="${esc(c.cta.url)}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;font-family:${FONT}">${esc(c.cta.label)}</a></td></tr></table>`
     : "";
 
   const html = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.title)}</title></head>
-<body style="margin:0;padding:0;background:#f4f4f0;font-family:${FONT}">
+<body style="margin:0;padding:0;background:#eef0f2;font-family:${FONT}">
 ${c.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(c.preheader)}</div>` : ""}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef0f2"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
-<tr><td style="background:#0d0d0c;border-radius:16px 16px 0 0;padding:20px 28px">
+<tr><td style="background:#15181c;border-radius:16px 16px 0 0;padding:20px 28px">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:28px;height:28px;background:#cdf72e;border-radius:8px;text-align:center;font-size:16px;font-weight:700;color:#0d0d0c;line-height:28px">${esc(brand.charAt(0).toUpperCase())}</td>
+<td style="width:28px;height:28px;background:#22c7a6;border-radius:8px;text-align:center;font-size:16px;font-weight:700;color:#15181c;line-height:28px">${esc(brand.charAt(0).toUpperCase())}</td>
 <td style="padding-left:12px;font-size:16px;font-weight:600;color:#ffffff;letter-spacing:-0.01em">${esc(brand)}</td>
 </tr></table></td></tr>
 <tr><td style="background:#ffffff;padding:32px 28px 12px;border-radius:0 0 16px 16px">
-<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-0.02em;color:#0d0d0c">${esc(c.title)}</h1>
+<h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-0.02em;color:#15181c">${esc(c.title)}</h1>
 ${c.intro ? para(c.intro) : ""}${highlight}${changes}${rows}${cta}${c.outro ? para(c.outro) : ""}
 </td></tr>
-<tr><td style="padding:20px 28px;font-size:12px;line-height:1.6;color:#a2a199;text-align:center">${c.footnote ? `${esc(c.footnote)}<br>` : ""}Sent with Gigsaw${brand !== "Gigsaw" ? ` for ${esc(brand)}` : ""}</td></tr>
+<tr><td style="padding:20px 28px;font-size:12px;line-height:1.6;color:#8d949c;text-align:center">${c.footnote ? `${esc(c.footnote)}<br>` : ""}Sent with Gigsaw${brand !== "Gigsaw" ? ` for ${esc(brand)}` : ""}</td></tr>
 </table></td></tr></table></body></html>`;
 
   const text = [
