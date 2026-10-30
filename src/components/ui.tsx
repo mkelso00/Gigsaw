@@ -160,3 +160,24 @@ export function SectionHeading({ title, action }: { title: React.ReactNode; acti
     </div>
   );
 }
+
+/** A small row of linked options, one of them on, e.g. who to show in a list. Scrolls sideways on a phone. */
+export function Segmented({ label, items }: { label: string; items: { href: string; label: string; on: boolean }[] }) {
+  return (
+    <nav
+      aria-label={label}
+      className="flex max-w-full shrink-0 gap-0.5 overflow-x-auto rounded-lg border border-ink-200 bg-white p-0.5 text-sm whitespace-nowrap"
+    >
+      {items.map((i) => (
+        <Link
+          key={i.href}
+          href={i.href}
+          aria-current={i.on ? "page" : undefined}
+          className={`rounded-md px-3 py-1.5 font-medium transition-colors ${i.on ? "bg-ink-950 text-white" : "text-ink-500 hover:text-ink-950"}`}
+        >
+          {i.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}

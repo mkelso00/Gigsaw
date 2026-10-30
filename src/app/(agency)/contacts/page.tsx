@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { ContactsTabs } from "@/components/contacts-tabs";
-import { Empty, PageHeader } from "@/components/ui";
+import { DropMenu } from "@/components/header-actions";
+import { Icon } from "@/components/icons";
+import { Empty, PageHeader, Segmented } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, type ContactType, CONTACT_TYPE_PLURALS } from "@/lib/constants";
 import { prisma } from "@/lib/db";
@@ -37,59 +39,54 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Companies & customers"
-        subtitle="Companies (venue owners) and private customers (weddings and parties). People who work at them are under People."
+        subtitle="Companies (venue owners, promoters, clients like a record label) and private customers (weddings and parties). People who work at them are under People."
         actions={
           <>
-            <Link href="/contacts/new?type=CLIENT" className="btn">
-              Add private customer
-            </Link>
+            <DropMenu label="More">
+              <Link href="/contacts/new?type=CLIENT">Add a private customer</Link>
+              <Link href="/artists/import">Import from a spreadsheet</Link>
+            </DropMenu>
             <Link href="/contacts/new" className="btn btn-primary">
-              Add company or contact
+              Add company
             </Link>
           </>
         }
       />
       <ContactsTabs active="companies" />
-      {/* One line that scrolls sideways on a phone, rather than wrapping into rows. */}
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-ink-200 bg-white p-1 text-sm whitespace-nowrap">
-        {[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, CONTACT_TYPE_PLURALS[t]])].map(([t, label]) => (
-          <Link
-            key={t}
-            href={t ? `/contacts?type=${t}` : "/contacts"}
-            className={`shrink-0 rounded-lg px-3 py-1.5 ${(sp.type ?? "") === t ? "bg-ink-950 text-white" : "text-ink-600 hover:text-ink-950"}`}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
-      <form className="mb-4 flex gap-2">
-        <input
-          name="q"
-          defaultValue={sp.q}
-          placeholder="Search name, company, email, phone or tag"
-          aria-label="Search companies and customers"
-          className="input min-w-0 flex-1"
+      {/* One quiet line: search (it covers tags too), the type of contact, and tags in a menu. */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <form className="relative min-w-0 flex-1 basis-full lg:min-w-72 lg:basis-auto">
+          {sp.type && <input type="hidden" name="type" value={sp.type} />}
+          {sp.tag && <input type="hidden" name="tag" value={sp.tag} />}
+          <Icon name="search" className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-ink-400" />
+          <input
+            name="q"
+            type="search"
+            defaultValue={sp.q}
+            placeholder="Search by name, company, email, phone or tag"
+            aria-label="Search companies and customers"
+            className="input pl-10"
+          />
+        </form>
+        <Segmented
+          label="Type"
+          items={[["", "Everyone"], ...CONTACT_TYPES.map((t) => [t, CONTACT_TYPE_PLURALS[t]])].map(([t, label]) => ({
+            href: t ? `/contacts?type=${t}` : "/contacts",
+            label,
+            on: (sp.type ?? "") === t,
+          }))}
         />
-        {sp.type && <input type="hidden" name="type" value={sp.type} />}
-        {sp.tag && <input type="hidden" name="tag" value={sp.tag} />}
-        <button className="btn shrink-0">Search</button>
-      </form>
-      {tags.length > 0 && (
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 text-xs whitespace-nowrap sm:flex-wrap">
-          <Link href="/contacts" className={`badge ${!sp.tag ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
-            All
-          </Link>
-          {tags.map((t) => (
-            <Link
-              key={t}
-              href={`/contacts?tag=${encodeURIComponent(t)}`}
-              className={`badge ${sp.tag === t ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
-            >
-              #{t}
-            </Link>
-          ))}
-        </div>
-      )}
+        {tags.length > 0 && (
+          <DropMenu label={sp.tag ? `#${sp.tag}` : "Tags"}>
+            {sp.tag && <Link href="/contacts">All tags</Link>}
+            {tags.map((t) => (
+              <Link key={t} href={`/contacts?tag=${encodeURIComponent(t)}`}>
+                #{t}
+              </Link>
+            ))}
+          </DropMenu>
+        )}
+      </div>
       {contacts.length === 0 ? (
         <Empty>No contacts match.</Empty>
       ) : (
@@ -101,7 +98,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
                 <th>Type</th>
                 <th>Email</th>
                 <th>Phone</th>
-                <th>Tags</th>
                 <th className="text-right">Bookings</th>
               </tr>
             </thead>
@@ -123,11 +119,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
                     )}
                   </td>
                   <td className="whitespace-nowrap">{c.phone}</td>
-                  <td className="text-xs text-slate-500">
-                    {splitTags(c.tags)
-                      .map((t) => `#${t}`)
-                      .join(" ")}
-                  </td>
                   <td className="text-right">{c._count.bookings}</td>
                 </tr>
               ))}

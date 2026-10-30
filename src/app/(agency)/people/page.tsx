@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ContactsTabs } from "@/components/contacts-tabs";
+import { DropMenu } from "@/components/header-actions";
+import { Icon } from "@/components/icons";
+import { Segmented } from "@/components/ui";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -50,9 +53,9 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         subtitle="Musicians, venue managers and anyone you work with. A person can be in several acts and work at a venue or company."
         actions={
           <>
-            <Link href="/artists/import#template-people" className="btn">
-              Import from a spreadsheet
-            </Link>
+            <DropMenu label="More">
+              <Link href="/artists/import#template-people">Import from a spreadsheet</Link>
+            </DropMenu>
             <Link href="/people/new" className="btn btn-primary">
               Add person
             </Link>
@@ -60,22 +63,29 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         }
       />
       <ContactsTabs active="people" />
-      <form className="mb-4 flex flex-wrap gap-2">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Search name, act, venue, company, phone or email"
-          className="input min-w-0 flex-1 basis-full sm:basis-auto"
+      {/* One quiet line: search (Enter to search) and who to show. */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <form className="relative min-w-0 flex-1 basis-full sm:basis-auto">
+          {show && <input type="hidden" name="show" value={show} />}
+          <Icon name="search" className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-ink-400" />
+          <input
+            name="q"
+            type="search"
+            defaultValue={q}
+            placeholder="Search by name, act, venue, company, phone or email"
+            aria-label="Search people"
+            className="input pl-10"
+          />
+        </form>
+        <Segmented
+          label="Show"
+          items={SHOW.map(([v, l]) => ({
+            href: `/people?${new URLSearchParams(Object.entries({ q, show: v }).filter((e): e is [string, string] => !!e[1]))}`,
+            label: l,
+            on: (show ?? "") === v,
+          }))}
         />
-        <select name="show" defaultValue={show ?? ""} className="input w-auto">
-          {SHOW.map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          ))}
-        </select>
-        <button className="btn">Search</button>
-      </form>
+      </div>
       {people.length === 0 ? (
         <Empty>
           {q || show ? "No one matches." : "No people yet."}{" "}
@@ -93,8 +103,6 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                 <th>Acts</th>
                 <th>Company</th>
                 <th>Phone</th>
-                <th>Email</th>
-                <th>App</th>
               </tr>
             </thead>
             <tbody>
@@ -139,8 +147,6 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                   <td className="whitespace-nowrap">
                     {p.phone ? <a href={`tel:${p.phone.replace(/\s/g, "")}`}>{p.phone}</a> : <span className="text-ink-400">–</span>}
                   </td>
-                  <td>{p.email || <span className="text-ink-400">–</span>}</td>
-                  <td>{p.login ? <span className="badge bg-emerald-50 text-emerald-800">Login</span> : <span className="text-ink-400">–</span>}</td>
                 </tr>
               ))}
             </tbody>

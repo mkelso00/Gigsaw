@@ -137,7 +137,7 @@ export function DropMenu({ label, children }: { label: string; children: React.R
       {open && (
         <div
           onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}
-          className="motion-page-in absolute top-full right-0 z-40 mt-2 flex w-52 flex-col rounded-xl border border-ink-200 bg-white p-1.5 shadow-xl [&>a]:rounded-lg [&>a]:px-3 [&>a]:py-2 [&>a]:text-sm [&>a:hover]:bg-ink-50"
+          className="motion-page-in absolute top-full right-0 z-40 mt-2 flex max-h-80 w-52 flex-col overflow-y-auto rounded-xl border border-ink-200 bg-white p-1.5 shadow-xl [&>a]:rounded-lg [&>a]:px-3 [&>a]:py-2 [&>a]:text-sm [&>a:hover]:bg-ink-50"
         >
           {children}
         </div>
