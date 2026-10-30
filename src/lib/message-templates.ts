@@ -123,12 +123,31 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: EVENT,
   },
   {
+    key: "ENQUIRY_REPLY",
+    group: "CUSTOMERS",
+    label: "Enquiry received",
+    hint: "The automatic reply to someone who fills in the enquiry form on your website. What they sent is listed underneath.",
+    example: {
+      subject: "Thanks for your enquiry",
+      intro: "Hi {first_name}, thanks for getting in touch with {business}. We've got your enquiry and will come back to you soon.",
+    },
+    placeholders: ["first_name", "event_type", "date", "business"],
+  },
+  {
     key: "NEW_ACT",
     group: "TEAM",
     label: "New act applied",
     hint: "Sent to your business email when someone fills in your join link.",
     example: { subject: "New act wants to join: {act}", intro: "{act} has sent their details." },
     placeholders: ["act", "business"],
+  },
+  {
+    key: "NEW_ENQUIRY",
+    group: "TEAM",
+    label: "New enquiry",
+    hint: "When someone fills in the enquiry form on your website. Who gets it is set in Enquiry form.",
+    example: { subject: "New enquiry: {name}", intro: "{name} has sent an enquiry from your website." },
+    placeholders: ["name", "event_type", "date", "business"],
   },
 ];
 

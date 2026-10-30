@@ -18,13 +18,14 @@ export default async function AgencyLayout({ children }: { children: React.React
   const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
-  const [unfilled, noAct, acts, venues, contacts, newActs] = await Promise.all([
+  const [unfilled, noAct, acts, venues, contacts, newActs, newEnquiries] = await Promise.all([
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
     oneOffsNeedingAct(user.agencyId, 7),
     prisma.artist.findMany(pick),
     prisma.venue.findMany({ ...pick, select: { id: true, name: true, city: true } }),
     prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
+    prisma.enquiry.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
   // A self-service business whose trial has ended (or subscription stopped) can only reach Plan and Profile.
@@ -34,7 +35,7 @@ export default async function AgencyLayout({ children }: { children: React.React
   const navProps = {
     isAdmin: user.role === "ADMIN",
     isOwner: user.isOwner,
-    badges: { "/rota": unfilledThisWeek, "/artists": newActs },
+    badges: { "/rota": unfilledThisWeek, "/artists": newActs, "/enquiries": newEnquiries },
     business: { name: settings.agencyName || user.agency?.name || "Your business", email: settings.agencyEmail },
   };
   const initials = user.name

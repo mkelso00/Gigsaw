@@ -31,14 +31,15 @@ export async function removePushSubscription(endpoint: string) {
 
 export async function sendTestPush() {
   const user = await requireUser();
+  const act = user.role === "ARTIST";
   const reached = await sendPush({
     kind: "TEST",
     agencyId: user.agencyId,
     userId: user.id,
     payload: {
       title: "Notifications are on",
-      body: "This is how Gigsaw will remind you about your gigs.",
-      url: "/app",
+      body: act ? "This is how Gigsaw will remind you about your gigs." : "This is how Gigsaw will tell you about new enquiries.",
+      url: act ? "/app" : "/enquiries",
       tag: "test",
     },
     ttlSeconds: 600,

@@ -26,6 +26,7 @@ const paths: Record<string, string> = {
   chevron: "M9 6l6 6-6 6",
   back: "M15 6l-6 6 6 6",
   mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  inbox: "M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5",
   doc: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6",
   lock: "M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3",
   join: "M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM7 21a8 8 0 0 1 12-6.9M19 16v6M16 19h6",

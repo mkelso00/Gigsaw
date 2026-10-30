@@ -44,7 +44,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     ];
   }
 
-  const [bookings, artists, settings, archivedCount] = await Promise.all([
+  const [bookings, artists, settings, archivedCount, newEnquiries] = await Promise.all([
     prisma.booking.findMany({
       where,
       include: bookingListInclude,
@@ -54,6 +54,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     getSettings(user.agencyId),
     prisma.booking.count({ where: { agencyId: user.agencyId, archivedAt: { not: null } } }),
+    prisma.enquiry.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
   const isAdmin = user.role === "ADMIN";
 
@@ -68,6 +69,12 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         }
         actions={
           <>
+            {newEnquiries > 0 && !archived && (
+              <Link href="/enquiries" className="btn">
+                New enquiries
+                <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-semibold text-ink-950">{newEnquiries}</span>
+              </Link>
+            )}
             {archived ? (
               <Link href="/bookings" className="btn">
                 Back to bookings

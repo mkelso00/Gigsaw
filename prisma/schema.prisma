@@ -51,6 +51,7 @@ model Agency {
   people       Person[]
   events       Event[]
   applications ActApplication[]
+  enquiries    Enquiry[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -117,6 +118,11 @@ model Settings {
   dayReminderTime       String  @default("12:00") // venue's local time
   invoiceTerms          String  @default("Payment due within 14 days of invoice date.")
   contractTerms         String  @default("")
+  // The enquiry form for the business's own website (/enquire/<enquirySlug>). Off until switched on.
+  enquiryOn             Boolean @default(false)
+  enquirySlug           String? @unique
+  // Which fields show, the thank-you message, who hears about new enquiries and the logo (src/lib/enquiries.ts).
+  enquiryForm           Json    @default("{}")
 }
 
 model User {
@@ -227,11 +233,12 @@ model Contact {
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
 
-  notes    ContactNote[]
-  slots    VenueSlot[]
-  bookings Booking[]
-  people   Person[]
-  events   Event[]
+  notes     ContactNote[]
+  slots     VenueSlot[]
+  bookings  Booking[]
+  people    Person[]
+  events    Event[]
+  enquiries Enquiry[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -357,8 +364,9 @@ model Booking {
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
 
-  payments Payment[]
-  checkIns CheckIn[]
+  payments  Payment[]
+  checkIns  CheckIn[]
+  enquiries Enquiry[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -599,6 +607,7 @@ model Event {
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
   tasks      EventTask[]
+  enquiries  Enquiry[]
 
   @@index([agencyId, date])
 }
@@ -667,4 +676,42 @@ model ActApplication {
   passwordHash      String
 
   @@index([agencyId, status])
+}
+
+// Someone filling in the enquiry form on the business's website. It finds or makes the customer,
+// adds an Enquiry booking with no act yet (or a wedding), and waits under Enquiries until dealt with.
+model Enquiry {
+  id        String    @id @default(cuid())
+  agencyId  String
+  agency    Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  status    String    @default("NEW") // NEW | DONE (dealt with)
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  name      String
+  email     String
+  phone     String @default("")
+  eventType String @default("") // one of EVENT_TYPES, or "" if the form doesn't ask
+  date      String @default("") // "YYYY-MM-DD", or "" if not given
+  startTime String @default("") // "HH:MM", or ""
+  venue     String @default("") // venue or town, as typed
+  guests    Int?
+  budget    String @default("") // as typed, e.g. "about £1,500"
+  acts      Json   @default("[]") // acts they like: [{ id, name }]
+  message   String @default("")
+  source    String @default("") // the website it was sent from, if known
+  // A one-way hash of the sender's IP address, for rate limiting. The address itself isn't kept.
+  ipHash    String @default("")
+
+  // What it made. contactCreated: the customer was new, so deleting the enquiry as spam removes them too.
+  contactId      String?
+  contact        Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactCreated Boolean  @default(false)
+  bookingId      String?
+  booking        Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  eventId        String?
+  event          Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId, status, createdAt])
+  @@index([ipHash, createdAt])
 }

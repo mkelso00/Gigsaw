@@ -24,8 +24,8 @@ function deviceName() {
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const isInstalled = () => window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
-/** Lets an artist turn on gig reminders as notifications on this phone. */
-export function PushSetup({ publicKey }: { publicKey: string }) {
+/** Turning phone notifications on and off for this login on this device. `said` is what to say after turning on or off. */
+function usePush(publicKey: string, said: { on: string; off: string }) {
   const [state, setState] = useState<State>("checking");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -70,7 +70,7 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
       const res = await savePushSubscription(sub.toJSON() as never, deviceName());
       if (!res.ok) throw new Error("save failed");
       setState("on");
-      setNote("Done. You'll get a reminder the week before and on the day of each gig.");
+      setNote(said.on);
     } catch {
       setNote("That didn't work. Check notifications are allowed for this app in your phone's settings, then try again.");
     } finally {
@@ -94,9 +94,19 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
       await sub.unsubscribe();
     }
     setState("off");
-    setNote("Notifications are off on this phone. You'll still get reminders by email.");
+    setNote(said.off);
     setBusy(false);
   }
+
+  return { state, busy, note, turnOn, test, turnOff };
+}
+
+/** Lets an artist turn on gig reminders as notifications on this phone. */
+export function PushSetup({ publicKey }: { publicKey: string }) {
+  const { state, busy, note, turnOn, test, turnOff } = usePush(publicKey, {
+    on: "Done. You'll get a reminder the week before and on the day of each gig.",
+    off: "Notifications are off on this phone. You'll still get reminders by email.",
+  });
 
   if (state === "checking") return null;
   const btn = "flex h-12 w-full items-center justify-center rounded-xl text-[15px] font-medium transition disabled:opacity-50";
@@ -148,5 +158,47 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
       )}
       {note && <p className="mt-3 text-sm text-volt-400">{note}</p>}
     </section>
+  );
+}
+
+/** Internal users (Profile): notifications on this phone or computer, e.g. when a new enquiry comes in. */
+export function StaffPushSetup({ publicKey }: { publicKey: string }) {
+  const { state, busy, note, turnOn, test, turnOff } = usePush(publicKey, {
+    on: "Done. New enquiries will show up on this device.",
+    off: "Notifications are off on this device. You'll still get emails.",
+  });
+  if (state === "checking") return null;
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4" data-push-state={state}>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ink-950">Phone notifications on this device</span>
+        <span className="mt-0.5 block text-sm text-ink-500">
+          {state === "on"
+            ? "On. You'll get a notification here for the alerts above with Phone switched on."
+            : state === "off"
+              ? "Get a notification on this phone or computer for the alerts above with Phone switched on."
+              : state === "install"
+                ? "On iPhone, add Gigsaw to your Home Screen first (Share, then Add to Home Screen), open it from there and come back here."
+                : state === "blocked"
+                  ? "Notifications are blocked for Gigsaw here. Allow them in your browser or phone settings, then come back."
+                  : "This browser can't show notifications. You'll still get emails."}
+        </span>
+        {note && <span className="mt-2 block text-sm font-medium text-ink-800">{note}</span>}
+      </span>
+      {state === "on" ? (
+        <span className="flex gap-2">
+          <button type="button" onClick={test} disabled={busy} className="btn btn-sm">
+            Send a test
+          </button>
+          <button type="button" onClick={turnOff} disabled={busy} className="btn btn-sm">
+            Turn off
+          </button>
+        </span>
+      ) : state === "off" ? (
+        <button type="button" onClick={turnOn} disabled={busy} className="btn btn-sm btn-primary">
+          {busy ? "Turning on…" : "Turn on"}
+        </button>
+      ) : null}
+    </div>
   );
 }
