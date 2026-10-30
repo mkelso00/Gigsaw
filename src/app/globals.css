@@ -442,3 +442,86 @@ html:has(.theme-dark) body {
     display: none;
   }
 }
+
+/*
+ * Movement in the app. Kept small and slow enough to feel calm: pages rise in, Settings slides
+ * in like a drawer, pop-ups open softly, buttons give a little when pressed, and loading shapes
+ * breathe rather than flash. All of it is switched off for people who ask for less motion.
+ */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.motion-page-in {
+  animation: page-in 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.motion-slide-in {
+  animation: slide-in 0.42s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+.motion-slide-in-left {
+  animation: slide-in-left 0.36s cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+dialog[open] {
+  animation: pop-in 0.28s cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+dialog[open]::backdrop {
+  animation: fade-in 0.28s ease;
+}
+.btn {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.skeleton {
+  border-radius: var(--radius-card);
+  background: var(--color-ink-100);
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-page-in,
+  .motion-slide-in,
+  .motion-slide-in-left,
+  dialog[open],
+  dialog[open]::backdrop,
+  .skeleton {
+    animation: none;
+  }
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

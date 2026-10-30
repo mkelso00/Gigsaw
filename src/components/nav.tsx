@@ -62,7 +62,7 @@ function SettingsNav({ business }: { business: { name: string; email: string } }
     .slice(0, 3)
     .toUpperCase();
   return (
-    <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:min-h-0 lg:flex-col lg:gap-0.5 lg:overflow-y-auto lg:pb-4">
+    <nav className="motion-slide-in flex gap-1 overflow-x-auto px-3 pb-3 lg:min-h-0 lg:flex-col lg:gap-0.5 lg:overflow-y-auto lg:pb-4">
       <Link href="/dashboard" className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-white hover:bg-white/[0.04]">
         <Icon name="back" className="h-4 w-4 text-ink-400" />
         Settings
