@@ -2,7 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 import { price } from "./format";
-import { ArrivalsSketch, ArrowRight, CheckInSketch, Container, Cross, Eyebrow, FinalCta, Marker, OfferSketch, RotaSketch } from "./site-ui";
+import { HeroWord } from "./hero-word";
+import {
+  DeskWindow,
+  FactsStrip,
+  FeatureCard,
+  KindCards,
+  LiveSketch,
+  MoneySketch,
+  OffersSketch,
+  PhoneSketch,
+  SoundWaves,
+  StepLights,
+  WeddingSketch,
+} from "./home-parts";
+import { ArrowRight, Container, Cross, Eyebrow, FinalCta } from "./site-ui";
 
 export const metadata: Metadata = {
   title: { absolute: "Gigsaw: booking software for music agencies" },
@@ -83,44 +97,114 @@ const HIGHLIGHTS = [
 export default function HomePage() {
   return (
     <>
-      {/* Hero */}
-      <section className="overflow-hidden">
-        <Container className="pt-14 pb-16 sm:pt-24 sm:pb-24">
-          <Eyebrow>Booking software for music agencies</Eyebrow>
-          <h1 className="mt-5 max-w-5xl text-[44px] leading-[0.98] font-semibold tracking-[-0.045em] sm:text-7xl lg:text-[88px]">
-            Every gig booked, confirmed and <Marker>on time.</Marker>
-          </h1>
-          <p className="mt-7 max-w-2xl text-lg leading-relaxed text-ink-700 sm:text-xl">
-            Gigsaw runs your weekly bar slots, weddings and private events in one place. Acts accept gigs with a tap, check in when they arrive, and you see it
-            all as it happens. No more spreadsheets, group chats or Friday night phone calls.
-          </p>
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link href="/signup" className="btn btn-volt h-12 px-6 text-base">
-              Try it free
-              <ArrowRight />
-            </Link>
-            <Link href="/pricing" className="btn h-12 px-6 text-base">
-              See pricing
-            </Link>
-            <p className="text-sm text-ink-500 sm:ml-3">Free for {TRIAL_DAYS} days. Made in the UK.</p>
+      {/* Hero: words on the left, the agency's screen and an act's phone on the right, on a grid of pulsing dots. */}
+      <section className="relative overflow-hidden bg-ink-50">
+        <div aria-hidden className="dot-grid absolute inset-0 opacity-50 [mask-image:linear-gradient(to_bottom,#000_70%,transparent)]" />
+        <div aria-hidden className="dot-ripple absolute inset-0" />
+        <SoundWaves className="absolute inset-x-0 -bottom-6 h-40 opacity-50 sm:h-56" />
+        <Container className="relative grid items-center gap-14 pt-14 pb-20 sm:pt-20 sm:pb-28 lg:grid-cols-[1fr_1.08fr] lg:gap-12">
+          <div>
+            <Eyebrow>Booking software for music agencies</Eyebrow>
+            <h1 className="mt-5 text-[40px] leading-[1.04] font-bold tracking-[-0.025em] sm:text-6xl lg:text-[62px]">
+              Every gig
+              <br />
+              <HeroWord />
+              <br />
+              without the chasing.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-600">
+              Weekly bar slots, weddings and private events in one place. Acts accept with a tap, check in when they arrive, and you see it all as it happens.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link href="/signup" className="btn btn-primary h-12 px-6 text-base">
+                Try it free
+                <ArrowRight />
+              </Link>
+              <Link href="/pricing" className="btn h-12 px-6 text-base">
+                See pricing
+              </Link>
+            </div>
+            <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
+              <StepLights />
+              <p className="font-mono text-[11px] tracking-[0.1em] whitespace-nowrap text-ink-500 uppercase">Free for {TRIAL_DAYS} days · Made in the UK</p>
+            </div>
           </div>
-
-          <div className="mt-16 rounded-[1.75rem] bg-ink-950 p-3 sm:mt-20 sm:p-5">
-            <div className="grid gap-3 sm:gap-5 lg:grid-cols-[1.35fr_1fr]">
-              <RotaSketch />
-              <ArrivalsSketch />
+          <div className="relative pb-8 sm:pr-10 lg:pr-12">
+            <DeskWindow />
+            <div className="float-slow absolute -right-1 -bottom-6 hidden sm:block lg:-right-4">
+              <PhoneSketch />
             </div>
           </div>
         </Container>
       </section>
 
+      <FactsStrip />
+
+      {/* Who it's for */}
+      <section>
+        <Container className="py-20 sm:py-28">
+          <h2 data-reveal className="max-w-4xl text-3xl leading-[1.12] font-bold tracking-[-0.02em] sm:text-[44px]">
+            Built for every kind of gig. <span className="text-ink-400">Residencies, weddings and corporate work, all on one desk.</span>
+          </h2>
+          <div className="mt-12">
+            <KindCards />
+          </div>
+        </Container>
+      </section>
+
+      {/* What's in it */}
+      <section className="border-t border-ink-200 bg-ink-50">
+        <Container className="py-20 sm:py-28">
+          <h2 data-reveal className="max-w-4xl text-3xl leading-[1.12] font-bold tracking-[-0.02em] sm:text-[44px]">
+            Everything an agency does. <span className="text-ink-400">From the first offer to the last invoice, in one place.</span>
+          </h2>
+          <div className="mt-12 grid gap-4 lg:grid-cols-5">
+            <FeatureCard
+              label="Offers"
+              title="Acts say yes with one tap. No more chasing."
+              href="/features#offers"
+              className="lg:col-span-3"
+              wash="bg-volt-300"
+            >
+              <OffersSketch />
+            </FeatureCard>
+            <FeatureCard
+              label="Arrivals"
+              title="Know they're there before the venue does."
+              href="/features#arrivals"
+              className="lg:col-span-2"
+              wash="bg-cue-400"
+            >
+              <LiveSketch />
+            </FeatureCard>
+            <FeatureCard label="Money" title="Sale, cost and what you make, on every gig." href="/features#money" className="lg:col-span-2" wash="bg-volt-400">
+              <MoneySketch />
+            </FeatureCard>
+            <FeatureCard label="Weddings" title="One booking, every act, one invoice." href="/features#weddings" className="lg:col-span-3" wash="bg-cue-400">
+              <WeddingSketch />
+            </FeatureCard>
+          </div>
+          <div data-reveal className="mt-4 grid gap-px overflow-hidden rounded-2xl border border-ink-200 bg-ink-200 sm:grid-cols-2 lg:grid-cols-4">
+            {HIGHLIGHTS.filter((h) => ["bookings", "act-app", "imports"].includes(h.id) || h.title.startsWith("Venue")).map((h) => (
+              <Link key={h.title} href={`/features#${h.id}`} className="group bg-white p-5 transition-colors hover:bg-ink-50">
+                <h3 className="flex items-center justify-between gap-3 font-semibold">
+                  {h.title}
+                  <ArrowRight className="h-3.5 w-3.5 text-ink-400 transition group-hover:translate-x-0.5 group-hover:text-ink-950" />
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-600">{h.body}</p>
+              </Link>
+            ))}
+          </div>
+        </Container>
+      </section>
+
       {/* The problem */}
-      <section className="border-t border-ink-200/70 bg-ink-50">
+      <section>
         <Container className="grid gap-12 py-20 sm:py-28 lg:grid-cols-[1fr_1.1fr] lg:gap-20">
-          <div>
+          <div data-reveal>
             <Eyebrow>The problem</Eyebrow>
-            <h2 className="mt-4 text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">Running an agency shouldn&apos;t feel like juggling.</h2>
-            <div className="mt-7 space-y-5 text-lg leading-relaxed text-ink-700">
+            <h2 className="mt-4 text-3xl leading-[1.08] font-bold tracking-[-0.02em] sm:text-[44px]">Running an agency shouldn&apos;t feel like juggling.</h2>
+            <div className="mt-7 space-y-5 text-lg leading-relaxed text-ink-600">
               <p>
                 Most music agencies are run from a spreadsheet, a WhatsApp group, an inbox and somebody&apos;s memory. It works, mostly. Until a slot goes
                 unfilled, an act forgets, or a venue manager rings to ask where the music is.
@@ -132,9 +216,14 @@ export default function HomePage() {
             </div>
           </div>
           <ul className="space-y-3 self-center">
-            {PAINS.map((p) => (
-              <li key={p} className="flex gap-4 rounded-2xl border border-ink-200/80 bg-white p-5 text-[17px] leading-snug text-ink-800">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-100 text-ink-500">
+            {PAINS.map((p, i) => (
+              <li
+                key={p}
+                data-reveal
+                style={{ transitionDelay: `${i * 80}ms` }}
+                className="flex gap-4 rounded-xl border border-ink-200 bg-white p-5 text-[17px] leading-snug text-ink-800"
+              >
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cue-100 text-cue-700">
                   <Cross className="h-3.5 w-3.5" />
                 </span>
                 {p}
@@ -148,90 +237,18 @@ export default function HomePage() {
       <section>
         <Container className="py-20 sm:py-28">
           <Eyebrow>How it works</Eyebrow>
-          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">From empty slot to paid gig, in four steps.</h2>
+          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">From empty slot to paid gig, in four steps.</h2>
           <ol className="mt-14 grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s, i) => (
-              <li key={s.title}>
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-volt-400 text-lg font-semibold text-ink-950">{i + 1}</span>
+              <li key={s.title} data-reveal style={{ transitionDelay: `${i * 100}ms` }}>
+                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink-950 font-mono text-base font-semibold text-volt-300">
+                  0{i + 1}
+                </span>
                 <h3 className="mt-5 text-xl font-semibold tracking-tight">{s.title}</h3>
                 <p className="mt-3 leading-relaxed text-ink-600">{s.body}</p>
               </li>
             ))}
           </ol>
-        </Container>
-      </section>
-
-      {/* Arrivals spotlight */}
-      <section className="bg-ink-950 text-white">
-        <Container className="grid items-center gap-14 py-20 sm:py-28 lg:grid-cols-2 lg:gap-20">
-          <div>
-            <p className="text-sm font-semibold tracking-tight text-volt-400">Live arrivals</p>
-            <h2 className="mt-4 text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">Know the act is there before the venue does.</h2>
-            <div className="mt-7 space-y-5 text-lg leading-relaxed text-ink-300">
-              <p>
-                When an act gets to the venue, they tap <strong className="font-semibold text-white">I&apos;ve arrived</strong> in the Gigsaw app. Their phone
-                shares its location, and Gigsaw checks it against the venue's map pin.
-              </p>
-              <p>
-                Your live board shows every gig tonight: who&apos;s on the way and when they&apos;ll get there, who&apos;s arrived, who&apos;s late. If the call
-                time passes with no check-in, the agent gets an email and a text. Over time you build up a punctuality record for every act.
-              </p>
-            </div>
-            <Link href="/features#arrivals" className="mt-8 inline-flex items-center gap-2 font-medium text-volt-400 hover:text-volt-300">
-              How arrivals work
-              <ArrowRight />
-            </Link>
-          </div>
-          <CheckInSketch />
-        </Container>
-      </section>
-
-      {/* Feature highlights */}
-      <section>
-        <Container className="py-20 sm:py-28">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <Eyebrow>What&apos;s in it</Eyebrow>
-              <h2 className="mt-4 max-w-2xl text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">Everything an agency does, in one place.</h2>
-            </div>
-            <Link href="/features" className="inline-flex shrink-0 items-center gap-2 font-medium text-ink-950 hover:text-ink-600">
-              See every feature
-              <ArrowRight />
-            </Link>
-          </div>
-          <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-ink-200 bg-ink-200 sm:grid-cols-2 lg:grid-cols-4">
-            {HIGHLIGHTS.map((h) => (
-              <Link key={h.title} href={`/features#${h.id}`} className="group flex flex-col bg-white p-6 transition-colors hover:bg-ink-50 sm:p-7">
-                <h3 className="text-lg leading-snug font-semibold tracking-tight">{h.title}</h3>
-                <p className="mt-3 flex-1 leading-relaxed text-ink-600">{h.body}</p>
-                <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-ink-500 group-hover:text-ink-950">
-                  Read more
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      {/* Offers */}
-      <section className="border-t border-ink-200/70 bg-ink-50">
-        <Container className="grid items-center gap-14 py-20 sm:py-28 lg:grid-cols-[1.1fr_1fr] lg:gap-20">
-          <div>
-            <Eyebrow>Offers</Eyebrow>
-            <h2 className="mt-4 text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">Stop chasing acts for a yes.</h2>
-            <div className="mt-7 space-y-5 text-lg leading-relaxed text-ink-700">
-              <p>
-                Put the gig in the calendar first, even before you know who&apos;s playing. When you&apos;ve picked an act, send them an offer. They get a
-                message with the date, the venue, the times and their own fee, and a private link with two buttons.
-              </p>
-              <p>
-                If they accept, the gig is confirmed, it shows up in their app and you get an email. If they decline, you get an email and a text, and the gig
-                stays put so you can offer it to someone else. The dashboard always shows which offers are still waiting.
-              </p>
-            </div>
-          </div>
-          <OfferSketch />
         </Container>
       </section>
 
@@ -241,7 +258,7 @@ export default function HomePage() {
           <div className="grid gap-10 rounded-3xl border border-ink-200 p-6 sm:p-12 lg:grid-cols-[1fr_1.2fr] lg:gap-16">
             <div>
               <Eyebrow>Moving from Overture?</Eyebrow>
-              <h2 className="mt-4 text-3xl leading-[1.08] font-semibold tracking-[-0.03em] sm:text-4xl">Bring your contacts with you.</h2>
+              <h2 className="mt-4 text-3xl leading-[1.08] font-bold tracking-[-0.02em] sm:text-4xl">Bring your contacts with you.</h2>
             </div>
             <div className="space-y-5 text-lg leading-relaxed text-ink-700">
               <p>
@@ -269,9 +286,7 @@ export default function HomePage() {
       <section className="border-t border-ink-200/70 bg-ink-50">
         <Container className="py-20 sm:py-28">
           <Eyebrow>Pricing</Eyebrow>
-          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-semibold tracking-[-0.035em] sm:text-5xl">
-            Pay for the gigs you book. Your acts are free.
-          </h2>
+          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">Pay for the gigs you book. Your acts are free.</h2>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-700">
             Pick a plan by how many gigs you book in a month. Acts, venue managers and customers never cost anything, however many you have.
           </p>

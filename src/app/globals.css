@@ -306,3 +306,139 @@ html:has(.theme-dark) body {
   --color-ink-950: #15181c;
   --color-ink-900: #1a1e22;
 }
+
+/*
+ * Movement on the public site. Everything moves like sound: level bars, drifting waves, a
+ * gentle float. Sections fade up as they scroll into view (see reveal.tsx). All of it stops
+ * for people who ask their device for less motion.
+ */
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes level {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.level-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: level 1.6s ease-in-out infinite;
+}
+.wave-drift {
+  animation: drift 18s linear infinite;
+}
+.float-slow {
+  animation: float 6s ease-in-out infinite;
+}
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+[data-reveal="shown"] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .level-bar,
+  .wave-drift,
+  .float-slow {
+    animation: none;
+  }
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* The drum machine steps under the hero: each lights as the beat passes. */
+@keyframes step {
+  0%,
+  6% {
+    background-color: var(--color-volt-400);
+    box-shadow: 0 0 8px var(--color-volt-400);
+  }
+  22%,
+  100% {
+    background-color: var(--step-base, var(--color-ink-200));
+    box-shadow: none;
+  }
+}
+@keyframes step-hit {
+  0%,
+  6% {
+    background-color: var(--color-cue-500);
+    box-shadow: 0 0 10px var(--color-cue-400);
+  }
+  22%,
+  100% {
+    background-color: var(--step-base, var(--color-ink-200));
+    box-shadow: none;
+  }
+}
+.step-light {
+  animation: step 3.2s linear infinite;
+}
+.step-light.step-hit {
+  animation-name: step-hit;
+}
+/* Small square dots on a grid behind the hero, like the marks on a sequencer. */
+.dot-grid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect x='58.5' y='58.5' width='3' height='3' fill='%23006b5b'/%3E%3C/svg%3E");
+  background-position: center top;
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-light {
+    animation: none;
+  }
+}
+/* A ripple of brighter dots spreading out from the middle, like sound from a speaker. */
+@property --ripple {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes ripple {
+  from {
+    --ripple: 0px;
+  }
+  to {
+    --ripple: 1600px;
+  }
+}
+.dot-ripple {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect x='58' y='58' width='4' height='4' fill='%2322c7a6'/%3E%3C/svg%3E");
+  background-position: center top;
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, transparent calc(var(--ripple) - 140px), #000 calc(var(--ripple) - 40px), transparent var(--ripple));
+  mask-image: radial-gradient(circle at 50% 45%, transparent calc(var(--ripple) - 140px), #000 calc(var(--ripple) - 40px), transparent var(--ripple));
+  animation: ripple 5s cubic-bezier(0.3, 0.1, 0.4, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-ripple {
+    display: none;
+  }
+}
