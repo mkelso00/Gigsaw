@@ -405,7 +405,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               gigs={e.bookings.filter((b) => b.status !== "CANCELLED")}
               links={payLinks}
               currency={t.currency}
-              ready={cardPaymentsReady(user.agency!)}
+              ready={await cardPaymentsReady(user.agency!)}
               isAdmin={user.role === "ADMIN"}
               email={e.customer?.email ?? ""}
               timezone={e.timezone}

@@ -570,7 +570,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               gigs={[booking]}
               links={booking.payLinks}
               currency={booking.currency}
-              ready={cardPaymentsReady(user.agency!)}
+              ready={await cardPaymentsReady(user.agency!)}
               isAdmin={user.role === "ADMIN"}
               email={booking.promoter?.email ?? ""}
               timezone={settings.defaultTimezone}

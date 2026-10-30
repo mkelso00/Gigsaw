@@ -11,7 +11,17 @@ import { billingState } from "@/lib/subscription";
 // Settings > Plan for a business that pays by card: its trial or subscription, how much of the
 // plan it's using this month, and changing plan.
 
-export function SubscriptionPlan({ agency, gigs, users, subscribed: justSubscribed }: { agency: Agency; gigs: number; users: number; subscribed: boolean }) {
+export async function SubscriptionPlan({
+  agency,
+  gigs,
+  users,
+  subscribed: justSubscribed,
+}: {
+  agency: Agency;
+  gigs: number;
+  users: number;
+  subscribed: boolean;
+}) {
   const b = billingState(agency);
   const m = (x: number) => formatMoney(x, CURRENCY);
   const yearly = agency.billingInterval === "year";
@@ -70,7 +80,7 @@ export function SubscriptionPlan({ agency, gigs, users, subscribed: justSubscrib
         </SettingsCard>
       </SettingsSection>
 
-      {!stripeConfigured() ? (
+      {!(await stripeConfigured()) ? (
         <SettingsCard pad>
           <p className="text-sm text-ink-500">Card payments aren&apos;t switched on yet. Your trial carries on as normal in the meantime.</p>
         </SettingsCard>

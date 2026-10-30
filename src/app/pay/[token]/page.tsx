@@ -22,7 +22,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const m = (x: number) => formatMoney(x, t.currency);
   const label = PAY_KIND_LABELS[t.kind];
   const justPaid = paid === "1";
-  const canPay = t.open && cardPaymentsReady(t.agency) && t.dueMinor > 0 && !justPaid;
+  const canPay = t.open && (await cardPaymentsReady(t.agency)) && t.dueMinor > 0 && !justPaid;
 
   return (
     <div className="min-h-screen bg-ink-50 px-4 py-10 text-ink-950">

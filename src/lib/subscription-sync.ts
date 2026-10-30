@@ -50,7 +50,7 @@ async function syncIncludedUsers(agencyId: string) {
 
 /** Make the subscription charge for however many internal users are over the plan's allowance. */
 export async function syncExtraUsers(agencyId: string) {
-  if (!stripeConfigured()) return;
+  if (!(await stripeConfigured())) return;
   const a = await prisma.agency.findUnique({ where: { id: agencyId } });
   if (!a?.stripeSubscriptionId || a.billingMode !== "STRIPE") return;
   const plan = planByKey(a.plan);

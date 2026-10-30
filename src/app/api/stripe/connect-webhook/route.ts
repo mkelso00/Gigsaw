@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { stripeKeys } from "@/lib/stripe-keys";
 import { applyAccount, recordCardPayment, type StripeAccount } from "@/lib/card-payments";
 import { prisma } from "@/lib/db";
 import { verifyWebhook } from "@/lib/stripe";
@@ -12,7 +13,7 @@ import { verifyWebhook } from "@/lib/stripe";
 type ConnectEvent = { id: string; type: string; account?: string; data: { object: Record<string, unknown> } };
 
 export async function POST(req: Request) {
-  const secret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  const secret = (await stripeKeys()).connectWebhookSecret;
   if (!secret) return NextResponse.json({ error: "Webhook not set up" }, { status: 503 });
   const body = await req.text();
   if (!verifyWebhook(body, req.headers.get("stripe-signature"), secret)) return NextResponse.json({ error: "Bad signature" }, { status: 400 });

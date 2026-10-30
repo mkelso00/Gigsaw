@@ -26,7 +26,7 @@ export async function connectStripe(_: FormState): Promise<FormState> {
   let url = "";
   const res = await handleForm(async () => {
     const user = await requireAdmin();
-    if (!stripeConfigured()) throw new FormError("Card payments aren't switched on for Gigsaw yet. Please try again later.");
+    if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on for Gigsaw yet. Please try again later.");
     const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId } });
     let account = agency.stripeAccountId;
     try {
@@ -69,7 +69,7 @@ export async function makePayLink(target: "booking" | "event", id: string, kind:
   const user = await requireStaff();
   return handleForm(async () => {
     if (!isPayKind(kind)) throw new FormError("Unknown payment");
-    if (!cardPaymentsReady(user.agency!)) throw new FormError("Connect Stripe in Settings, Card payments first.");
+    if (!(await cardPaymentsReady(user.agency!))) throw new FormError("Connect Stripe in Settings, Card payments first.");
     if (target === "booking") {
       const b = await prisma.booking.findFirst({ where: { id, agencyId: user.agencyId }, select: { id: true } });
       if (!b) throw new FormError("Booking not found");
@@ -95,7 +95,7 @@ export async function emailPayLink(linkId: string, _: FormState, form: FormData)
     const to = str(form, "to");
     if (!isEmail(to)) throw new FormError("Enter the email address to send it to");
     if (!t.open) throw new FormError("This booking is cancelled or archived, so there's nothing to pay.");
-    if (!cardPaymentsReady(t.agency)) throw new FormError("Connect Stripe in Settings, Card payments first.");
+    if (!(await cardPaymentsReady(t.agency))) throw new FormError("Connect Stripe in Settings, Card payments first.");
     if (t.dueMinor <= 0) throw new FormError("Nothing left to pay on this one.");
     const amount = formatMoney(t.dueMinor, t.currency);
     const firstName = (t.payer?.email === to ? t.payer.name : "").split(" ")[0];
@@ -137,7 +137,7 @@ export async function startCardPayment(token: string, _: FormState): Promise<For
   const res = await handleForm(async () => {
     const t = token && token.length >= 20 ? await loadPayLink({ token }) : null;
     if (!t || !t.open) throw new FormError("This link isn't valid any more. Please get in touch with us.");
-    if (!cardPaymentsReady(t.agency)) throw new FormError(`Card payments aren't available right now. Please get in touch with ${t.brand}.`);
+    if (!(await cardPaymentsReady(t.agency))) throw new FormError(`Card payments aren't available right now. Please get in touch with ${t.brand}.`);
     if (t.dueMinor <= 0) throw new FormError("There's nothing left to pay. Thank you!");
     const page = payUrl(token);
     try {

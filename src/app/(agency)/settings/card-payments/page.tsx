@@ -20,7 +20,7 @@ export default async function CardPaymentSettings({ searchParams }: { searchPara
   let agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId } });
   let problem = sp.error ? "Stripe couldn't open the setup just now. Please try again." : "";
   // Until the account can take payments, check with Stripe each time this page is opened.
-  if (agency.stripeAccountId && stripeConfigured() && (!agency.stripeChargesEnabled || sp.connected)) {
+  if (agency.stripeAccountId && (await stripeConfigured()) && (!agency.stripeChargesEnabled || sp.connected)) {
     try {
       await refreshAccount(agency.stripeAccountId);
       agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId } });
@@ -45,7 +45,7 @@ export default async function CardPaymentSettings({ searchParams }: { searchPara
         description="Venues and customers pay deposits and invoices by card from a link you send them. The money goes straight into your own Stripe account. Gigsaw takes nothing; Stripe charges its usual card fees."
       >
         <SettingsCard>
-          {!stripeConfigured() ? (
+          {!(await stripeConfigured()) ? (
             <SettingsRow icon="billing" title="Not available yet" sub="Card payments aren't switched on for Gigsaw yet. Please check back soon." />
           ) : !connected ? (
             <SettingsRow

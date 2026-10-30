@@ -12,6 +12,7 @@ import { toMinor } from "@/lib/money";
 import { internalUserCounts } from "@/lib/seat-counts";
 import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
+import { clearStripeKeyCache, STRIPE_KEY_NAMES } from "@/lib/stripe-keys";
 
 function priceFrom(form: FormData, currency: string) {
   try {
@@ -188,4 +189,42 @@ export async function setStatementPaid(statementId: string, paid: boolean) {
   await requireOwner();
   await prisma.billingStatement.update({ where: { id: statementId }, data: { status: paid ? "PAID" : "ISSUED", paidAt: paid ? new Date() : null } });
   revalidatePath("/owner", "layout");
+}
+
+/**
+ * Gigsaw's own Stripe keys, pasted in the Owner area. A blank box keeps what's saved; Remove
+ * clears it (so the server's environment variable, if any, is used again). Each key is checked
+ * for the right shape, and the secret key is tried against Stripe before it's saved.
+ */
+export async function saveStripeKeys(_: FormState, form: FormData): Promise<FormState> {
+  await requireOwner();
+  return handleForm(async () => {
+    const shapes: Record<keyof typeof STRIPE_KEY_NAMES, [RegExp, string]> = {
+      secretKey: [/^(sk|rk)_(live|test)_[A-Za-z0-9]{10,}$/, "The secret key starts with sk_live_ or sk_test_ (or rk_ for a restricted key)."],
+      webhookSecret: [/^whsec_[A-Za-z0-9]{10,}$/, "Webhook signing secrets start with whsec_."],
+      connectWebhookSecret: [/^whsec_[A-Za-z0-9]{10,}$/, "Webhook signing secrets start with whsec_."],
+    };
+    for (const k of Object.keys(STRIPE_KEY_NAMES) as (keyof typeof STRIPE_KEY_NAMES)[]) {
+      const name = STRIPE_KEY_NAMES[k];
+      if (form.get(`${k}Remove`)) {
+        await prisma.appSecret.deleteMany({ where: { key: name } });
+        continue;
+      }
+      const value = str(form, k).trim();
+      if (!value) continue;
+      if (!shapes[k][0].test(value)) throw new FormError(shapes[k][1]);
+      if (k === "secretKey") {
+        const res = await fetch(`${process.env.STRIPE_API_BASE ?? "https://api.stripe.com"}/v1/account`, {
+          headers: { Authorization: `Bearer ${value}` },
+          signal: AbortSignal.timeout(15_000),
+        }).catch(() => null);
+        if (!res) throw new FormError("Couldn't reach Stripe to check the key. Please try again.");
+        if (res.status === 401) throw new FormError("Stripe didn't accept that secret key. Copy it again from Developers, API keys.");
+      }
+      await prisma.appSecret.upsert({ where: { key: name }, create: { key: name, value }, update: { value } });
+    }
+    clearStripeKeyCache();
+    revalidatePath("/owner/stripe");
+    return { ok: "Saved. Stripe will use these keys straight away." };
+  });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { stripeKeys } from "@/lib/stripe-keys";
 import { prisma } from "@/lib/db";
 import { stripe, verifyWebhook } from "@/lib/stripe";
 import { applySubscription, type StripeSubscription } from "@/lib/subscription-sync";
@@ -8,7 +9,7 @@ import { applySubscription, type StripeSubscription } from "@/lib/subscription-s
 // customer.subscription.created, .updated and .deleted. Its signing secret is STRIPE_WEBHOOK_SECRET.
 
 export async function POST(req: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = (await stripeKeys()).webhookSecret;
   if (!secret) return NextResponse.json({ error: "Webhook not set up" }, { status: 503 });
   const body = await req.text();
   if (!verifyWebhook(body, req.headers.get("stripe-signature"), secret)) return NextResponse.json({ error: "Bad signature" }, { status: 400 });

@@ -20,7 +20,7 @@ async function billingAgency() {
   const user = await requireAdmin();
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId! } });
   if (agency.billingMode !== "STRIPE") throw new FormError("Your plan is billed by invoice. Get in touch to change it.");
-  if (!stripeConfigured()) throw new FormError("Card payments aren't switched on yet. Please try again later.");
+  if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on yet. Please try again later.");
   return { user, agency };
 }
 
@@ -102,7 +102,7 @@ export async function changePlan(_: FormState, form: FormData): Promise<FormStat
     if (!agency.stripeSubscriptionId || agency.subscriptionStatus === "CANCELED") {
       await prisma.agency.update({ where: { id: agency.id }, data: { plan: plan.key, billingInterval: interval, includedUsers: plan.includedUsers } });
     } else {
-      if (!stripeConfigured()) throw new FormError("Card payments aren't switched on yet.");
+      if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on yet.");
       const sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`);
       const planItem = sub.items.data.find((i) => {
         const k = parseLookupKey(i.price.lookup_key);

@@ -14,8 +14,8 @@ import { formatDate } from "./time";
 // then made on the agency's account (the Stripe-Account header), so the money is theirs.
 
 /** An agency can take card payments: Stripe is set up for Gigsaw and the agency's account can charge cards. */
-export function cardPaymentsReady(a: { stripeAccountId: string | null; stripeChargesEnabled: boolean }) {
-  return stripeConfigured() && !!a.stripeAccountId && a.stripeChargesEnabled;
+export async function cardPaymentsReady(a: { stripeAccountId: string | null; stripeChargesEnabled: boolean }) {
+  return (await stripeConfigured()) && !!a.stripeAccountId && a.stripeChargesEnabled;
 }
 
 /** The client sees the act's name, or a polite placeholder while the gig has no act yet. */

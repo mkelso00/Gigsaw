@@ -36,7 +36,7 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
   const received = receivedOnInvoice(e.bookings.flatMap((b) => b.payments));
   // The card payment link, if one's been made and there's something to pay.
   const payLink =
-    t.outstanding > 0 && cardPaymentsReady(user.agency!)
+    t.outstanding > 0 && (await cardPaymentsReady(user.agency!))
       ? await prisma.payLink.findFirst({ where: { eventId: e.id, kind: "BALANCE", agencyId: user.agencyId } })
       : null;
   const money = (m: number) => formatMoney(m, t.currency);

@@ -9,6 +9,7 @@ export const metadata: Metadata = { title: { default: "Owner", template: "%s · 
 const LINKS = [
   ["/owner", "Businesses"],
   ["/owner/billing", "Billing"],
+  ["/owner/stripe", "Stripe"],
   ["/owner/messages", "Outbox"],
 ];
 

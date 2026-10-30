@@ -20,7 +20,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const money = (m: number) => formatMoney(m, b.currency);
   // The card payment link, if one's been made and there's something to pay.
   const payLink =
-    balance > 0 && cardPaymentsReady(user.agency!)
+    balance > 0 && (await cardPaymentsReady(user.agency!))
       ? await prisma.payLink.findFirst({ where: { bookingId: b.id, kind: "BALANCE", agencyId: b.agencyId } })
       : null;
 

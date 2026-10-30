@@ -1,14 +1,16 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { stripeKeys } from "./stripe-keys";
 import { CURRENCY, EXTRA_USER_MONTHLY_MINOR, EXTRA_USER_YEARLY_MINOR, planByKey, type PlanKey } from "./plans";
 
-// A small Stripe client over its REST API (no SDK needed). Setup is just two settings on the
-// server: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET. Products and prices are made in Stripe
+// A small Stripe client over its REST API (no SDK needed). Setup is just the secret key and the
+// webhook secret, pasted in the Owner area → Stripe (or set as STRIPE_SECRET_KEY and
+// STRIPE_WEBHOOK_SECRET on the server). Products and prices are made in Stripe
 // the first time they're needed, found again by their lookup key, so nothing has to be set up
 // by hand in the Stripe dashboard. A price change in src/lib/plans.ts makes a new Stripe price;
 // existing subscriptions keep theirs until the plan is changed.
 
-export const stripeConfigured = () => !!process.env.STRIPE_SECRET_KEY;
+export const stripeConfigured = async () => !!(await stripeKeys()).secretKey;
 
 export class StripeError extends Error {
   constructor(
@@ -51,7 +53,7 @@ export async function stripe<T = Record<string, unknown>>(
   params: Params = {},
   opts: { account?: string } = {},
 ): Promise<T> {
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = (await stripeKeys()).secretKey;
   if (!key) throw new StripeError("Stripe isn't connected yet");
   const body = encodeForm(params);
   // STRIPE_API_BASE is only for testing against a stand-in server.
