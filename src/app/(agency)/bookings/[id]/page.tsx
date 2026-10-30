@@ -207,9 +207,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <ArrivalPanel booking={booking} arrival={arrival} settings={settings} />
 
           <section className="card card-pad">
-            <h2 className="section-title mb-4">Log a check-in for the artist</h2>
+            <h2 className="section-title mb-4">Log a check-in for the act</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Use this if the artist can&apos;t use the app, for example the promoter rang to say they&apos;re in. It is marked as logged by the agency.
+              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as logged by you.
             </p>
             <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
               <Field label="Type">
@@ -224,7 +224,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <Field label="Date">
                 <input type="date" name="date" defaultValue={localDateKey(now, tz)} className="input" />
               </Field>
-              <Field label={`Time (${zone})`} hint="Blank means now">
+              <Field label={`Time (${zone})`}>
                 <input type="time" name="time" className="input" />
               </Field>
               <Field label="Note">
