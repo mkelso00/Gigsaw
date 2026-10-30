@@ -14,11 +14,14 @@ import {
   updateEventPlan,
 } from "@/actions/events";
 import { CopyField } from "@/components/client-bits";
+import { ContractPanel } from "@/components/contract-panel";
 import { EventForm } from "@/components/event-form";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArtistDot, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { BOOKING_STATUS_LABELS, actName } from "@/lib/constants";
+import { contractState, eventContractDoc } from "@/lib/contract-doc";
+import { contractStatusFor } from "@/lib/contracts";
 import { getSettings, prisma } from "@/lib/db";
 import { eventFormOptions } from "@/lib/event-options";
 import { PLAN_FIELDS, daysBetween, type EventMessage } from "@/lib/event-plan";
@@ -60,6 +63,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const where = e.venue ? `${e.venue.name}${e.venue.city ? `, ${e.venue.city}` : ""}` : e.venueText;
   const emailsOn = e.autoEmails && settings.eventEmails;
   const lastBooking = e.bookings.at(-1);
+  const contractDoc = eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings);
+  const contract = await contractStatusFor(user.agencyId, { kind: "event", id: e.id }, contractDoc);
+  const contractSigned = contractState(contract.current) === "SIGNED" && !contract.changes.length;
 
   return (
     <div>
@@ -70,9 +76,14 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         actions={
           <>
             {e.bookings.length > 0 && (
-              <Link href={`/print/events/${e.id}/invoice`} className="btn" target="_blank">
-                Invoice
-              </Link>
+              <>
+                <Link href={`/print/events/${e.id}/contract`} className="btn" target="_blank">
+                  Contract
+                </Link>
+                <Link href={`/print/events/${e.id}/invoice`} className="btn" target="_blank">
+                  Invoice
+                </Link>
+              </>
             )}
             {e.customer && (
               <Link href={`/contacts/${e.customer.id}`} className="btn">
@@ -263,7 +274,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             <h2 className="section-title mb-3">Checklist</h2>
             <ul className="space-y-1">
               {tasks.map((task) => {
-                const auto = autoDone(task.key, e, t, sent);
+                const auto = autoDone(task.key, e, t, sent, contractSigned);
                 const done = !!task.doneAt || auto;
                 const late = !done && task.dueDate && task.dueDate < today;
                 return (
@@ -304,6 +315,15 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <input name="dueDate" type="date" aria-label="Due date" className="input col-span-2" />
             </ActionForm>
           </section>
+
+          <ContractPanel
+            kind="event"
+            id={e.id}
+            status={contract}
+            timeZone={e.timezone}
+            signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
+            previewHref={`/print/events/${e.id}/contract`}
+          />
 
           <section className="card card-pad">
             <h2 className="section-title">Customer&apos;s planner</h2>

@@ -51,6 +51,7 @@ model Agency {
   people       Person[]
   events       Event[]
   applications ActApplication[]
+  contracts    Contract[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -357,8 +358,9 @@ model Booking {
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
 
-  payments Payment[]
-  checkIns CheckIn[]
+  payments  Payment[]
+  checkIns  CheckIn[]
+  contracts Contract[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -599,6 +601,7 @@ model Event {
   updatedAt  DateTime    @updatedAt
   bookings   Booking[]
   tasks      EventTask[]
+  contracts  Contract[]
 
   @@index([agencyId, date])
 }
@@ -667,4 +670,40 @@ model ActApplication {
   passwordHash      String
 
   @@index([agencyId, status])
+}
+
+// A contract sent to the client to sign online, for one booking or for a whole wedding or event
+// (every act in one contract). The client opens a private link (/c/<token>), types their name and
+// draws a signature. Once signed it is locked: what they saw is kept, with a SHA-256 hash of it.
+model Contract {
+  id          String    @id @default(cuid())
+  agencyId    String
+  agency      Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  bookingId   String?
+  booking     Booking?  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  eventId     String?
+  event       Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  status      String    @default("SENT") // SENT | SIGNED | CANCELLED
+  // Who it was sent to (the booking's payer or the event's customer, unless changed).
+  contactId   String?
+  signerName  String
+  signerEmail String
+  sentById    String?
+  sentAt      DateTime  @default(now())
+  viewedAt    DateTime?
+  cancelledAt DateTime?
+  // Filled in when signed. The signature is a PNG data URL; content is the contract as they saw it.
+  signedAt    DateTime?
+  signedName  String    @default("")
+  signature   String    @default("")
+  signedIp    String    @default("")
+  signedAgent String    @default("")
+  contentHash String    @default("")
+  content     Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([agencyId])
+  @@index([bookingId])
+  @@index([eventId])
 }

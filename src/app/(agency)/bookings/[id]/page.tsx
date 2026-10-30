@@ -16,10 +16,13 @@ import { CopyBooking } from "@/components/copy-booking";
 import { appUrl } from "@/lib/messaging";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
+import { ContractPanel } from "@/components/contract-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { buildChecklist } from "@/lib/checklist";
+import { bookingContractDoc, contractState } from "@/lib/contract-doc";
+import { contractStatusFor, contractSubject, type ContractTarget } from "@/lib/contracts";
 import { linkedActIds } from "@/lib/people";
 import {
   BOOKING_STATUSES,
@@ -95,10 +98,19 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     }),
   ]);
 
+  // A gig inside a wedding or event is covered by the event's contract.
+  const contractTarget: ContractTarget = booking.eventId ? { kind: "event", id: booking.eventId } : { kind: "booking", id: booking.id };
+  const contractDoc = booking.eventId ? (await contractSubject(user.agencyId, contractTarget))?.doc : bookingContractDoc(booking, settings);
+  const contract = contractDoc ? await contractStatusFor(user.agencyId, contractTarget, contractDoc) : null;
+
   const deal = dealBreakdown(booking);
   const totals = paymentTotals(booking.payments);
   const checklist = buildChecklist(
-    { ...booking, linkedArtistIds: linked },
+    {
+      ...booking,
+      linkedArtistIds: linked,
+      contract: contract ? { state: contractState(contract.current), changed: contract.changes.length > 0 } : null,
+    },
     others.map((o) => ({ ...o, artistName: actName(o) })),
     totals.depositReceivedMinor,
     now,
@@ -209,7 +221,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <section className="card card-pad">
             <h2 className="section-title mb-4">Log a check-in for the act</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as logged by you.
+              Use this if the act can&apos;t use the app, for example the venue rang to say they&apos;re in. Leave the time blank for now. It is marked as
+              logged by you.
             </p>
             <ActionForm action={logCheckInForArtist.bind(null, booking.id)} className="grid gap-3 sm:grid-cols-5 sm:items-end">
               <Field label="Type">
@@ -415,6 +428,18 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </section>
+
+          {contract && (
+            <ContractPanel
+              kind={contractTarget.kind}
+              id={contractTarget.id}
+              status={contract}
+              timeZone={tz}
+              signer={booking.promoter ? { name: booking.promoter.name, email: booking.promoter.email } : null}
+              previewHref={booking.event ? `/print/events/${booking.event.id}/contract` : `/print/bookings/${booking.id}/contract`}
+              partOf={booking.event ? { href: `/events/${booking.event.id}`, name: booking.event.name } : undefined}
+            />
+          )}
 
           <section className="card card-pad">
             <h2 className="section-title mb-3">Checklist</h2>

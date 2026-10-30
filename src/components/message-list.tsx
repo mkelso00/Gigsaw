@@ -9,6 +9,7 @@ const KIND: Record<string, string> = {
   BOOKING_CHANGE: "Artist: gig booked or changed",
   REMINDER: "Artist: gig reminder",
   EVENT: "Wedding or event",
+  CONTRACT: "Contract to sign",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {

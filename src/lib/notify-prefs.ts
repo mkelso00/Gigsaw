@@ -4,6 +4,7 @@ export const STAFF_ALERTS = [
   { key: "LATE", label: "An act is late", hint: "When a gig's call time passes with no check-in.", channels: ["email", "text"] },
   { key: "DECLINED", label: "An act turns down a gig", hint: "So you can find someone else.", channels: ["email", "text"] },
   { key: "ACCEPTED", label: "An act accepts a gig", hint: "The gig is confirmed straight away.", channels: ["email"] },
+  { key: "SIGNED", label: "A customer signs a contract", hint: "Bookings and weddings where you're the lead agent.", channels: ["email"] },
   { key: "PLANNER", label: "A customer fills in their planner", hint: "Weddings and events: the running order and details are in.", channels: ["email"] },
 ] as const;
 

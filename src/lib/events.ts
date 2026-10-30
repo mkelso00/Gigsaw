@@ -53,8 +53,16 @@ export function eventTotals(bookings: MoneyBooking[]) {
 }
 
 /** Checklist items that tick themselves once the thing has happened. */
-export function autoDone(key: string, e: { plannerDoneAt: Date | null }, totals: ReturnType<typeof eventTotals>, sent: Set<string>): boolean {
+export function autoDone(
+  key: string,
+  e: { plannerDoneAt: Date | null },
+  totals: ReturnType<typeof eventTotals>,
+  sent: Set<string>,
+  contractSigned = false,
+): boolean {
   switch (key as TaskKey) {
+    case "CONTRACT":
+      return contractSigned;
     case "DEPOSIT":
       return totals.received > 0;
     case "PLANNER":
