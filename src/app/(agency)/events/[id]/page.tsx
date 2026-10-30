@@ -326,6 +326,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             timeZone={e.timezone}
             signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
             previewHref={`/print/events/${e.id}/contract`}
+            agencySigned={!!settings.signatureImage}
           />
 
           <section className="card card-pad">

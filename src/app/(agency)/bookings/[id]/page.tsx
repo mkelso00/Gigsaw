@@ -492,6 +492,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               signer={booking.promoter ? { name: booking.promoter.name, email: booking.promoter.email } : null}
               previewHref={booking.event ? `/print/events/${booking.event.id}/contract` : `/print/bookings/${booking.id}/contract`}
               partOf={booking.event ? { href: `/events/${booking.event.id}`, name: booking.event.name } : undefined}
+              agencySigned={!!settings.signatureImage}
             />
           )}
 

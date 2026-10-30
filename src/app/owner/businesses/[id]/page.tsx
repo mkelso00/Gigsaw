@@ -5,7 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Badge, SettingsCard, SettingsSection } from "@/components/settings-ui";
-import { Field, Stat } from "@/components/ui";
+import { Field } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { gigMonth, monthLabel, monthSearchWindow, notBilledReason, shiftMonth } from "@/lib/billing";
 import { formatDate } from "@/lib/time";
@@ -35,7 +35,8 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
 
   // Usage for the last six months, newest first.
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const months = Array.from({ length: 6 }, (_, i) => shiftMonth(thisMonth, -i));
+  // A year at a glance: the last three months, this one and the next eight (bookings already on the books).
+  const months = Array.from({ length: 12 }, (_, i) => shiftMonth(thisMonth, i - 3));
   const usage = await Promise.all(months.map((m) => usageForMonth(m, agency.id).then((u) => u.get(agency.id)?.count ?? 0)));
   // Every booking this month, demo and archived included, with whether it's counted and why not.
   const now = new Date();
@@ -98,11 +99,39 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
       )}
 
       <div className="space-y-10">
-        <SettingsSection title="Usage" description="Billable bookings and what they come to, with internal users included.">
-          <div className="grid grid-cols-3 gap-3">
-            {usage.slice(0, 3).map((n, i) => (
-              <Stat key={months[i]} label={monthLabel(months[i])} value={n} hint={money(n * agency.pricePerGigMinor + seats.monthlyMinor)} />
-            ))}
+        <SettingsSection title="Usage" description="Bookings that count each month, from three months ago to eight months ahead.">
+          <div className="card overflow-x-auto">
+            <div className="flex min-w-[640px] items-end gap-1 px-4 pt-5 pb-3">
+              {months.map((m, i) => {
+                const n = usage[i];
+                const top = Math.max(1, ...usage);
+                const current = m === thisMonth;
+                const future = m > thisMonth;
+                return (
+                  <div
+                    key={m}
+                    className="flex flex-1 flex-col items-center gap-1.5"
+                    title={`${monthLabel(m)}: ${n} booking${n === 1 ? "" : "s"}, ${money(n * agency.pricePerGigMinor + seats.monthlyMinor)}`}
+                  >
+                    <span className={`font-mono text-xs tabular-nums ${n ? "text-ink-950" : "text-ink-300"}`}>{n}</span>
+                    <span className="flex h-16 w-full items-end justify-center">
+                      <span
+                        className={`w-3/5 rounded-t ${current ? "bg-volt-400 shadow-[0_0_8px_var(--color-volt-400)]" : future ? "bg-volt-200" : "bg-ink-300"}`}
+                        style={{ height: `${n ? Math.max(8, (n / top) * 100) : 4}%` }}
+                      />
+                    </span>
+                    <span className={`font-mono text-[10px] tracking-[0.08em] uppercase ${current ? "font-semibold text-ink-950" : "text-ink-400"}`}>
+                      {monthLabel(m).slice(0, 3)}
+                      {m.endsWith("-01") ? ` ${m.slice(2, 4)}` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="border-t border-ink-100 px-4 py-2.5 text-xs text-ink-500">
+              This month so far: <span className="font-mono font-semibold text-ink-950">{money(usage[3] * agency.pricePerGigMinor + seats.monthlyMinor)}</span>.
+              Pale bars are bookings already made for the months ahead; they&apos;re billed in their own month.
+            </p>
           </div>
           {monthRows.length > 0 && (
             <details className="mt-3">

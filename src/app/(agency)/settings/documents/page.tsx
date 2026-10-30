@@ -26,6 +26,7 @@ export default async function DocumentSettings() {
           </SettingsCard>
         </SettingsSection>
         <SettingsSection
+          id="signature"
           title="Your signature"
           description="Signed on your side of every contract, printed or sent to sign online. Draw it once here with your mouse, finger or a pen."
         >

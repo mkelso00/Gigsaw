@@ -26,6 +26,7 @@ export function ContractPanel({
   signer,
   previewHref,
   partOf,
+  agencySigned = true,
 }: {
   kind: "booking" | "event";
   id: string;
@@ -36,6 +37,8 @@ export function ContractPanel({
   previewHref: string;
   /** Set on a booking inside a wedding or event: its contract is the event's, managed there. */
   partOf?: { href: string; name: string };
+  /** Whether the business has drawn its own signature (Settings → Contracts and invoices). */
+  agencySigned?: boolean;
 }) {
   const { current, changes, earlier } = status;
   const state = contractState(current);
@@ -121,6 +124,15 @@ export function ContractPanel({
                 Cancel the contract
               </ConfirmButton>
             </form>
+          )}
+          {!agencySigned && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Your side isn&apos;t signed yet: your name shows in a handwriting style.{" "}
+              <a href="/settings/documents#signature" className="font-medium underline">
+                Draw your signature
+              </a>{" "}
+              once and it goes on every contract.
+            </p>
           )}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <a href={previewHref} target="_blank" className="link">
