@@ -5,6 +5,8 @@ import { createSession, hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { addDemoData } from "@/lib/demo";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
+import { PROVIDERS } from "@/lib/oauth";
+import { clearPendingSignup, pendingSignup, userByEmail } from "@/lib/oauth-flow";
 import { EXTRA_USER_YEARLY_MINOR, planByKey, PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -15,15 +17,20 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
     if (str(form, "company_site")) return; // a hidden field only bots fill in
     const name = required(form, "business", "Business name");
     const adminName = required(form, "name", "Your name");
-    const email = required(form, "email", "Email").toLowerCase();
+    // Signed up with Google or Microsoft: the email is the one they confirmed, and no password is needed.
+    const linked = await pendingSignup();
+    const email = linked ? linked.email : required(form, "email", "Email").toLowerCase();
     if (!isEmail(email)) throw new FormError("Check your email address");
     const password = str(form, "password");
-    if (password.length < 8) throw new FormError("Choose a password of at least 8 characters");
-    if (await prisma.user.findUnique({ where: { email } })) throw new FormError("That email already has a Gigsaw login. Sign in instead.");
+    if (!linked && password.length < 8) throw new FormError("Choose a password of at least 8 characters");
+    if (await userByEmail(email)) throw new FormError("That email already has a Gigsaw login. Sign in instead.");
+    if (linked && (await prisma.linkedAccount.findFirst({ where: { provider: PROVIDERS[linked.provider].db, subject: linked.subject } }))) {
+      throw new FormError(`That ${PROVIDERS[linked.provider].label} account already has a Gigsaw login. Sign in instead.`);
+    }
     if (str(form, "terms") !== "on") throw new FormError("Please agree to the terms to carry on");
     const plan = planByKey(str(form, "plan")) ?? PLANS[1];
     const interval = str(form, "interval") === "year" ? "year" : "month";
-    const passwordHash = await hashPassword(password);
+    const passwordHash = linked ? "" : await hashPassword(password);
 
     const admin = await prisma.$transaction(async (tx) => {
       const agency = await tx.agency.create({
@@ -40,8 +47,21 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
         },
       });
       await tx.settings.create({ data: { agencyId: agency.id, agencyName: name, agencyEmail: email } });
-      return tx.user.create({ data: { email, name: adminName, role: "ADMIN", agencyId: agency.id, passwordHash, phone: str(form, "phone") } });
+      return tx.user.create({
+        data: {
+          email,
+          name: adminName,
+          role: "ADMIN",
+          agencyId: agency.id,
+          passwordHash,
+          phone: str(form, "phone"),
+          linkedAccounts: linked
+            ? { create: { provider: PROVIDERS[linked.provider].db, subject: linked.subject, email: linked.email, lastUsedAt: new Date() } }
+            : undefined,
+        },
+      });
     });
+    if (linked) await clearPendingSignup();
     if (str(form, "demo") === "on") await addDemoData(prisma, { agencyId: admin.agencyId!, leadAgentId: admin.id });
     await prisma.activity.create({
       data: {

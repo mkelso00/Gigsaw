@@ -140,8 +140,14 @@ model User {
   // Which alerts this internal user wants, by kind and channel, e.g. { "LATE": { "text": false } }.
   // Anything not mentioned is on.
   notifyPrefs  Json     @default("{}")
+  // Calendar sync for staff: a private feed of bookings at /api/calendar/team/<token>. Null means not set up.
+  calendarToken    String? @unique
+  calendarScope    String  @default("MINE") // MINE (bookings where they're lead agent) | ALL
+  // Statuses to include, comma separated, e.g. "CONFIRMED,SETTLED". Blank means all (never cancelled or archived).
+  calendarStatuses String  @default("")
 
   sessions          Session[]
+  linkedAccounts    LinkedAccount[]
   passwordResets    PasswordReset[]
   managedArtists    Artist[]           @relation("ArtistAgent")
   bookingsCreated   Booking[]          @relation("BookingCreator")
@@ -150,6 +156,22 @@ model User {
   checkIns          CheckIn[]
   activity          Activity[]
   pushSubscriptions PushSubscription[]
+}
+
+// A Google or Microsoft account someone signs in with. Matched by the provider's subject id,
+// which never changes, so a later change of email at either end doesn't break the link.
+model LinkedAccount {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String // GOOGLE | MICROSOFT
+  subject    String // the provider's id for the account (the id_token's "sub")
+  email      String    @default("") // as the provider gave it when connected, to show on Profile
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
 }
 
 model Session {
