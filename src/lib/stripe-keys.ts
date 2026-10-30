@@ -18,7 +18,8 @@ let cache: { at: number; keys: StripeKeys; source: StripeKeySource } | null = nu
 
 async function load() {
   if (cache && Date.now() - cache.at < 30_000) return cache;
-  const rows = await prisma.appSecret.findMany({ where: { key: { in: Object.values(STRIPE_KEY_NAMES) } } });
+  // If the database can't be read, carry on with the server's own variables rather than failing.
+  const rows = await prisma.appSecret.findMany({ where: { key: { in: Object.values(STRIPE_KEY_NAMES) } } }).catch(() => []);
   const saved = new Map(rows.map((r) => [r.key, r.value]));
   const env = {
     secretKey: process.env.STRIPE_SECRET_KEY ?? "",
