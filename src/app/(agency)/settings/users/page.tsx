@@ -65,8 +65,8 @@ export default async function UsersSettings() {
             <Field label="Mobile" hint="Optional. Used for texts about late acts on their gigs.">
               <input name="phone" type="tel" className="input" />
             </Field>
-            <Field label="Password" hint="At least 8 characters. Send it to them; they can change it in their profile.">
-              <input name="password" type="text" minLength={8} required className="input" autoComplete="new-password" />
+            <Field label="Password" hint="Optional. Leave blank and we email them a welcome with a link to set their own.">
+              <input name="password" type="text" minLength={8} className="input" autoComplete="new-password" />
             </Field>
             <Field label="Role" hint="Admins can also change settings and users">
               <select name="role" className="input">
@@ -74,7 +74,11 @@ export default async function UsersSettings() {
                 <option value="ADMIN">Admin</option>
               </select>
             </Field>
-            <div className="flex justify-end border-t border-ink-100 pt-4 sm:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-100 pt-4 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-ink-600">
+                <input type="checkbox" name="welcome" defaultChecked />
+                Send them a welcome email
+              </label>
               <SubmitButton pendingText="Adding…">Add user</SubmitButton>
             </div>
           </ActionForm>

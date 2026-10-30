@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { addAgencyAdmin, resetUserPassword, setStatementPaid, updateAgency } from "@/actions/owner";
+import { addAgencyAdmin, resendWelcome, resetUserPassword, setStatementPaid, updateAgency } from "@/actions/owner";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field, PageHeader, Stat } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
@@ -47,7 +47,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
       />
       {created && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Business created. Send the admin their email and password, and the web address of this site. They sign in at /login.
+          Business created. If you ticked the welcome email, the admin has a link to set their password and sign in. They can also sign in at /login.
         </div>
       )}
 
@@ -146,7 +146,13 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                   <span>
                     <strong>{u.name}</strong> · {u.email} · {u.role === "ADMIN" ? "Admin" : "Agent"}
                     {u.isOwner && <span className="badge ml-2 bg-slate-900 text-white">Owner</span>}
+                    {!u.passwordHash && <span className="badge ml-2 bg-amber-100 text-amber-800">Hasn&apos;t set a password yet</span>}
                   </span>
+                  {!u.isOwner && (
+                    <form action={resendWelcome.bind(null, u.id)}>
+                      <button className="btn btn-sm">Send welcome email again</button>
+                    </form>
+                  )}
                 </div>
                 {!u.isOwner && (
                   <details className="mt-2">
@@ -165,8 +171,8 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
           <ActionForm action={addAgencyAdmin.bind(null, agency.id)} className="grid gap-2 sm:grid-cols-4 sm:items-end">
             <input name="name" required placeholder="Name" className="input" />
             <input name="email" type="email" required placeholder="Email" className="input" />
-            <input name="password" type="text" minLength={8} required placeholder="Password" autoComplete="off" className="input" />
-            <SubmitButton>Add</SubmitButton>
+            <input name="password" type="text" minLength={8} placeholder="Password (or leave blank)" autoComplete="off" className="input" />
+            <SubmitButton>Add and welcome</SubmitButton>
           </ActionForm>
         </section>
       </div>

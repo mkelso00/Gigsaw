@@ -11,7 +11,10 @@ export default async function NewAgencyPage() {
   await requireOwner();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="New business" subtitle="Creates the business and its first admin login. Send them the email and password to get started." />
+      <PageHeader
+        title="New business"
+        subtitle="Creates the business and its first admin login, and emails them a welcome with a link to set their password."
+      />
       <ActionForm action={createAgency} className="space-y-6">
         <section className="card card-pad space-y-4">
           <h2 className="section-title">Company</h2>
@@ -52,10 +55,14 @@ export default async function NewAgencyPage() {
             <Field label="Email">
               <input name="adminEmail" type="email" required className="input" />
             </Field>
-            <Field label="Password" hint="At least 8 characters">
-              <input name="password" type="text" required minLength={8} autoComplete="off" className="input" />
+            <Field label="Password" hint="Optional. Leave blank and they set their own from the welcome email.">
+              <input name="password" type="text" minLength={8} autoComplete="off" className="input" />
             </Field>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="welcome" defaultChecked className="h-4 w-4" />
+            Send a welcome email with a link to set their password and sign in
+          </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="demo" className="h-4 w-4" />
             Fill with demo data so they can explore (they can remove it from Settings). Demo gigs are never billed.

@@ -10,6 +10,7 @@ import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
 import { emailConfigured, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
 import { isHhmm } from "@/lib/reminder-time";
+import { sendWelcome } from "@/lib/welcome";
 import { toMinor } from "@/lib/money";
 import { TEMPLATES } from "@/lib/message-templates";
 import { prefsFromForm } from "@/lib/notify-prefs";
@@ -116,8 +117,9 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
   const admin = await requireAdmin();
   return handleForm(async () => {
     const email = required(form, "email", "Email").toLowerCase();
-    const password = required(form, "password", "Password");
-    if (password.length < 8) throw new FormError("Password must be at least 8 characters");
+    // No password: they set their own from the welcome email.
+    const password = str(form, "password");
+    if (password && password.length < 8) throw new FormError("Password must be at least 8 characters");
     if (await prisma.user.findUnique({ where: { email } })) throw new FormError("That email already has a login");
     const role = str(form, "role") === "ADMIN" ? "ADMIN" : "AGENT";
     const u = await prisma.user.create({
@@ -127,13 +129,18 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
         phone: str(form, "phone"),
         role,
         agencyId: admin.agencyId,
-        passwordHash: await hashPassword(password),
+        passwordHash: password ? await hashPassword(password) : "",
       },
     });
     await logActivity(admin, "USER", u.id, "added team member", `${u.name} (${role.toLowerCase()})`);
     await syncExtraUsersQuietly(admin.agencyId!);
+    const welcome = !password || !!form.get("welcome");
+    if (welcome) {
+      const s = await prisma.settings.findUnique({ where: { agencyId: admin.agencyId! }, select: { agencyName: true } });
+      await sendWelcome({ user: u, business: s?.agencyName || "your business", invitedBy: admin.name });
+    }
     revalidatePath("/settings");
-    return { ok: `${u.name} can now sign in.` };
+    return { ok: welcome ? `Welcome email sent to ${u.email}. They'll set their own password.` : `${u.name} can now sign in.` };
   });
 }
 

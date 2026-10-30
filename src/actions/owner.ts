@@ -13,6 +13,7 @@ import { internalUserCounts } from "@/lib/seat-counts";
 import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
 import { clearStripeKeyCache, STRIPE_KEY_NAMES } from "@/lib/stripe-keys";
+import { sendWelcome } from "@/lib/welcome";
 
 function priceFrom(form: FormData, currency: string) {
   try {
@@ -39,6 +40,14 @@ function seatsFrom(form: FormData, currency: string) {
   return { includedUsers: included, extraUserYearlyMinor: yearly };
 }
 
+/** A password if one was typed, or none ("") when they'll set their own from the welcome email. */
+async function optionalPasswordHash(form: FormData) {
+  const password = str(form, "password");
+  if (!password) return "";
+  if (password.length < 8) throw new FormError("Password must be at least 8 characters");
+  return hashPassword(password);
+}
+
 async function newPasswordHash(form: FormData) {
   const password = required(form, "password", "Password");
   if (password.length < 8) throw new FormError("Password must be at least 8 characters");
@@ -60,7 +69,8 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
     const adminName = required(form, "adminName", "Admin name");
     const adminEmail = required(form, "adminEmail", "Admin email").toLowerCase();
     await emailFree(adminEmail);
-    const passwordHash = await newPasswordHash(form);
+    const passwordHash = await optionalPasswordHash(form);
+    if (!passwordHash && !form.get("welcome")) throw new FormError("Set a password, or tick Send a welcome email so they can set their own");
 
     const { agency, admin } = await prisma.$transaction(async (tx) => {
       const agency = await tx.agency.create({
@@ -78,6 +88,7 @@ export async function createAgency(_: FormState, form: FormData): Promise<FormSt
       return { agency, admin };
     });
     if (str(form, "demo") === "on") await addDemoData(prisma, { agencyId: agency.id, leadAgentId: admin.id });
+    if (form.get("welcome")) await sendWelcome({ user: admin, business: name });
     await logActivity({ id: owner.id, agencyId: agency.id }, "AGENCY", agency.id, "agency created by Gigsaw", name);
     id = agency.id;
   });
@@ -117,12 +128,13 @@ export async function addAgencyAdmin(agencyId: string, _: FormState, form: FormD
   return handleForm(async () => {
     const email = required(form, "email", "Email").toLowerCase();
     await emailFree(email);
-    await prisma.agency.findUniqueOrThrow({ where: { id: agencyId } });
-    await prisma.user.create({
-      data: { email, name: required(form, "name", "Name"), role: "ADMIN", agencyId, passwordHash: await newPasswordHash(form) },
-    });
+    const agency = await prisma.agency.findUniqueOrThrow({ where: { id: agencyId } });
+    const passwordHash = await optionalPasswordHash(form);
+    const user = await prisma.user.create({ data: { email, name: required(form, "name", "Name"), role: "ADMIN", agencyId, passwordHash } });
+    // With no password typed, the welcome email is how they get in.
+    if (!passwordHash || form.get("welcome")) await sendWelcome({ user, business: agency.name });
     revalidatePath(`/owner/businesses/${agencyId}`);
-    return { ok: `${email} can now sign in as an admin of this agency.` };
+    return { ok: passwordHash ? `${email} can now sign in as an admin.` : `Welcome email sent to ${email}. They'll set their own password.` };
   });
 }
 
@@ -227,4 +239,13 @@ export async function saveStripeKeys(_: FormState, form: FormData): Promise<Form
     revalidatePath("/owner/stripe");
     return { ok: "Saved. Stripe will use these keys straight away." };
   });
+}
+
+/** Send someone's welcome email again, with a fresh set-your-password link. */
+export async function resendWelcome(userId: string) {
+  const owner = await requireOwner();
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { agency: { select: { name: true } } } });
+  await sendWelcome({ user, business: user.agency?.name ?? "Gigsaw" });
+  await logActivity({ id: owner.id, agencyId: user.agencyId }, "USER", user.id, "welcome email sent again", user.email);
+  revalidatePath(`/owner/businesses/${user.agencyId}`);
 }

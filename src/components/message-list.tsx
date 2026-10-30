@@ -4,6 +4,7 @@ import { formatDateTime } from "@/lib/time";
 
 const KIND: Record<string, string> = {
   PASSWORD_RESET: "Password reset",
+  WELCOME: "Welcome",
   OVERDUE_ALERT: "Overdue alert",
   CLIENT_ARRIVAL: "Client: artist arrived",
   BOOKING_CHANGE: "Artist: gig booked or changed",

@@ -8,12 +8,20 @@ import { findUsableReset } from "@/lib/reset";
 export const metadata: Metadata = { title: "Choose a new password" };
 export const dynamic = "force-dynamic";
 
-export default async function ResetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function ResetPasswordPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ welcome?: string }> }) {
   const { token } = await params;
+  const welcome = (await searchParams).welcome === "1";
   const reset = await findUsableReset(token);
   if (!reset) {
     return (
-      <AuthShell title="This link has expired" subtitle="Reset links work once, for one hour. Ask for a new one and use the latest email.">
+      <AuthShell
+        title="This link has expired"
+        subtitle={
+          welcome
+            ? "Welcome links work once, for 7 days. Ask for a new one below, or ask whoever added you to send it again."
+            : "Reset links work once, for one hour. Ask for a new one and use the latest email."
+        }
+      >
         <Link href="/forgot-password" className="btn btn-primary w-full">
           Send a new link
         </Link>
@@ -21,7 +29,10 @@ export default async function ResetPasswordPage({ params }: { params: Promise<{ 
     );
   }
   return (
-    <AuthShell title="Choose a new password" subtitle={`For ${reset.user.email}. You'll be signed out on every other device.`}>
+    <AuthShell
+      title={welcome ? `Welcome, ${reset.user.name.split(" ")[0]}` : "Choose a new password"}
+      subtitle={welcome ? `Set a password for ${reset.user.email} and you're in.` : `For ${reset.user.email}. You'll be signed out on every other device.`}
+    >
       <ActionForm action={resetPassword.bind(null, token)} className="space-y-4">
         <label className="block">
           <span className="label">New password</span>

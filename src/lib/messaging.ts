@@ -12,6 +12,7 @@ import { pushTo, type PushPayload } from "./push";
 
 export type MessageKind =
   | "PASSWORD_RESET"
+  | "WELCOME"
   | "OVERDUE_ALERT"
   | "CLIENT_ARRIVAL"
   | "BOOKING_CHANGE"
