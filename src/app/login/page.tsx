@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
 
   return (
-    <AuthShell title="Welcome back" subtitle="Agency teams and artists sign in here.">
+    <AuthShell title="Welcome back" subtitle="Agency teams and acts sign in here.">
       <OAuthNotice sp={sp} />
       <OAuthButtons providers={configuredProviders()} intent="login" verb="Sign in" />
       <ActionForm action={login} className="space-y-4">

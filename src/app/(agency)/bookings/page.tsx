@@ -107,7 +107,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />
           </label>
           <label>
-            <span className="label">Artist</span>
+            <span className="label">Act</span>
             <select name="artist" defaultValue={sp.artist ?? ""} className="input">
               <option value="">All acts</option>
               <option value="none">No act yet</option>
@@ -207,7 +207,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                   <SelectAll name="ids" />
                 </th>
                 <th>Date</th>
-                <th>Artist</th>
+                <th>Act</th>
                 <th>Venue</th>
                 <th>Status</th>
                 <th className="text-right">Fee</th>

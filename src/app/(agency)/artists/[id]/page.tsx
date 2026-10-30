@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     where: { id, agencyId: user.agencyId },
     select: { name: true },
   });
-  return { title: a?.name ?? "Artist" };
+  return { title: a?.name ?? "Act" };
 }
 
 export default async function ArtistPage({ params }: { params: Promise<{ id: string }> }) {

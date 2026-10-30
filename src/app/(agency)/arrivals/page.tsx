@@ -136,7 +136,7 @@ export default async function ArrivalsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Artist</th>
+                  <th>Act</th>
                   <th className="text-right">On time</th>
                   <th className="text-right">Late</th>
                   <th className="text-right">No check-in</th>
@@ -182,7 +182,7 @@ export default async function ArrivalsPage() {
         <section>
           <h2 className="section-title mb-3">Latest check-ins</h2>
           {recent.length === 0 ? (
-            <Empty>No check-ins yet. Artists check in from the Gigsaw app on their phone.</Empty>
+            <Empty>No check-ins yet. Acts check in from the Gigsaw app on their phone.</Empty>
           ) : (
             <ul className="card divide-y divide-slate-100">
               {recent.map((c) => (

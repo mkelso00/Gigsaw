@@ -228,7 +228,7 @@ export function BookingForm({
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Internal notes" hint="Not shown to the artist">
+          <Field label="Internal notes" hint="Not shown to the act">
             <textarea name="notes" rows={3} defaultValue={booking?.notes} className="input" />
           </Field>
           <Field label="Tags" hint="Comma separated, e.g. festival, private">

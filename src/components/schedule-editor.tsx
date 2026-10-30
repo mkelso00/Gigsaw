@@ -42,7 +42,7 @@ function SlotFields({ slot, artists, contacts, currency }: { slot?: VenueSlot; a
           ))}
         </select>
       </Field>
-      <Field label="Regular artist" hint="Used by “book regulars”">
+      <Field label="Regular act" hint="Used by “book regulars”">
         <select name="artistId" defaultValue={slot?.artistId ?? ""} className="input">
           <option value="">None, fill each week</option>
           {artists.map((a) => (

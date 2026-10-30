@@ -8,7 +8,7 @@ const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrai
 
 export const metadata: Metadata = {
   title: { default: "Gigsaw", template: "%s · Gigsaw" },
-  description: "Booking management for music agencies and artists, with booking arrival tracking.",
+  description: "Booking management for music agencies and their acts, with live arrival tracking.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Gigsaw", statusBarStyle: "black-translucent" },
 };

@@ -20,7 +20,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const now = new Date();
-  if (!q) return <Empty>Type a town, venue or artist in the search bar above.</Empty>;
+  if (!q) return <Empty>Type a town, venue or act in the search bar above.</Empty>;
 
   const contains = { contains: q, mode: "insensitive" as const };
   const gigWhere = {

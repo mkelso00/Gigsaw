@@ -126,7 +126,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Artist</th>
+                      <th>Act</th>
                       <th>Venue</th>
                       <th>Status</th>
                       <th className="text-right">Fee</th>

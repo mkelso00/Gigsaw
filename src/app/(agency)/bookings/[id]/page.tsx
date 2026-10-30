@@ -281,7 +281,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                   <li key={c.id} className="flex items-center justify-between gap-3 py-2">
                     <span>
                       <strong>{CHECK_IN_KIND_LABELS[c.kind as keyof typeof CHECK_IN_KIND_LABELS] ?? c.kind}</strong> at {formatDateTime(c.at, tz)}{" "}
-                      {c.source === "AGENT" ? `· logged by ${c.user?.name ?? "agency"}` : "· from the artist app"}
+                      {c.source === "AGENT" ? `· logged by ${c.user?.name ?? "agency"}` : "· from the act app"}
                       {c.note && <span className="text-slate-500"> · “{c.note}”</span>}
                     </span>
                     <form action={deleteCheckIn.bind(null, c.id)}>
