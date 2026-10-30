@@ -7,7 +7,8 @@ import { addDemoData } from "@/lib/demo";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { PROVIDERS } from "@/lib/oauth";
 import { clearPendingSignup, pendingSignup, userByEmail } from "@/lib/oauth-flow";
-import { EXTRA_USER_YEARLY_MINOR, planByKey, PLANS, TRIAL_DAYS } from "@/lib/plans";
+import { loadCatalogue } from "@/lib/plan-store";
+import { choosablePlans, featuredPlan, findPlan } from "@/lib/plans";
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
@@ -28,7 +29,9 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
       throw new FormError(`That ${PROVIDERS[linked.provider].label} account already has a Gigsaw login. Sign in instead.`);
     }
     if (str(form, "terms") !== "on") throw new FormError("Please agree to the terms to carry on");
-    const plan = planByKey(str(form, "plan")) ?? PLANS[1];
+    const catalogue = await loadCatalogue();
+    const plan = findPlan(choosablePlans(catalogue.plans), str(form, "plan")) ?? featuredPlan(catalogue.plans);
+    if (!plan) throw new FormError("Sign-up isn't open just now. Please get in touch.");
     const interval = str(form, "interval") === "year" ? "year" : "month";
     const passwordHash = linked ? "" : await hashPassword(password);
 
@@ -39,10 +42,10 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
           billingMode: "STRIPE",
           plan: plan.key,
           billingInterval: interval,
-          trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86_400_000),
+          trialEndsAt: new Date(Date.now() + catalogue.trialDays * 86_400_000),
           subscriptionStatus: "NONE",
           includedUsers: plan.includedUsers,
-          extraUserYearlyMinor: EXTRA_USER_YEARLY_MINOR,
+          extraUserYearlyMinor: catalogue.extraUserYearlyMinor,
           billingEmail: email,
         },
       });

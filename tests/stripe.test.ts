@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 const { encodeForm, parseLookupKey, priceLookupKey, stripe, verifyWebhook } = await import("@/lib/stripe");
-const { billingState, fromStripeStatus } = await import("@/lib/subscription");
+const { billingState, fromStripeStatus, hasLiveSubscription } = await import("@/lib/subscription");
 
 describe("Stripe helpers", () => {
   it("form-encodes nested params the way Stripe expects", () => {
@@ -25,11 +25,17 @@ describe("Stripe helpers", () => {
   });
 
   it("names prices so they can be found again, and reads them back", () => {
-    const key = priceLookupKey("GROWTH", "year");
-    expect(key).toMatch(/^gigsaw_growth_year_\d+$/);
-    expect(parseLookupKey(key)).toEqual({ kind: "GROWTH", interval: "year" });
-    expect(parseLookupKey(priceLookupKey("EXTRA_USER", "month"))).toEqual({ kind: "EXTRA_USER", interval: "month" });
+    const key = priceLookupKey("GROWTH", "year", 99000);
+    expect(key).toBe("gigsaw_growth_year_99000");
+    expect(parseLookupKey(key)).toEqual({ kind: "GROWTH", interval: "year", amountMinor: 99000 });
+    expect(parseLookupKey(priceLookupKey("EXTRA_USER", "month", 2000))).toEqual({ kind: "EXTRA_USER", interval: "month", amountMinor: 2000 });
     expect(parseLookupKey("something_else")).toBeNull();
+  });
+
+  it("reads back plans the owner adds, including keys with underscores", () => {
+    expect(parseLookupKey(priceLookupKey("PRO_PLUS", "month", 14900))).toEqual({ kind: "PRO_PLUS", interval: "month", amountMinor: 14900 });
+    // A key that itself ends in a word like "month" still reads back whole.
+    expect(parseLookupKey("gigsaw_six_month_year_5000")).toEqual({ kind: "SIX_MONTH", interval: "year", amountMinor: 5000 });
   });
 });
 
@@ -55,6 +61,18 @@ describe("subscription state", () => {
   });
   it("never locks businesses billed by invoice", () => {
     expect(billingState({ ...base, billingMode: "INVOICE", trialEndsAt: null }, now).locked).toBe(false);
+  });
+  it("never locks a free account, whatever its trial or Stripe state says", () => {
+    const free = { ...base, billingMode: "FREE" };
+    expect(billingState({ ...free, trialEndsAt: null }, now)).toMatchObject({ mode: "FREE", locked: false, label: "Free account", subscribed: false });
+    expect(billingState({ ...free, trialEndsAt: new Date("2020-01-01T00:00:00Z") }, now).locked).toBe(false);
+    expect(billingState({ ...free, trialEndsAt: null, subscriptionStatus: "CANCELED", stripeSubscriptionId: "sub_1" }, now).locked).toBe(false);
+    expect(billingState({ ...free, trialEndsAt: null, subscriptionStatus: "PAST_DUE", stripeSubscriptionId: "sub_1" }, now).locked).toBe(false);
+  });
+  it("knows when a subscription is still running", () => {
+    expect(hasLiveSubscription({ stripeSubscriptionId: "sub_1", subscriptionStatus: "TRIALING" })).toBe(true);
+    expect(hasLiveSubscription({ stripeSubscriptionId: "sub_1", subscriptionStatus: "CANCELED" })).toBe(false);
+    expect(hasLiveSubscription({ stripeSubscriptionId: null, subscriptionStatus: "NONE" })).toBe(false);
   });
   it("maps Stripe's statuses", () => {
     expect(fromStripeStatus("trialing")).toBe("TRIALING");

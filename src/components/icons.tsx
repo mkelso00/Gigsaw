@@ -16,6 +16,8 @@ const paths: Record<string, string> = {
   owner: "M3 7l4 3 5-6 5 6 4-3-2 12H5zM5 19h14",
   messages: "M4 5h16v12H8l-4 3z",
   billing: "M3 6h18v12H3zM3 10h18M7 15h4",
+  plans: "M12 3 3 8l9 5 9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5",
+  tag: "M3 12V4h8l10 10-8 8zM7.5 8.5h.01",
   filter: "M4 6h16M7 12h10M10 18h4",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   menu: "M4 7h16M4 12h16M4 17h16",

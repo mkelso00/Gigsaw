@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TRIAL_DAYS } from "@/lib/plans";
 
 // Shared building blocks for the public site. The "sketches" are simplified drawings of real
 // Gigsaw screens, using made-up acts and venues, so visitors can see what each feature looks like.
@@ -50,15 +49,23 @@ export function Cross({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
-/** Big closing call to action, used at the bottom of most pages. */
-export function FinalCta({ title = "Give your next month of bookings to Gigsaw.", pricingLink = true }: { title?: string; pricingLink?: boolean }) {
+/** Big closing call to action, used at the bottom of most pages. `trialDays` comes from the plans (src/lib/plan-store.ts). */
+export function FinalCta({
+  title = "Give your next month of bookings to Gigsaw.",
+  pricingLink = true,
+  trialDays,
+}: {
+  title?: string;
+  pricingLink?: boolean;
+  trialDays: number;
+}) {
   return (
     <section className="bg-volt-400">
       <Container className="py-20 sm:py-28">
         <h2 className="max-w-3xl text-4xl leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-ink-950 sm:text-6xl">{title}</h2>
         <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-800">
           Set up your venues, put a few weeks of bookings in, send your first offers and watch your acts check in.
-          {pricingLink && ` Try it free for ${TRIAL_DAYS} days.`}
+          {pricingLink && ` Try it free for ${trialDays} days.`}
         </p>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <Link href="/signup" className="btn btn-primary h-12 px-6 text-base">

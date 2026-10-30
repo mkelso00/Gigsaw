@@ -1,14 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { EXTRA_USER_MONTHLY_MINOR, EXTRA_USER_YEARLY_MINOR, PLANS, TRIAL_DAYS } from "@/lib/plans";
+import { loadCatalogue } from "@/lib/plan-store";
+import { choosablePlans, featuredPlan, type Catalogue } from "@/lib/plans";
 import { price } from "../format";
 import { Check, Container, Cross, Eyebrow, FinalCta } from "../site-ui";
 import { PricingTable } from "./pricing-table";
 
-export const metadata: Metadata = {
-  title: "Pricing",
-  description: `Gigsaw plans are based on how many bookings you make in a month. Acts, venue managers and customers are free. Try free for ${TRIAL_DAYS} days.`,
-};
+// Prices come from the Owner area → Plans: the page is rebuilt at most every five minutes, and straight away when they change.
+export const revalidate = 300;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { trialDays } = await loadCatalogue();
+  return {
+    title: "Pricing",
+    description: `Gigsaw plans are based on how many bookings you make in a month. Acts, venue managers and customers are free. Try free for ${trialDays} days.`,
+  };
+}
 
 // Mirrors isBillable in src/lib/billing.ts. Keep the two in step if the rules change.
 const COUNTS = [
@@ -23,52 +30,65 @@ const NEVER = [
   "Demo data, which you can load and remove to try Gigsaw out.",
 ];
 
-const largest = PLANS.filter((p) => p.gigsPerMonth !== null).slice(-1)[0];
+function faq(c: Catalogue, plans: Catalogue["plans"]): [string, React.ReactNode][] {
+  const limited = plans.filter((p) => p.gigsPerMonth !== null);
+  const largest = limited.sort((a, b) => (a.gigsPerMonth ?? 0) - (b.gigsPerMonth ?? 0)).slice(-1)[0];
+  const unlimited = plans.find((p) => p.gigsPerMonth === null);
+  return [
+    [
+      "What's an internal user?",
+      <>
+        Internal users are the people in your agency who sign in to run things: your admins and agents. Each plan includes some, and each extra one is{" "}
+        {price(c.extraUserMonthlyMinor)} a month, or {price(c.extraUserYearlyMinor)} a year on a yearly plan.
+      </>,
+    ],
+    [
+      "Do acts, venue managers and customers cost anything?",
+      <>
+        No. They&apos;re external users, and they&apos;re always free, however many you have. Acts get their own app login, venues get their line-up link and
+        couples get their planner link at no extra cost.
+      </>,
+    ],
+    ["Can I change plan?", <>Yes. Move up or down a plan whenever you like.</>],
+    [
+      "What happens if I go over my bookings?",
+      <>
+        Nothing stops working. Bookings keep booking, acts keep checking in. If you go over your plan&apos;s bookings, we&apos;ll suggest the plan that fits
+        {largest && unlimited ? (
+          <>
+            , and above {largest.gigsPerMonth} bookings a month the {unlimited.name} plan has no limit
+          </>
+        ) : null}
+        .
+      </>,
+    ],
+    [
+      "How does the free trial work?",
+      <>Try Gigsaw free for {c.trialDays} days. Load the demo data to look around, or start with your own venues and acts straight away.</>,
+    ],
+    ["Can I cancel?", <>Yes, any time. If you want a copy of your data first, export it to CSV.</>],
+    ["Can I get my data out?", <>Yes. Export your bookings, arrivals and reports to CSV whenever you like. Your data is yours.</>],
+    [
+      "I'm moving from Overture. Can you help?",
+      <>
+        Export your contacts from Overture as a CSV file and import it into Gigsaw: acts, members, venues, staff, companies and customers all come across. The
+        Agency plan includes help moving across.{" "}
+        <Link href="/features#imports" className="link">
+          More about importing
+        </Link>
+        .
+      </>,
+    ],
+    ["Where is Gigsaw made?", <>In the UK. Prices are in pounds.</>],
+  ];
+}
 
-const FAQ: [string, React.ReactNode][] = [
-  [
-    "What's an internal user?",
-    <>
-      Internal users are the people in your agency who sign in to run things: your admins and agents. Each plan includes some, and each extra one is{" "}
-      {price(EXTRA_USER_MONTHLY_MINOR)} a month, or {price(EXTRA_USER_YEARLY_MINOR)} a year on a yearly plan.
-    </>,
-  ],
-  [
-    "Do acts, venue managers and customers cost anything?",
-    <>
-      No. They&apos;re external users, and they&apos;re always free, however many you have. Acts get their own app login, venues get their line-up link and
-      couples get their planner link at no extra cost.
-    </>,
-  ],
-  ["Can I change plan?", <>Yes. Move up or down a plan whenever you like.</>],
-  [
-    "What happens if I go over my bookings?",
-    <>
-      Nothing stops working. Bookings keep booking, acts keep checking in. If you go over your plan&apos;s bookings, we&apos;ll suggest the plan that fits
-      {largest ? <>, and above {largest.gigsPerMonth} bookings a month the Agency plan has no limit</> : null}.
-    </>,
-  ],
-  [
-    "How does the free trial work?",
-    <>Try Gigsaw free for {TRIAL_DAYS} days. Load the demo data to look around, or start with your own venues and acts straight away.</>,
-  ],
-  ["Can I cancel?", <>Yes, any time. If you want a copy of your data first, export it to CSV.</>],
-  ["Can I get my data out?", <>Yes. Export your bookings, arrivals and reports to CSV whenever you like. Your data is yours.</>],
-  [
-    "I'm moving from Overture. Can you help?",
-    <>
-      Export your contacts from Overture as a CSV file and import it into Gigsaw: acts, members, venues, staff, companies and customers all come across. The
-      Agency plan includes help moving across.{" "}
-      <Link href="/features#imports" className="link">
-        More about importing
-      </Link>
-      .
-    </>,
-  ],
-  ["Where is Gigsaw made?", <>In the UK. Prices are in pounds.</>],
-];
-
-export default function PricingPage() {
+export default async function PricingPage() {
+  const catalogue = await loadCatalogue();
+  const plans = choosablePlans(catalogue.plans);
+  const FAQ = faq(catalogue, plans);
+  const featured = featuredPlan(catalogue.plans)?.key ?? null;
+  const trialDays = catalogue.trialDays;
   return (
     <>
       <section>
@@ -77,11 +97,17 @@ export default function PricingPage() {
             <Eyebrow>Pricing</Eyebrow>
             <h1 className="mt-5 text-[42px] text-balance leading-[0.98] font-semibold tracking-[-0.045em] sm:text-7xl">Priced by the bookings you make.</h1>
             <p className="mx-auto mt-7 max-w-2xl text-lg leading-relaxed text-ink-700 sm:text-xl">
-              Pick a plan by how many bookings you make in a month. Your acts, venue managers and customers are always free. Try free for {TRIAL_DAYS} days.
+              Pick a plan by how many bookings you make in a month. Your acts, venue managers and customers are always free. Try free for {trialDays} days.
             </p>
           </div>
           <div className="mt-14">
-            <PricingTable />
+            <PricingTable
+              plans={plans}
+              featured={featured}
+              extraUserMonthlyMinor={catalogue.extraUserMonthlyMinor}
+              extraUserYearlyMinor={catalogue.extraUserYearlyMinor}
+              trialDays={trialDays}
+            />
           </div>
         </Container>
       </section>
@@ -158,7 +184,7 @@ export default function PricingPage() {
         </Container>
       </section>
 
-      <FinalCta title={`Try Gigsaw free for ${TRIAL_DAYS} days.`} pricingLink={false} />
+      <FinalCta title={`Try Gigsaw free for ${trialDays} days.`} pricingLink={false} trialDays={trialDays} />
     </>
   );
 }

@@ -10,7 +10,8 @@ import { currentUser, homePath } from "@/lib/auth";
 import { formatMoney } from "@/lib/money";
 import { configuredProviders, PROVIDERS } from "@/lib/oauth";
 import { pendingSignup } from "@/lib/oauth-flow";
-import { CURRENCY, planByKey, PLANS, TRIAL_DAYS } from "@/lib/plans";
+import { loadCatalogue } from "@/lib/plan-store";
+import { choosablePlans, CURRENCY, featuredPlan, findPlan, yearlySavingLabel } from "@/lib/plans";
 
 export const metadata: Metadata = { title: "Start your free trial" };
 export const dynamic = "force-dynamic";
@@ -23,12 +24,18 @@ export default async function SignUpPage({
   const user = await currentUser();
   if (user) redirect(homePath(user));
   const sp = await searchParams;
-  const chosen = planByKey(sp.plan?.toUpperCase()) ?? PLANS[1];
+  const catalogue = await loadCatalogue();
+  const plans = choosablePlans(catalogue.plans);
+  const chosen = findPlan(plans, sp.plan?.toUpperCase()) ?? featuredPlan(catalogue.plans);
+  const saving = yearlySavingLabel(plans);
   const interval = sp.interval === "year" ? "year" : "month";
   // Came back from "Sign up with Google/Microsoft": their name and email are filled in, no password needed.
   const linked = await pendingSignup();
   return (
-    <AuthShell title={`Try Gigsaw free for ${TRIAL_DAYS} days`} subtitle="Set up your business in a minute. Add a card any time before your trial ends.">
+    <AuthShell
+      title={`Try Gigsaw free for ${catalogue.trialDays} days`}
+      subtitle="Set up your business in a minute. Add a card any time before your trial ends."
+    >
       <OAuthNotice sp={sp} />
       {linked ? (
         <div className="mb-5 flex items-center gap-3 rounded-xl border border-ink-200 bg-ink-50 px-4 py-3 text-sm">
@@ -49,13 +56,13 @@ export default async function SignUpPage({
         <fieldset>
           <legend className="label">Plan</legend>
           <div className="grid gap-2">
-            {PLANS.map((p) => (
+            {plans.map((p) => (
               <label
                 key={p.key}
                 className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-ink-200 px-4 py-3 has-[:checked]:border-ink-950"
               >
                 <span className="flex items-center gap-3">
-                  <input type="radio" name="plan" value={p.key} defaultChecked={p.key === chosen.key} className="h-4 w-4 accent-ink-950" />
+                  <input type="radio" name="plan" value={p.key} defaultChecked={p.key === chosen?.key} className="h-4 w-4 accent-ink-950" />
                   <span>
                     <span className="block text-sm font-semibold">{p.name}</span>
                     <span className="block text-xs text-ink-500">{p.gigsPerMonth ? `Up to ${p.gigsPerMonth} bookings a month` : "Unlimited bookings"}</span>
@@ -70,8 +77,8 @@ export default async function SignUpPage({
           </div>
           <input type="hidden" name="interval" value={interval} />
           <p className="mt-1.5 text-xs text-ink-500">
-            Paying {interval === "year" ? "yearly (2 months free)" : "monthly"}.{" "}
-            <Link href={`/signup?plan=${chosen.key}&interval=${interval === "year" ? "month" : "year"}`} className="underline">
+            Paying {interval === "year" ? `yearly${saving ? ` (${saving.toLowerCase()})` : ""}` : "monthly"}.{" "}
+            <Link href={`/signup?plan=${chosen?.key ?? ""}&interval=${interval === "year" ? "month" : "year"}`} className="underline">
               Switch to {interval === "year" ? "monthly" : "yearly"}
             </Link>
             . You can change plan any time.

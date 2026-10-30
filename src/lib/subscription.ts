@@ -1,7 +1,8 @@
 // Where a self-service business stands with its subscription, and whether the app is open to it.
-// Businesses billed by invoice (the Owner area) are never locked here.
+// Businesses billed by invoice, and free accounts (both set in the Owner area), are never locked.
+// The plan itself (its name and price) comes from src/lib/plan-store.ts.
 
-import { planByKey, type Plan } from "./plans";
+export type BillingMode = "INVOICE" | "STRIPE" | "FREE";
 
 export type SubscriptionStatus = "NONE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
 
@@ -27,8 +28,9 @@ export function fromStripeStatus(s: string): SubscriptionStatus {
 }
 
 export function billingState(a: AgencyBilling, now = new Date()) {
-  const plan: Plan | null = planByKey(a.plan);
-  if (a.billingMode !== "STRIPE") return { mode: "INVOICE" as const, plan, locked: false, trialDaysLeft: null, subscribed: false, label: "Billed by invoice" };
+  // A free account is never charged and never locked, whatever its trial date or Stripe state says.
+  if (a.billingMode === "FREE") return { mode: "FREE" as const, locked: false, trialDaysLeft: null, subscribed: false, label: "Free account" };
+  if (a.billingMode !== "STRIPE") return { mode: "INVOICE" as const, locked: false, trialDaysLeft: null, subscribed: false, label: "Billed by invoice" };
   const status = a.subscriptionStatus as SubscriptionStatus;
   const subscribed = !!a.stripeSubscriptionId && (status === "ACTIVE" || status === "TRIALING" || status === "PAST_DUE");
   const trialLeftMs = a.trialEndsAt ? a.trialEndsAt.getTime() - now.getTime() : 0;
@@ -47,8 +49,13 @@ export function billingState(a: AgencyBilling, now = new Date()) {
       : status === "CANCELED"
         ? "Subscription cancelled"
         : "Trial ended";
-  return { mode: "STRIPE" as const, plan, locked, trialDaysLeft, subscribed, status, label };
+  return { mode: "STRIPE" as const, locked, trialDaysLeft, subscribed, status, label };
 }
 
 /** Pages a locked business can still reach, so it can choose a plan and pay. */
 export const OPEN_WHEN_LOCKED = ["/settings/plan", "/profile"];
+
+/** A Stripe subscription that hasn't been cancelled (trialing, paid, retrying a failed payment, or still being set up). */
+export function hasLiveSubscription(a: { stripeSubscriptionId: string | null; subscriptionStatus: string }) {
+  return !!a.stripeSubscriptionId && a.subscriptionStatus !== "CANCELED";
+}
