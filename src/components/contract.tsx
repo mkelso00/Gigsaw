@@ -1,3 +1,4 @@
+import { Mrs_Saint_Delafield } from "next/font/google";
 import { DocTable } from "@/components/document";
 import type { ContractDoc } from "@/lib/contract-doc";
 import { formatDateTime, zoneLabel } from "@/lib/time";
@@ -11,7 +12,23 @@ export type ContractSignature = {
   signedAt: Date;
 };
 
-export function ContractBody({ doc, signature, timeZone }: { doc: ContractDoc; signature?: ContractSignature | null; timeZone: string }) {
+/** A handwriting face for the agency's name when they haven't drawn a signature yet. */
+const script = Mrs_Saint_Delafield({ subsets: ["latin"], weight: "400", display: "swap" });
+
+/** The agency's own signature, from Settings → Contracts and invoices. */
+export type AgencySignature = { image: string; name: string; role: string };
+
+export function ContractBody({
+  doc,
+  signature,
+  agencySignature,
+  timeZone,
+}: {
+  doc: ContractDoc;
+  signature?: ContractSignature | null;
+  agencySignature?: AgencySignature | null;
+  timeZone: string;
+}) {
   const theAct = doc.plural ? "the Acts" : "the Act";
   return (
     <>
@@ -50,10 +67,28 @@ export function ContractBody({ doc, signature, timeZone }: { doc: ContractDoc; s
           )}
         </div>
         <div className="break-inside-avoid">
-          <div className="flex h-16 items-end border-b border-slate-400 pb-1 font-serif text-xl italic">{doc.agency.name}</div>
+          {agencySignature?.image ? (
+            <div className="flex h-20 items-end border-b border-slate-400 pb-1">
+              <img
+                src={agencySignature.image}
+                alt={`Signature of ${agencySignature.name || doc.agency.name}`}
+                className="max-h-[76px] max-w-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className={`flex h-20 items-end border-b border-slate-400 pb-1 text-[34px] leading-none text-slate-900 ${script.className}`}>
+              {agencySignature?.name || doc.agency.name}
+            </div>
+          )}
           <div className="mt-2">
             For {doc.agency.name}, on behalf of {theAct}
           </div>
+          {agencySignature?.name && (
+            <div className="mt-1 text-slate-500">
+              {agencySignature.name}
+              {agencySignature.role ? `, ${agencySignature.role}` : ""}
+            </div>
+          )}
         </div>
       </div>
     </>

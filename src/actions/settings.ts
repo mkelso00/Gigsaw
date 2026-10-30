@@ -1,4 +1,5 @@
 "use server";
+import { checkSignature } from "@/lib/contract-doc";
 
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -93,6 +94,15 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     if (has("bookingFeeFor")) data.bookingFeeFor = oneOf(str(form, "bookingFeeFor"), ["EVENTS", "ALL"] as const, "EVENTS");
     if (has("invoiceTerms")) data.invoiceTerms = str(form, "invoiceTerms");
     if (has("contractTerms")) data.contractTerms = str(form, "contractTerms");
+    // The agency's signature: a new drawing replaces the old one, an empty box keeps it, and Remove clears it.
+    if (has("signatureName")) data.signatureName = str(form, "signatureName").slice(0, 120);
+    if (has("signatureRole")) data.signatureRole = str(form, "signatureRole").slice(0, 120);
+    if (form.get("signatureRemove")) data.signatureImage = "";
+    else if (str(form, "signatureImage")) {
+      const image = checkSignature(str(form, "signatureImage"));
+      if (!image) throw new FormError("That signature didn't come through. Please draw it again.");
+      data.signatureImage = image;
+    }
     Object.assign(data, toggle("overdueAlerts"), toggle("clientArrivalMessages"), toggle("weeklyReminders"), toggle("dayReminders"), toggle("eventEmails"));
 
     await prisma.settings.upsert({ where: { agencyId: user.agencyId }, create: { agencyId: user.agencyId }, update: data });

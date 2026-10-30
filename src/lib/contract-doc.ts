@@ -349,3 +349,8 @@ export function clientIp(get: (name: string) => string | null): string {
   const fwd = get("x-forwarded-for")?.split(",")[0]?.trim();
   return (fwd || get("x-real-ip")?.trim() || "").slice(0, 100);
 }
+
+/** The agency's own signature for the foot of a contract, from its settings. */
+export function agencySignatureOf(settings: { signatureImage: string; signatureName: string; signatureRole: string } | null | undefined) {
+  return settings ? { image: settings.signatureImage, name: settings.signatureName, role: settings.signatureRole } : null;
+}

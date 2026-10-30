@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ContractBody } from "@/components/contract";
 import { DocumentShell } from "@/components/document";
-import { bookingContractDoc } from "@/lib/contract-doc";
+import { agencySignatureOf, bookingContractDoc } from "@/lib/contract-doc";
 import { loadPrintable } from "@/lib/print";
 import { formatDateTime } from "@/lib/time";
 
@@ -13,7 +13,7 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
   const doc = bookingContractDoc(b, settings);
   return (
     <DocumentShell title={doc.title} reference={doc.reference} settings={settings}>
-      <ContractBody doc={doc} timeZone={b.timezone} />
+      <ContractBody doc={doc} timeZone={b.timezone} agencySignature={agencySignatureOf(settings)} />
       <p className="mt-8 text-xs text-slate-400">Issued {formatDateTime(new Date(), settings.defaultTimezone)}</p>
     </DocumentShell>
   );

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ContractAudit, ContractBody } from "@/components/contract";
 import { DocumentShell } from "@/components/document";
 import { requireStaff } from "@/lib/auth";
-import { asContractDoc } from "@/lib/contract-doc";
+import { agencySignatureOf, asContractDoc } from "@/lib/contract-doc";
 import { getSettings, prisma } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Signed contract" };
@@ -25,7 +25,12 @@ export default async function SignedContractPage({ params }: { params: Promise<{
       reference={doc.reference}
       settings={{ agencyName: doc.agency.name, agencyAddress: doc.agency.address, agencyEmail: doc.agency.email }}
     >
-      <ContractBody doc={doc} timeZone={tz} signature={{ name: c.signedName, image: c.signature, signedAt: c.signedAt }} />
+      <ContractBody
+        doc={doc}
+        timeZone={tz}
+        agencySignature={agencySignatureOf(settings)}
+        signature={{ name: c.signedName, image: c.signature, signedAt: c.signedAt }}
+      />
       <ContractAudit c={{ ...c, signedAt: c.signedAt }} timeZone={tz} />
     </DocumentShell>
   );

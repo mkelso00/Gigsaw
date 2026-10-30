@@ -7,7 +7,7 @@ import { DocumentShell } from "@/components/document";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { SignaturePad } from "@/components/signature-pad";
 import { currentUser } from "@/lib/auth";
-import { asContractDoc, contractHash } from "@/lib/contract-doc";
+import { agencySignatureOf, asContractDoc, contractHash } from "@/lib/contract-doc";
 import { liveContractDoc } from "@/lib/contracts";
 import { prisma } from "@/lib/db";
 import { formatDateTime } from "@/lib/time";
@@ -44,7 +44,12 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
           </>
         }
       >
-        <ContractBody doc={doc} timeZone={tz} signature={{ name: c.signedName, image: c.signature, signedAt: c.signedAt! }} />
+        <ContractBody
+          doc={doc}
+          timeZone={tz}
+          agencySignature={agencySignatureOf(c.agency.settings)}
+          signature={{ name: c.signedName, image: c.signature, signedAt: c.signedAt! }}
+        />
         <ContractAudit c={{ ...c, signedAt: c.signedAt! }} timeZone={tz} />
       </DocumentShell>
     );
@@ -132,7 +137,7 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
         </div>
       }
     >
-      <ContractBody doc={doc} timeZone={timeZone} />
+      <ContractBody doc={doc} timeZone={timeZone} agencySignature={agencySignatureOf(c.agency.settings)} />
     </DocumentShell>
   );
 }

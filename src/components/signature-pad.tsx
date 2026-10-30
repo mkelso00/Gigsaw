@@ -39,7 +39,7 @@ function drawStrokes(ctx: CanvasRenderingContext2D, strokes: Point[][], scale: n
   ctx.restore();
 }
 
-export function SignaturePad({ name }: { name: string }) {
+export function SignaturePad({ name, emptyText = "Your signature is needed." }: { name: string; emptyText?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokes = useRef<Point[][]>([]);
   const drawing = useRef<Point[] | null>(null);
@@ -60,16 +60,24 @@ export function SignaturePad({ name }: { name: string }) {
     drawStrokes(ctx, drawing.current ? [...strokes.current, drawing.current] : strokes.current, dpr);
   }, []);
 
-  /** The finished signature as a PNG, at a fixed scale so its size doesn't depend on the phone. */
+  /**
+   * The finished signature as a PNG, cropped to the ink with a little margin so it fills the
+   * signature line wherever it's shown, at a fixed scale so its size doesn't depend on the screen.
+   */
   const exportPng = useCallback(() => {
-    const c = canvasRef.current;
-    if (!c || !strokes.current.length) return "";
-    const { width, height } = c.getBoundingClientRect();
+    const all = strokes.current.flat();
+    if (!all.length) return "";
+    const pad = 6;
+    const minX = Math.min(...all.map((p) => p.x)) - pad;
+    const minY = Math.min(...all.map((p) => p.y)) - pad;
+    const w = Math.max(...all.map((p) => p.x)) - minX + pad;
+    const h = Math.max(...all.map((p) => p.y)) - minY + pad;
     const out = document.createElement("canvas");
-    out.width = Math.round(width * EXPORT_SCALE);
-    out.height = Math.round(height * EXPORT_SCALE);
+    out.width = Math.max(1, Math.round(w * EXPORT_SCALE));
+    out.height = Math.max(1, Math.round(h * EXPORT_SCALE));
     const ctx = out.getContext("2d");
     if (!ctx) return "";
+    ctx.translate(-minX * EXPORT_SCALE, -minY * EXPORT_SCALE);
     drawStrokes(ctx, strokes.current, EXPORT_SCALE);
     return out.toDataURL("image/png");
   }, []);
@@ -136,7 +144,7 @@ export function SignaturePad({ name }: { name: string }) {
         <div className="pointer-events-none absolute right-4 bottom-8 left-4 border-b border-ink-200" aria-hidden />
       </div>
       <div className="mt-2 flex items-center justify-between text-sm">
-        <span className="text-ink-500">{value ? "Signature added." : "Your signature is needed."}</span>
+        <span className="text-ink-500">{value ? "Signature added." : emptyText}</span>
         <button type="button" onClick={clear} className="btn btn-sm" disabled={!value}>
           Clear
         </button>

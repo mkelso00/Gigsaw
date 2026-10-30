@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ContractBody } from "@/components/contract";
 import { DocumentShell } from "@/components/document";
 import { requireStaff } from "@/lib/auth";
+import { agencySignatureOf } from "@/lib/contract-doc";
 import { contractSubject } from "@/lib/contracts";
+import { getSettings } from "@/lib/db";
 import { formatDateTime } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Contract" };
@@ -12,11 +14,11 @@ export const metadata: Metadata = { title: "Contract" };
 export default async function EventContractPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const s = await contractSubject(user.agencyId, { kind: "event", id });
+  const [s, settings] = await Promise.all([contractSubject(user.agencyId, { kind: "event", id }), getSettings(user.agencyId)]);
   if (!s) notFound();
   return (
     <DocumentShell title={s.doc.title} reference={s.doc.reference} settings={s.settings}>
-      <ContractBody doc={s.doc} timeZone={s.timeZone} />
+      <ContractBody doc={s.doc} timeZone={s.timeZone} agencySignature={agencySignatureOf(settings)} />
       <p className="mt-8 text-xs text-slate-400">Issued {formatDateTime(new Date(), s.settings.defaultTimezone)}</p>
     </DocumentShell>
   );
