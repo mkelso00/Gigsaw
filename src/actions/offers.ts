@@ -20,7 +20,7 @@ export async function answerByToken(token: string, answer: "ACCEPTED" | "DECLINE
   const done = await answerOffer(b.id, answer);
   revalidatePath(`/o/${token}`);
   return done
-    ? { ok: true, message: answer === "ACCEPTED" ? "Accepted. The gig is confirmed." : "Declined. We've let the agency know." }
+    ? { ok: true, message: answer === "ACCEPTED" ? "Accepted. The booking is confirmed." : "Declined. We've let the agency know." }
     : { ok: false, message: "This offer isn't open any more." };
 }
 
@@ -35,7 +35,7 @@ export async function acceptAllByToken(token: string) {
   let n = 0;
   for (const o of open) if (await answerOffer(o.id, "ACCEPTED")) n++;
   revalidatePath(`/o/${token}`);
-  return { ok: true, message: `Accepted ${n} gig${n === 1 ? "" : "s"}.` };
+  return { ok: true, message: `Accepted ${n} booking${n === 1 ? "" : "s"}.` };
 }
 
 /** From the artist app: only gigs for acts this login belongs to. */

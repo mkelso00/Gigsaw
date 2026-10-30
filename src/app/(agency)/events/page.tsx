@@ -44,7 +44,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="Weddings & events"
-        subtitle="One booking per customer, with every act they've booked. Each act only sees its own gig and fee."
+        subtitle="One booking per customer, with every act they've booked. Each act only sees its own booking and fee."
         actions={
           <Link href="/events/new" className="btn btn-primary">
             New wedding or event

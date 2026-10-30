@@ -18,7 +18,7 @@ export function arrivalDetail(a: ArrivalSummary, timezone: string): string {
     case "ON_THE_WAY":
       return a.expectedAt ? `Expected at ${localTime(a.expectedAt, timezone)}` : "Travelling now";
     case "NO_CHECK_IN":
-      return "The gig has finished and no arrival was recorded";
+      return "The booking has finished and no arrival was recorded";
     default:
       return "";
   }
@@ -43,12 +43,7 @@ export function ArrivalPanel({
 }) {
   const tz = booking.timezone;
   const arrivedCheckIn = booking.checkIns.find((c) => c.kind === "ARRIVED");
-  const highlight =
-    arrival.state === "OVERDUE"
-      ? "border-rose-300 ring-2 ring-rose-100"
-      : arrival.state === "ARRIVED_ON_TIME"
-        ? "border-emerald-200"
-        : "";
+  const highlight = arrival.state === "OVERDUE" ? "border-rose-300 ring-2 ring-rose-100" : arrival.state === "ARRIVED_ON_TIME" ? "border-emerald-200" : "";
 
   return (
     <section className={`card card-pad ${highlight}`}>

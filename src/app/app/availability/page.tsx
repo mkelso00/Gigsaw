@@ -34,7 +34,7 @@ export default async function AwayPage() {
     <div className="space-y-8">
       <div>
         <Link href="/app" className="text-sm text-ink-400 hover:text-white">
-          ← My gigs
+          ← My bookings
         </Link>
         <h1 className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">Dates you can&apos;t play</h1>
         <p className="mt-1 text-[15px] text-ink-400">Holidays, other work, anything. {settings.agencyName || "Your agency"} sees these before booking you.</p>

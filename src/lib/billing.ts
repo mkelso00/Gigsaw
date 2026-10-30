@@ -22,6 +22,17 @@ export function isBillable(b: { status: string; demo: boolean; arriveBy: Date; a
   return (b.status === "HOLD" || b.status === "PENDING" || b.status === "AWAITING") && b.arriveBy < now;
 }
 
+/** Why a booking isn't billed, in plain words, or null when it is. */
+export function notBilledReason(b: { status: string; demo: boolean; arriveBy: Date; arrived: boolean; hasAct?: boolean }, now = new Date()): string | null {
+  if (isBillable(b, now)) return null;
+  if (b.demo) return "Demo data";
+  if (b.status === "CANCELLED") return "Cancelled";
+  if (b.status === "ENQUIRY") return "Still an enquiry";
+  if (b.hasAct === false) return "No act yet";
+  if (b.arriveBy >= now) return "Not confirmed yet";
+  return "Not confirmed";
+}
+
 /** A gig more than a day in the past that was never confirmed or cancelled. */
 export function isUnresolvedPast(b: { status: string; demo: boolean; arriveBy: Date }, now = new Date()) {
   return !b.demo && UNRESOLVED_STATUSES.includes(b.status) && b.arriveBy.getTime() < now.getTime() - DAY;

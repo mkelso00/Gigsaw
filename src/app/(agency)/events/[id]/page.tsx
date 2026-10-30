@@ -434,7 +434,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 <SubmitButton className="btn btn-primary w-full">Record payment</SubmitButton>
               </div>
             </ActionForm>
-            <p className="hint">Shared across the acts&apos; gigs automatically, soonest first.</p>
+            <p className="hint">Shared across the acts&apos; bookings automatically, soonest first.</p>
           </section>
 
           {e.notes && (
@@ -445,7 +445,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           )}
 
           <form action={deleteEvent.bind(null, e.id)}>
-            <ConfirmButton message="Delete this wedding or event? The acts' gigs stay as normal bookings." className="btn btn-danger w-full">
+            <ConfirmButton message="Delete this wedding or event? The acts' bookings stay as normal bookings." className="btn btn-danger w-full">
               Delete
             </ConfirmButton>
           </form>

@@ -49,7 +49,7 @@ export function BookingForm({
       <section className="card card-pad space-y-4">
         <h2 className="section-title">The booking</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Act" htmlFor="bf-act" hint="Leave empty while you set the gig up; add the act later">
+          <Field label="Act" htmlFor="bf-act" hint="Leave empty while you set the booking up; add the act later">
             <Combobox
               id="bf-act"
               name="artistId"

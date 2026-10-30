@@ -17,12 +17,12 @@ import { sendWelcome } from "@/lib/welcome";
 
 function priceFrom(form: FormData, currency: string) {
   try {
-    const minor = toMinor(required(form, "pricePerGig", "Price per gig"), currency);
+    const minor = toMinor(required(form, "pricePerGig", "Price per booking"), currency);
     if (minor < 0) throw new FormError("Price can't be negative");
     return minor;
   } catch (e) {
     if (e instanceof FormError) throw e;
-    throw new FormError("Enter the price per gig as a number, like 2.50");
+    throw new FormError("Enter the price per booking as a number, like 2.50");
   }
 }
 
@@ -193,7 +193,7 @@ export async function issueStatements(month: string, _: FormState): Promise<Form
     issued++;
   }
   revalidatePath("/owner", "layout");
-  if (!issued && !skipped) return { ok: "Nothing to bill that month: no billable gigs or extra internal users." };
+  if (!issued && !skipped) return { ok: "Nothing to bill that month: no billable bookings or extra internal users." };
   return { ok: `Issued ${issued} statement(s).${skipped ? ` ${skipped} already paid, left as they were.` : ""}` };
 }
 

@@ -34,7 +34,7 @@ export default async function BookingFeeSettings() {
               <Field label="Add it to">
                 <select name="bookingFeeFor" defaultValue={settings.bookingFeeFor} className="input">
                   <option value="EVENTS">Weddings and private events (once per event)</option>
-                  <option value="ALL">Every booking, bar gigs too</option>
+                  <option value="ALL">Every booking, bar bookings too</option>
                 </select>
               </Field>
             </div>

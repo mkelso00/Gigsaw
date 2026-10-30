@@ -38,7 +38,7 @@ export async function sendTestPush() {
     userId: user.id,
     payload: {
       title: "Notifications are on",
-      body: act ? "This is how Gigsaw will remind you about your gigs." : "This is how Gigsaw will tell you about new enquiries.",
+      body: act ? "This is how Gigsaw will remind you about your bookings." : "This is how Gigsaw will tell you about new enquiries.",
       url: act ? "/app" : "/enquiries",
       tag: "test",
     },

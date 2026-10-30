@@ -8,7 +8,7 @@ import { formatDate, localTime } from "@/lib/time";
 // A gig offer for an act: a private link (no login) to accept or decline. Lists any other open
 // offers for the same act too. Shows the act's own fee only.
 
-export const metadata: Metadata = { title: "Gig offer", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Booking offer", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 export default async function OfferPage({ params }: { params: Promise<{ token: string }> }) {
@@ -37,7 +37,7 @@ export default async function OfferPage({ params }: { params: Promise<{ token: s
     <div className="min-h-screen bg-ink-50 px-4 py-10 text-ink-950">
       <div className="mx-auto max-w-xl">
         <div className="text-sm font-medium text-ink-500">{brand}</div>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{open.length > 1 ? `${open.length} gig offers` : "Gig offer"}</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{open.length > 1 ? `${open.length} booking offers` : "Booking offer"}</h1>
         <p className="mt-1 text-ink-600">For {b.artist.name}</p>
         <div className="mt-8 space-y-4">
           {offers.map((o) => {

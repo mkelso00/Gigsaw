@@ -166,7 +166,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
             <span className="text-sm text-ink-500">
               {archived
                 ? "Tick bookings to restore them or delete them for good."
-                : "Tick gigs to change their times or fee together and tell the acts, or to archive them."}
+                : "Tick bookings to change their times or fee together and tell the acts, or to archive them."}
             </span>
             <span className="flex flex-wrap gap-2">
               {archived ? (
@@ -189,7 +189,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 </>
               ) : (
                 <>
-                  <button className="btn btn-sm">Change selected gigs</button>
+                  <button className="btn btn-sm">Change selected bookings</button>
                   <SelectedAction
                     name="ids"
                     action={archiveBookings}

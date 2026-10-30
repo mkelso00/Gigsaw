@@ -86,7 +86,7 @@ export function ContractPanel({
 
       {partOf ? (
         <p className="mt-3 text-sm text-ink-600">
-          This gig is part of{" "}
+          This booking is part of{" "}
           <Link href={partOf.href} className="link">
             {partOf.name}
           </Link>

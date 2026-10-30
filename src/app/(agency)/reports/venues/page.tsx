@@ -47,7 +47,7 @@ export default async function VenueStatementPage({
           </Link>
         }
         title="Venue statement"
-        subtitle="Pick a venue and dates to see the gigs played there, what the venue owes you and what the acts were paid. Then print the invoice."
+        subtitle="Pick a venue and dates to see the bookings played there, what the venue owes you and what the acts were paid. Then print the invoice."
       />
       <form className="card mb-6 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto] lg:items-end">
         <label>
@@ -86,7 +86,7 @@ export default async function VenueStatementPage({
           )}
           <label className="ml-auto flex items-center gap-2 text-ink-600">
             <input type="checkbox" name="customers" defaultChecked={sp.customers === "on"} className="h-4 w-4" />
-            Include gigs booked by private customers (weddings at this venue)
+            Include bookings made by private customers (weddings at this venue)
           </label>
         </div>
       </form>
@@ -113,9 +113,9 @@ export default async function VenueStatementPage({
           </div>
           <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat
-              label="Venue owes for these gigs"
+              label="Venue owes for these bookings"
               value={m(s.totals.due)}
-              hint={`${s.totals.gigs} gig${s.totals.gigs === 1 ? "" : "s"}${s.totals.vat ? ` · incl. VAT ${m(s.totals.vat)}` : ""}`}
+              hint={`${s.totals.gigs} booking${s.totals.gigs === 1 ? "" : "s"}${s.totals.vat ? ` · incl. VAT ${m(s.totals.vat)}` : ""}`}
             />
             <Stat tone={s.totals.owed ? "alert" : "default"} label="Still to pay" value={m(s.totals.owed)} hint={`Received ${m(s.totals.received)}`} />
             <Stat
@@ -127,12 +127,12 @@ export default async function VenueStatementPage({
           </div>
           {s.totals.unconfirmed > 0 && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {s.totals.unconfirmed} of these gig{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet, so{" "}
+              {s.totals.unconfirmed} of these booking{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet, so{" "}
               {s.totals.unconfirmed === 1 ? "it isn't" : "they aren't"} on the printable invoice until confirmed.
             </p>
           )}
           {s.rows.length === 0 ? (
-            <Empty>No gigs at {s.venue.name} in these dates.</Empty>
+            <Empty>No bookings at {s.venue.name} in these dates.</Empty>
           ) : (
             <div className="card overflow-x-auto">
               <table className="table">

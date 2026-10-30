@@ -86,8 +86,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     <div>
       <h1 className="mb-1 text-[28px] font-semibold tracking-[-0.02em]">&ldquo;{q}&rdquo;</h1>
       <p className="mb-8 text-[15px] text-ink-500">
-        {upcoming.length} gig{upcoming.length === 1 ? "" : "s"} coming up
-        {earlier.length ? `, ${earlier.length}${earlier.length === 100 ? "+" : ""} earlier` : ""}. Cancelled gigs are left out.
+        {upcoming.length} booking{upcoming.length === 1 ? "" : "s"} coming up
+        {earlier.length ? `, ${earlier.length}${earlier.length === 100 ? "+" : ""} earlier` : ""}. Cancelled bookings are left out.
       </p>
 
       {(artists.length > 0 || venues.length > 0 || contacts.length > 0) && (
@@ -128,7 +128,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       )}
 
       {bookings.length === 0 ? (
-        <Empty>No gigs match &ldquo;{q}&rdquo;. Try a town, venue, act, promoter or booking reference.</Empty>
+        <Empty>No bookings match &ldquo;{q}&rdquo;. Try a town, venue, act, promoter or booking reference.</Empty>
       ) : (
         <div className="space-y-8">
           {groups

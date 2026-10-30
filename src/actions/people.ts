@@ -149,7 +149,7 @@ export async function setPersonLogin(personId: string, _: FormState, form: FormD
     await logActivity(user, "PERSON", personId, p.login ? "reset app login" : "created app login", email);
     revalidatePath(`/people/${personId}`);
     return {
-      ok: `Login saved. Share the email and password with ${personName(p)} so they can sign in on their phone. They'll see the gigs for every act they're in.`,
+      ok: `Login saved. Share the email and password with ${personName(p)} so they can sign in on their phone. They'll see the bookings for every act they're in.`,
     };
   });
 }

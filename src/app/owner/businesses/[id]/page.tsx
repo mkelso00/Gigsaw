@@ -7,8 +7,9 @@ import { Icon } from "@/components/icons";
 import { Badge, SettingsCard, SettingsSection } from "@/components/settings-ui";
 import { Field, Stat } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
-import { monthLabel, shiftMonth } from "@/lib/billing";
-import { CURRENCIES } from "@/lib/constants";
+import { gigMonth, monthLabel, monthSearchWindow, notBilledReason, shiftMonth } from "@/lib/billing";
+import { formatDate } from "@/lib/time";
+import { BOOKING_STATUS_LABELS, type BookingStatus, CURRENCIES } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { formatMoney, minorToInput } from "@/lib/money";
 import { userCharge } from "@/lib/seats";
@@ -36,6 +37,28 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
   const thisMonth = new Date().toISOString().slice(0, 7);
   const months = Array.from({ length: 6 }, (_, i) => shiftMonth(thisMonth, -i));
   const usage = await Promise.all(months.map((m) => usageForMonth(m, agency.id).then((u) => u.get(agency.id)?.count ?? 0)));
+  // Every booking this month, demo and archived included, with whether it's counted and why not.
+  const now = new Date();
+  const monthRows = (
+    await prisma.booking.findMany({
+      where: { agencyId: agency.id, arriveBy: monthSearchWindow(thisMonth), archivedAt: undefined },
+      select: {
+        id: true,
+        reference: true,
+        status: true,
+        demo: true,
+        arriveBy: true,
+        timezone: true,
+        artistId: true,
+        archivedAt: true,
+        artist: { select: { name: true } },
+        checkIns: { where: { kind: "ARRIVED" }, select: { id: true }, take: 1 },
+      },
+      orderBy: { arriveBy: "asc" },
+    })
+  )
+    .filter((b) => gigMonth(b) === thisMonth)
+    .map((b) => ({ ...b, why: notBilledReason({ ...b, arrived: b.checkIns.length > 0, hasAct: !!b.artistId }, now) }));
   const money = (m: number) => formatMoney(m, agency.billingCurrency);
   const staff = agency.users.filter((u) => u.role !== "ARTIST");
   const artists = agency.users.filter((u) => u.role === "ARTIST");
@@ -62,7 +85,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
           {agency.status === "ACTIVE" ? "Active" : "Suspended"}
         </span>
         <p className="w-full text-[15px] text-ink-500">
-          {billing.mode === "STRIPE" ? billing.label : `${money(agency.pricePerGigMinor)} per gig, by invoice`} · {agency._count.bookings} bookings ·{" "}
+          {billing.mode === "STRIPE" ? billing.label : `${money(agency.pricePerGigMinor)} per booking, by invoice`} · {agency._count.bookings} bookings ·{" "}
           {agency._count.artists} acts
         </p>
       </div>
@@ -75,12 +98,31 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
       )}
 
       <div className="space-y-10">
-        <SettingsSection title="Usage" description="Billable gigs and what they come to, with internal users included.">
+        <SettingsSection title="Usage" description="Billable bookings and what they come to, with internal users included.">
           <div className="grid grid-cols-3 gap-3">
             {usage.slice(0, 3).map((n, i) => (
               <Stat key={months[i]} label={monthLabel(months[i])} value={n} hint={money(n * agency.pricePerGigMinor + seats.monthlyMinor)} />
             ))}
           </div>
+          {monthRows.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm text-ink-500 hover:text-ink-950">
+                What&apos;s counted in {monthLabel(thisMonth)}: {monthRows.filter((r) => !r.why).length} of {monthRows.length} bookings
+              </summary>
+              <div className="card motion-page-in mt-3 divide-y divide-ink-100">
+                {monthRows.map((r) => (
+                  <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm">
+                    <span className="w-20 font-mono text-ink-500">{r.reference}</span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {r.artist?.name ?? "No act"} · {formatDate(r.arriveBy, r.timezone)} · {BOOKING_STATUS_LABELS[r.status as BookingStatus] ?? r.status}
+                      {r.archivedAt && <span className="text-ink-400"> · archived</span>}
+                    </span>
+                    {r.why ? <Badge>{r.why}</Badge> : <Badge tone="green">Counted</Badge>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </SettingsSection>
 
         <SettingsSection title="Internal users" description="Admins and agents who sign in to this business.">
@@ -172,7 +214,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
             <div className="card card-pad grid gap-4 sm:grid-cols-2">
               <Field label="How they pay" hint={billing.mode === "STRIPE" ? billing.label : "You send statements from Billing"}>
                 <select name="billingMode" defaultValue={agency.billingMode} className="input">
-                  <option value="INVOICE">By invoice (per gig)</option>
+                  <option value="INVOICE">By invoice (per booking)</option>
                   <option value="STRIPE">By card (Stripe subscription)</option>
                 </select>
               </Field>
@@ -183,7 +225,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                   ))}
                 </select>
               </Field>
-              <Field label="Price per gig">
+              <Field label="Price per booking">
                 <input
                   name="pricePerGig"
                   inputMode="decimal"
@@ -248,7 +290,7 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                 <div key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-sm">
                   <span className="w-32 font-medium">{monthLabel(s.month)}</span>
                   <span className="flex-1 text-ink-500">
-                    {s.gigCount} gig{s.gigCount === 1 ? "" : "s"} at {formatMoney(s.pricePerGigMinor, s.currency)}
+                    {s.gigCount} booking{s.gigCount === 1 ? "" : "s"} at {formatMoney(s.pricePerGigMinor, s.currency)}
                     {s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}
                   </span>
                   <span className="font-mono font-semibold tabular-nums">{formatMoney(s.amountMinor, s.currency)}</span>

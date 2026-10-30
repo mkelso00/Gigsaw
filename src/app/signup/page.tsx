@@ -58,7 +58,7 @@ export default async function SignUpPage({
                   <input type="radio" name="plan" value={p.key} defaultChecked={p.key === chosen.key} className="h-4 w-4 accent-ink-950" />
                   <span>
                     <span className="block text-sm font-semibold">{p.name}</span>
-                    <span className="block text-xs text-ink-500">{p.gigsPerMonth ? `Up to ${p.gigsPerMonth} gigs a month` : "Unlimited gigs"}</span>
+                    <span className="block text-xs text-ink-500">{p.gigsPerMonth ? `Up to ${p.gigsPerMonth} bookings a month` : "Unlimited bookings"}</span>
                   </span>
                 </span>
                 <span className="text-sm font-medium tabular-nums">
@@ -105,7 +105,7 @@ export default async function SignUpPage({
         )}
         <label className="flex items-start gap-3 text-sm">
           <input type="checkbox" name="demo" className="mt-0.5 h-4 w-4 accent-ink-950" />
-          <span className="text-ink-600">Fill it with sample acts, venues and gigs to try things out (remove them in one click later)</span>
+          <span className="text-ink-600">Fill it with sample acts, venues and bookings to try things out (remove them in one click later)</span>
         </label>
         <label className="flex items-start gap-3 text-sm">
           <input type="checkbox" name="terms" required className="mt-0.5 h-4 w-4 accent-ink-950" />

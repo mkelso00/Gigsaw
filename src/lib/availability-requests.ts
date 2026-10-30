@@ -57,7 +57,7 @@ export async function sendAvailability(requestId: string, replyIds?: string[]) {
       const t = messageFor(settings?.messageTemplates, "AVAILABILITY", {
         first_name: r.firstName,
         act: reply.artist.name,
-        venue: place || "a gig",
+        venue: place || "a booking",
         date,
         time: req.startTime || req.arriveTime,
         business: agencyName,

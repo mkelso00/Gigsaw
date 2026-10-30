@@ -123,7 +123,7 @@ export async function updateEvent(eventId: string, _: FormState, form: FormData)
     });
     await logActivity(user, "EVENT", eventId, "updated");
     revalidatePath("/", "layout");
-    return { ok: before.date !== basics.date ? "Saved. The date changed: move each act's gig on its booking too." : "Saved." };
+    return { ok: before.date !== basics.date ? "Saved. The date changed: move each act's booking on its booking too." : "Saved." };
   });
 }
 
@@ -136,7 +136,7 @@ export async function updateEventPlan(eventId: string, _: FormState, form: FormD
     await prisma.event.update({ where: { id: eventId }, data: { ...data, guestCount: int(form, "guestCount") } });
     await logActivity(user, "EVENT", eventId, "updated the plan");
     revalidatePath(`/events/${eventId}`);
-    return { ok: "Plan saved. The acts see it on their gig page." };
+    return { ok: "Plan saved. The acts see it on their booking page." };
   });
 }
 
@@ -200,7 +200,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
     return {
       ok: artist
         ? `${artist.name} added (${b.reference})${status === "AWAITING" ? ": offer sent" : ""}.`
-        : `Gig added (${b.reference}): Pending, needs an act.`,
+        : `Booking added (${b.reference}): Pending, needs an act.`,
     };
   });
 }

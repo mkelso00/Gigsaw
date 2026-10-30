@@ -119,7 +119,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <div>
       <PageHeader
         title="Reports"
-        subtitle="What the acts earned, what venues and clients paid, and what we made. Confirmed and settled gigs only."
+        subtitle="What the acts earned, what venues and clients paid, and what we made. Confirmed and settled bookings only."
         actions={
           <>
             <Link href={`/reports/venues?from=${from}&to=${to}`} className="btn">
@@ -186,7 +186,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Stat label="Gigs" value={total.gigs} hint={label} />
+        <Stat label="Bookings" value={total.gigs} hint={label} />
         <Stat label="Venues and clients paid" value={m(total.sale)} hint={total.owed ? `${m(total.owed)} still owed` : "All paid"} />
         <Stat label="Acts earned" value={m(total.cost)} hint={total.toPay ? `${m(total.toPay)} still to pay` : "All paid"} />
         <Stat
@@ -202,12 +202,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </div>
       {otherCurrencies > 0 && (
         <p className="mb-6 text-sm text-ink-500">
-          {otherCurrencies} gig{otherCurrencies === 1 ? "" : "s"} in other currencies {otherCurrencies === 1 ? "is" : "are"} left out of these totals.
+          {otherCurrencies} booking{otherCurrencies === 1 ? "" : "s"} in other currencies {otherCurrencies === 1 ? "is" : "are"} left out of these totals.
         </p>
       )}
 
       {inCur.length === 0 ? (
-        <Empty>No confirmed or settled gigs in {period === "custom" ? "these dates" : `this ${period}`}.</Empty>
+        <Empty>No confirmed or settled bookings in {period === "custom" ? "these dates" : `this ${period}`}.</Empty>
       ) : (
         <div className="space-y-8">
           {buckets.length > 0 && (
@@ -218,7 +218,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <thead>
                     <tr>
                       <th />
-                      <th className="text-right">Gigs</th>
+                      <th className="text-right">Bookings</th>
                       <th className="text-right">Venues and clients paid</th>
                       <th className="text-right">Acts earned</th>
                       <th className="text-right">We made</th>
@@ -259,7 +259,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 <thead>
                   <tr>
                     <th>Act</th>
-                    <th className="text-right">Gigs</th>
+                    <th className="text-right">Bookings</th>
                     <th className="text-right">Earned</th>
                     <th className="text-right">Paid</th>
                     <th className="text-right">Still to pay</th>
@@ -296,14 +296,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <section>
             <h2 className="section-title mb-3">What each venue paid for live music</h2>
             {venues.size === 0 ? (
-              <Empty>No bar gigs in these dates.</Empty>
+              <Empty>No bar bookings in these dates.</Empty>
             ) : (
               <div className="card overflow-x-auto">
                 <table className="table">
                   <thead>
                     <tr>
                       <th>Venue</th>
-                      <th className="text-right">Gigs</th>
+                      <th className="text-right">Bookings</th>
                       <th className="text-right">Paid for music</th>
                       <th className="text-right">Acts earned</th>
                       <th className="text-right">We made</th>
@@ -346,7 +346,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <thead>
                     <tr>
                       <th>Client or event</th>
-                      <th className="text-right">Gigs</th>
+                      <th className="text-right">Bookings</th>
                       <th className="text-right">Paid for music</th>
                       <th className="text-right">Acts earned</th>
                       <th className="text-right">We made</th>

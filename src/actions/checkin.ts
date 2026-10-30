@@ -33,13 +33,13 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
     include: { venue: true, checkIns: { select: { kind: true } } },
   });
   // Artists can only check in to their own gigs (any act they're in).
-  if (!booking || !booking.artistId || !(await actIdsFor(user)).includes(booking.artistId)) return { ok: false, message: "Gig not found." };
-  if (booking.status === "CANCELLED") return { ok: false, message: "This gig has been cancelled." };
+  if (!booking || !booking.artistId || !(await actIdsFor(user)).includes(booking.artistId)) return { ok: false, message: "Booking not found." };
+  if (booking.status === "CANCELLED") return { ok: false, message: "This booking has been cancelled." };
 
   const now = new Date();
   const window = checkInWindow(booking.arriveBy, booking.setStart, booking.setEnd);
   if (now < window.opensAt) return { ok: false, message: "Check-in opens 12 hours before your call time." };
-  if (now > window.closesAt) return { ok: false, message: "Check-in for this gig has closed." };
+  if (now > window.closesAt) return { ok: false, message: "Check-in for this booking has closed." };
 
   const has = (k: string) => booking.checkIns.some((c) => c.kind === k);
   if (payload.kind === "ARRIVED" && has("ARRIVED")) return { ok: false, message: "You've already checked in as arrived." };

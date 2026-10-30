@@ -11,7 +11,7 @@ const SHOWN_STATUSES = ["HOLD", "PENDING", "CONFIRMED", "SETTLED"];
 
 export type LineupEntry =
   | {
-      kind: "gig";
+      kind: "booking";
       id: string;
       start: Date;
       end: Date | null;
@@ -80,7 +80,7 @@ export async function venueLineup(venue: { id: string; agencyId: string; timezon
     const key = localDateKey(b.arriveBy, tz);
     if (b.slotId) filled.add(`${b.slotId}|${key}`);
     add(key, {
-      kind: "gig",
+      kind: "booking",
       id: b.id,
       start: b.setStart,
       end: b.setEnd,

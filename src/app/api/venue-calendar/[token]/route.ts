@@ -13,7 +13,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const now = new Date();
   const events = days.flatMap(([, entries]) =>
     entries
-      .filter((e) => e.kind === "gig")
+      .filter((e) => e.kind === "booking")
       .map((e) => ({
         uid: `${e.id}@gigsaw-venue`,
         start: e.start,

@@ -85,7 +85,7 @@ export default async function VenueInvoicePage({
           ))}
           <tr>
             <td colSpan={2} className="py-2 text-right text-slate-500">
-              Subtotal ({s.totals.gigs} gig{s.totals.gigs === 1 ? "" : "s"})
+              Subtotal ({s.totals.gigs} booking{s.totals.gigs === 1 ? "" : "s"})
             </td>
             <td className="py-2 text-right">{m(s.totals.sale)}</td>
           </tr>

@@ -78,7 +78,7 @@ export default async function AvailabilityRequestPage({ params, searchParams }: 
           <>
             {r.booking && (
               <Link href={`/bookings/${r.booking.id}`} className="btn">
-                Gig {r.booking.reference}
+                Booking {r.booking.reference}
               </Link>
             )}
             {open && c.waiting > 0 && (

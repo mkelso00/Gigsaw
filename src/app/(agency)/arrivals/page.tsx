@@ -88,7 +88,7 @@ export default async function ArrivalsPage() {
       <section className="mb-8">
         <h2 className="section-title mb-3">Live board</h2>
         {board.length === 0 ? (
-          <Empty>No gigs with a call time in the last 12 or next 24 hours.</Empty>
+          <Empty>No bookings with a call time in the last 12 or next 24 hours.</Empty>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
             {board.map(({ b, a }) => (

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Gigsaw",
     short_name: "Gigsaw",
-    description: "Your gigs, itineraries and arrival check-ins.",
+    description: "Your bookings, itineraries and arrival check-ins.",
     start_url: "/app",
     display: "standalone",
     background_color: "#15181c",

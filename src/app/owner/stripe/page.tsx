@@ -93,7 +93,7 @@ export default async function OwnerStripePage() {
         <Status
           on={!!keys.connectWebhookSecret}
           title="Card payments webhook"
-          sub={keys.connectWebhookSecret ? "Signing secret saved." : "Needed so card payments are recorded on the gig."}
+          sub={keys.connectWebhookSecret ? "Signing secret saved." : "Needed so card payments are recorded on the booking."}
         />
         {allSet && (
           <p className="px-5 py-3 text-sm text-volt-700">All set. Businesses can subscribe, and take card payments once they connect their own Stripe.</p>

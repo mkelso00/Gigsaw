@@ -143,7 +143,7 @@ export default async function DashboardPage() {
       key: "noact",
       tone: "soon",
       count: oneOffsNoAct,
-      text: `other gig${oneOffsNoAct === 1 ? "" : "s"} in the next 14 days ${oneOffsNoAct === 1 ? "has" : "have"} no act yet`,
+      text: `other booking${oneOffsNoAct === 1 ? "" : "s"} in the next 14 days ${oneOffsNoAct === 1 ? "has" : "have"} no act yet`,
       href: "/bookings?artist=none",
       action: "See",
     });
@@ -181,7 +181,7 @@ export default async function DashboardPage() {
       key: "unresolved",
       tone: "soon",
       count: unresolved,
-      text: `past gig${unresolved === 1 ? " is" : "s are"} still on enquiry, hold or pending`,
+      text: `past booking${unresolved === 1 ? " is" : "s are"} still on enquiry, hold or pending`,
       href: "/bookings?status=UNRESOLVED&when=all",
       action: "Tidy up",
     });

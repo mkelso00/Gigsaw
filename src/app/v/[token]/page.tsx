@@ -30,7 +30,10 @@ export default async function VenueLineupPage({ params }: { params: Promise<{ to
         <div className="mx-auto max-w-3xl px-5 pt-6 pb-10">
           <div className="flex items-center justify-between">
             <Logo size={26} sub={agencyName} />
-            <a href={feed.replace(/^https?:\/\//, "webcal://")} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10">
+            <a
+              href={feed.replace(/^https?:\/\//, "webcal://")}
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10"
+            >
               Add to calendar
             </a>
           </div>
@@ -44,10 +47,12 @@ export default async function VenueLineupPage({ params }: { params: Promise<{ to
         {days.length === 0 && <div className="card p-8 text-center text-ink-500">Nothing booked in the next eight weeks yet.</div>}
         {days.map(([key, entries]) => (
           <section key={key} className={`card overflow-hidden ${key === today ? "ring-2 ring-volt-400" : ""}`}>
-            <h2 className={`px-5 py-3 text-sm font-semibold ${key === today ? "bg-volt-300 text-ink-950" : "border-b border-ink-100"}`}>{dayTitle(key, today)}</h2>
+            <h2 className={`px-5 py-3 text-sm font-semibold ${key === today ? "bg-volt-300 text-ink-950" : "border-b border-ink-100"}`}>
+              {dayTitle(key, today)}
+            </h2>
             <ul className="divide-y divide-ink-100">
               {entries.map((e) =>
-                e.kind === "gig" ? (
+                e.kind === "booking" ? (
                   <li key={e.id} className="flex flex-wrap items-center gap-x-5 gap-y-1 px-5 py-4">
                     <div className="w-28 shrink-0 font-semibold tabular-nums">
                       {t(e.start)}

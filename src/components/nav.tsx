@@ -160,7 +160,7 @@ export function NavLinks({
                 {badges[l.href] ? (
                   <span
                     className="ml-auto rounded-full bg-cue-500 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white"
-                    title={BADGE_TITLES[l.href] ?? "Gigs in the next 7 days with no act"}
+                    title={BADGE_TITLES[l.href] ?? "Bookings in the next 7 days with no act"}
                   >
                     {badges[l.href]}
                   </span>

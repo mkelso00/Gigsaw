@@ -190,10 +190,10 @@ export async function approveApplication(id: string, _: FormState): Promise<Form
           intro:
             w.intro ??
             (loginTaken
-              ? `${agencyName} has approved your details. Log in with your usual Gigsaw account to see your gigs.`
-              : `${agencyName} has approved your details. Log in with this email and the password you chose to see your gigs, accept offers and check in on the night.`),
+              ? `${agencyName} has approved your details. Log in with your usual Gigsaw account to see your bookings.`
+              : `${agencyName} has approved your details. Log in with this email and the password you chose to see your bookings, accept offers and check in on the night.`),
           cta: { label: "Log in", url: `${appUrl()}/login` },
-          outro: "Add it to your home screen so it's one tap away on gig nights.",
+          outro: "Add it to your home screen so it's one tap away on booking nights.",
         },
       });
   });

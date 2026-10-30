@@ -60,7 +60,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
   return (
     <div className="space-y-5">
       <Link href="/app" className="text-sm text-ink-400 hover:text-white">
-        ← All gigs
+        ← All bookings
       </Link>
       <div>
         <div className="flex items-center gap-2">
@@ -84,7 +84,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
             hasDeparted={b.checkIns.some((c) => c.kind === "DEPARTED")}
             windowOpen={now >= w.opensAt && now <= w.closesAt}
             windowMessage={
-              now < w.opensAt ? `Check-in opens ${formatDate(w.opensAt, tz)} at ${localTime(w.opensAt, tz)}.` : "Check-in for this gig has closed."
+              now < w.opensAt ? `Check-in opens ${formatDate(w.opensAt, tz)} at ${localTime(w.opensAt, tz)}.` : "Check-in for this booking has closed."
             }
           />
           {b.checkIns.length > 0 && (

@@ -24,8 +24,8 @@ export default async function ReminderSettings() {
             <SettingsToggle
               name="weeklyReminders"
               defaultChecked={settings.weeklyReminders}
-              label="Weekly list of gigs"
-              hint="Each act gets their gigs for the coming Monday to Sunday: on hold, pending and confirmed, never enquiries or cancelled gigs."
+              label="Weekly list of bookings"
+              hint="Each act gets their bookings for the coming Monday to Sunday: on hold, pending and confirmed, never enquiries or cancelled bookings."
             >
               <div className="grid gap-4 p-5 sm:grid-cols-2">
                 <Field label="Day">
@@ -46,7 +46,7 @@ export default async function ReminderSettings() {
               name="dayReminders"
               defaultChecked={settings.dayReminders}
               label="Reminder on the day"
-              hint="“Don’t forget your gig this evening”. For an afternoon gig it goes 3 hours before the arrive-by time instead."
+              hint="“Don’t forget your booking this evening”. For an afternoon booking it goes 3 hours before the arrive-by time instead."
             >
               <div className="grid gap-4 p-5 sm:grid-cols-2">
                 <Field label="Time on the day" hint="The venue's local time">

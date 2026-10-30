@@ -64,7 +64,7 @@ export async function actHintsOn(agencyId: string, dateKey: string, timezone: st
     out.set(e.artistId, { hint: why ? `Away: ${why}` : "Away", tone: "away" });
   }
   for (const g of gigs) {
-    if (g.artistId && !out.has(g.artistId) && localDateKey(g.arriveBy, g.timezone) === dateKey) out.set(g.artistId, { hint: "Has a gig", tone: "busy" });
+    if (g.artistId && !out.has(g.artistId) && localDateKey(g.arriveBy, g.timezone) === dateKey) out.set(g.artistId, { hint: "Has a booking", tone: "busy" });
   }
   return out;
 }

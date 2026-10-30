@@ -52,13 +52,14 @@ export async function sendOffers(bookingIds: string[]) {
     const agencyName = first.agency.settings?.agencyName || first.agency.name;
     const link = `${appUrl()}/o/${first.offerToken}`;
     const n = list.length;
-    const title = n === 1 ? `Gig offer: ${first.venue?.name ?? "a gig"}, ${formatDate(first.arriveBy, first.timezone)}` : `${n} gig offers from ${agencyName}`;
+    const title =
+      n === 1 ? `Booking offer: ${first.venue?.name ?? "a booking"}, ${formatDate(first.arriveBy, first.timezone)}` : `${n} booking offers from ${agencyName}`;
     const base = { kind: "BOOKING_CHANGE" as const, agencyId: first.agencyId, bookingId: n === 1 ? first.id : null };
     const named = r.isMember || new Set(list.map((g) => g.artistId)).size > 1;
     const t = messageFor(first.agency.settings?.messageTemplates, "OFFER", {
       first_name: r.firstName,
       act: first.artist?.name,
-      venue: first.venue?.name ?? "a gig",
+      venue: first.venue?.name ?? "a booking",
       date: formatDate(first.arriveBy, first.timezone),
       time: localTime(first.arriveBy, first.timezone),
       business: agencyName,
@@ -83,7 +84,7 @@ export async function sendOffers(bookingIds: string[]) {
           title,
           intro:
             t.intro ??
-            `Hi ${r.firstName}, ${agencyName} would like to book ${named ? "your act" : "you"} for ${n === 1 ? "this gig" : "these gigs"}. Please accept or decline as soon as you can.`,
+            `Hi ${r.firstName}, ${agencyName} would like to book ${named ? "your act" : "you"} for ${n === 1 ? "this booking" : "these bookings"}. Please accept or decline as soon as you can.`,
           rows: list.map((g) => {
             const fee = dealBreakdown(g).artistMinor;
             return [
@@ -102,7 +103,7 @@ export async function sendOffers(bookingIds: string[]) {
         to: r.phone,
         text: t.text
           ? `${t.text} ${link}`
-          : `${agencyName}: ${n === 1 ? `gig offer, ${first.venue?.name ?? ""} ${formatDate(first.arriveBy, first.timezone)}` : `${n} gig offers`}. Accept or decline: ${link}`,
+          : `${agencyName}: ${n === 1 ? `booking offer, ${first.venue?.name ?? ""} ${formatDate(first.arriveBy, first.timezone)}` : `${n} booking offers`}. Accept or decline: ${link}`,
       });
     }
   }
@@ -134,7 +135,7 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
   if (answer === "ACCEPTED") await onConfirmed(b.id);
   const agencyName = b.agency.settings?.agencyName || b.agency.name;
   const accepted = answer === "ACCEPTED";
-  const subject = `${b.artist.name} ${accepted ? "accepted" : "declined"}: ${b.venue?.name ?? "gig"}, ${formatDate(b.arriveBy, b.timezone)}`;
+  const subject = `${b.artist.name} ${accepted ? "accepted" : "declined"}: ${b.venue?.name ?? "booking"}, ${formatDate(b.arriveBy, b.timezone)}`;
   // The lead agent hears about it (unless they've turned this off); with no agent, the business email does.
   const kind = accepted ? "ACCEPTED" : "DECLINED";
   const to = b.agent ? (wants(b.agent.notifyPrefs, kind, "email") ? b.agent.email : null) : b.agency.settings?.agencyEmail;
@@ -147,9 +148,9 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
       email: {
         brand: agencyName,
         title: subject,
-        highlight: { label: accepted ? "Confirmed" : "Declined", value: accepted ? "The gig is on" : "Find another act", tone: accepted ? "good" : "bad" },
+        highlight: { label: accepted ? "Confirmed" : "Declined", value: accepted ? "The booking is on" : "Find another act", tone: accepted ? "good" : "bad" },
         rows: [
-          ["Gig", `${b.venue?.name ?? "No venue"}${b.venue?.city ? `, ${b.venue.city}` : ""}`],
+          ["Booking", `${b.venue?.name ?? "No venue"}${b.venue?.city ? `, ${b.venue.city}` : ""}`],
           ["When", when(b)],
         ],
         cta: { label: "Open the booking", url: `${appUrl()}/bookings/${b.id}` },

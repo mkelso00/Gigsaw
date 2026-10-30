@@ -50,7 +50,7 @@ export default async function OwnerHome() {
       />
       <div className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Active businesses" value={agencies.filter((a) => a.status === "ACTIVE").length} hint={`${agencies.length} in total`} />
-        <Stat label={`Billable gigs, ${monthLabel(month)}`} value={totalGigs} hint="So far this month" />
+        <Stat label={`Billable bookings, ${monthLabel(month)}`} value={totalGigs} hint="So far this month" />
         <Stat label="This month so far" value={money(byCurrency)} hint="At each business's prices" href="/owner/billing" />
         <Stat
           label="Unpaid statements"
@@ -74,7 +74,7 @@ export default async function OwnerHome() {
             const plan =
               a.billingMode === "STRIPE"
                 ? `${a.plan ? a.plan.charAt(0) + a.plan.slice(1).toLowerCase() : "No plan"} · ${billingState(a).label}`
-                : `${formatMoney(a.pricePerGigMinor, a.billingCurrency)} per gig`;
+                : `${formatMoney(a.pricePerGigMinor, a.billingCurrency)} per booking`;
             return (
               <li key={a.id} className={i > 0 ? "border-t border-ink-100" : ""}>
                 <Link href={`/owner/businesses/${a.id}`} className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-ink-50">
@@ -99,7 +99,7 @@ export default async function OwnerHome() {
                     </span>
                   </span>
                   <span className="hidden w-24 text-right sm:block">
-                    <span className="block font-mono text-[10px] tracking-[0.12em] text-ink-400 uppercase">Gigs</span>
+                    <span className="block font-mono text-[10px] tracking-[0.12em] text-ink-400 uppercase">Bookings</span>
                     <span className="font-mono text-sm tabular-nums">{gigs}</span>
                   </span>
                   <span className="w-24 text-right">

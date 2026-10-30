@@ -138,7 +138,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         </div>
         {tab !== "history" ? (
           <Link href={upcoming ? `/payments?tab=${tab}` : `/payments?tab=${tab}&upcoming=1`} className="btn btn-sm">
-            {upcoming ? "Gigs that have happened only" : "Include upcoming gigs"}
+            {upcoming ? "Bookings that have happened only" : "Include upcoming bookings"}
           </Link>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -179,7 +179,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Gig</th>
+                    <th>Booking</th>
                     <th>From / to</th>
                     <th>Type</th>
                     <th className="text-right">In</th>
@@ -221,13 +221,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               tone={owedTotal ? "dark" : "default"}
               label={tab === "collect" ? "Still to collect" : "Still to pay acts"}
               value={m(owedTotal)}
-              hint={`${sorted.reduce((t, g) => t + g.rows.length, 0)} gigs`}
+              hint={`${sorted.reduce((t, g) => t + g.rows.length, 0)} bookings`}
             />
             <Stat label={tab === "collect" ? "Venues and clients" : "Acts"} value={sorted.length} />
             <Stat
               label="Oldest"
               value={oldest > 0 ? `${oldest} day${oldest === 1 ? "" : "s"}` : "-"}
-              hint="since the gig"
+              hint="since the booking"
               tone={oldest > 30 ? "alert" : "default"}
             />
           </div>
@@ -242,7 +242,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       {g.colour && <ArtistDot colour={g.colour} />}
                       {g.name}
                       <span className="text-sm font-normal text-ink-500">
-                        · {g.rows.length} gig{g.rows.length === 1 ? "" : "s"}
+                        · {g.rows.length} booking{g.rows.length === 1 ? "" : "s"}
                       </span>
                     </span>
                     <span className="text-lg font-semibold tabular-nums">{m(g.total)}</span>
@@ -252,10 +252,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Gig</th>
+                          <th>Booking</th>
                           <th>{tab === "collect" ? "Act" : "Date"}</th>
                           <th className="text-right">Owed</th>
-                          <th className="text-right">Since gig</th>
+                          <th className="text-right">Since booking</th>
                         </tr>
                       </thead>
                       <tbody>

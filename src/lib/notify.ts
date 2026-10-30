@@ -50,9 +50,9 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
 
   const tz = b.timezone;
   const agencyName = b.agency.settings?.agencyName || b.agency.name;
-  const where = b.venue?.name ?? "your gig";
+  const where = b.venue?.name ?? "your booking";
   const cancelled = b.status === "CANCELLED" && before.status !== "CANCELLED";
-  const title = cancelled ? `Cancelled: ${where}, ${formatDate(b.arriveBy, tz)}` : `Your gig at ${where} has changed`;
+  const title = cancelled ? `Cancelled: ${where}, ${formatDate(b.arriveBy, tz)}` : `Your booking at ${where} has changed`;
   const base = { kind: "BOOKING_CHANGE" as const, agencyId: b.agencyId, bookingId: b.id };
   const replyTo = b.agent?.email || b.agency.settings?.agencyEmail;
 
@@ -90,8 +90,8 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
           preheader: changes.map(([k, , v]) => `${k}: ${v}`).join(" · "),
           title,
           intro: cancelled
-            ? `Hi ${r.firstName}, ${r.isMember ? `${act.name}'s gig` : "this gig"} has been cancelled.`
-            : (t.intro ?? `Hi ${r.firstName}, ${agencyName} has updated ${whose} gig. Here's what's different:`),
+            ? `Hi ${r.firstName}, ${r.isMember ? `${act.name}'s booking` : "this booking"} has been cancelled.`
+            : (t.intro ?? `Hi ${r.firstName}, ${agencyName} has updated ${whose} booking. Here's what's different:`),
           changes,
           rows: cancelled
             ? []
@@ -112,7 +112,7 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
       await sendSms({
         ...base,
         to: r.phone,
-        text: `${agencyName}: ${cancelled ? "CANCELLED" : "Gig change"}${r.isMember ? ` (${act.name})` : ""} at ${where}, ${formatDate(b.arriveBy, tz)}. ${summary}.${link ? ` ${link}` : ""}`,
+        text: `${agencyName}: ${cancelled ? "CANCELLED" : "Booking change"}${r.isMember ? ` (${act.name})` : ""} at ${where}, ${formatDate(b.arriveBy, tz)}. ${summary}.${link ? ` ${link}` : ""}`,
       });
     }
   }
@@ -153,7 +153,8 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
       business: agencyName,
     });
     if (!t.on) continue;
-    const title = n === 1 ? `New gig: ${first.venue?.name ?? "booked"}, ${formatDate(first.arriveBy, first.timezone)}` : `You've been booked for ${n} gigs`;
+    const title =
+      n === 1 ? `New booking: ${first.venue?.name ?? "booked"}, ${formatDate(first.arriveBy, first.timezone)}` : `You've been booked for ${n} bookings`;
     const link = r.userId ? `${appUrl()}/app` : null;
     const base = { kind: "BOOKING_CHANGE" as const, agencyId: first.agencyId, bookingId: n === 1 ? first.id : null };
     if (r.userId) await sendPush({ ...base, userId: r.userId, payload: { title, body: line(first), url: "/app", tag: `new-${first.id}` } });
@@ -169,7 +170,7 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
           title,
           intro: t.intro ?? `Hi ${r.firstName}, ${agencyName} has booked you for:`,
           rows: gigs.slice(0, 40).map((b) => [formatDate(b.arriveBy, b.timezone), line(b).split(": ").slice(1).join(": ")]),
-          cta: link ? { label: "See your gigs", url: link } : undefined,
+          cta: link ? { label: "See your bookings", url: link } : undefined,
           outro: "Times are the venue's local time. Reply to this email if anything doesn't work for you.",
         },
       });
@@ -178,7 +179,7 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
       await sendSms({
         ...base,
         to: r.phone,
-        text: `${agencyName}: ${n === 1 ? "new gig" : `${n} new gigs`} booked. ${n === 1 ? line(first) : `First: ${line(first)}`}.${link ? ` ${link}` : ""}`,
+        text: `${agencyName}: ${n === 1 ? "new booking" : `${n} new bookings`} booked. ${n === 1 ? line(first) : `First: ${line(first)}`}.${link ? ` ${link}` : ""}`,
       });
     }
     sent++;

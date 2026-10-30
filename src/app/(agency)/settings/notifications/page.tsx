@@ -71,7 +71,12 @@ export default async function NotificationSettings() {
 
       <SettingsSection>
         <SettingsCard>
-          <SettingsRow icon="user" title="Your own alerts" sub="Late acts, turned-down gigs and more: each person chooses in their profile" href="/profile" />
+          <SettingsRow
+            icon="user"
+            title="Your own alerts"
+            sub="Late acts, turned-down bookings and more: each person chooses in their profile"
+            href="/profile"
+          />
           <SettingsRow icon="arrivals" title="Late act alerts" sub="Who's alerted when an act is late, and an on-call contact" href="/settings/arrivals" />
           <SettingsRow
             icon="messages"

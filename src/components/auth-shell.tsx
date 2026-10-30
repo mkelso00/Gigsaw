@@ -8,7 +8,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         <Logo size={32} />
         <div className="my-auto max-w-lg">
           <h2 className="text-[56px] leading-[0.95] font-semibold tracking-[-0.04em]">
-            Every gig.
+            Every booking.
             <br />
             <span className="text-volt-400">On time.</span>
           </h2>

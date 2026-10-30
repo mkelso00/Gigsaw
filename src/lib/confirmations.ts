@@ -44,7 +44,7 @@ export async function onConfirmed(bookingId: string) {
     business: agencyName,
   };
   const actOn = messageFor(templates, "BOOKED", gigVars).on;
-  const title = `You're booked: ${b.venue?.name ?? b.event?.name ?? "gig"}, ${formatDate(b.arriveBy, b.timezone)}`;
+  const title = `You're booked: ${b.venue?.name ?? b.event?.name ?? "booking"}, ${formatDate(b.arriveBy, b.timezone)}`;
   for (const r of actOn ? ((await recipientsForActs([b.artistId])).get(b.artistId) ?? []) : []) {
     const t = messageFor(templates, "BOOKED", { ...gigVars, first_name: r.firstName });
     const link = r.userId ? `${appUrl()}/app/gigs/${b.id}` : null;
@@ -75,7 +75,7 @@ export async function onConfirmed(bookingId: string) {
             ...(fee > 0 ? ([["Fee", formatMoney(fee, b.currency)]] as [string, string][]) : []),
           ],
           cta: link ? { label: "Open in Gigsaw", url: link } : undefined,
-          outro: "If you've added your gigs to your phone's calendar, it'll appear there by itself.",
+          outro: "If you've added your bookings to your phone's calendar, it'll appear there by itself.",
         },
       });
     }

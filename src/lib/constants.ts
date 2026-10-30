@@ -49,7 +49,7 @@ export const EVENT_TYPES = ["GIG", "FESTIVAL", "CLUB_NIGHT", "WEDDING", "CORPORA
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  GIG: "Bar gig",
+  GIG: "Bar or pub",
   FESTIVAL: "Festival",
   CLUB_NIGHT: "Club night",
   WEDDING: "Wedding",

@@ -132,7 +132,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
         <details className="card mb-6 [&[open]>summary]:border-b [&[open]>summary]:border-ink-100" id="add-gig">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
             <span>
-              <span className="section-title">Add a gig</span>
+              <span className="section-title">Add a booking</span>
               <span className="ml-2 text-sm text-ink-500">Any date, any venue. One-off, or every week.</span>
             </span>
             <span className="btn btn-sm">+ Add</span>
@@ -155,7 +155,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
           <Link href="/venues" className="link">
             venue
           </Link>{" "}
-          and add its music schedule, for example Mon to Thu 19:00–21:00 solo, or use Add a gig above.
+          and add its music schedule, for example Mon to Thu 19:00–21:00 solo, or use Add a booking above.
         </Empty>
       ) : (
         <>
@@ -195,7 +195,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                 <h2 className="section-title">
                   Needs an act <span className="font-normal text-ink-500">· {needs.length} in the next 4 weeks</span>
                 </h2>
-                <span className="text-xs text-ink-500">Soonest first. Offer sends the act the gig to accept; Confirm books them straight in.</span>
+                <span className="text-xs text-ink-500">Soonest first. Offer sends the act the booking to accept; Confirm books them straight in.</span>
               </div>
               <ul className="divide-y divide-ink-100">
                 {needs.slice(0, 40).map(({ date, slot }) => (
@@ -374,7 +374,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
             </table>
           </div>
           <p className="mt-3 text-xs text-ink-500">
-            Booking a slot or adding a gig tells the artist by email and text. Tick &ldquo;Every …&rdquo; when adding to make it a weekly slot. Change a
+            Booking a slot or adding a booking tells the artist by email and text. Tick &ldquo;Every …&rdquo; when adding to make it a weekly slot. Change a
             slot&apos;s times or fee on the venue&apos;s page.
           </p>
         </>

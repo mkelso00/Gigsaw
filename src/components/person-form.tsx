@@ -128,7 +128,7 @@ export function PersonForm({
       {row(
         "Phone number",
         <input name="phone" type="tel" defaultValue={values.phone} placeholder="07700 900000" className="input sm:max-w-xs" />,
-        "Used for gig reminders and changes by text.",
+        "Used for booking reminders and changes by text.",
       )}
       {row("Social media", <input name="social" defaultValue={values.social} placeholder="@handle" className="input" />)}
       {row("Website", <input name="website" defaultValue={values.website} placeholder="https://" className="input" />)}

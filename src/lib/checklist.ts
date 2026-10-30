@@ -111,7 +111,7 @@ export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depo
   const items: ChecklistItem[] = [];
   if (b.status === "CANCELLED") return [{ level: "ok", label: "Booking is cancelled" }];
   if (!b.artistId)
-    items.push({ level: "warning", label: "No act yet", detail: "Add an act, then set the status to Awaiting confirmation to offer them the gig." });
+    items.push({ level: "warning", label: "No act yet", detail: "Add an act, then set the status to Awaiting confirmation to offer them the booking." });
 
   const label = (o: OtherBooking) =>
     `${o.reference}${o.artistId !== b.artistId ? ` (${o.artistName ?? "another act"}, which shares a member)` : ""}${o.venue ? ` at ${o.venue.name}` : ""}`;
@@ -122,7 +122,7 @@ export function buildChecklist(b: ChecklistBooking, others: OtherBooking[], depo
   for (const f of clashes) items.push({ level: "error", label: "Double booking", detail: describeAssessment(f.assessment, label(f.other)) });
   for (const f of tight) items.push({ level: "error", label: "May not have time to get there", detail: describeAssessment(f.assessment, label(f.other)) });
   for (const f of fine)
-    items.push({ level: "ok", label: "Another gig the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
+    items.push({ level: "ok", label: "Another booking the same day, with time to travel", detail: describeAssessment(f.assessment, label(f.other)) });
   if (!findings.length) items.push({ level: "ok", label: "No double booking" });
 
   if (b.artistId) {

@@ -130,10 +130,10 @@ export default async function JoinPage({ params, searchParams }: { params: Promi
           <section className="card card-pad space-y-4">
             <div>
               <h2 className="section-title">Fee and bank details</h2>
-              <p className="text-sm text-ink-500">So we know what you usually charge and can pay you after each gig.</p>
+              <p className="text-sm text-ink-500">So we know what you usually charge and can pay you after each booking.</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Your usual fee for a bar gig (£)" hint="A guide; each gig's fee is agreed with you">
+              <Field label="Your usual fee for a bar booking (£)" hint="A guide; each booking's fee is agreed with you">
                 <input name="usualFee" inputMode="decimal" placeholder="0.00" className="input" />
               </Field>
               <Field label="Name on the account">

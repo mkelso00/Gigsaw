@@ -232,7 +232,8 @@ export async function sendActDetails(e: FullEvent) {
             brand: brandOf(e),
             title,
             intro:
-              t.intro ?? `Hi ${r.firstName}, here's everything for ${r.isMember ? `${b.artist.name}'s` : "your"} ${isWedding(e) ? "wedding" : "event"} gig.`,
+              t.intro ??
+              `Hi ${r.firstName}, here's everything for ${r.isMember ? `${b.artist.name}'s` : "your"} ${isWedding(e) ? "wedding" : "event"} booking.`,
             rows: [
               ["Where", where || "To be confirmed"],
               ["Arrive by", localTime(b.arriveBy, b.timezone)],

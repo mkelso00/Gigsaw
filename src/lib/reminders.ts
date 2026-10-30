@@ -117,7 +117,7 @@ async function deliver(d: Delivery) {
         title: d.title,
         intro: d.intro,
         rows: d.gigs.map((b) => [formatDate(b.arriveBy, b.timezone), `${label(b)}${b.venue?.city ? `, ${b.venue.city}` : ""}${held(b)}\n${times(b)}`]),
-        cta: d.to.userId ? { label: "Open my gigs", url: `${appUrl()}${d.url}` } : undefined,
+        cta: d.to.userId ? { label: "Open my bookings", url: `${appUrl()}${d.url}` } : undefined,
         outro: `Can't make one? Reply to this email to let ${d.agencyName} know.`,
       },
     });
@@ -169,8 +169,8 @@ export async function runReminders(now = new Date()) {
           agencyName,
           agencyEmail: s.agencyEmail,
           templates: s.messageTemplates,
-          title: `Your ${n === 1 ? "gig" : `${n} gigs`} ${thisWeek ? "this" : "next"} week`,
-          intro: `Hi ${who.firstName}, here are your gigs for the week starting ${formatDate(from, s.defaultTimezone)}. Times are when to arrive and when you're on.`,
+          title: `Your ${n === 1 ? "booking" : `${n} bookings`} ${thisWeek ? "this" : "next"} week`,
+          intro: `Hi ${who.firstName}, here are your bookings for the week starting ${formatDate(from, s.defaultTimezone)}. Times are when to arrive and when you're on.`,
           url: "/app",
           ttlSeconds: 24 * 3600,
         });
@@ -216,8 +216,8 @@ export async function runReminders(now = new Date()) {
           agencyName,
           agencyEmail: s.agencyEmail,
           templates: s.messageTemplates,
-          title: list.length > 1 ? `Don't forget: ${list.length} gigs today` : `Don't forget your gig ${partOfDay(first.arriveBy, first.timezone)}`,
-          intro: `Hi ${who.firstName}, a reminder about ${list.length > 1 ? "your gigs" : "your gig"} today. Remember to tap "I've arrived" in the app when you get there.`,
+          title: list.length > 1 ? `Don't forget: ${list.length} bookings today` : `Don't forget your booking ${partOfDay(first.arriveBy, first.timezone)}`,
+          intro: `Hi ${who.firstName}, a reminder about ${list.length > 1 ? "your bookings" : "your booking"} today. Remember to tap "I've arrived" in the app when you get there.`,
           url: list.length > 1 ? "/app" : `/app/gigs/${first.id}`,
           ttlSeconds: Math.max(600, Math.round((first.arriveBy.getTime() - now.getTime()) / 1000)),
         });

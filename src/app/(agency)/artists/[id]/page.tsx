@@ -124,14 +124,14 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
         <Stat
           label="On-time rate"
           value={stats.onTimeRate != null ? `${Math.round(stats.onTimeRate * 100)}%` : "No data"}
-          hint={stats.tracked ? `${stats.onTime} of ${stats.tracked} past gigs` : "Builds up as gigs happen"}
+          hint={stats.tracked ? `${stats.onTime} of ${stats.tracked} past bookings` : "Builds up as bookings happen"}
         />
         <Stat
           label="Late arrivals"
           value={stats.late}
           hint={stats.averageMinutesLate != null ? `Avg ${formatMinutes(stats.averageMinutesLate)} late` : undefined}
         />
-        <Stat label="No check-in" value={stats.missing} hint="Gigs with no arrival recorded" />
+        <Stat label="No check-in" value={stats.missing} hint="Bookings with no arrival recorded" />
         <Stat
           label="Typical arrival"
           value={
@@ -218,8 +218,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           <section className="card card-pad" id="line-up">
             <h2 className="section-title">Members</h2>
             <p className="mt-1 mb-4 text-sm text-ink-500">
-              The acts that make up this one, e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo. Search your acts to add one. Their gigs are checked
-              against each other, and each member sees this act&apos;s gigs too.
+              The acts that make up this one, e.g. Wonderlust = Graham McKee Solo + Jo Drummond Solo. Search your acts to add one. Their bookings are checked
+              against each other, and each member sees this act&apos;s bookings too.
             </p>
             {artist.partActs.length > 0 && (
               <ul className="mb-4 divide-y divide-ink-100 text-sm">
@@ -278,7 +278,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             </div>
             <p className="mt-1 mb-4 text-sm text-ink-500">
               {artist.members.length
-                ? "Reminders and gig changes go to each person. Anyone in another act too is checked for clashes across both."
+                ? "Reminders and booking changes go to each person. Anyone in another act too is checked for clashes across both."
                 : "Optional: the people in this act, with their own phone, email and login. Until you add any, reminders and changes go to the act's own email and phone."}
             </p>
             {artist.members.length > 0 && (
@@ -321,11 +321,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             <p className="mt-1 text-sm text-slate-500">
               {artist.login
                 ? `Signed up as ${artist.login.email}. Set a new password below if they've forgotten it.`
-                : "Give the artist a login so they can see their gigs and check in on arrival from their phone."}
+                : "Give the artist a login so they can see their bookings and check in on arrival from their phone."}
             </p>
             <p className="mt-1 mb-4 text-sm text-ink-500" data-testid="push-status">
               {!artist.login
-                ? "Gig reminders go by email and text until they have a login."
+                ? "Booking reminders go by email and text until they have a login."
                 : artist.login.pushSubscriptions.length
                   ? `Phone reminders on: ${[...new Set(artist.login.pushSubscriptions.map((p) => p.device || "Phone"))].join(", ")}.`
                   : "Phone reminders are off. They can turn them on in their app; until then reminders go by email and text."}

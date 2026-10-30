@@ -59,7 +59,7 @@ export default async function NewAvailabilityPage({ searchParams }: { searchPara
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Ask who's free"
-        eyebrow={gig ? "For a gig that needs an act" : undefined}
+        eyebrow={gig ? "For a booking that needs an act" : undefined}
         subtitle="Pick a date and the acts to ask. They answer Yes or No from a link or their app, and you see the answers come in."
       />
       <AvailabilityForm

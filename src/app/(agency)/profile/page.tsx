@@ -45,7 +45,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         </form>
       }
     >
-      <SettingsSection title="Your details" description="Your mobile is used for texts about late acts and turned-down gigs.">
+      <SettingsSection title="Your details" description="Your mobile is used for texts about late acts and turned-down bookings.">
         <SettingsCard pad>
           <ActionForm action={updateMyDetails} saveBar className="grid gap-4 sm:grid-cols-2">
             <Field label="Name">
@@ -64,7 +64,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
       <SettingsSection
         id="notifications"
         title="Notifications"
-        description="What you hear about on the gigs and events you look after. Turning one off here only affects you."
+        description="What you hear about on the bookings and events you look after. Turning one off here only affects you."
       >
         <ActionForm action={saveMyNotifications} saveBar className="space-y-4">
           <SettingsCard>

@@ -130,8 +130,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             <h2 className="section-title">App login</h2>
             <p className="mt-1 text-sm text-ink-500">
               {p.login
-                ? `Signs in as ${p.login.email}. They see the gigs for every act they're in, and only their act's fee, never what the venue or customer pays.`
-                : "Give them a login to see their gigs, check in on arrival and get reminders on their phone."}
+                ? `Signs in as ${p.login.email}. They see the bookings for every act they're in, and only their act's fee, never what the venue or customer pays.`
+                : "Give them a login to see their bookings, check in on arrival and get reminders on their phone."}
             </p>
             {p.login && (
               <p className="mt-1 text-sm text-ink-500" data-testid="push-status">

@@ -17,7 +17,8 @@ function getPosition(): Promise<{ pos: Position; problem?: string }> {
       (err) =>
         resolve({
           pos: null,
-          problem: err.code === err.PERMISSION_DENIED ? "Location is turned off for Gigsaw, so it wasn't shared." : "Couldn't get your location, so it wasn't shared.",
+          problem:
+            err.code === err.PERMISSION_DENIED ? "Location is turned off for Gigsaw, so it wasn't shared." : "Couldn't get your location, so it wasn't shared.",
         }),
       // Always take a fresh reading: a cached one from earlier in the journey would make
       // an arrival look like it happened away from the venue.
@@ -112,7 +113,7 @@ export function CheckInPanel({
           {busy === "DEPARTED" ? "Sending…" : "I've left the venue"}
         </button>
       )}
-      {hasArrived && hasDeparted && <p className="text-center text-sm text-ink-400">All done for this gig. Thanks!</p>}
+      {hasArrived && hasDeparted && <p className="text-center text-sm text-ink-400">All done for this booking. Thanks!</p>}
       {result && (
         <p role="status" className={`rounded-xl px-3 py-2.5 text-sm ${result.ok ? "bg-volt-400/10 text-volt-300" : "bg-rose-500/15 text-rose-300"}`}>
           {result.text}

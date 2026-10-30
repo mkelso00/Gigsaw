@@ -34,8 +34,8 @@ const AREAS: Area[] = [
       ],
       ["Book regulars", "Book every slot's regular act for 1 to 12 weeks in one go. Anything already booked is skipped, and nobody is ever double-booked."],
       [
-        "Add a gig anywhere",
-        "Add a one-off gig on any day of the rota, or tick “Every Thursday” to turn it into a weekly slot. Jump to any week with the date picker.",
+        "Add a booking anywhere",
+        "Add a one-off booking on any day of the rota, or tick “Every Thursday” to turn it into a weekly slot. Jump to any week with the date picker.",
       ],
       [
         "New booking from any page",
@@ -45,13 +45,13 @@ const AREAS: Area[] = [
         "A warning before a double-booking",
         "If times overlap, or there isn't enough time to pack down and travel between venues, Gigsaw explains why and lets you save anyway or go back. It even checks across bands that share a member.",
       ],
-      ["Change a slot, change its gigs", "New times or a new fee on a slot can be applied to every upcoming gig in it. Each act is told what changed."],
+      ["Change a slot, change its bookings", "New times or a new fee on a slot can be applied to every upcoming booking in it. Each act is told what changed."],
       [
         "Change or copy lots at once",
-        "Tick several gigs to move their times or set a new fee. Copy a booking to as many dates as you like from a mini calendar.",
+        "Tick several bookings to move their times or set a new fee. Copy a booking to as many dates as you like from a mini calendar.",
       ],
       [
-        "Gigs without an act stand out",
+        "Bookings without an act stand out",
         "A count in the menu, a banner on the dashboard and a “Needs an act” list on the rota, soonest first, each filled in one step.",
       ],
       ["Calendar and search", "Day, week and month views, coloured by venue or act. Search acts, venues, contacts and bookings from any page as you type."],
@@ -66,17 +66,17 @@ const AREAS: Area[] = [
     nav: "Offers",
     title: "Offers and confirmations",
     lead: [
-      "Create the gig first and add the act when you have one. A pending gig sits in the calendar with its venue, date, times and money, marked “Needs an act” until it's filled.",
-      "When you choose an act, send them an offer. They get the gig with their own fee only, and a private link to accept or decline. No login needed.",
+      "Create the booking first and add the act when you have one. A pending booking sits in the calendar with its venue, date, times and money, marked “Needs an act” until it's filled.",
+      "When you choose an act, send them an offer. They get the booking with their own fee only, and a private link to accept or decline. No login needed.",
     ],
     sketch: <OfferSketch />,
     points: [
       [
         "By email, text or phone notification",
-        "Each act, or each member of a band, is offered the gig in the way that reaches them. Offers also show at the top of the act app.",
+        "Each act, or each member of a band, is offered the booking in the way that reaches them. Offers also show at the top of the act app.",
       ],
-      ["Accept confirms the gig", "When an act accepts, the gig is confirmed and you get an email. They can accept several offers at once."],
-      ["Declines don't get lost", "A decline sends you an email and a text. The gig stays as it is, ready to offer to someone else."],
+      ["Accept confirms the booking", "When an act accepts, the booking is confirmed and you get an email. They can accept several offers at once."],
+      ["Declines don't get lost", "A decline sends you an email and a text. The booking stays as it is, ready to offer to someone else."],
       ["A clear list on the dashboard", "See every offer still waiting for an answer, and every one that's been turned down."],
       [
         "Straight from the rota",
@@ -105,7 +105,7 @@ const AREAS: Area[] = [
       ["On time or late", "An arrival is on time if it's within a grace period of the call time, five minutes unless you change it. After that it's late."],
       [
         "A live board",
-        "Every gig with a call time in the last 12 hours or the next 24: overdue, on the way with an arrival time, arrived on time, arrived late. It refreshes every 30 seconds.",
+        "Every booking with a call time in the last 12 hours or the next 24: overdue, on the way with an arrival time, arrived on time, arrived late. It refreshes every 30 seconds.",
       ],
       [
         "Late alerts",
@@ -125,14 +125,14 @@ const AREAS: Area[] = [
     title: "Weddings and private events",
     lead: [
       "A wedding is rarely one act. There's the ceremony singer, the band and the DJ, each with their own times and fees. In Gigsaw, the couple have one booking with every act on it.",
-      "Each act gets its own gig, with what the customer pays for it and what the act is paid. The customer's total, payments and balance are added up across all of them, on one combined invoice.",
+      "Each act gets its own booking, with what the customer pays for it and what the act is paid. The customer's total, payments and balance are added up across all of them, on one combined invoice.",
     ],
     points: [
       [
         "A planner link for the couple",
         "A private page, no login needed, for the running order, contact on the day, parking and load-in, dress code, food for the acts and song requests.",
       ],
-      ["Shared with the acts, without the prices", "Acts see the planner on their gig page, along with who else is performing. They never see any prices."],
+      ["Shared with the acts, without the prices", "Acts see the planner on their booking page, along with who else is performing. They never see any prices."],
       [
         "Automatic emails on the right days",
         "The planner link eight weeks before, a reminder at three weeks if it's not filled in, a balance reminder in the last two weeks, final details to the acts a week before, and a thank-you with your review link the day after.",
@@ -162,8 +162,11 @@ const AREAS: Area[] = [
         "Who owes what",
         "See what venues and clients still owe, and what's still to pay each act, grouped by venue, client or act. Mark a whole group paid with one button.",
       ],
-      ["Venue statements", "Pick a venue and a month. See every gig played there, what the venue owes and has paid, what each act was paid, and your margin."],
-      ["Invoices that stay private", "Print an invoice for the venue's confirmed gigs in the period. It never shows what the acts are paid."],
+      [
+        "Venue statements",
+        "Pick a venue and a month. See every booking played there, what the venue owes and has paid, what each act was paid, and your margin.",
+      ],
+      ["Invoices that stay private", "Print an invoice for the venue's confirmed bookings in the period. It never shows what the acts are paid."],
       [
         "Reports for any dates",
         "What venues and clients paid, what each act earned and what you made, by day, week or month. A table per act, per venue and per private client.",
@@ -179,14 +182,14 @@ const AREAS: Area[] = [
     title: "Acts, people and venues",
     lead: [
       "Gigsaw keeps people, companies and acts together, the way they work in real life. A venue manager is simply a person at that venue. A musician can be in a duo, a band and their own solo act.",
-      "Reminders and gig changes go to each member of an act, and double-booking checks follow the people, not just the act name.",
+      "Reminders and booking changes go to each member of an act, and double-booking checks follow the people, not just the act name.",
     ],
     points: [
       [
         "One person, several acts",
-        "Each person can belong to any number of acts. With their own login, they see the gigs for every act they're in, labelled by act.",
+        "Each person can belong to any number of acts. With their own login, they see the bookings for every act they're in, labelled by act.",
       ],
-      ["Bands made of acts", "Build a band from your existing solo acts. The solo acts see the band's gigs, and clashes are checked both ways."],
+      ["Bands made of acts", "Build a band from your existing solo acts. The solo acts see the band's bookings, and clashes are checked both ways."],
       ["Venues with the details that matter", "Address, capacity, time zone, weekly music schedule and the map pin used to check arrivals."],
       ["Contacts and notes", "Promoters, private customers, venue staff and anyone else, with tags, search and conversation notes."],
       [
@@ -207,8 +210,8 @@ const AREAS: Area[] = [
     points: [
       ["Acts told about changes", "If a date, time, venue or fee changes, the act gets an email and a text showing what it was and what it is now."],
       [
-        "Gig reminders",
-        "Each act gets a list of the coming week's gigs, on Sunday evening by default, and a reminder on the day. Change the days and times, or turn them off.",
+        "Booking reminders",
+        "Each act gets a list of the coming week's bookings, on Sunday evening by default, and a reminder on the day. Change the days and times, or turn them off.",
       ],
       [
         "The right way to reach each act",
@@ -216,7 +219,7 @@ const AREAS: Area[] = [
       ],
       [
         "Your words, your placeholders",
-        "Edit any automatic message with placeholders like {first_name}, {act}, {venue} and {date}. The gig details and links are always added underneath.",
+        "Edit any automatic message with placeholders like {first_name}, {act}, {venue} and {date}. The booking details and links are always added underneath.",
       ],
       ["Your own settings", "Each person on your team can switch emails or texts off for late acts, declined offers, accepted offers and planners coming in."],
       ["A full message log", "A log of every message Gigsaw has sent. Cancellations always go out, even if other messages are off."],
@@ -228,14 +231,14 @@ const AREAS: Area[] = [
     title: "The act app",
     lead: [
       "Your acts get their own app. It runs in the phone's browser and can be added to the home screen, so there's nothing to download from an app store.",
-      "It shows them what they need for the gig and nothing they don't: their own fee, never what the venue pays.",
+      "It shows them what they need for the booking and nothing they don't: their own fee, never what the venue pays.",
     ],
     points: [
-      ["Their gigs and their pay", "Every upcoming gig, with times, venue directions, the itinerary and their own fee."],
+      ["Their bookings and their pay", "Every upcoming booking, with times, venue directions, the itinerary and their own fee."],
       ["Offers at the top", "New offers sit at the top of the app, ready to accept or decline."],
       ["On the way, arrived, left", "Three buttons on the night: I'm on the way, I've arrived and I've left the venue."],
       ["Phone reminders", "One tap turns on phone notifications. On iPhone, the app shows how to add Gigsaw to the home screen first."],
-      ["In their own calendar", "Acts add their gigs to Apple, Google or Outlook calendar once, and it keeps itself up to date."],
+      ["In their own calendar", "Acts add their bookings to Apple, Google or Outlook calendar once, and it keeps itself up to date."],
       ["Wedding details", "For weddings and events, acts see the couple's planner and who else is performing."],
     ],
   },
@@ -257,7 +260,7 @@ const AREAS: Area[] = [
       ],
       [
         "Try it with demo data",
-        "Load a sample bar-circuit agency with acts, venues, gigs and live arrivals, look around, then remove it in one click. Demo data never sends messages.",
+        "Load a sample bar-circuit agency with acts, venues, bookings and live arrivals, look around, then remove it in one click. Demo data never sends messages.",
       ],
     ],
   },

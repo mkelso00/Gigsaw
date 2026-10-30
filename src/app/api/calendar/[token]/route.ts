@@ -59,5 +59,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     { timezone: defaultTimezone },
   );
   const lastModified = bookings.reduce<Date | undefined>((max, b) => (!max || b.updatedAt > max ? b.updatedAt : max), undefined);
-  return icsResponse(req, ics, { filename: "gigs.ics", lastModified });
+  return icsResponse(req, ics, { filename: "bookings.ics", lastModified });
 }

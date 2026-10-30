@@ -172,7 +172,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader
         title="Calendar"
-        subtitle={`${bookings.length} gig${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "act" : "venue"} · not yet confirmed is dashed${away.length ? " · amber is an act away" : ""}`}
+        subtitle={`${bookings.length} booking${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · colour by ${byArtist ? "act" : "venue"} · not yet confirmed is dashed${away.length ? " · amber is an act away" : ""}`}
         actions={
           <Link href={`/availability/new?date=${anchor >= todayKey ? anchor : todayKey}${sp.artist ? `&artistId=${sp.artist}` : ""}`} className="btn">
             Ask who&apos;s free
@@ -362,7 +362,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     >
                       {Number(key.slice(8))}
                     </Link>
-                    {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} gigs</span>}
+                    {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} bookings</span>}
                   </div>
                   <div className="space-y-1">
                     <AwayChips entries={awayOn(key)} max={2} small />
@@ -448,7 +448,7 @@ function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
   if (!items.length) {
     return (
       <Empty>
-        No gigs this day.{" "}
+        No bookings this day.{" "}
         <Link href={addHref} className="link">
           Add one
         </Link>

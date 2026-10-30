@@ -104,7 +104,7 @@ function usePush(publicKey: string, said: { on: string; off: string }) {
 /** Lets an artist turn on gig reminders as notifications on this phone. */
 export function PushSetup({ publicKey }: { publicKey: string }) {
   const { state, busy, note, turnOn, test, turnOff } = usePush(publicKey, {
-    on: "Done. You'll get a reminder the week before and on the day of each gig.",
+    on: "Done. You'll get a reminder the week before and on the day of each booking.",
     off: "Notifications are off on this phone. You'll still get reminders by email.",
   });
 
@@ -113,10 +113,10 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
 
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5" data-push-state={state}>
-      <h2 className="text-sm font-medium text-ink-400">Gig reminders on this phone</h2>
+      <h2 className="text-sm font-medium text-ink-400">Booking reminders on this phone</h2>
       {state === "on" ? (
         <>
-          <p className="mt-1 text-sm text-ink-300">On. You&apos;ll get your week of gigs each week and a reminder on the day of each gig.</p>
+          <p className="mt-1 text-sm text-ink-300">On. You&apos;ll get your week of bookings each week and a reminder on the day of each booking.</p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button onClick={test} disabled={busy} className={`${btn} border border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]`}>
               Send a test
@@ -129,7 +129,7 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
       ) : state === "off" ? (
         <>
           <p className="mt-1 text-sm text-ink-300">
-            Get a list of next week&apos;s gigs each week, and a &ldquo;don&apos;t forget your gig&rdquo; reminder on the day.
+            Get a list of next week&apos;s bookings each week, and a &ldquo;don&apos;t forget your booking&rdquo; reminder on the day.
           </p>
           <button onClick={turnOn} disabled={busy} className={`${btn} mt-4 bg-volt-400 text-ink-950 hover:bg-volt-300`}>
             {busy ? "Turning on…" : "Turn on reminders"}

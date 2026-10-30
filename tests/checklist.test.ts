@@ -56,7 +56,7 @@ describe("clashes", () => {
     });
     expect(findDateClashes(booking, [early])).toHaveLength(0);
     const items = buildChecklist(booking, [early], 50000, new Date("2026-10-15T00:00:00Z"));
-    expect(items.find((i) => i.label === "Another gig the same day, with time to travel")?.level).toBe("ok");
+    expect(items.find((i) => i.label === "Another booking the same day, with time to travel")?.level).toBe("ok");
   });
   it("flags an earlier gig too far away to get back in time", () => {
     const early = other({

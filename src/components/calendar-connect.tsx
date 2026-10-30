@@ -10,8 +10,8 @@ export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: stri
   const btn = "flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition";
   return (
     <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
-      <h2 className="text-sm font-medium text-ink-400">Put your gigs in your phone&apos;s calendar</h2>
-      <p className="mt-1 text-sm text-ink-300">Tap once. New gigs and any changes then appear in your calendar automatically.</p>
+      <h2 className="text-sm font-medium text-ink-400">Put your bookings in your phone&apos;s calendar</h2>
+      <p className="mt-1 text-sm text-ink-300">Tap once. New bookings and any changes then appear in your calendar automatically.</p>
       <div className="mt-4 grid gap-2">
         <a href={webcal} className={`${btn} bg-white text-ink-950 hover:bg-ink-100`}>
           iPhone / Apple Calendar
@@ -29,7 +29,8 @@ export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: stri
       <details className="mt-4 text-xs text-ink-400">
         <summary className="cursor-pointer">Other calendars, or if a button doesn&apos;t work</summary>
         <p className="my-2">
-          Add a calendar &ldquo;from URL&rdquo; or &ldquo;by subscription&rdquo; and paste this link. Keep it private: anyone with it can see your gig dates.
+          Add a calendar &ldquo;from URL&rdquo; or &ldquo;by subscription&rdquo; and paste this link. Keep it private: anyone with it can see your booking
+          dates.
         </p>
         <div className="[&_input]:border-white/10 [&_input]:bg-white/[0.04] [&_input]:text-white">
           <CopyField value={feedUrl} />

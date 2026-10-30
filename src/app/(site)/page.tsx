@@ -21,7 +21,7 @@ import { ArrowRight, Container, Cross, Eyebrow, FinalCta } from "./site-ui";
 export const metadata: Metadata = {
   title: { absolute: "Gigsaw: booking software for music agencies" },
   description:
-    "Gigsaw runs your weekly bar slots, weddings and private events in one place. Acts accept gigs by link, check in when they arrive, and you see it all live.",
+    "Gigsaw runs your weekly bar slots, weddings and private events in one place. Acts accept bookings by link, check in when they arrive, and you see it all live.",
 };
 
 const PAINS = [
@@ -43,7 +43,7 @@ const STEPS = [
   },
   {
     title: "Send offers and let acts say yes",
-    body: "Each act gets an email, text or phone notification with the gig and their own fee, plus a link to accept or decline. No login, no app store. When they accept, the gig confirms itself and you get an email.",
+    body: "Each act gets an email, text or phone notification with the booking and their own fee, plus a link to accept or decline. No login, no app store. When they accept, the booking confirms itself and you get an email.",
   },
   {
     title: "Watch them arrive, then get paid",
@@ -60,12 +60,12 @@ const HIGHLIGHTS = [
   {
     id: "offers",
     title: "Offers acts accept by link",
-    body: "Acts get the gig and their own fee, never yours, with Accept and Decline buttons. Several offers can be accepted at once.",
+    body: "Acts get the booking and their own fee, never yours, with Accept and Decline buttons. Several offers can be accepted at once.",
   },
   {
     id: "arrivals",
     title: "Live arrivals and late alerts",
-    body: "A live board of tonight's gigs: on the way, arrived, late or overdue. Late acts trigger an email and text to the agent.",
+    body: "A live board of tonight's bookings: on the way, arrived, late or overdue. Late acts trigger an email and text to the agent.",
   },
   {
     id: "weddings",
@@ -80,12 +80,12 @@ const HIGHLIGHTS = [
   {
     id: "money",
     title: "Venue statements and invoices",
-    body: "Pick a venue and a month. See every gig played, what's owed and what's been paid, then print an invoice that never shows the acts' fees.",
+    body: "Pick a venue and a month. See every booking played, what's owed and what's been paid, then print an invoice that never shows the acts' fees.",
   },
   {
     id: "act-app",
     title: "An app for your acts",
-    body: "Acts see their gigs, directions and their own pay on their phone, accept offers, get reminders and add every gig to their calendar.",
+    body: "Acts see their bookings, directions and their own pay on their phone, accept offers, get reminders and add every booking to their calendar.",
   },
   {
     id: "imports",
@@ -106,7 +106,7 @@ export default function HomePage() {
           <div>
             <Eyebrow>Booking software for music agencies</Eyebrow>
             <h1 className="mt-5 text-[40px] leading-[1.04] font-bold tracking-[-0.025em] sm:text-6xl lg:text-[62px]">
-              Every gig
+              Every booking
               <br />
               <HeroWord />
               <br />
@@ -144,7 +144,7 @@ export default function HomePage() {
       <section>
         <Container className="py-20 sm:py-28">
           <h2 data-reveal className="max-w-4xl text-3xl leading-[1.12] font-bold tracking-[-0.02em] sm:text-[44px]">
-            Built for every kind of gig. <span className="text-ink-400">Residencies, weddings and corporate work, all on one desk.</span>
+            Built for every kind of booking. <span className="text-ink-400">Residencies, weddings and corporate work, all on one desk.</span>
           </h2>
           <div className="mt-12">
             <KindCards />
@@ -177,7 +177,13 @@ export default function HomePage() {
             >
               <LiveSketch />
             </FeatureCard>
-            <FeatureCard label="Money" title="Sale, cost and what you make, on every gig." href="/features#money" className="lg:col-span-2" wash="bg-volt-400">
+            <FeatureCard
+              label="Money"
+              title="Sale, cost and what you make, on every booking."
+              href="/features#money"
+              className="lg:col-span-2"
+              wash="bg-volt-400"
+            >
               <MoneySketch />
             </FeatureCard>
             <FeatureCard label="Weddings" title="One booking, every act, one invoice." href="/features#weddings" className="lg:col-span-3" wash="bg-cue-400">
@@ -237,7 +243,7 @@ export default function HomePage() {
       <section>
         <Container className="py-20 sm:py-28">
           <Eyebrow>How it works</Eyebrow>
-          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">From empty slot to paid gig, in four steps.</h2>
+          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">From empty slot to paid booking, in four steps.</h2>
           <ol className="mt-14 grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s, i) => (
               <li key={s.title} data-reveal style={{ transitionDelay: `${i * 100}ms` }}>
@@ -286,9 +292,11 @@ export default function HomePage() {
       <section className="border-t border-ink-200/70 bg-ink-50">
         <Container className="py-20 sm:py-28">
           <Eyebrow>Pricing</Eyebrow>
-          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">Pay for the gigs you book. Your acts are free.</h2>
+          <h2 className="mt-4 max-w-3xl text-4xl leading-[1.04] font-bold tracking-[-0.02em] sm:text-5xl">
+            Pay for the bookings you make. Your acts are free.
+          </h2>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-700">
-            Pick a plan by how many gigs you book in a month. Acts, venue managers and customers never cost anything, however many you have.
+            Pick a plan by how many bookings you make in a month. Acts, venue managers and customers never cost anything, however many you have.
           </p>
           <div className="mt-12 grid gap-4 md:grid-cols-3">
             {PLANS.map((p) => (
@@ -298,7 +306,7 @@ export default function HomePage() {
                   <span className="text-4xl font-semibold tracking-tight">{price(p.monthlyMinor)}</span>
                   <span className="text-ink-500"> a month</span>
                 </p>
-                <p className="mt-3 text-ink-600">{p.gigsPerMonth === null ? "Unlimited gigs" : `Up to ${p.gigsPerMonth} gigs a month`}</p>
+                <p className="mt-3 text-ink-600">{p.gigsPerMonth === null ? "Unlimited bookings" : `Up to ${p.gigsPerMonth} bookings a month`}</p>
               </div>
             ))}
           </div>

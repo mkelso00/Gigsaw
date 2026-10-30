@@ -66,10 +66,10 @@ export default async function ArrivalSettings() {
           </p>
         </SettingsSection>
 
-        <SettingsSection title="Double-booking checks" description="Used when saving a booking to check an act can get from one gig to the next.">
+        <SettingsSection title="Double-booking checks" description="Used when saving a booking to check an act can get from one booking to the next.">
           <SettingsCard pad>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Changeover between gigs (minutes)" hint="Time to pack down and get going, added to the travel time between venues. 0 to 240.">
+              <Field label="Changeover between bookings (minutes)" hint="Time to pack down and get going, added to the travel time between venues. 0 to 240.">
                 <input name="changeoverMinutes" type="number" min={0} max={240} step={1} defaultValue={settings.changeoverMinutes} className="input" />
               </Field>
             </div>

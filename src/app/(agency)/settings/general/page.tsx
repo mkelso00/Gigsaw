@@ -33,7 +33,7 @@ export default async function GeneralSettings() {
         <SettingsSection title="Time zone and currency" description="Used for new bookings, reports and reminders.">
           <SettingsCard pad>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Time zone" hint="When days start and end in reports and reminders. A venue's own time zone is used for its gigs.">
+              <Field label="Time zone" hint="When days start and end in reports and reminders. A venue's own time zone is used for its bookings.">
                 <select name="defaultTimezone" defaultValue={settings.defaultTimezone} className="input">
                   {TIMEZONES.map((z) => (
                     <option key={z} value={z}>

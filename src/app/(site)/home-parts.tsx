@@ -138,7 +138,7 @@ export function PhoneSketch() {
 }
 
 const FACTS = [
-  "Acts accept gigs by link",
+  "Acts accept bookings by link",
   "Live arrivals and late alerts",
   "Weekly bar slots and weddings",
   "Venue statements and invoices",

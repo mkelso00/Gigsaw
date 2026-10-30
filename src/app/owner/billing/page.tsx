@@ -37,7 +37,7 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
     <div>
       <PageHeader
         title="Billing"
-        subtitle="What each invoiced business owes for the month: its price per gig for every gig that went ahead, plus any extra internal users. Cancelled gigs, enquiries and demo data are never billed."
+        subtitle="What each invoiced business owes for the month: its price per booking for every booking that went ahead, plus any extra internal users. Cancelled bookings, enquiries and demo data are never billed."
         actions={
           <div className="flex items-center gap-2">
             <Link href={`/owner/billing?month=${shiftMonth(month, -1)}`} className="btn" aria-label="Previous month">
@@ -54,7 +54,7 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
       <div className="card card-pad mb-6 flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-2xl text-sm text-slate-600">
           {over
-            ? "Issuing freezes each business's gig count and price for this month into a statement, with the booking references so the bill can be checked. Re-issuing updates unpaid statements; paid ones are never changed."
+            ? "Issuing freezes each business's booking count and price for this month into a statement, with the booking references so the bill can be checked. Re-issuing updates unpaid statements; paid ones are never changed."
             : "This month isn't over yet. The figures below are live and will change as bookings are confirmed or cancelled. You can issue statements once the month ends."}
         </p>
         <div className="flex gap-2">
@@ -77,8 +77,8 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
             <thead>
               <tr>
                 <th>Business</th>
-                <th className="text-right">Gigs now</th>
-                <th className="text-right">Price per gig</th>
+                <th className="text-right">Bookings now</th>
+                <th className="text-right">Price per booking</th>
                 <th className="text-right">Extra users</th>
                 <th className="text-right">Amount now</th>
                 <th>Statement</th>
@@ -107,7 +107,7 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
                         <strong>{formatMoney(s.amountMinor, s.currency)}</strong>
                         <span className="text-xs text-slate-500">
                           {" "}
-                          for {s.gigCount} gigs{s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}
+                          for {s.gigCount} bookings{s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}
                         </span>
                         {s.gigCount !== gigs && s.status !== "PAID" && (
                           <div className="text-xs text-amber-700">Bookings changed since issuing. Re-issue to update.</div>

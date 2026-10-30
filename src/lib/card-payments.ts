@@ -284,7 +284,7 @@ async function tellAgent(t: PayTarget, amount: number, currency: string, payerEm
         ...(t.payer ? ([["Paid by", [t.payer.name, payerEmail].filter(Boolean).join(", ")]] as [string, string][]) : []),
         ["Still to pay", formatMoney(left, currency)],
       ],
-      intro: unmatched ? "There were no gigs left to put it against, so please record it on the right gig by hand." : undefined,
+      intro: unmatched ? "There were no bookings left to put it against, so please record it on the right booking by hand." : undefined,
       cta: { label: t.link.bookingId ? "Open the booking" : "Open the event", url: t.staffUrl },
       outro: "It's in your Stripe account and logged in Gigsaw as a payment.",
     },

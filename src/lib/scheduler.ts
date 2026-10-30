@@ -15,7 +15,7 @@ export function startScheduler() {
     running = true;
     try {
       const r = await runOverdueCheck();
-      if (r.alerted) console.log(`[gigsaw] overdue alerts sent for ${r.alerted} gig(s)`);
+      if (r.alerted) console.log(`[gigsaw] overdue alerts sent for ${r.alerted} booking(s)`);
     } catch (e) {
       console.error("[gigsaw] overdue check failed", e);
     }

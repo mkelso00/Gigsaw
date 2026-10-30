@@ -18,7 +18,7 @@ export function InAppOffer({ bookingId }: { bookingId: string }) {
       <button
         disabled={pending}
         onClick={() => {
-          if (window.confirm("Decline this gig?")) start(() => answerInApp(bookingId, "DECLINED"));
+          if (window.confirm("Decline this booking?")) start(() => answerInApp(bookingId, "DECLINED"));
         }}
         className="h-11 rounded-xl border border-white/10 bg-white/[0.06] text-[15px] font-medium text-white hover:bg-white/[0.1] disabled:opacity-50"
       >

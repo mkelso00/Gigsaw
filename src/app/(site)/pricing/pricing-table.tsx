@@ -65,7 +65,7 @@ export function PricingTable() {
               </div>
 
               <p className={`mt-7 border-y py-4 font-medium ${featured ? "border-white/10" : "border-ink-200"}`}>
-                {p.gigsPerMonth === null ? "Unlimited gigs" : `Up to ${p.gigsPerMonth} gigs a month`}
+                {p.gigsPerMonth === null ? "Unlimited bookings" : `Up to ${p.gigsPerMonth} bookings a month`}
                 <span className={`block text-sm font-normal ${featured ? "text-ink-400" : "text-ink-500"}`}>
                   {p.includedUsers} internal users included, then{" "}
                   {yearly ? `${price(EXTRA_USER_YEARLY_MINOR)} a year` : `${price(EXTRA_USER_MONTHLY_MINOR)} a month`} each

@@ -65,7 +65,7 @@ export async function findClashes(c: Candidate, changeoverMinutes: number): Prom
     if (!o.artist || !o.artistId) continue;
     const a = assessPair({ arriveBy: c.arriveBy, setStart: c.setStart, setEnd: c.setEnd, venue }, o, changeoverMinutes);
     if (a.level === "ok") continue;
-    const where = o.venue ? `${o.venue.name}${o.venue.city ? `, ${o.venue.city}` : ""}` : "another gig";
+    const where = o.venue ? `${o.venue.name}${o.venue.city ? `, ${o.venue.city}` : ""}` : "another booking";
     const when = `${formatDate(o.arriveBy, o.timezone)}, ${localTime(o.setStart, o.timezone)}${o.setEnd ? `–${localTime(o.setEnd, o.timezone)}` : ""}`;
     let who = `${o.artist.name} is`;
     if (o.artistId !== c.artistId) {

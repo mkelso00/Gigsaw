@@ -21,7 +21,7 @@ export function OfferButtons({ token, all }: { token: string; all?: number }) {
       <button
         disabled={pending}
         onClick={() => {
-          if (window.confirm("Decline this gig?")) start(async () => setResult(await answerByToken(token, "DECLINED")));
+          if (window.confirm("Decline this booking?")) start(async () => setResult(await answerByToken(token, "DECLINED")));
         }}
         className="btn flex-1"
       >

@@ -44,7 +44,7 @@ export async function SubscriptionPlan({
             {plan && (
               <div className="mt-1 text-sm text-white/70">
                 {m(yearly ? plan.yearlyMinor : plan.monthlyMinor)} a {yearly ? "year" : "month"} ·{" "}
-                {plan.gigsPerMonth ? `up to ${plan.gigsPerMonth} gigs a month` : "unlimited gigs"} · {plan.includedUsers} internal users included
+                {plan.gigsPerMonth ? `up to ${plan.gigsPerMonth} bookings a month` : "unlimited bookings"} · {plan.includedUsers} internal users included
               </div>
             )}
           </div>
@@ -64,11 +64,11 @@ export async function SubscriptionPlan({
         <SettingsCard>
           <SettingsRow
             icon="bookings"
-            title={`${gigs} gig${gigs === 1 ? "" : "s"}${plan?.gigsPerMonth ? ` of ${plan.gigsPerMonth}` : ""}`}
+            title={`${gigs} booking${gigs === 1 ? "" : "s"}${plan?.gigsPerMonth ? ` of ${plan.gigsPerMonth}` : ""}`}
             sub={
               over && suggest
-                ? `You're over your plan's gigs. Nothing stops working, but ${suggest.name} fits better.`
-                : "A gig counts when it's confirmed or settled, the act checks in, or it's left on hold or pending after its date."
+                ? `You're over your plan's bookings. Nothing stops working, but ${suggest.name} fits better.`
+                : "A booking counts when it's confirmed or settled, the act checks in, or it's left on hold or pending after its date."
             }
           />
           <SettingsRow

@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
-export const metadata: Metadata = { title: "Change several gigs" };
+export const metadata: Metadata = { title: "Change several bookings" };
 export const dynamic = "force-dynamic";
 
 export default async function BulkEditPage({ searchParams }: { searchParams: Promise<{ ids?: string | string[] }> }) {
@@ -30,16 +30,16 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
             ← Bookings
           </Link>
         }
-        title={`Change ${bookings.length} gig${bookings.length === 1 ? "" : "s"}`}
-        subtitle="Times are in each venue's local time and keep each gig's own date. Leave a box empty to keep what's there."
+        title={`Change ${bookings.length} booking${bookings.length === 1 ? "" : "s"}`}
+        subtitle="Times are in each venue's local time and keep each booking's own date. Leave a box empty to keep what's there."
       />
       {bookings.length === 0 ? (
         <Empty>
-          No gigs selected. Go to{" "}
+          No bookings selected. Go to{" "}
           <Link href="/bookings" className="link">
             Bookings
           </Link>
-          , tick the gigs you want and press &ldquo;Change selected gigs&rdquo;.
+          , tick the bookings you want and press &ldquo;Change selected bookings&rdquo;.
         </Empty>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -74,10 +74,10 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
             <section className="border-t border-ink-100 pt-6">
               <h2 className="section-title mb-1">New money</h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Sale for each gig" hint="What the venue or customer pays, before VAT. Empty keeps each gig's sale.">
+                <Field label="Sale for each booking" hint="What the venue or customer pays, before VAT. Empty keeps each booking's sale.">
                   <input name="fee" inputMode="decimal" placeholder="150.00" className="input" />
                 </Field>
-                <Field label="Cost for each gig (act's fee)" hint="What the act is paid. The act only sees this. Empty keeps it.">
+                <Field label="Cost for each booking (act's fee)" hint="What the act is paid. The act only sees this. Empty keeps it.">
                   <input name="cost" inputMode="decimal" placeholder="120.00" className="input" />
                 </Field>
               </div>
@@ -86,16 +86,16 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
               <input type="checkbox" name="notifyArtists" defaultChecked className="mt-0.5 h-4 w-4 accent-ink-950" />
               <span>
                 <span className="block text-sm font-medium">Tell each artist what changed</span>
-                <span className="block text-xs text-ink-600">An email and text with old and new times and fee. Past gigs and demo data are skipped.</span>
+                <span className="block text-xs text-ink-600">An email and text with old and new times and fee. Past bookings and demo data are skipped.</span>
               </span>
             </label>
             <SubmitButton pendingText="Updating…">
-              Update {bookings.length} gig{bookings.length === 1 ? "" : "s"}
+              Update {bookings.length} booking{bookings.length === 1 ? "" : "s"}
             </SubmitButton>
           </ActionForm>
 
           <aside className="card h-fit overflow-hidden">
-            <div className="border-b border-ink-100 px-4 py-3 text-sm font-medium">Selected gigs</div>
+            <div className="border-b border-ink-100 px-4 py-3 text-sm font-medium">Selected bookings</div>
             <ul className="max-h-[560px] divide-y divide-ink-100 overflow-y-auto text-sm">
               {bookings.map((b) => (
                 <li key={b.id} className="px-4 py-3">

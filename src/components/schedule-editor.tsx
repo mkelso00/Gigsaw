@@ -162,8 +162,8 @@ export function ScheduleEditor({
                     <label className="flex items-start gap-3 rounded-xl border border-volt-400 bg-volt-100/60 p-3 text-sm">
                       <input type="checkbox" name="applyToUpcoming" defaultChecked className="mt-0.5 h-4 w-4 accent-ink-950" />
                       <span>
-                        <span className="block font-medium">Also change gigs already booked in this slot from today on</span>
-                        <span className="block text-xs text-ink-600">New times and fee are applied to each upcoming gig.</span>
+                        <span className="block font-medium">Also change bookings already booked in this slot from today on</span>
+                        <span className="block text-xs text-ink-600">New times and fee are applied to each upcoming booking.</span>
                       </span>
                     </label>
                     <label className="flex items-center gap-3 px-3 text-sm">
@@ -175,7 +175,7 @@ export function ScheduleEditor({
                     </div>
                   </ActionForm>
                   <form action={deleteSlot.bind(null, s.id)} className="mt-3">
-                    <ConfirmButton message="Remove this slot? Gigs already booked in it stay booked." className="btn btn-sm btn-danger">
+                    <ConfirmButton message="Remove this slot? Bookings already booked in it stay booked." className="btn btn-sm btn-danger">
                       Remove slot
                     </ConfirmButton>
                   </form>

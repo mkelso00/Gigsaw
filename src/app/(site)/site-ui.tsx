@@ -51,13 +51,13 @@ export function Cross({ className = "h-5 w-5" }: { className?: string }) {
 }
 
 /** Big closing call to action, used at the bottom of most pages. */
-export function FinalCta({ title = "Give your next month of gigs to Gigsaw.", pricingLink = true }: { title?: string; pricingLink?: boolean }) {
+export function FinalCta({ title = "Give your next month of bookings to Gigsaw.", pricingLink = true }: { title?: string; pricingLink?: boolean }) {
   return (
     <section className="bg-volt-400">
       <Container className="py-20 sm:py-28">
         <h2 className="max-w-3xl text-4xl leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-ink-950 sm:text-6xl">{title}</h2>
         <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-800">
-          Set up your venues, put a few weeks of gigs in, send your first offers and watch your acts check in.
+          Set up your venues, put a few weeks of bookings in, send your first offers and watch your acts check in.
           {pricingLink && ` Try it free for ${TRIAL_DAYS} days.`}
         </p>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -197,7 +197,7 @@ export function OfferSketch() {
   return (
     <div className="mx-auto w-full max-w-[300px] rounded-[2rem] border border-ink-200 bg-white p-3 shadow-[0_30px_60px_-30px_rgba(13,13,12,0.35)]">
       <div className="rounded-[1.5rem] bg-ink-50 p-5">
-        <p className="text-xs font-medium text-ink-500">Gig offer from Northside Music</p>
+        <p className="text-xs font-medium text-ink-500">Booking offer from Northside Music</p>
         <p className="mt-3 text-xl leading-tight font-semibold tracking-tight text-ink-950">Friday 14 November</p>
         <dl className="mt-4 space-y-2.5 text-sm">
           {[

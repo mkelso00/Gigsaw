@@ -33,7 +33,7 @@ export default async function NewAgencyPage() {
 
         <SettingsSection title="Price" description="For businesses you invoice. Card-paying businesses choose a plan when they sign up themselves.">
           <div className="card card-pad grid gap-4 sm:grid-cols-2">
-            <Field label="Price per gig" hint="For each gig that goes ahead">
+            <Field label="Price per booking" hint="For each booking that goes ahead">
               <input name="pricePerGig" inputMode="decimal" required defaultValue="2.50" className="input" />
             </Field>
             <Field label="Currency">
@@ -75,7 +75,7 @@ export default async function NewAgencyPage() {
               <span>
                 Fill with demo data
                 <span className="block text-ink-500">
-                  Sample acts, venues and bookings to explore. They can remove it from Settings, and demo gigs are never billed.
+                  Sample acts, venues and bookings to explore. They can remove it from Settings, and demo bookings are never billed.
                 </span>
               </span>
             </label>

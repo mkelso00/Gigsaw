@@ -169,7 +169,7 @@ export function QuickSearch() {
               onClick={() => go(all)}
               className="mt-1 w-full rounded-lg border-t border-ink-100 px-3 py-2.5 text-left text-sm text-ink-600 hover:bg-ink-50"
             >
-              See all gigs for &ldquo;{q.trim()}&rdquo; →
+              See all bookings for &ldquo;{q.trim()}&rdquo; →
             </button>
           )}
         </div>

@@ -40,7 +40,7 @@ async function clashCheck(
         ? "Hold on: this artist is already booked at that time"
         : warnings.every((w) => w.level === "away")
           ? "Hold on: this act has said they can't play that day"
-          : "Hold on: check there's time to get between gigs",
+          : "Hold on: check there's time to get between bookings",
       items: warnings.map((w) => w.text),
       button: "Save anyway",
     },
@@ -266,7 +266,7 @@ export async function logCheckInForArtist(bookingId: string, _: FormState, form:
       at = zonedToUtc(date, time, booking.timezone);
     }
     if (at.getTime() > Date.now() + 5 * 60_000) throw new FormError("You can't log a check-in in the future");
-    if (!booking.artistId) throw new FormError("Add an act to this gig first");
+    if (!booking.artistId) throw new FormError("Add an act to this booking first");
     await prisma.checkIn.create({
       data: { bookingId, artistId: booking.artistId!, userId: user.id, kind, source: "AGENT", at, note: str(form, "note") },
     });
@@ -356,7 +356,7 @@ export async function copyBooking(bookingId: string, dates: string[], status: st
     ok: true,
     ids,
     message: `Copied to ${ids.length} date${ids.length === 1 ? "" : "s"} as ${label}${finalStatus === "AWAITING" ? ": the act has been sent the offers" : ""}.${
-      clashes.length ? ` Check ${clashes.slice(0, 5).join(", ")}${clashes.length > 5 ? "…" : ""}: the act may have another gig then.` : ""
+      clashes.length ? ` Check ${clashes.slice(0, 5).join(", ")}${clashes.length > 5 ? "…" : ""}: the act may have another booking then.` : ""
     }`,
   };
 }

@@ -165,7 +165,7 @@ export async function updateSlot(slotId: string, _: FormState, form: FormData): 
             notifyArtists: str(form, "notifyArtists") === "on",
           },
         );
-        note = ` ${res.updated} upcoming gig${res.updated === 1 ? "" : "s"} updated${res.notified ? `, ${res.notified} artist message${res.notified === 1 ? "" : "s"} sent` : ""}.`;
+        note = ` ${res.updated} upcoming booking${res.updated === 1 ? "" : "s"} updated${res.notified ? `, ${res.notified} artist message${res.notified === 1 ? "" : "s"} sent` : ""}.`;
       }
     }
     await logActivity(user, "VENUE", slot.venueId, "changed a schedule slot", `${fields.startTime}–${fields.endTime}`);
@@ -370,17 +370,17 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
       : "";
     if (mode === "pending")
       return {
-        ok: `Added ${created.length} gig${created.length === 1 ? "" : "s"} to the calendar ${span}, Pending with no act. Dates already in the calendar were left alone.`,
+        ok: `Added ${created.length} booking${created.length === 1 ? "" : "s"} to the calendar ${span}, Pending with no act. Dates already in the calendar were left alone.`,
       };
     if (mode === "offer") {
       const people = await sendOffers(created);
       return {
-        ok: `Offered ${created.length} gig${created.length === 1 ? "" : "s"} ${span}${people ? `: ${people} ${people === 1 ? "person was" : "people were"} sent their offers` : ""}.${left}`,
+        ok: `Offered ${created.length} booking${created.length === 1 ? "" : "s"} ${span}${people ? `: ${people} ${people === 1 ? "person was" : "people were"} sent their offers` : ""}.${left}`,
       };
     }
     const told = str(form, "notify") === "on" ? await notifyArtistsOfNewGigs(created) : 0;
     return {
-      ok: `Booked ${created.length} gig${created.length === 1 ? "" : "s"} ${span}.${told ? ` ${told} act${told === 1 ? "" : "s"} sent a list of their new gigs.` : ""}${left}`,
+      ok: `Booked ${created.length} booking${created.length === 1 ? "" : "s"} ${span}.${told ? ` ${told} act${told === 1 ? "" : "s"} sent a list of their new bookings.` : ""}${left}`,
     };
   });
 }

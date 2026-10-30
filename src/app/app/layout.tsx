@@ -5,7 +5,7 @@ import { Logo } from "@/components/logo";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 
-export const metadata: Metadata = { title: { default: "My gigs", template: "%s · Gigsaw" } };
+export const metadata: Metadata = { title: { default: "My bookings", template: "%s · Gigsaw" } };
 export const viewport: Viewport = { themeColor: "#15181c" };
 
 export default async function ArtistAppLayout({ children }: { children: React.ReactNode }) {

@@ -38,7 +38,7 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
           <div>
             <div className="text-[13px] text-white/60">Your Gigsaw plan</div>
             <div className="mt-2 text-3xl font-semibold tracking-tight">
-              {price(agency.pricePerGigMinor)} <span className="text-base font-normal text-white/60">per gig</span>
+              {price(agency.pricePerGigMinor)} <span className="text-base font-normal text-white/60">per booking</span>
             </div>
             <div className="mt-1 text-xs text-white/60">
               {seats.users} internal user{seats.users === 1 ? "" : "s"}, {agency.includedUsers} included
@@ -51,7 +51,7 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
               {price(gigs * agency.pricePerGigMinor + seats.monthlyMinor)}
             </div>
             <div className="text-xs text-white/60">
-              {gigs} billable gig{gigs === 1 ? "" : "s"}
+              {gigs} billable booking{gigs === 1 ? "" : "s"}
               {seats.monthlyMinor > 0 ? ` + ${price(seats.monthlyMinor)} for extra users` : ""}
             </div>
           </div>
@@ -62,8 +62,8 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
         <SettingsCard>
           <SettingsRow
             icon="bookings"
-            title="Per gig"
-            sub="A gig counts when it's confirmed or settled, when the act checks in, or when it's still on hold or pending after its date. Cancelled gigs, enquiries and demo data are free."
+            title="Per booking"
+            sub="A booking counts when it's confirmed or settled, when the act checks in, or when it's still on hold or pending after its date. Cancelled bookings, enquiries and demo data are free."
           />
           <SettingsRow
             icon="contacts"
@@ -74,7 +74,7 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
           {unresolved > 0 && (
             <SettingsRow
               icon="clock"
-              title={`${unresolved} past gig${unresolved === 1 ? " was" : "s were"} never confirmed or cancelled`}
+              title={`${unresolved} past booking${unresolved === 1 ? " was" : "s were"} never confirmed or cancelled`}
               sub="They're counted until you confirm or cancel them."
               href="/bookings?status=UNRESOLVED&when=all"
             />
@@ -90,7 +90,7 @@ export default async function PlanSettings({ searchParams }: { searchParams: Pro
                 key={s.id}
                 icon="billing"
                 title={monthLabel(s.month)}
-                sub={`${s.gigCount} gig${s.gigCount === 1 ? "" : "s"}${s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}`}
+                sub={`${s.gigCount} booking${s.gigCount === 1 ? "" : "s"}${s.extraUsers ? ` + ${s.extraUsers} extra user${s.extraUsers === 1 ? "" : "s"}` : ""}`}
                 right={
                   <span className="block text-sm sm:text-right">
                     <span className="block font-medium tabular-nums">{formatMoney(s.amountMinor, s.currency)}</span>

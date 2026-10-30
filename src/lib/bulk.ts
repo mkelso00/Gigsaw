@@ -79,7 +79,7 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       user,
       "BOOKING",
       b.id,
-      "updated with other gigs",
+      "updated with other bookings",
       [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "sale" : "", change.cost ? "cost" : ""].filter(Boolean).join(" and "),
     );
     updated++;

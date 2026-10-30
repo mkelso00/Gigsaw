@@ -37,7 +37,7 @@ export default async function WeddingSettings() {
           </SettingsCard>
         </SettingsSection>
 
-        <SettingsSection title="Booking confirmations" description="When an act's gig becomes Confirmed, the act is always told. Choose who else hears.">
+        <SettingsSection title="Booking confirmations" description="When an act's booking becomes Confirmed, the act is always told. Choose who else hears.">
           <SettingsCard pad>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Tell whoever pays" hint="Sent to the booking's customer or company, if they have an email address.">

@@ -66,7 +66,7 @@ export async function addAway(artistId: string, _: FormState, form: FormData): P
     revalidatePath("/", "layout");
     const gigs = await gigsBetween(user.agencyId, act.id, away.startDate, away.endDate, settings.defaultTimezone);
     return {
-      ok: `Blocked out ${formatRange(away.startDate, away.endDate)}.${gigs.length ? ` They already have ${gigs.length === 1 ? "a gig" : `${gigs.length} gigs`} then: ${gigs.map((g) => g.reference).join(", ")}.` : ""}`,
+      ok: `Blocked out ${formatRange(away.startDate, away.endDate)}.${gigs.length ? ` They already have ${gigs.length === 1 ? "a booking" : `${gigs.length} bookings`} then: ${gigs.map((g) => g.reference).join(", ")}.` : ""}`,
     };
   });
 }

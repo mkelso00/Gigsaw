@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-const WORDS = ["booked", "confirmed", "checked in", "paid"];
+const WORDS = ["confirmed", "checked in", "paid"];
 
 /**
  * The changing word in the home page headline, in a pill with a channel light. The pill eases to

@@ -318,8 +318,10 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
 
   // ---------- Gigs ----------
   // Carry on numbering after any real bookings.
-  const last = await prisma.booking.findFirst({ where: { agencyId }, orderBy: { reference: "desc" }, select: { reference: true } });
-  let refN = last ? Number(last.reference.replace(/\D/g, "")) : 0;
+  // Archived bookings keep their numbers too, so count them (raw SQL: the client hides archived ones).
+  const [top] = await prisma.$queryRaw<{ n: number | null }[]>`
+    SELECT MAX(NULLIF(regexp_replace(reference, '[^0-9]', '', 'g'), '')::bigint)::int AS n FROM "Booking" WHERE "agencyId" = ${agencyId}`;
+  let refN = top?.n ?? 0;
   const nextRef = () => `GS-${String(++refN).padStart(4, "0")}`;
   const now = new Date();
   const todayKey = localDateKey(now, TZ);

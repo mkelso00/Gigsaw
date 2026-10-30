@@ -31,7 +31,7 @@ export const PLANS: Plan[] = [
     monthlyMinor: 4900,
     yearlyMinor: 49000,
     includedUsers: 2,
-    highlights: ["Up to 50 gigs a month", "2 internal users", "Unlimited acts, venues and customers", "Act app with check-in"],
+    highlights: ["Up to 50 bookings a month", "2 internal users", "Unlimited acts, venues and customers", "Act app with check-in"],
   },
   {
     key: "GROWTH",
@@ -41,17 +41,17 @@ export const PLANS: Plan[] = [
     monthlyMinor: 9900,
     yearlyMinor: 99000,
     includedUsers: 2,
-    highlights: ["Up to 200 gigs a month", "2 internal users", "Weddings, planners and automatic emails", "Venue statements and reports"],
+    highlights: ["Up to 200 bookings a month", "2 internal users", "Weddings, planners and automatic emails", "Venue statements and reports"],
   },
   {
     key: "AGENCY",
     name: "Agency",
-    tagline: "For agencies running hundreds of gigs",
+    tagline: "For agencies running hundreds of bookings",
     gigsPerMonth: null,
     monthlyMinor: 19900,
     yearlyMinor: 199000,
     includedUsers: 3,
-    highlights: ["Unlimited gigs", "3 internal users", "Everything in Growth", "Help moving across from Overture"],
+    highlights: ["Unlimited bookings", "3 internal users", "Everything in Growth", "Help moving across from Overture"],
   },
 ];
 

@@ -430,7 +430,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               </select>
               <SubmitButton className="btn">Update</SubmitButton>
             </ActionForm>
-            <p className="hint">Pending → Awaiting confirmation (the act is offered the gig) → Confirmed when they accept.</p>
+            <p className="hint">Pending → Awaiting confirmation (the act is offered the booking) → Confirmed when they accept.</p>
             {!booking.artistId && booking.status !== "CANCELLED" && (
               <div className="mt-4 space-y-2 border-t border-ink-100 pt-4 text-sm">
                 {asked && askedCounts ? (

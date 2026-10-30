@@ -33,13 +33,13 @@ export default function TermsPage() {
       <h2>Plans and paying</h2>
       <ul>
         <li>
-          Plans are priced by the number of gigs in a month, plus any internal users over the number your plan includes. Prices are on the{" "}
+          Plans are priced by the number of bookings in a month, plus any internal users over the number your plan includes. Prices are on the{" "}
           <Link href="/pricing" className="link">
             pricing page
           </Link>
           .
         </li>
-        <li>The pricing page explains what counts as a gig. If you go over your plan, nothing stops working: we&apos;ll suggest the plan that fits.</li>
+        <li>The pricing page explains what counts as a booking. If you go over your plan, nothing stops working: we&apos;ll suggest the plan that fits.</li>
         <li>Monthly plans are paid monthly. Yearly plans are paid for the year up front.</li>
         <li>You can change plan or cancel at any time. [Refunds and the timing of changes to be confirmed.]</li>
         <li>If we change our prices, we&apos;ll give you at least [notice period] notice by email.</li>
@@ -74,7 +74,7 @@ export default function TermsPage() {
         If we remove something important, we&apos;ll tell you first.
       </p>
       <p>
-        Gigsaw helps you keep track of gigs, arrivals and money, but it doesn&apos;t replace your own judgement. For example, a check-in shows where a phone
+        Gigsaw helps you keep track of bookings, arrivals and money, but it doesn&apos;t replace your own judgement. For example, a check-in shows where a phone
         was, not who was holding it.
       </p>
 

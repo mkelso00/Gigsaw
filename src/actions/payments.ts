@@ -61,6 +61,6 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
     await logActivities(user, "BOOKING", log);
     revalidatePath("/", "layout");
     if (!count) return { ok: "Already paid." };
-    return { ok: `${count} gig${count === 1 ? "" : "s"} marked paid (${formatMoney(total, currency)} ${direction === "IN" ? "in" : "out"}).` };
+    return { ok: `${count} booking${count === 1 ? "" : "s"} marked paid (${formatMoney(total, currency)} ${direction === "IN" ? "in" : "out"}).` };
   });
 }

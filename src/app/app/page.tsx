@@ -148,7 +148,7 @@ export default async function ArtistHome() {
       {offers.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-medium text-volt-400">
-            {offers.length === 1 ? "New gig offer" : `${offers.length} gig offers`} · please accept or decline
+            {offers.length === 1 ? "New booking offer" : `${offers.length} booking offers`} · please accept or decline
           </h2>
           <div className="space-y-3">
             {offers.map(({ b }) => {
@@ -177,7 +177,7 @@ export default async function ArtistHome() {
         <section className="overflow-hidden rounded-3xl border border-white/[0.06] bg-ink-900">
           <div className="p-5 pb-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next gig{manyActs ? ` · ${actName(next.b)}` : ""}</span>
+              <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next booking{manyActs ? ` · ${actName(next.b)}` : ""}</span>
               <ArrivalBadge state={next.a.state} />
             </div>
             <div className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{next.b.venue?.name ?? "Venue to be confirmed"}</div>
@@ -206,7 +206,7 @@ export default async function ArtistHome() {
           </div>
         </section>
       ) : (
-        <div className="rounded-3xl border border-white/[0.06] bg-ink-900 p-8 text-center text-ink-400">No upcoming gigs. Enjoy the time off!</div>
+        <div className="rounded-3xl border border-white/[0.06] bg-ink-900 p-8 text-center text-ink-400">No upcoming bookings. Enjoy the time off!</div>
       )}
 
       {current.length > 1 && (
@@ -248,7 +248,7 @@ export default async function ArtistHome() {
 
       <PushSetup publicKey={pushKey} />
 
-      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${feedName} gigs`} />}
+      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${feedName} bookings`} />}
 
       {stats.tracked > 0 && (
         <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
@@ -256,7 +256,7 @@ export default async function ArtistHome() {
             <div>
               <h2 className="text-sm font-medium text-ink-400">Your timekeeping</h2>
               <p className="mt-1 text-sm">
-                On time for {stats.onTime} of your last {stats.tracked} gigs
+                On time for {stats.onTime} of your last {stats.tracked} bookings
               </p>
             </div>
             <div className="text-3xl font-semibold text-volt-400 tabular-nums">{Math.round((stats.onTimeRate ?? 0) * 100)}%</div>
@@ -269,7 +269,7 @@ export default async function ArtistHome() {
 
       {past.length > 0 && (
         <section>
-          <h2 className="mb-3 text-sm font-medium text-ink-400">Past gigs</h2>
+          <h2 className="mb-3 text-sm font-medium text-ink-400">Past bookings</h2>
           <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-ink-900">
             {past.slice(0, 20).map(({ b, a }) => (
               <li key={b.id}>

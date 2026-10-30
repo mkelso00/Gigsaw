@@ -62,7 +62,7 @@ export default async function UsersSettings() {
             <Field label="Email">
               <input name="email" type="email" required className="input" />
             </Field>
-            <Field label="Mobile" hint="Optional. Used for texts about late acts on their gigs.">
+            <Field label="Mobile" hint="Optional. Used for texts about late acts on their bookings.">
               <input name="phone" type="tel" className="input" />
             </Field>
             <Field label="Password" hint="Optional. Leave blank and we email them a welcome with a link to set their own.">

@@ -49,7 +49,7 @@ export function ArtistForm({ action, artist, agents }: { action: Action; artist?
         <Field label="Based in">
           <input name="town" defaultValue={artist?.town} className="input" />
         </Field>
-        <Field label="Usual fee" hint="A guide to what they charge for a bar gig">
+        <Field label="Usual fee" hint="A guide to what they charge for a bar booking">
           <input name="usualFee" inputMode="decimal" defaultValue={minorToInput(artist?.usualFeeMinor)} placeholder="0.00" className="input" />
         </Field>
         <Field label="Calendar colour">
@@ -181,7 +181,7 @@ export function VenueForm({
             className="h-10 w-20 cursor-pointer rounded-lg border border-ink-200"
           />
         </Field>
-        <Field label="Time zone" hint="Gig times at this venue are shown in this zone">
+        <Field label="Time zone" hint="Booking times at this venue are shown in this zone">
           <select name="timezone" defaultValue={venue?.timezone ?? defaultTimezone} className="input">
             {TIMEZONES.map((z) => (
               <option key={z} value={z}>
