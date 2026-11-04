@@ -17,6 +17,7 @@ const PUBLIC = [
   "/enquire/",
   "/api/venue-calendar",
   "/api/cron",
+  "/api/health",
   "/login",
   "/setup",
   "/forgot-password",

@@ -123,7 +123,7 @@ Messages go out once these are set in Railway → Variables. Until then, every m
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Shows "Sign in with Google" and "Sign up with Google". In Google Cloud Console, make an OAuth client (Web application) with the redirect URI `<your site>/api/auth/google/callback` and the scopes `openid`, `email` and `profile`. |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Optional. Shows "Sign in with Microsoft" for work, school and personal accounts. In Microsoft Entra, register an app for "any organisational directory and personal Microsoft accounts" with the Web redirect URI `<your site>/api/auth/microsoft/callback`, and add the optional `email` and `xms_edov` claims to the ID token. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Optional. Keys that sign phone notifications. If not set, Gigsaw makes a pair once and keeps it in the database, which is fine for most installs. Changing them means every phone has to turn reminders on again. |
-| `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker (late alerts and gig reminders) and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
+| `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker (late alerts and gig reminders) and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. Compared in constant time. Each job (overdue alerts, reminders, wedding and event emails) runs on its own; the reply lists how each went and is a 500 if any failed. |
 
 Settings → Messages → **Send me a test** checks both are working.
 
@@ -133,14 +133,95 @@ Settings → Messages → **Send me a test** checks both are working.
 2. Add a database: **+ New → Database → PostgreSQL**.
 3. In the Gigsaw service, open **Variables** and add `DATABASE_URL` with the value `${{Postgres.DATABASE_URL}}` (Railway offers this as a reference variable).
 4. In **Settings → Networking**, click **Generate Domain** to get a public web address.
-5. Redeploy. On each start, Gigsaw creates or updates its database tables automatically (`prisma migrate deploy`).
+5. Redeploy. Before each new version starts, Gigsaw creates or updates its database tables (`prisma migrate deploy`, see [Deploying](#deploying)).
 6. Open the web address. On a brand new database, the first visit shows a setup page that creates the owner account. It only appears once. Then use the Owner area to add agencies.
 
 Upgrading an existing single-agency install: the migration moves all existing data into one agency (named from its settings) and makes the first admin the owner. Nothing is deleted.
 
-Railway runs `npm run build` and `npm start` on its own and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
+Railway reads `railway.json` for how to build, migrate, start and check the app, and sets the port for you. The site is served over HTTPS, which phones need before they will share their location for check-ins.
 
 To try Gigsaw with sample data, go to **Settings → Demo data → Load demo data**. It adds a bar-circuit agency: 12 acts (solos, duos, a DJ and two bands, one built from solo acts), 8 venues with weekly music schedules, managers and the pub companies that pay, six weeks of gigs played, live arrivals today, the next month of gigs with offers out and gigs still needing an act, two weddings and two private events, alongside your own data, and **Remove demo data** takes it all out again. Sample logins with published passwords are only created by the local seed script, never on the live site.
+
+## Deploying
+
+Every push to `main` deploys on Railway. `railway.json` in the repo sets out the steps:
+
+1. **Build**: `npm run build` (Nixpacks).
+2. **Pre-deploy**: `npx prisma migrate deploy` applies any new migrations. It runs once per deploy, before the new version starts, while the old version is still serving. If it fails, the deploy stops there and the old version keeps running.
+3. **Start**: `npm run start:app` (just `next start`, no migrations).
+4. **Health check**: Railway calls `GET /api/health` and only switches traffic to the new version once it answers 200 (it waits up to 2 minutes). The old version is then stopped.
+5. **Restarts**: if the app crashes, Railway restarts it, up to 10 times in a row.
+
+`/api/health` is public and returns `{ status, db, time, version }`: 200 when the database answers within 2 seconds, 503 when it doesn't. `version` is the deployed commit. Railway only uses it during a deploy, so to be told about problems later, point an uptime monitor (for example Better Stack or UptimeRobot) at `https://<your site>/api/health`.
+
+For local or manual use, `npm start` still runs the migrations first and then starts the app, so `npm run build && npm start` works as before. Use `npm run start:app` to start without migrating.
+
+### If a migration fails
+
+The new version never goes live, so the site carries on running the previous version against the database as it was. Nobody needs to do anything in a hurry.
+
+1. Open the failed deployment in Railway and read the **Pre-deploy** logs. Prisma names the migration and the database error.
+2. Before changing anything by hand, take a backup (see below).
+3. Check what state the database is in, from your own computer using the Postgres service's `DATABASE_PUBLIC_URL`:
+
+   ```bash
+   DATABASE_URL="<DATABASE_PUBLIC_URL>" npx prisma migrate status
+   ```
+
+4. A migration that failed part-way is recorded as failed, and Prisma won't apply anything else until it's resolved. Either undo the part that ran and mark it rolled back, then fix the migration and push again:
+
+   ```bash
+   DATABASE_URL="<DATABASE_PUBLIC_URL>" npx prisma migrate resolve --rolled-back <migration_folder_name>
+   ```
+
+   or finish the change by hand and mark it applied:
+
+   ```bash
+   DATABASE_URL="<DATABASE_PUBLIC_URL>" npx prisma migrate resolve --applied <migration_folder_name>
+   ```
+
+5. Redeploy (push the fix, or **Redeploy** in Railway).
+
+Never rename or edit a migration that has already run in production. New migrations must sort after the newest folder in `prisma/migrations` (they're named by date, and some existing ones are dated ahead).
+
+## Backups and restore
+
+Gigsaw's data lives in the Railway Postgres service. Keep two kinds of backup: Railway's own scheduled backups, and an occasional manual dump kept somewhere outside Railway.
+
+### Turn on Railway backups
+
+In Railway, open the **Postgres** service, go to its **Backups** tab and turn on scheduled backups (daily, plus weekly or monthly if you want to keep some for longer). Backups are taken of the database volume and kept by Railway. Check the tab now and then to see that new ones are appearing. A Railway backup can be restored from the same tab; that replaces the database's current contents, so take a manual dump first if there's anything since the backup you might want.
+
+### Take a manual backup
+
+You need the Postgres client tools (`pg_dump`, `pg_restore`), at the same major version as the server or newer. In Railway, open the Postgres service, **Variables**, and copy `DATABASE_PUBLIC_URL` (the address that works from outside Railway). Then:
+
+```bash
+pg_dump --format=custom --no-owner --no-acl --dbname "<DATABASE_PUBLIC_URL>" --file "gigsaw-$(date +%Y-%m-%d).dump"
+```
+
+The file holds every agency's data, including people's contact details and payment records, so store it encrypted and delete old ones you no longer need. Take one before any risky change, such as a large migration or a manual fix.
+
+### Restore to a new database
+
+Restoring into a fresh database, rather than over the live one, means you can check it first and switch back if something is wrong.
+
+1. In the Railway project, add a new database: **+ New → Database → PostgreSQL**. Rename it, for example `Postgres-restored`.
+2. Copy the new service's `DATABASE_PUBLIC_URL` and load the dump into it:
+
+   ```bash
+   pg_restore --no-owner --no-acl --exit-on-error --dbname "<NEW_DATABASE_PUBLIC_URL>" gigsaw-2026-11-04.dump
+   ```
+
+3. Check it looks right, for example the number of bookings and the newest migration:
+
+   ```bash
+   psql "<NEW_DATABASE_PUBLIC_URL>" -c 'select count(*) from "Booking";' -c 'select migration_name from _prisma_migrations order by finished_at desc limit 1;'
+   ```
+
+4. Point the app at it: in the Gigsaw service, **Variables**, change `DATABASE_URL` to `${{Postgres-restored.DATABASE_URL}}` (use the new service's name). Railway redeploys; the pre-deploy step applies any migrations newer than the dump, and the health check confirms the app can reach the database before it goes live.
+5. Sign in and check a few recent bookings. Anything done after the dump was taken (bookings, payments, messages sent) isn't in it, so tell the agencies what period to re-enter, and be aware that reminders or alerts sent after the dump may go out again.
+6. Keep the old database until you're sure, then remove it.
 
 ## Running it locally
 
