@@ -18,7 +18,7 @@ How this was done: four independent read-only reviews (data and multi-tenancy; s
 | 2B, 2C: one validated config (`src/server/env.ts`); JSON logs with error digests and request ids; optional Sentry; Stripe failures logged; scheduler heartbeat | ✅ Done (4 Nov) |
 | 2D: `/api/health`, `railway.json` (pre-deploy migrations, health check), cron with constant-time secret and per-job errors, deploy and backup runbook | ✅ Done (4 Nov) |
 | 2E: 16 indexes for hot paths; old message links redacted | ✅ Done (4 Nov) |
-| Dashboard hydration error (#418) | In progress |
+| Dashboard hydration error (#418): a bug in the React bundled with Next 15.5 (replayed elements hydrate from their first child); patched at build time by `scripts/react-hydration-fix.cjs` until Next 16 | ✅ Done (4 Nov) |
 | Wave 3 onwards | Not started |
 
 Open: add `charge.refunded` to the Connect webhook in Stripe; protect `main` on GitHub so CI must pass; confirm Railway picks up `railway.json` on the first deploy. Decided: old offer links sent before 1A are left as they are (they close the next time each offer is sent). Small follow-ups: `redactLinks` misses upper-case schemes and links run together; `savePushSubscription` lets a known endpoint move to another user; enquiry and contract IP still use the first X-Forwarded-For value.
