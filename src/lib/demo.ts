@@ -9,11 +9,12 @@
 // data is never billed or messaged.
 
 import { randomBytes } from "node:crypto";
-import type { Artist, Contact, Prisma, PrismaClient, Venue, VenueSlot } from "@prisma/client";
+import type { Artist, Contact, Prisma, Venue, VenueSlot } from "@prisma/client";
 import type { prisma as appPrisma } from "./db";
 
 /** Works with the app's client (which hides archived bookings) or a plain one (the seed script). */
-type Db = PrismaClient | typeof appPrisma;
+// The app client (with its extensions). The seed script passes a plain PrismaClient, cast to this.
+export type Db = typeof appPrisma;
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
 import { defaultTasks } from "./event-plan";

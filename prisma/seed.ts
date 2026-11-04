@@ -3,7 +3,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { addDemoData } from "../src/lib/demo";
+import { addDemoData, type Db } from "../src/lib/demo";
 
 const prisma = new PrismaClient();
 
@@ -51,7 +51,7 @@ async function main() {
     data: { email: "admin@gigsaw.test", name: "Alex Morgan", role: "ADMIN", isOwner: true, agencyId: northern.id, passwordHash: hash },
   });
   const agent = await prisma.user.create({ data: { email: "agent@gigsaw.test", name: "Sam Patel", role: "AGENT", agencyId: northern.id, passwordHash: hash } });
-  const demo = await addDemoData(prisma, { agencyId: northern.id, leadAgentId: admin.id, secondAgentId: agent.id });
+  const demo = await addDemoData(prisma as unknown as Db, { agencyId: northern.id, leadAgentId: admin.id, secondAgentId: agent.id });
   // Ellie Rose (a solo act) can sign in to the artist app with the act's own login.
   const ellie = demo.artists.find((a) => a.name === "Ellie Rose")!;
   await prisma.user.create({
@@ -69,7 +69,7 @@ async function main() {
   const harbourAdmin = await prisma.user.create({
     data: { email: "harbour@gigsaw.test", name: "Jo Rivers", role: "ADMIN", agencyId: harbour.id, passwordHash: hash },
   });
-  const demo2 = await addDemoData(prisma, { agencyId: harbour.id, leadAgentId: harbourAdmin.id });
+  const demo2 = await addDemoData(prisma as unknown as Db, { agencyId: harbour.id, leadAgentId: harbourAdmin.id });
 
   console.log(`Seeded 2 agencies: ${demo.bookings} and ${demo2.bookings} bookings.`);
   console.log(
