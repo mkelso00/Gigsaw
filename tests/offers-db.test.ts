@@ -1,21 +1,19 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { offerResetFor } from "@/lib/offer-links";
+import { describeDb } from "./helpers/db";
 
 // Database test for answering offers. It makes and removes its own business, so it only runs
-// against a throwaway database (named gigsaw_test or gigsaw_w…), never the real one:
-//   DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/offers-db.test.ts
+// against the test database (see tests/helpers/db.ts):
+//   TEST_DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/offers-db.test.ts
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
-
-const url = process.env.DATABASE_URL ?? "";
-const testDb = /^gigsaw_(test|w\w+)$/.test(url.split("?")[0].split("/").pop() ?? "");
 
 type Db = typeof import("@/lib/db");
 type Offers = typeof import("@/lib/offers");
 type Actions = typeof import("@/actions/offers");
 
-describe.skipIf(!testDb)("offers (database)", () => {
+describeDb("offers (database)", () => {
   // Loaded here rather than at the top, so a skipped run never touches the database.
   let prisma: Db["prisma"];
   let answerOffer: Offers["answerOffer"];

@@ -1,0 +1,85 @@
+# Checks every push and pull request: migrations, schema, types, tests (with a real Postgres
+# for the database tests) and a production build. Railway deploys main, so keep main green.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request replaces a run still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gigsaw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gigsaw_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # A throwaway database, only for this run. The tests create and remove their own data.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gigsaw_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gigsaw_test
+      # Never start the background scheduler or reach a real provider from CI.
+      DISABLE_SCHEDULER: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, so the migration check can compare with the base branch.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check migration names
+        # Compared with the branch a pull request goes into, or the commit before a push (the
+        # default branch when a new branch is pushed).
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before || format('origin/{0}', github.event.repository.default_branch)) }}
+        run: node scripts/check-migrations.mjs --base "$BASE"
+
+      - name: Validate the Prisma schema
+        run: npx prisma validate
+
+      - name: Generate the Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Apply migrations to the test database
+        run: npx prisma migrate deploy
+
+      - name: Tests (including the database tests)
+        run: npx vitest run
+
+      - name: Build
+        env:
+          NODE_ENV: production
+          APP_URL: http://localhost:3000
+        run: npm run build
