@@ -11,6 +11,7 @@ import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormSta
 import { findClashes } from "@/lib/clash-check";
 import { defaultBookingFee, minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
+import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
 import { dateInWeek, isDateKey, weekdayOf } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
@@ -242,7 +243,14 @@ async function bookSlot(
     if (!existing.artistId && artist) {
       await prisma.booking.update({
         where: { id: existing.id },
-        data: { artistId: artist.id, status: statusOverride ?? slot.bookingStatus, agentId: artist.agentId ?? undefined, demo: slot.venue.demo || artist.demo },
+        data: {
+          artistId: artist.id,
+          status: statusOverride ?? slot.bookingStatus,
+          agentId: artist.agentId ?? undefined,
+          demo: slot.venue.demo || artist.demo,
+          // Any link from an earlier act on this gig stops working.
+          ...offerResetFor(existing, { artistId: artist.id }),
+        },
       });
       await logActivity(user, "BOOKING", existing.id, "act added", artist.name);
       return existing.id;

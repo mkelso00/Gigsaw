@@ -392,13 +392,15 @@ model Booking {
   slot   VenueSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
 
   // Messages: send the client an "artist has arrived" note; when alerts went out (sent once).
-  // Offer to the act: a private accept/decline link, and their answer.
-  offerToken     String?   @unique
-  offeredAt      DateTime?
-  offerResponse  String? // ACCEPTED | DECLINED
-  respondedAt    DateTime?
+  // Offer to the act: a private accept/decline link, and their answer. The link only works while
+  // offeredArtistId (the act it was sent to) is still the booking's act.
+  offerToken      String?   @unique
+  offeredArtistId String?
+  offeredAt       DateTime?
+  offerResponse   String? // ACCEPTED | DECLINED
+  respondedAt     DateTime?
   // When the customer (weddings and private events) was told this act is confirmed.
-  customerToldAt DateTime?
+  customerToldAt  DateTime?
 
   notifyClientOnArrival Boolean   @default(true)
   overdueAlertSentAt    DateTime?

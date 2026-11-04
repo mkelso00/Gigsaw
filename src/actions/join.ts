@@ -123,6 +123,10 @@ export async function approveApplication(id: string, _: FormState): Promise<Form
     const loginTaken = !!(await prisma.user.findUnique({ where: { email: a.email }, select: { id: true } }));
 
     await prisma.$transaction(async (tx) => {
+      // Claim the application first: of two taps at once only one gets it, and the other stops
+      // here (its claim waits for the first to finish, then finds it no longer new).
+      const claim = await tx.actApplication.updateMany({ where: { id: a.id, status: "NEW" }, data: { status: "APPROVED", reviewedAt: new Date() } });
+      if (claim.count !== 1) throw new FormError("Already dealt with");
       const act = await tx.artist.create({
         data: {
           agencyId: user.agencyId,
@@ -169,7 +173,7 @@ export async function approveApplication(id: string, _: FormState): Promise<Form
           data: { email: a.email, name: a.contactName, passwordHash: a.passwordHash, role: "ARTIST", personId: contact.id, agencyId: user.agencyId },
         });
       }
-      await tx.actApplication.update({ where: { id: a.id }, data: { status: "APPROVED", reviewedAt: new Date(), artistId: act.id } });
+      await tx.actApplication.update({ where: { id: a.id }, data: { artistId: act.id } });
     });
     await logActivity(user, "ARTIST", artistId, "approved new act", a.actName);
 
@@ -207,7 +211,9 @@ export async function declineApplication(id: string) {
   const user = await requireStaff();
   const a = await prisma.actApplication.findFirst({ where: { id, agencyId: user.agencyId, status: "NEW" } });
   if (!a) return;
-  await prisma.actApplication.update({ where: { id }, data: { status: "DECLINED", reviewedAt: new Date() } });
+  // Only while still new, so it can't undo an approval made a moment ago.
+  const claim = await prisma.actApplication.updateMany({ where: { id, status: "NEW" }, data: { status: "DECLINED", reviewedAt: new Date() } });
+  if (claim.count !== 1) return;
   await logActivity(user, "SETTINGS", user.agencyId, "declined act application", a.actName);
   revalidatePath("/", "layout");
 }

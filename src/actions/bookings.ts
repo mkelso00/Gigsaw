@@ -8,6 +8,7 @@ import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, NEEDS_ACT, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
 import { onConfirmed } from "@/lib/confirmations";
+import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
 import { findClashes } from "@/lib/clash-check";
 import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
@@ -74,7 +75,8 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const data = await parseBookingForm(form, settings, user.agencyId);
     const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
     if (hold) return hold;
-    await prisma.booking.update({ where: { id: bookingId }, data });
+    // A different act or a cancellation ends the old offer link.
+    await prisma.booking.update({ where: { id: bookingId }, data: { ...data, ...offerResetFor(old, data) } });
     await logActivity(user, "BOOKING", bookingId, "updated");
     if (data.status === "CONFIRMED" && old.status !== "CONFIRMED") await onConfirmed(bookingId);
     // Newly awaiting confirmation, or a different act: send the offer.
@@ -100,7 +102,7 @@ export async function setBookingStatus(bookingId: string, _: FormState, form: Fo
     const before = await ownBooking(user, bookingId);
     if (before.status === status) return { ok: "No change." };
     if (!before.artistId && NEEDS_ACT.includes(status)) throw new FormError(`Add an act first (Edit), then set it to ${BOOKING_STATUS_LABELS[status]}.`);
-    await prisma.booking.update({ where: { id: bookingId }, data: { status } });
+    await prisma.booking.update({ where: { id: bookingId }, data: { status, ...offerResetFor(before, { status }) } });
     await logActivity(
       user,
       "BOOKING",
