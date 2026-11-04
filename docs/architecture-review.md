@@ -4,6 +4,20 @@ Date: 2 November 2026. Scope: the whole app at commit `4e59fa5` (≈35,600 lines
 
 How this was done: four independent read-only reviews (data and multi-tenancy; security and server actions; business rules; structure, front end, tests and operations), then every finding marked **✓** below was checked by hand against the code. Findings without a tick were reported with file and line references but not re-traced; treat them as very likely, not proven.
 
+## Progress
+
+| PR | Status |
+|---|---|
+| 1A, 1D: offer links bound to the act; one-winner claims (accept, mark paid, book from reply, approve act) | ✅ Done (4 Nov) |
+| 1B, 1C, 1G: push host allow-list; secret links hidden in the message log; login rate limit; sign out other devices on password change | ✅ Done (4 Nov) |
+| 1E, 1I: archived-booking guards; billing lock enforced in auth for pages, actions, exports, prints and act feeds | ✅ Done (4 Nov) |
+| 1F: error and not-found pages in every area | ✅ Done (4 Nov) |
+| 1H: Stripe webhooks re-fetch and ignore stale subscriptions, event ids, idempotent checkout; unmatched card payments kept and flagged; refunds noted | ✅ Done (4 Nov) |
+| Also fixed: buttons stuck on "Saving…" after a redirect (page animation remounted the page) | ✅ Done (4 Nov) |
+| Wave 2 onwards | Not started |
+
+Open from wave 1: old offer links sent before 1A are bound to the booking's current act (decision: leave, or invalidate all outstanding links); add `charge.refunded` to the Connect webhook in Stripe; an intermittent hydration error (#418) on first dashboard load, seen about one load in three in production builds and not yet traced; existing Message rows still hold full links (needs a one-off data migration).
+
 ## 1. The short version
 
 The app is in better shape than its pace of change would suggest. There is no live cross-agency data leak, every server action checks who is calling, Stripe signatures are verified properly, emails and CSV exports are escaped, and the act privacy rule (acts never see the sale price or booking fee) holds everywhere except one bug.
