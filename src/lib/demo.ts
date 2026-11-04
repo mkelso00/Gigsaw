@@ -437,6 +437,7 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
         ...(o.offer
           ? {
               offerToken: randomBytes(18).toString("base64url"),
+              offeredArtistId: o.act?.id ?? null,
               offeredAt: new Date(now.getTime() - (o.offer === "declined" ? 26 : 5) * 3_600_000),
               ...(o.offer === "declined" ? { offerResponse: "DECLINED", respondedAt: new Date(now.getTime() - 2 * 3_600_000) } : {}),
             }

@@ -47,23 +47,33 @@ export function gigDateKey(b: { arriveBy: Date; timezone: string }) {
  * ones included (they keep their numbers), and compares the numbers as numbers so GS-10000
  * comes after GS-9999.
  */
-async function nextReference(agencyId: string): Promise<string> {
-  const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
+async function nextReference(agencyId: string, db: Db): Promise<string> {
+  const [row] = await db.$queryRaw<{ n: number | null }[]>`
     SELECT MAX(NULLIF(regexp_replace(reference, '[^0-9]', '', 'g'), '')::bigint)::int AS n FROM "Booking" WHERE "agencyId" = ${agencyId}`;
   return `GS-${String((row?.n ?? 0) + 1).padStart(4, "0")}`;
 }
 
-export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">) {
+/** The client, or a transaction. */
+type Db = Pick<typeof prisma, "booking" | "$queryRaw">;
+
+/**
+ * Inside a transaction (`db`), a clash on the number fails the whole transaction, so the caller
+ * retries it (see isReferenceClash).
+ */
+export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">, db: Db = prisma) {
   // Retry if two people create a booking at the same moment and grab the same number.
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < (db === prisma ? 5 : 1); attempt++) {
     try {
-      return await prisma.booking.create({ data: { ...data, agencyId, reference: await nextReference(agencyId) } });
+      return await db.booking.create({ data: { ...data, agencyId, reference: await nextReference(agencyId, db) } });
     } catch (e) {
-      if ((e as { code?: string }).code !== "P2002") throw e;
+      if (db !== prisma || !isReferenceClash(e)) throw e;
     }
   }
   throw new Error("Could not allocate a booking reference");
 }
+
+/** Two bookings saved at the same moment took the same reference number. */
+export const isReferenceClash = (e: unknown) => (e as { code?: string }).code === "P2002";
 
 /**
  * Turn the booking form into database fields.

@@ -6,6 +6,7 @@ import { wants } from "./notify-prefs";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { onConfirmed } from "./confirmations";
+import { answerClaimWhere } from "./offer-links";
 import { groupByRecipient, recipientsForActs } from "./people";
 import { formatDate, localTime } from "./time";
 
@@ -36,15 +37,20 @@ export async function sendOffers(bookingIds: string[]) {
     orderBy: { arriveBy: "asc" },
   });
   if (!gigs.length) return 0;
-  // A fresh link and a clean answer for each offer, saved in one transaction.
+  // A fresh link and a clean answer for each offer, bound to the act it goes to, saved in one
+  // transaction. Any earlier link for the gig stops working. A gig whose act changed since it
+  // was read is skipped: the change sends its own offer.
   const offeredAt = new Date();
-  await prisma.$transaction(
+  const saved = await prisma.$transaction(
     gigs.map((g) => {
-      g.offerToken ??= randomBytes(18).toString("base64url");
-      return prisma.booking.update({ where: { id: g.id }, data: { offerToken: g.offerToken, offeredAt, offerResponse: null, respondedAt: null } });
+      g.offerToken = randomBytes(18).toString("base64url");
+      return prisma.booking.updateMany({
+        where: { id: g.id, status: "AWAITING", artistId: g.artistId },
+        data: { offerToken: g.offerToken, offeredArtistId: g.artistId, offeredAt, offerResponse: null, respondedAt: null },
+      });
     }),
   );
-  const live = gigs.filter((g) => !g.demo); // demo data never sends anything
+  const live = gigs.filter((g, i) => saved[i].count === 1 && !g.demo); // demo data never sends anything
   const recipients = await recipientsForActs(live.map((g) => g.artistId!));
   const byPerson = groupByRecipient(live, recipients);
   for (const { to: r, gigs: list } of byPerson.values()) {
@@ -112,16 +118,20 @@ export async function sendOffers(bookingIds: string[]) {
 
 /**
  * Record the act's answer. Accepting confirms the gig; declining leaves it awaiting
- * confirmation. Either way the agent is told straight away. Returns false if the offer is no
- * longer open (cancelled, or moved to another act).
+ * confirmation. Either way the agent is told straight away. `expect` is the act that was asked
+ * (and, from a link, the link's token). Returns false if the offer is no longer open (answered,
+ * cancelled, or moved to another act).
  */
-export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLINED") {
+export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLINED", expect: { artistId: string; token?: string }) {
   const b = await prisma.booking.findUnique({ where: { id: bookingId }, include: offerInclude });
-  if (!b || b.status !== "AWAITING" || !b.artist) return false;
-  await prisma.booking.update({
-    where: { id: b.id },
+  if (!b || !b.artist) return false;
+  // Only one answer counts: of two taps at once only the first changes the row, and only that
+  // one goes on to confirm the booking and send the messages.
+  const claim = await prisma.booking.updateMany({
+    where: answerClaimWhere(b.id, expect),
     data: { offerResponse: answer, respondedAt: new Date(), ...(answer === "ACCEPTED" ? { status: "CONFIRMED" } : {}) },
   });
+  if (claim.count !== 1) return false;
   await prisma.activity.create({
     data: {
       agencyId: b.agencyId,

@@ -5,11 +5,12 @@ import { redirect } from "next/navigation";
 import { requireStaff, requireUser, type AgencyUser } from "@/lib/auth";
 import { checkAwayRange, formatRange, isAnswer, type ReplyAnswer } from "@/lib/availability";
 import { answerAvailability, newReplyToken, requestToday, sendAvailability } from "@/lib/availability-requests";
-import { createBookingWithReference } from "@/lib/bookings";
+import { createBookingWithReference, isReferenceClash } from "@/lib/bookings";
 import { EVENT_TYPES, LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { defaultBookingFee, toMinor } from "@/lib/money";
+import { offerResetFor } from "@/lib/offer-links";
 import { actIdsFor, ownActIds } from "@/lib/people";
 import { isDateKey } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
@@ -255,41 +256,74 @@ export async function bookFromReply(replyId: string, _: FormState): Promise<Form
       return;
     }
     const gig = req.bookingId ? await prisma.booking.findFirst({ where: { id: req.bookingId, agencyId: user.agencyId } }) : null;
-    if (gig && !gig.artistId && gig.status !== "CANCELLED") {
-      await prisma.booking.update({
-        where: { id: gig.id },
-        data: {
-          artistId: reply.artistId,
-          agentId: gig.agentId ?? reply.artist.agentId ?? user.id,
-          // The fee the act was asked at, unless the gig already has one.
-          ...(req.costMinor != null && gig.artistFeeMinor == null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
-        },
+    const onGig = !!gig && !gig.artistId && gig.status !== "CANCELLED";
+    if (!onGig && !req.startTime) throw new FormError("This request has no times. Use Full form to book them with times.");
+    const startTime = req.startTime ?? "";
+    const settings = await getSettings(user.agencyId);
+    // Claim the answer first, so a double tap makes one booking: the claim holds the answer until
+    // the booking is saved, and the second tap then finds it already booked and just opens it.
+    const save = () =>
+      prisma.$transaction(async (tx) => {
+        const claim = await tx.availabilityReply.updateMany({ where: { id: reply.id, bookingId: null }, data: { bookingId: null } });
+        if (!claim.count) {
+          const done = await tx.availabilityReply.findUnique({ where: { id: reply.id }, select: { bookingId: true } });
+          if (!done?.bookingId) throw new FormError("Answer not found");
+          return { id: done.bookingId, made: false };
+        }
+        let bookingId: string;
+        if (gig && onGig) {
+          // Only while the gig still has no act: another "Yes" may have just filled it.
+          const put = await tx.booking.updateMany({
+            where: { id: gig.id, artistId: null, status: { not: "CANCELLED" } },
+            data: {
+              artistId: reply.artistId,
+              agentId: gig.agentId ?? reply.artist.agentId ?? user.id,
+              // The fee the act was asked at, unless the gig already has one.
+              ...(req.costMinor != null && gig.artistFeeMinor == null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
+              ...offerResetFor(gig, { artistId: reply.artistId }),
+            },
+          });
+          if (!put.count) throw new FormError("That booking has just been given an act. Open it to check.");
+          bookingId = gig.id;
+        } else {
+          const booking = await createBookingWithReference(
+            user.agencyId,
+            {
+              ...buildSchedule(req.date, { arrive: req.arriveTime || startTime, setStart: startTime, setEnd: req.endTime || null }, req.timezone),
+              artistId: reply.artistId,
+              venueId: req.venue?.id ?? null,
+              agentId: reply.artist.agentId ?? user.id,
+              createdById: user.id,
+              status: "PENDING",
+              eventType: req.eventType,
+              eventName: req.venue ? "" : req.place,
+              timezone: req.timezone,
+              currency: req.currency,
+              ...(req.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
+              commissionPct: reply.artist.defaultCommission ?? settings.defaultCommission,
+              bookingFeeMinor: defaultBookingFee(settings, { eventType: req.eventType }),
+              notes: req.note,
+            },
+            tx,
+          );
+          bookingId = booking.id;
+        }
+        await tx.availabilityReply.update({ where: { id: reply.id }, data: { bookingId } });
+        return { id: bookingId, made: true };
       });
-      await logActivity(user, "BOOKING", gig.id, "act added from Who's free", reply.artist.name);
-      id = gig.id;
-    } else {
-      if (!req.startTime) throw new FormError("This request has no times. Use Full form to book them with times.");
-      const settings = await getSettings(user.agencyId);
-      const booking = await createBookingWithReference(user.agencyId, {
-        ...buildSchedule(req.date, { arrive: req.arriveTime || req.startTime, setStart: req.startTime, setEnd: req.endTime || null }, req.timezone),
-        artistId: reply.artistId,
-        venueId: req.venue?.id ?? null,
-        agentId: reply.artist.agentId ?? user.id,
-        createdById: user.id,
-        status: "PENDING",
-        eventType: req.eventType,
-        eventName: req.venue ? "" : req.place,
-        timezone: req.timezone,
-        currency: req.currency,
-        ...(req.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
-        commissionPct: reply.artist.defaultCommission ?? settings.defaultCommission,
-        bookingFeeMinor: defaultBookingFee(settings, { eventType: req.eventType }),
-        notes: req.note,
-      });
-      await logActivity(user, "BOOKING", booking.id, "added from Who's free", `${reply.artist.name} said they're free`);
-      id = booking.id;
+    let saved: Awaited<ReturnType<typeof save>> | undefined;
+    for (let attempt = 0; !saved; attempt++) {
+      try {
+        saved = await save();
+      } catch (e) {
+        if (attempt >= 4 || !isReferenceClash(e)) throw e;
+      }
     }
-    await prisma.availabilityReply.update({ where: { id: reply.id }, data: { bookingId: id } });
+    id = saved.id;
+    if (saved.made) {
+      if (onGig) await logActivity(user, "BOOKING", id, "act added from Who's free", reply.artist.name);
+      else await logActivity(user, "BOOKING", id, "added from Who's free", `${reply.artist.name} said they're free`);
+    }
   });
   if (result?.error) return result;
   revalidatePath("/", "layout");
