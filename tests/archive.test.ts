@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { actInUseMessage } from "@/lib/archive";
+import { describeDb } from "./helpers/db";
 
 describe("actInUseMessage", () => {
   it("lets an act with no bookings go", () => {
@@ -13,17 +14,14 @@ describe("actInUseMessage", () => {
 });
 
 // Against a real database (the app's client hides archived bookings, which is what these guard
-// against). Run with TEST_DATABASE_URL pointing at a scratch database that has the migrations,
-// e.g. TEST_DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/archive.test.ts
-const url = process.env.TEST_DATABASE_URL;
-
-describe.skipIf(!url)("archived bookings in guards (database)", () => {
+// against). Runs only against the test database (see tests/helpers/db.ts), e.g.
+//   TEST_DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/archive.test.ts
+describeDb("archived bookings in guards (database)", () => {
   type Db = typeof import("@/lib/db").prisma;
   let prisma: Db;
   let agencyId = "";
 
   beforeAll(async () => {
-    process.env.DATABASE_URL = url;
     prisma = (await import("@/lib/db")).prisma;
     const agency = await prisma.agency.create({ data: { name: `Archive test ${Date.now()}` } });
     agencyId = agency.id;

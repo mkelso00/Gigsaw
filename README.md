@@ -259,7 +259,19 @@ Demo logins (password `gigsaw123` for all):
 - `graham@gigsaw.test`: artist app as a person: Graham sees his solo gigs and those of Wonderlust, a band built from his act and Jo Drummond's
 - `harbour@gigsaw.test`: admin of Harbour Music, a second agency that can't see Northern Lights' data
 
-`npm run db:reset` wipes the local database and reloads the demo data. After changing `prisma/schema.prisma`, run `npm run db:migrate` to create a migration.
+`npm run db:reset` wipes the local database and reloads the demo data.
+
+## Migrations
+
+After changing `prisma/schema.prisma`, make the migration with:
+
+```bash
+npm run migration:new -- add_venue_notes
+```
+
+New migrations must be named after the newest existing folder in `prisma/migrations`. Some folders have dates in the future, and production has already run them, so a migration named with today's date (which is what `prisma migrate dev` does) would sort before them and be applied out of order. `migration:new` picks the next name for you (now, or the day after the newest folder if that's later) and writes the SQL with `prisma migrate diff`. Set `SHADOW_DATABASE_URL` to a scratch database (it is wiped each time) to work the SQL out from the migrations themselves; without it, the SQL is the difference between the schema and your local database, so run `npx prisma migrate deploy` first. `--empty` makes the folder with an empty `migration.sql` for SQL you write yourself. Then apply it with `npx prisma migrate deploy`.
+
+Never rename, delete or edit a migration that has been merged: production records each one by name. `npm run check:migrations` checks the names (and, with `-- --base main`, that new ones sort after the newest on `main` and old ones are untouched). CI runs it on every push and pull request.
 
 ## Checks
 
@@ -274,6 +286,30 @@ npm run lint
 ```bash
 npm run build
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs these on every push and pull request, with the migration check, `prisma validate` and the database tests against a fresh Postgres 16.
+
+### Database tests
+
+Some tests (`describeDb` in `tests/helpers/db.ts`) need a real database: tenant isolation between agencies, offers, double taps on payments and approvals, alert and reminder claims, archived bookings. They are skipped unless `TEST_DATABASE_URL` is set. Point it at a throwaway database with `test` in its name, never your working one; each test makes its own agencies and removes them afterwards, so the database can be reused and the seed data doesn't matter. Messages are only recorded, never sent.
+
+Make the database once (with the Docker Postgres above) and bring it up to date:
+
+```bash
+docker exec gigsaw-db createdb -U postgres gigsaw_test
+```
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gigsaw_test npx prisma migrate deploy
+```
+
+Then run the tests with it:
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gigsaw_test npm test
+```
+
+Run `prisma migrate deploy` against it again after pulling new migrations.
 
 ## Tech
 

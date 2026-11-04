@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { describeDb } from "./helpers/db";
 
 // Database tests for double taps: marking paid, booking from a "Yes", approving a new act. Each
 // is run twice at once and must only happen once. Like offers-db.test.ts, it only runs against
-// a throwaway database (named gigsaw_test or gigsaw_w…):
-//   DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/claims-db.test.ts
+// the test database (see tests/helpers/db.ts):
+//   TEST_DATABASE_URL=postgresql://…/gigsaw_test npx vitest run tests/claims-db.test.ts
 
 const staff = vi.hoisted(() => ({ user: null as unknown }));
 vi.mock("server-only", () => ({}));
@@ -11,12 +12,9 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({ redirect: () => {}, notFound: () => {} }));
 vi.mock("@/lib/auth", () => ({ requireStaff: async () => staff.user, requireUser: async () => staff.user }));
 
-const url = process.env.DATABASE_URL ?? "";
-const testDb = /^gigsaw_(test|w\w+)$/.test(url.split("?")[0].split("/").pop() ?? "");
-
 type Db = typeof import("@/lib/db");
 
-describe.skipIf(!testDb)("double taps (database)", () => {
+describeDb("double taps (database)", () => {
   let prisma: Db["prisma"];
   let agencyId = "";
   let actId = "";
