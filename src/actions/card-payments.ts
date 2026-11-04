@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin, requireStaff } from "@/lib/auth";
+import { requireAdmin, requireOwner, requireStaff } from "@/lib/auth";
 import { cardPaymentsReady, ensurePayLink, loadPayLink, onboardingLink, payUrl } from "@/lib/card-payments";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { messageFor } from "@/lib/message-templates";
 import { isEmail, sendEmail } from "@/lib/messaging";
 import { formatMoney } from "@/lib/money";
-import { checkoutParams, isPayKind, PAY_KIND_LABELS } from "@/lib/pay-links";
+import { allocate, checkoutParams, isPayKind, PAY_KIND_LABELS } from "@/lib/pay-links";
 import { stripe, stripeConfigured, StripeError } from "@/lib/stripe";
 
 // Card payments: an admin connects the agency's own Stripe account (Settings > Card payments),
@@ -128,6 +128,85 @@ export async function emailPayLink(linkId: string, _: FormState, form: FormData)
     await logActivity(user, entity, entityId, "emailed a card payment link", `${label} ${amount} to ${to}`);
     revalidatePath(t.link.bookingId ? `/bookings/${t.link.bookingId}` : `/events/${t.link.eventId}`);
     return { ok: `Sent to ${to}.` };
+  });
+}
+
+/**
+ * Put a card payment that came in unmatched (see recordCardPayment) against a booking, by its
+ * reference: logged as payments on it like any other card payment. Staff, on Payments.
+ */
+export async function placeCardPayment(id: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const card = await prisma.cardPayment.findFirst({ where: { id, agencyId: user.agencyId, status: "UNMATCHED" } });
+    if (!card) throw new FormError("That card payment has already been sorted out.");
+    const reference = str(form, "reference");
+    if (!reference) throw new FormError("Enter the booking reference");
+    const b = await prisma.booking.findFirst({
+      where: { agencyId: user.agencyId, reference: { equals: reference, mode: "insensitive" } },
+      include: { payments: true },
+    });
+    if (!b) throw new FormError(`There's no booking ${reference}`);
+    if (b.currency !== card.currency) throw new FormError(`${b.reference} is in ${b.currency} but the payment was in ${card.currency}.`);
+    const kind = isPayKind(card.kind) ? card.kind : "BALANCE";
+    const parts = allocate(kind, card.amountMinor, [b]);
+    const money = formatMoney(card.amountMinor, card.currency);
+    await prisma.$transaction(async (tx) => {
+      // Only once, however often it's pressed.
+      const claimed = await tx.cardPayment.updateMany({ where: { id: card.id, status: "UNMATCHED" }, data: { status: "MATCHED" } });
+      if (!claimed.count) throw new FormError("That card payment has already been sorted out.");
+      await tx.payment.createMany({
+        data: parts.map((p) => ({
+          bookingId: p.bookingId,
+          direction: "IN",
+          kind: p.kind,
+          amountMinor: p.amountMinor,
+          paidAt: card.paidAt,
+          note: card.refundedMinor ? `Paid by card, ${formatMoney(card.refundedMinor, card.currency)} refunded in Stripe` : "Paid by card",
+          cardPaymentId: card.id,
+        })),
+      });
+    });
+    await logActivity(user, "BOOKING", b.id, "payment received", `${money} by card (put on the booking by hand)`);
+    revalidatePath("/", "layout");
+    return { ok: `${money} is now on ${b.reference}.` };
+  });
+}
+
+/** Clear an unmatched card payment without putting it on a booking, e.g. it was refunded or sorted out in Stripe. */
+export async function dismissCardPayment(id: string, _: FormState): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const done = await prisma.cardPayment.updateMany({ where: { id, agencyId: user.agencyId, status: "UNMATCHED" }, data: { status: "DISMISSED" } });
+    if (!done.count) throw new FormError("That card payment has already been sorted out.");
+    await logActivity(user, "SETTINGS", id, "cleared an unmatched card payment");
+    revalidatePath("/payments");
+    return { ok: "Cleared." };
+  });
+}
+
+/** Owner area: a card payment Gigsaw couldn't tie to any business, given to the right one so its staff can put it on a booking. */
+export async function giveCardPayment(id: string, _: FormState, form: FormData): Promise<FormState> {
+  const owner = await requireOwner();
+  return handleForm(async () => {
+    const agency = await prisma.agency.findUnique({ where: { id: str(form, "agency") }, select: { id: true, name: true } });
+    if (!agency) throw new FormError("Choose a business");
+    const done = await prisma.cardPayment.updateMany({ where: { id, agencyId: null, status: "UNMATCHED" }, data: { agencyId: agency.id } });
+    if (!done.count) throw new FormError("That card payment has already been sorted out.");
+    await logActivity({ id: owner.id, agencyId: agency.id }, "SETTINGS", id, "card payment passed on by Gigsaw", "to put on a booking");
+    revalidatePath("/owner/stripe");
+    return { ok: `Passed to ${agency.name}. It shows on their Payments page.` };
+  });
+}
+
+/** Owner area: clear a card payment that doesn't belong to anyone in Gigsaw. */
+export async function dismissOwnerCardPayment(id: string, _: FormState): Promise<FormState> {
+  await requireOwner();
+  return handleForm(async () => {
+    const done = await prisma.cardPayment.updateMany({ where: { id, agencyId: null, status: "UNMATCHED" }, data: { status: "DISMISSED" } });
+    if (!done.count) throw new FormError("That card payment has already been sorted out.");
+    revalidatePath("/owner/stripe");
+    return { ok: "Cleared." };
   });
 }
 

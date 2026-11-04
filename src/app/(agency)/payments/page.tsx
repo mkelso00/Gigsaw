@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { dismissCardPayment, placeCardPayment } from "@/actions/card-payments";
 import { markPaid } from "@/actions/payments";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { ArtistDot, Empty, PageHeader, Stat } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { PAYMENT_KIND_LABELS, actName, type PaymentKind } from "@/lib/constants";
@@ -120,9 +121,54 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const inTotal = payments.filter((p) => p.direction === "IN" && p.booking.currency === cur).reduce((t, p) => t + p.amountMinor, 0);
   const outTotal = payments.filter((p) => p.direction === "OUT" && p.booking.currency === cur).reduce((t, p) => t + p.amountMinor, 0);
 
+  // Card payments Stripe took that couldn't be put against a booking by themselves.
+  const unmatched = await prisma.cardPayment.findMany({ where: { agencyId: user.agencyId, status: "UNMATCHED" }, orderBy: { paidAt: "asc" } });
+
   return (
     <div>
       <PageHeader title="Payments" subtitle="What venues and clients still owe, what's still to pay the acts, and every payment logged." />
+
+      {unmatched.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900" aria-label="Card payments to sort out">
+          <h2 className="font-semibold">
+            {unmatched.length === 1 ? "A card payment needs" : `${unmatched.length} card payments need`} putting against a booking
+          </h2>
+          <p className="mt-1">The money is in your Stripe account. Enter the booking it was for and it&apos;s logged there as paid by card.</p>
+          <ul className="mt-3 space-y-3">
+            {unmatched.map((c) => (
+              <li key={c.id} className="rounded-xl bg-white px-4 py-3 text-ink-900">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-base font-semibold tabular-nums">{formatMoney(c.amountMinor, c.currency)}</span>
+                  <span className="text-ink-500">
+                    {formatDate(c.paidAt, tz)}
+                    {c.email && ` · ${c.email}`}
+                  </span>
+                </div>
+                <p className="mt-1 text-ink-600">
+                  {c.problem}
+                  {c.refundedMinor > 0 && ` ${formatMoney(c.refundedMinor, c.currency)} has since been refunded in Stripe.`}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <ActionForm action={placeCardPayment.bind(null, c.id)}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input name="reference" required placeholder="Booking reference" aria-label="Booking reference" className="input w-44" />
+                      <SubmitButton className="btn btn-sm btn-primary">Put on booking</SubmitButton>
+                    </div>
+                  </ActionForm>
+                  <ActionForm action={dismissCardPayment.bind(null, c.id)}>
+                    <ConfirmButton
+                      className="btn btn-sm"
+                      message="Clear this payment without putting it on a booking? Only do this if it's been sorted out in Stripe."
+                    >
+                      Sorted in Stripe
+                    </ConfirmButton>
+                  </ActionForm>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="inline-flex gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm" role="tablist" aria-label="Payments">

@@ -10,9 +10,9 @@ import { appUrl } from "@/lib/messaging";
 import { allPlans } from "@/lib/plan-store";
 import { findPlan } from "@/lib/plans";
 import { INTERNAL_ROLES } from "@/lib/seats";
-import { ensurePrice, stripe, stripeConfigured, StripeError, type Interval } from "@/lib/stripe";
+import { ensurePrice, idempotencyKey, stripe, stripeConfigured, StripeError, type Interval } from "@/lib/stripe";
 import { hasLiveSubscription } from "@/lib/subscription";
-import { moveSubscription } from "@/lib/subscription-sync";
+import { liveSubscriptionInStripe, moveSubscription } from "@/lib/subscription-sync";
 
 // Settings > Plan: choose a plan, add a card (Stripe Checkout), manage billing (Stripe's billing
 // portal: card, invoices, cancelling) and change plan. Admins only, and open while the business is
@@ -58,13 +58,11 @@ export async function startCheckout(_: FormState, form: FormData): Promise<FormS
     // One Stripe customer per business.
     let customer = agency.stripeCustomerId;
     if (!customer) {
-      const c = await stripe<{ id: string }>("POST", "customers", {
-        name: agency.name,
-        email: agency.billingEmail || user.email,
-        metadata: { agencyId: agency.id },
-      });
-      customer = c.id;
-      await prisma.agency.update({ where: { id: agency.id }, data: { stripeCustomerId: customer } });
+      const params = { name: agency.name, email: agency.billingEmail || user.email, metadata: { agencyId: agency.id } };
+      const c = await stripe<{ id: string }>("POST", "customers", params, { idempotencyKey: idempotencyKey(["customer", agency.id], params) });
+      // Saved unless another tab got there first, in which case that one's used.
+      await prisma.agency.updateMany({ where: { id: agency.id, stripeCustomerId: null }, data: { stripeCustomerId: c.id } });
+      customer = (await prisma.agency.findUniqueOrThrow({ where: { id: agency.id }, select: { stripeCustomerId: true } })).stripeCustomerId ?? c.id;
     }
     const users = await prisma.user.count({ where: { agencyId: agency.id, role: { in: INTERNAL_ROLES }, demo: false } });
     const extra = Math.max(0, users - plan.includedUsers);
@@ -73,7 +71,14 @@ export async function startCheckout(_: FormState, form: FormData): Promise<FormS
     // Whatever's left of the free trial carries over, so nobody pays early for adding a card.
     // (Stripe needs a trial to end at least two days away.)
     const trialEnd = agency.trialEndsAt && agency.trialEndsAt.getTime() > Date.now() + 2 * DAY ? Math.floor(agency.trialEndsAt.getTime() / 1000) : undefined;
-    const session = await stripe<{ url: string }>("POST", "checkout/sessions", {
+    // Checked again just before Stripe is asked: a Checkout finished in another tab may have been
+    // saved since, or may be in Stripe and not yet here.
+    const fresh = await prisma.agency.findUniqueOrThrow({ where: { id: agency.id } });
+    if (hasLiveSubscription(fresh) || (await liveSubscriptionInStripe(agency.id, customer))) {
+      revalidatePath("/", "layout");
+      throw new FormError("You're already subscribed. Use Change plan or Manage billing.");
+    }
+    const params = {
       mode: "subscription",
       customer,
       client_reference_id: agency.id,
@@ -86,6 +91,10 @@ export async function startCheckout(_: FormState, form: FormData): Promise<FormS
       customer_update: { name: "auto", address: "auto" },
       success_url: `${appUrl()}/settings/plan?subscribed=1`,
       cancel_url: `${appUrl()}/settings/plan`,
+    };
+    // A double click or a second tab with the same choice gets the same Checkout page, not a second subscription.
+    const session = await stripe<{ url: string }>("POST", "checkout/sessions", params, {
+      idempotencyKey: idempotencyKey(["checkout", agency.id, plan.key, interval], params),
     });
     await logActivity(user, "SETTINGS", agency.id, "started a subscription checkout", `${plan.name}, ${interval}ly`);
     url = session.url;

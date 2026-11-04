@@ -55,6 +55,21 @@ export function billingState(a: AgencyBilling, now = new Date()) {
 /** Pages a locked business can still reach, so it can choose a plan and pay. */
 export const OPEN_WHEN_LOCKED = ["/settings/plan", "/profile"];
 
+/** A Stripe subscription status that means it's over for good (cancelled, or never got going). */
+export const stripeStatusEnded = (s: string) => fromStripeStatus(s) === "CANCELED";
+
+/**
+ * Whether what Stripe says about a subscription should be saved on the business. Stripe's events
+ * arrive late, twice and in any order, so the webhook always fetches the subscription's current
+ * state first; and a subscription that isn't the business's own one is left alone unless the
+ * business's one is missing or has ended, and the new one hasn't. So a late "deleted" for an old
+ * subscription, or a second one from another Checkout tab, never replaces a live subscription.
+ */
+export function shouldApplySubscription(o: { storedId: string | null; storedEnded: boolean; incomingId: string; incomingEnded: boolean }) {
+  if (!o.storedId || o.storedId === o.incomingId) return true;
+  return o.storedEnded && !o.incomingEnded;
+}
+
 /** A Stripe subscription that hasn't been cancelled (trialing, paid, retrying a failed payment, or still being set up). */
 export function hasLiveSubscription(a: { stripeSubscriptionId: string | null; subscriptionStatus: string }) {
   return !!a.stripeSubscriptionId && a.subscriptionStatus !== "CANCELED";

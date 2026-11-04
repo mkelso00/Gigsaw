@@ -1,5 +1,5 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { stripeKeys } from "./stripe-keys";
 import { loadCatalogue } from "./plan-store";
 import { CURRENCY, findPlan, type PlanKey } from "./plans";
@@ -47,12 +47,14 @@ export function encodeForm(params: Params, prefix = ""): string {
 /**
  * Call Stripe. `account` makes the call on an agency's own connected account (Stripe Connect),
  * e.g. a Checkout Session whose money goes to the agency rather than to Gigsaw.
+ * `idempotencyKey` makes a repeat of the same POST (a double click, a second tab) give back what
+ * the first one made instead of making another.
  */
 export async function stripe<T = Record<string, unknown>>(
   method: "GET" | "POST" | "DELETE",
   path: string,
   params: Params = {},
-  opts: { account?: string } = {},
+  opts: { account?: string; idempotencyKey?: string } = {},
 ): Promise<T> {
   const key = (await stripeKeys()).secretKey;
   if (!key) throw new StripeError("Stripe isn't connected yet");
@@ -66,6 +68,7 @@ export async function stripe<T = Record<string, unknown>>(
       "Content-Type": "application/x-www-form-urlencoded",
       "Stripe-Version": "2024-06-20",
       ...(opts.account ? { "Stripe-Account": opts.account } : {}),
+      ...(opts.idempotencyKey && method === "POST" ? { "Idempotency-Key": opts.idempotencyKey } : {}),
     },
     body: method === "GET" ? undefined : body,
     signal: AbortSignal.timeout(15_000),
@@ -73,6 +76,18 @@ export async function stripe<T = Record<string, unknown>>(
   const json = (await res.json()) as T & { error?: { message: string; code?: string } };
   if (!res.ok) throw new StripeError(json.error?.message ?? `Stripe error ${res.status}`, json.error?.code);
   return json;
+}
+
+/**
+ * An Idempotency-Key for a POST that should only happen once however often it's asked for, e.g.
+ * ["checkout", agencyId, plan, interval]. The same request within the same hour gets the same key,
+ * so Stripe gives back what the first one made. Different parameters (say a user was added in
+ * between) make a new key rather than an error from Stripe, and the hour stops a repeat days later
+ * getting back a Checkout page that has since expired.
+ */
+export function idempotencyKey(what: string[], params: Params, now = Date.now()) {
+  const hash = createHash("sha256").update(encodeForm(params)).digest("hex").slice(0, 16);
+  return ["gigsaw", ...what, Math.floor(now / 3_600_000), hash].join("-");
 }
 
 /**

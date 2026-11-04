@@ -470,25 +470,35 @@ model PayLink {
 // One completed Stripe Checkout payment on an agency's connected account. The session id is
 // unique, so a webhook Stripe sends twice is only recorded once. The money is logged as
 // ordinary Payments (one per gig it was shared across) that point back here.
+// A payment that can't be put against a booking (the business disconnected Stripe, or the link or
+// booking was deleted) is still kept, as UNMATCHED, until someone puts it against a booking.
+// When Gigsaw can't tell which business it's for, it shows in the Owner area.
 model CardPayment {
-  id              String   @id @default(cuid())
-  agencyId        String
-  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  agencyId        String?
+  agency          Agency?   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   payLinkId       String?
-  payLink         PayLink? @relation(fields: [payLinkId], references: [id], onDelete: SetNull)
-  stripeSessionId String   @unique
-  stripePaymentId String   @default("") // the payment intent
+  payLink         PayLink?  @relation(fields: [payLinkId], references: [id], onDelete: SetNull)
+  stripeSessionId String    @unique
+  stripePaymentId String    @default("") // the payment intent
   stripeAccountId String
   kind            String // DEPOSIT | BALANCE
   amountMinor     Int
   currency        String
-  email           String   @default("") // who paid, as given at checkout
+  email           String    @default("") // who paid, as given at checkout
   paidAt          DateTime
-  createdAt       DateTime @default(now())
+  // MATCHED (logged as payments) | UNMATCHED (waiting to be put against a booking) | DISMISSED (dealt with outside Gigsaw)
+  status          String    @default("MATCHED")
+  problem         String    @default("") // why it couldn't be matched, for staff
+  refundedMinor   Int       @default(0) // refunded in Stripe, in all
+  refundedAt      DateTime?
+  createdAt       DateTime  @default(now())
 
   payments Payment[]
 
   @@index([agencyId, paidAt])
+  @@index([status])
+  @@index([stripePaymentId])
 }
 
 // A musician marking where they are for a gig. ARRIVED is the one that counts for punctuality.
@@ -612,6 +622,15 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// Stripe events already handled (both webhooks), so an event Stripe sends twice is only acted on once.
+model StripeEvent {
+  id         String   @id // Stripe's event id, evt_...
+  type       String
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
 }
 
 // Site-wide generated secrets, e.g. the web push (VAPID) keys.

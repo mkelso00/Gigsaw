@@ -3,8 +3,8 @@ import { prisma } from "./db";
 import { planByKey } from "./plan-store";
 import type { Plan } from "./plans";
 import { INTERNAL_ROLES } from "./seats";
-import { ensurePrice, parseLookupKey, stripe, stripeConfigured, type Interval } from "./stripe";
-import { fromStripeStatus } from "./subscription";
+import { ensurePrice, parseLookupKey, stripe, stripeConfigured, StripeError, type Interval } from "./stripe";
+import { fromStripeStatus, shouldApplySubscription, stripeStatusEnded } from "./subscription";
 
 // Keeping Gigsaw and Stripe in step: the webhook passes each subscription change here, and adding
 // or removing an internal user updates how many extra users the subscription charges for.
@@ -30,33 +30,96 @@ export type StripeSubscription = {
   items: { data: { id: string; quantity?: number; current_period_end?: number; price: { id: string; lookup_key: string | null } }[] };
 };
 
-/** Save a subscription's state on its business. Returns false if no business matches. */
-export async function applySubscription(sub: StripeSubscription) {
-  const agency =
-    (await prisma.agency.findFirst({ where: { stripeSubscriptionId: sub.id } })) ??
-    (sub.metadata?.agencyId ? await prisma.agency.findUnique({ where: { id: sub.metadata.agencyId } }) : null) ??
-    (await prisma.agency.findFirst({ where: { stripeCustomerId: sub.customer } }));
-  if (!agency) return false;
-  const planItem = sub.items.data.map((i) => parseLookupKey(i.price.lookup_key)).find((p) => p && p.kind !== "EXTRA_USER");
-  const periodEnd = sub.current_period_end ?? sub.items.data[0]?.current_period_end;
-  const status = fromStripeStatus(sub.status);
-  // A cancelled subscription doesn't move a business the owner has put on invoice or a free account back to card billing.
-  const keepMode = status === "CANCELED" && agency.billingMode !== "STRIPE";
-  await prisma.agency.update({
-    where: { id: agency.id },
-    data: {
-      ...(keepMode ? {} : { billingMode: "STRIPE" }),
-      stripeCustomerId: sub.customer,
-      stripeSubscriptionId: sub.id,
-      subscriptionStatus: status,
-      currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
-      // Stripe's trial is the one that counts once they've added a card (the owner may have moved it).
-      ...(sub.trial_end && !keepMode ? { trialEndsAt: new Date(sub.trial_end * 1000) } : {}),
-      ...(planItem && !keepMode ? { plan: planItem.kind, billingInterval: planItem.interval } : {}),
-    },
-  });
-  if (planItem && !keepMode) await syncIncludedUsers(agency.id);
-  return true;
+export type ApplyResult = "applied" | "ignored" | "no business";
+
+const findBusiness = async (sub: StripeSubscription, agencyId?: string | null) =>
+  (await prisma.agency.findFirst({ where: { stripeSubscriptionId: sub.id } })) ??
+  (agencyId ? await prisma.agency.findUnique({ where: { id: agencyId } }) : null) ??
+  (sub.metadata?.agencyId ? await prisma.agency.findUnique({ where: { id: sub.metadata.agencyId } }) : null) ??
+  (await prisma.agency.findFirst({ where: { stripeCustomerId: sub.customer } }));
+
+/** Whether the subscription saved on a business has ended (or is gone from Stripe). Gigsaw's copy may be behind, so Stripe is asked. */
+async function storedEnded(a: { stripeSubscriptionId: string | null; subscriptionStatus: string }) {
+  if (!a.stripeSubscriptionId || a.subscriptionStatus === "CANCELED") return true;
+  try {
+    return stripeStatusEnded((await stripe<StripeSubscription>("GET", `subscriptions/${a.stripeSubscriptionId}`)).status);
+  } catch (e) {
+    if (e instanceof StripeError && e.code === "resource_missing") return true;
+    throw e;
+  }
+}
+
+/**
+ * Save a subscription's state on its business: pass what Stripe says now, not an event's copy.
+ * A subscription that isn't the business's own one is ignored unless that one has ended (see
+ * shouldApplySubscription). `agencyId` is the business a Checkout Session was for.
+ */
+export async function applySubscription(sub: StripeSubscription, agencyId?: string | null): Promise<ApplyResult> {
+  // Saved only if the business's subscription is still the one checked, so two events handled at
+  // the same moment (an old subscription's "deleted" and a new one's "created") can't undo each other.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const agency = await findBusiness(sub, agencyId);
+    if (!agency) return "no business";
+    const stored = agency.stripeSubscriptionId;
+    if (stored !== sub.id) {
+      const ok = shouldApplySubscription({
+        storedId: stored,
+        storedEnded: await storedEnded(agency),
+        incomingId: sub.id,
+        incomingEnded: stripeStatusEnded(sub.status),
+      });
+      if (!ok) return "ignored";
+    }
+    const planItem = sub.items.data.map((i) => parseLookupKey(i.price.lookup_key)).find((p) => p && p.kind !== "EXTRA_USER");
+    const periodEnd = sub.current_period_end ?? sub.items.data[0]?.current_period_end;
+    const status = fromStripeStatus(sub.status);
+    // A cancelled subscription doesn't move a business the owner has put on invoice or a free account back to card billing.
+    const keepMode = status === "CANCELED" && agency.billingMode !== "STRIPE";
+    const saved = await prisma.agency.updateMany({
+      where: { id: agency.id, stripeSubscriptionId: stored },
+      data: {
+        ...(keepMode ? {} : { billingMode: "STRIPE" }),
+        stripeCustomerId: sub.customer,
+        stripeSubscriptionId: sub.id,
+        subscriptionStatus: status,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        // Stripe's trial is the one that counts once they've added a card (the owner may have moved it).
+        ...(sub.trial_end && !keepMode ? { trialEndsAt: new Date(sub.trial_end * 1000) } : {}),
+        ...(planItem && !keepMode ? { plan: planItem.kind, billingInterval: planItem.interval } : {}),
+      },
+    });
+    if (!saved.count) continue; // changed meanwhile: look again
+    if (planItem && !keepMode) await syncIncludedUsers(agency.id);
+    return "applied";
+  }
+  throw new Error(`Couldn't save subscription ${sub.id}: it kept changing`);
+}
+
+/**
+ * The webhook's way in: fetch the subscription's current state from Stripe and save it. However
+ * late, early or often an event arrives, what's saved is what Stripe says now.
+ */
+export async function syncSubscription(subscriptionId: string, agencyId?: string | null): Promise<ApplyResult | "not in Stripe"> {
+  let sub: StripeSubscription;
+  try {
+    sub = await stripe<StripeSubscription>("GET", `subscriptions/${subscriptionId}`);
+  } catch (e) {
+    if (e instanceof StripeError && e.code === "resource_missing") return "not in Stripe";
+    throw e;
+  }
+  return applySubscription(sub, agencyId);
+}
+
+/**
+ * A subscription this business already has in Stripe that isn't over, if any, saved on the business
+ * on the way (one made in another tab may not have reached Gigsaw yet). Checked just before a new
+ * Checkout is started, so a business never ends up paying for two.
+ */
+export async function liveSubscriptionInStripe(agencyId: string, customer: string) {
+  const list = await stripe<{ data: StripeSubscription[] }>("GET", "subscriptions", { customer, status: "all", limit: 20 });
+  const live = list.data.find((s) => !stripeStatusEnded(s.status));
+  if (live) await applySubscription(live, agencyId);
+  return live ?? null;
 }
 
 /** The plan sets how many internal users are included; keep the business's record in step. */

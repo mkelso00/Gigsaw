@@ -192,17 +192,54 @@ type CheckoutSession = {
   metadata?: Record<string, string> | null;
 };
 
+export type CardPaymentResult = "recorded" | "unmatched" | "duplicate" | "ignored";
+
+/** Why a card payment couldn't be put against a booking, as staff are told. */
+export const UNMATCHED_REASONS = {
+  NOT_CONNECTED: "It was paid into a Stripe account that's no longer connected to Gigsaw.",
+  NO_LINK: "The payment link, or the booking or event it was for, was deleted before the payment came in.",
+  NO_BOOKINGS: "There were no bookings left on the link to put it against.",
+} as const;
+
+const paymentIntentOf = (pi: string | { id: string } | null | undefined) => (typeof pi === "string" ? pi : (pi?.id ?? ""));
+
+/**
+ * The business a Stripe account belonged to before it was disconnected: from the card payments
+ * already logged from it, or from when it was connected (each account is made for one business).
+ * Never from the session's own metadata, which the account's owner could have written.
+ */
+async function formerAgency(accountId: string) {
+  const paid = await prisma.cardPayment.findFirst({
+    where: { stripeAccountId: accountId, status: "MATCHED", agencyId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { agencyId: true },
+  });
+  if (paid?.agencyId) return paid.agencyId;
+  const connected = await prisma.activity.findFirst({
+    where: { entity: "SETTINGS", action: { in: ["connected a Stripe account", "disconnected Stripe"] }, detail: accountId, agencyId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { agencyId: true },
+  });
+  return connected?.agencyId ?? null;
+}
+
 /**
  * A venue or customer has paid on the agency's connected account: log it as payments on the
  * gigs (like a payment entered by hand), once only however often Stripe tells us, and tell the
- * lead agent.
+ * lead agent. Money Stripe has taken is never dropped: if it can't be put against a booking, it's
+ * kept as an unmatched card payment for staff (or, if Gigsaw can't tell whose it is, the owner)
+ * to sort out, and they're told. Anything that fails throws, so Stripe tries again.
  */
-export async function recordCardPayment(s: CheckoutSession, accountId: string): Promise<"recorded" | "duplicate" | "ignored"> {
+export async function recordCardPayment(s: CheckoutSession, accountId: string): Promise<CardPaymentResult> {
   if (s.payment_status !== "paid" || !s.amount_total || !s.currency) return "ignored";
+  // Only sessions Gigsaw made: the agency may sell other things through the same Stripe account.
+  const linkId = s.metadata?.gigsaw_link;
+  if (!linkId) return "ignored";
+  if (await prisma.cardPayment.findUnique({ where: { stripeSessionId: s.id }, select: { id: true } })) return "duplicate";
   const agency = await prisma.agency.findUnique({ where: { stripeAccountId: accountId }, select: { id: true } });
-  if (!agency) return "ignored";
-  const raw = await prisma.payLink.findFirst({ where: { id: s.metadata?.gigsaw_link ?? "", agencyId: agency.id }, include: payLinkInclude });
-  if (!raw) return "ignored";
+  if (!agency) return keepUnmatched(s, accountId, await formerAgency(accountId), "NOT_CONNECTED");
+  const raw = await prisma.payLink.findFirst({ where: { id: linkId, agencyId: agency.id }, include: payLinkInclude });
+  if (!raw) return keepUnmatched(s, accountId, agency.id, "NO_LINK");
   const t = payTarget(raw);
   // Cancelled gigs aren't on the event's invoice, but money paid for an event must land somewhere.
   let gigs = t.gigs;
@@ -222,13 +259,14 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
           agencyId: agency.id,
           payLinkId: raw.id,
           stripeSessionId: s.id,
-          stripePaymentId: typeof s.payment_intent === "string" ? s.payment_intent : (s.payment_intent?.id ?? ""),
+          stripePaymentId: paymentIntentOf(s.payment_intent),
           stripeAccountId: accountId,
           kind: t.kind,
           amountMinor: amount,
           currency,
           email: s.customer_details?.email ?? "",
           paidAt,
+          ...(parts.length ? {} : { status: "UNMATCHED", problem: UNMATCHED_REASONS.NO_BOOKINGS }),
         },
       });
       await tx.payment.createMany({
@@ -260,12 +298,156 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return "duplicate";
     throw e;
   }
-  await tellAgent(t, amount, currency, s.customer_details?.email ?? "", !parts.length);
+  if (!parts.length) {
+    await tellUnmatched(agency.id, t.agentId, { amount, currency, email: s.customer_details?.email ?? "", problem: UNMATCHED_REASONS.NO_BOOKINGS });
+    return "unmatched";
+  }
+  await tellAgent(t, amount, currency, s.customer_details?.email ?? "");
+  return "recorded";
+}
+
+/** Keep a paid session that can't be put against a booking, and tell someone. */
+async function keepUnmatched(s: CheckoutSession, accountId: string, agencyId: string | null, why: keyof typeof UNMATCHED_REASONS): Promise<CardPaymentResult> {
+  const amount = s.amount_total!;
+  const currency = s.currency!.toUpperCase();
+  const kind = isPayKind(s.metadata?.gigsaw_kind) ? s.metadata.gigsaw_kind : "BALANCE";
+  try {
+    await prisma.cardPayment.create({
+      data: {
+        agencyId,
+        stripeSessionId: s.id,
+        stripePaymentId: paymentIntentOf(s.payment_intent),
+        stripeAccountId: accountId,
+        kind,
+        amountMinor: amount,
+        currency,
+        email: s.customer_details?.email ?? "",
+        paidAt: new Date(),
+        status: "UNMATCHED",
+        problem: UNMATCHED_REASONS[why],
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return "duplicate";
+    throw e;
+  }
+  await tellUnmatched(agencyId, null, { amount, currency, email: s.customer_details?.email ?? "", problem: UNMATCHED_REASONS[why], accountId });
+  return "unmatched";
+}
+
+/** Who hears about money to sort out: the lead agent if there is one, else the business email, else its admins. */
+async function businessContacts(agencyId: string, agentId: string | null) {
+  const agent = agentId ? await prisma.user.findUnique({ where: { id: agentId }, select: { email: true } }) : null;
+  if (agent?.email) return [agent.email];
+  const settings = await prisma.settings.findUnique({ where: { agencyId }, select: { agencyEmail: true } });
+  if (settings?.agencyEmail) return [settings.agencyEmail];
+  const admins = await prisma.user.findMany({ where: { agencyId, role: "ADMIN", demo: false }, select: { email: true } });
+  return admins.map((a) => a.email);
+}
+
+/**
+ * Tell the business (or, when Gigsaw can't tell whose it is, the owner) that a card payment needs
+ * putting against a booking. It's in the Outbox either way.
+ */
+async function tellUnmatched(
+  agencyId: string | null,
+  agentId: string | null,
+  p: { amount: number; currency: string; email: string; problem: string; accountId?: string },
+) {
+  const agency = agencyId ? await prisma.agency.findUnique({ where: { id: agencyId }, include: { settings: true } }) : null;
+  const to = agency
+    ? await businessContacts(agency.id, agentId)
+    : (await prisma.user.findMany({ where: { isOwner: true }, select: { email: true } })).map((u) => u.email);
+  const money = formatMoney(p.amount, p.currency);
+  const subject = `Card payment to sort out: ${money}`;
+  for (const address of new Set(to)) {
+    await sendEmail({
+      kind: "PAYMENT",
+      agencyId: agency?.id ?? null,
+      to: address,
+      subject,
+      email: {
+        brand: agency ? agency.settings?.agencyName || agency.name : "Gigsaw",
+        title: subject,
+        highlight: { label: "Paid by card, not yet on a booking", value: money, tone: "warn" },
+        intro: agency
+          ? `${p.problem} The money is in the Stripe account. Please put it against the right booking in Gigsaw.`
+          : `${p.problem} Gigsaw can't tell which business it's for. Please pass it on to the right one in the Owner area.`,
+        rows: [
+          ...(p.email ? ([["Paid by", p.email]] as [string, string][]) : []),
+          ...(!agency && p.accountId ? ([["Stripe account", p.accountId]] as [string, string][]) : []),
+        ],
+        cta: agency ? { label: "Open Payments", url: `${appUrl()}/payments` } : { label: "Open the Owner area", url: `${appUrl()}/owner/stripe` },
+      },
+    });
+  }
+}
+
+type StripeCharge = { id: string; payment_intent?: string | { id: string } | null; amount_refunded?: number; currency?: string };
+
+/**
+ * A card payment was refunded in Stripe (charge.refunded). Gigsaw notes how much on the card
+ * payment and its payments, logs it on the bookings and tells the business; it doesn't change
+ * what's been paid, so staff adjust the booking's payments by hand if the money shouldn't count.
+ */
+export async function recordCardRefund(c: StripeCharge, accountId: string): Promise<"recorded" | "duplicate" | "ignored"> {
+  const pi = paymentIntentOf(c.payment_intent);
+  if (!pi) return "ignored";
+  const card = await prisma.cardPayment.findFirst({
+    where: { stripeAccountId: accountId, stripePaymentId: pi },
+    include: { payments: { select: { bookingId: true } } },
+  });
+  if (!card) return "ignored";
+  // Stripe sends the total refunded so far, so a late or repeated event never counts twice.
+  const refunded = Math.min(card.amountMinor, c.amount_refunded ?? 0);
+  if (refunded <= card.refundedMinor) return "duplicate";
+  const saved = await prisma.cardPayment.updateMany({
+    where: { id: card.id, refundedMinor: card.refundedMinor },
+    data: { refundedMinor: refunded, refundedAt: new Date() },
+  });
+  if (!saved.count) return "duplicate";
+  const money = formatMoney(refunded, card.currency);
+  const bookingIds = [...new Set(card.payments.map((p) => p.bookingId))];
+  await prisma.payment.updateMany({ where: { cardPaymentId: card.id }, data: { note: `Paid by card, ${money} refunded in Stripe` } });
+  if (card.agencyId) {
+    await prisma.activity.createMany({
+      data: bookingIds.map((bookingId) => ({
+        agencyId: card.agencyId,
+        entity: "BOOKING",
+        entityId: bookingId,
+        action: "card payment refunded",
+        detail: money,
+      })),
+    });
+    const agency = await prisma.agency.findUnique({ where: { id: card.agencyId }, include: { settings: true } });
+    const [to] = await businessContacts(card.agencyId, null);
+    if (agency && to) {
+      const subject = `Card payment refunded: ${money} of ${formatMoney(card.amountMinor, card.currency)}`;
+      await sendEmail({
+        kind: "PAYMENT",
+        agencyId: card.agencyId,
+        bookingId: bookingIds[0] ?? null,
+        to,
+        subject,
+        email: {
+          brand: agency.settings?.agencyName || agency.name,
+          title: subject,
+          highlight: { label: "Refunded in Stripe", value: money, tone: "warn" },
+          intro: "Gigsaw still shows the full payment on the booking. If the refunded money shouldn't count, change or remove the payment on the booking.",
+          rows: card.email ? [["Paid by", card.email]] : [],
+          cta:
+            bookingIds.length === 1
+              ? { label: "Open the booking", url: `${appUrl()}/bookings/${bookingIds[0]}` }
+              : { label: "Open Payments", url: `${appUrl()}/payments` },
+        },
+      });
+    }
+  }
   return "recorded";
 }
 
 /** The lead agent hears about it (unless they've turned it off); with no agent, the business email does. */
-async function tellAgent(t: PayTarget, amount: number, currency: string, payerEmail: string, unmatched: boolean) {
+async function tellAgent(t: PayTarget, amount: number, currency: string, payerEmail: string) {
   const agent = t.agentId ? await prisma.user.findUnique({ where: { id: t.agentId }, select: { email: true, notifyPrefs: true } }) : null;
   const to = agent ? (wants(agent.notifyPrefs, "PAID", "email") ? agent.email : null) : t.agency.settings?.agencyEmail;
   if (!to) return;
@@ -287,7 +469,6 @@ async function tellAgent(t: PayTarget, amount: number, currency: string, payerEm
         ...(t.payer ? ([["Paid by", [t.payer.name, payerEmail].filter(Boolean).join(", ")]] as [string, string][]) : []),
         ["Still to pay", formatMoney(left, currency)],
       ],
-      intro: unmatched ? "There were no bookings left to put it against, so please record it on the right booking by hand." : undefined,
       cta: { label: t.link.bookingId ? "Open the booking" : "Open the event", url: t.staffUrl },
       outro: "It's in your Stripe account and logged in Gigsaw as a payment.",
     },
