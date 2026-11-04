@@ -5,6 +5,7 @@ import { QuickBooking } from "@/components/quick-booking";
 import { QuickSearch } from "@/components/quick-search";
 import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
+import { PageMotion } from "@/components/page-motion";
 import { MobileTopIcons, SearchSlot } from "@/components/header-actions";
 import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
@@ -160,7 +161,7 @@ export default async function AgencyLayout({ children }: { children: React.React
                 )}
               </div>
             ) : (
-              children
+              <PageMotion>{children}</PageMotion>
             )}
           </div>
         </main>
