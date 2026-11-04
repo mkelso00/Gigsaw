@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
+import { isLocked, lockedPath } from "@/lib/billing-lock";
 import { ARRIVAL_STATE_LABELS, LOCATION_LABELS } from "@/lib/arrival";
 import { arrivalFor } from "@/lib/bookings";
 import { csvResponse, toCsv } from "@/lib/csv";
@@ -13,6 +15,8 @@ export async function GET() {
   if (!user || user.role === "ARTIST" || !user.agencyId || user.agency?.status !== "ACTIVE") {
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   }
+  // A business that needs to choose a plan first can't take its data out this way either.
+  if (isLocked(user)) redirect(lockedPath(user));
   const agencyId = user.agencyId;
   const settings = await getSettings(agencyId);
   const now = new Date();

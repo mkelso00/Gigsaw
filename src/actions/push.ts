@@ -5,11 +5,13 @@ import { prisma } from "@/lib/db";
 import { sendPush } from "@/lib/messaging";
 import { isPushEndpoint } from "@/lib/push-hosts";
 
+// Turning notifications on from Profile (or the act app): open while the business is locked.
+
 type Sub = { endpoint: string; keys?: { p256dh?: string; auth?: string } };
 
 /** Remember this phone so reminders can be sent to it. */
 export async function savePushSubscription(sub: Sub, device: string) {
-  const user = await requireUser();
+  const user = await requireUser(undefined, { allowLocked: true });
   const endpoint = String(sub?.endpoint ?? "");
   const p256dh = String(sub?.keys?.p256dh ?? "");
   const auth = String(sub?.keys?.auth ?? "");
@@ -25,14 +27,14 @@ export async function savePushSubscription(sub: Sub, device: string) {
 }
 
 export async function removePushSubscription(endpoint: string) {
-  const user = await requireUser();
+  const user = await requireUser(undefined, { allowLocked: true });
   await prisma.pushSubscription.deleteMany({
     where: { endpoint, userId: user.id },
   });
 }
 
 export async function sendTestPush() {
-  const user = await requireUser();
+  const user = await requireUser(undefined, { allowLocked: true });
   const act = user.role === "ARTIST";
   const reached = await sendPush({
     kind: "TEST",

@@ -26,7 +26,7 @@ export const metadata: Metadata = { title: "Profile" };
 
 /** Your own details, alerts, password, sign-in methods, calendar and look. Separate from the business's Settings. */
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ oauth?: string; p?: string }> }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ allowLocked: true }); // Open while a plan is needed
   const sp = await searchParams;
   const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const methods = await signInMethods(user);

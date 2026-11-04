@@ -2,7 +2,7 @@
 
 import { createContext, startTransition, useActionState, useContext, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import type { FormState } from "@/lib/forms";
+import { formErrorFromDigest, type FormState } from "@/lib/forms";
 
 export function SubmitButton({
   children,
@@ -56,7 +56,16 @@ export function ActionForm({
   className?: string;
   saveBar?: boolean | { label: string };
 }) {
-  const [state, formAction, pending] = useActionState(action, undefined);
+  const [state, formAction, pending] = useActionState(async (prev: FormState, data: FormData): Promise<FormState> => {
+    try {
+      return await action(prev, data);
+    } catch (e) {
+      // A refusal thrown before the action's own error handling (e.g. a locked plan) still shows as a message.
+      const message = formErrorFromDigest(e);
+      if (message) return { error: message };
+      throw e;
+    }
+  }, undefined);
   const ref = useRef<HTMLFormElement>(null);
   const [dismissed, setDismissed] = useState<FormState>(undefined);
   // What the form held when it was loaded or last saved, to tell when something has changed.

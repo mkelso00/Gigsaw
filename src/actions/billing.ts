@@ -15,7 +15,8 @@ import { hasLiveSubscription } from "@/lib/subscription";
 import { moveSubscription } from "@/lib/subscription-sync";
 
 // Settings > Plan: choose a plan, add a card (Stripe Checkout), manage billing (Stripe's billing
-// portal: card, invoices, cancelling) and change plan. Admins only.
+// portal: card, invoices, cancelling) and change plan. Admins only, and open while the business is
+// locked (trial ended, subscription cancelled), since this is how it gets going again.
 
 const DAY = 86_400_000;
 
@@ -25,7 +26,7 @@ function notByCard(agency: Agency) {
 }
 
 async function billingAgency() {
-  const user = await requireAdmin();
+  const user = await requireAdmin({ allowLocked: true });
   const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId! } });
   if (agency.billingMode !== "STRIPE") throw new FormError(notByCard(agency));
   if (!(await stripeConfigured())) throw new FormError("Card payments aren't switched on yet. Please try again later.");
@@ -112,7 +113,7 @@ export async function openBillingPortal(_: FormState): Promise<FormState> {
 /** Change plan (and monthly or yearly). During the trial with no card yet it just changes the choice. */
 export async function changePlan(_: FormState, form: FormData): Promise<FormState> {
   return handleForm(async () => {
-    const user = await requireAdmin();
+    const user = await requireAdmin({ allowLocked: true });
     const agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId! } });
     if (agency.billingMode !== "STRIPE") throw new FormError(notByCard(agency));
     const plan = await choosable(str(form, "plan"), agency);

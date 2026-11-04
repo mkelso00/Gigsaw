@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { parseActProfile } from "@/lib/act-profile";
+import { actBookingCounts, actInUseMessage } from "@/lib/archive";
 import { CONTACT_TYPES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
@@ -70,10 +71,11 @@ export async function deleteArtist(artistId: string, _: FormState): Promise<Form
   const user = await requireStaff();
   const res = await handleForm(async () => {
     await ownArtist(user, artistId);
-    const bookings = await prisma.booking.count({ where: { artistId } });
-    if (bookings > 0) throw new FormError(`This artist has ${bookings} booking(s). Delete or reassign them first.`);
-    await prisma.user.deleteMany({ where: { artistId, role: "ARTIST" } });
-    await prisma.artist.delete({ where: { id: artistId } });
+    // Archived bookings count too: they still point at the act, so deleting it would fail.
+    const inUse = actInUseMessage(await actBookingCounts(prisma, artistId));
+    if (inUse) throw new FormError(inUse);
+    // Together, so the act's login isn't removed if the act itself can't be deleted.
+    await prisma.$transaction([prisma.user.deleteMany({ where: { artistId, role: "ARTIST" } }), prisma.artist.delete({ where: { id: artistId } })]);
     await logActivity(user, "ARTIST", artistId, "deleted artist");
   });
   if (res?.error) return res;
@@ -226,8 +228,9 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
     if (before.timezone !== data.timezone) {
       // Keep future bookings on the venue's clock. Their stored UTC times stay as they are,
       // so the agency should check the times on those bookings.
+      // Archived ones too (archivedAt: undefined), so a booking restored later isn't left on the old clock.
       const n = await prisma.booking.updateMany({
-        where: { venueId, agencyId: user.agencyId, setStart: { gte: new Date() } },
+        where: { venueId, agencyId: user.agencyId, setStart: { gte: new Date() }, archivedAt: undefined },
         data: { timezone: data.timezone },
       });
       note = ` Time zone changed: check the times on ${n.count} upcoming booking(s).`;
@@ -281,7 +284,8 @@ export async function companyToVenue(contactId: string) {
     (await prisma.venue.create({ data: { agencyId: user.agencyId, name, address: c.address, importRef: c.importRef } }));
   await prisma.person.updateMany({ where: { agencyId: user.agencyId, companyId: c.id }, data: { companyId: null, venueId: venue.id } });
   // Keep the company if it's who pays for any bookings; otherwise it's no longer needed.
-  const used = await prisma.booking.count({ where: { promoterId: c.id } });
+  // Archived bookings count (archivedAt: undefined): deleting the company would clear who paid for them.
+  const used = await prisma.booking.count({ where: { promoterId: c.id, archivedAt: undefined } });
   const usedByEvents = await prisma.event.count({ where: { customerId: c.id } });
   if (!used && !usedByEvents) await prisma.contact.delete({ where: { id: c.id } });
   await logActivity(user, "VENUE", venue.id, "made a venue from a company", name);

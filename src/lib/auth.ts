@@ -1,10 +1,12 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { lockDecision } from "./billing-lock";
 import { prisma } from "./db";
+import { ShownFormError } from "./forms";
 import type { Role } from "./constants";
 
 export const SESSION_COOKIE = "gigsaw_session";
@@ -72,22 +74,39 @@ export async function requireSignedIn(): Promise<CurrentUser> {
   return user;
 }
 
-/** A signed-in member of an active agency, optionally limited to some roles. */
-export async function requireUser(roles?: Role[]): Promise<AgencyUser> {
+type Access = {
+  /**
+   * Open even when the business's trial has ended or its subscription stopped: only for Plan and
+   * its billing actions, Profile and the pages around them. See src/lib/billing-lock.ts.
+   */
+  allowLocked?: boolean;
+};
+
+/**
+ * A signed-in member of an active agency, optionally limited to some roles. A business that has
+ * to choose a plan first is sent to Plan from a page, and refused with a message from an action.
+ */
+export async function requireUser(roles?: Role[], access: Access = {}): Promise<AgencyUser> {
   const user = await requireSignedIn();
   if (!user.agencyId || !user.agency) redirect(user.isOwner ? "/owner" : "/login");
   if (user.agency.status !== "ACTIVE") redirect("/suspended");
   if (roles && !roles.includes(user.role as Role)) redirect(homePath(user));
+  // Server actions are posted with a Next-Action header; pages and route handlers aren't.
+  const inAction = !!(await headers()).get("next-action");
+  const lock = lockDecision(user, { allowLocked: access.allowLocked, inAction });
+  // A ShownFormError reaches the form as a message even when thrown before the action's own handleForm.
+  if (lock.kind === "refuse") throw new ShownFormError(lock.message);
+  if (lock.kind === "redirect") redirect(lock.to);
   return user as AgencyUser;
 }
 
 /** Agency staff only (admins and agents). */
-export function requireStaff() {
-  return requireUser(["ADMIN", "AGENT"]);
+export function requireStaff(access?: Access) {
+  return requireUser(["ADMIN", "AGENT"], access);
 }
 
-export function requireAdmin() {
-  return requireUser(["ADMIN"]);
+export function requireAdmin(access?: Access) {
+  return requireUser(["ADMIN"], access);
 }
 
 /** The platform owner: runs the Owner area, creates agencies and bills them. */
