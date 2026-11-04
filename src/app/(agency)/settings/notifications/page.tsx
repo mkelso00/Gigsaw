@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { TEMPLATES, TEMPLATE_GROUPS, templateSettings, type TemplateGroup } from "@/lib/message-templates";
 import { emailConfigured, smsConfigured } from "@/lib/messaging";
+import { env } from "@/server/env";
 
 export const metadata: Metadata = { title: "Notifications" };
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function NotificationSettings() {
   const user = await requireAdmin();
   const settings = await getSettings(user.agencyId!);
-  const from = process.env.MAIL_FROM?.match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? "Gigsaw's sending address";
+  const from = env().mailFromAddress ?? "Gigsaw's sending address";
   const counts = (g: TemplateGroup) => {
     const list = TEMPLATES.filter((t) => t.group === g);
     const off = list.filter((t) => templateSettings(settings.messageTemplates, t.key).off).length;

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { CHECK_IN_KINDS, type CheckInKind } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { actIdsFor } from "@/lib/people";
+import { log } from "@/server/log";
 
 export type CheckInPayload = {
   kind: CheckInKind;
@@ -74,7 +75,7 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
   await logActivity(user, "BOOKING", bookingId, "artist checked in", payload.kind.toLowerCase().replaceAll("_", " "));
   if (payload.kind === "ARRIVED") {
     // A failed message must never stop the check-in itself.
-    await notifyClientOfArrival(bookingId).catch((e) => console.error("[gigsaw] client arrival message failed", e));
+    await notifyClientOfArrival(bookingId).catch((e) => log.error("Client arrival message failed", { bookingId, err: e }));
   }
   revalidatePath("/", "layout");
 

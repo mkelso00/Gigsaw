@@ -11,6 +11,7 @@ import { choosablePlans, findPlan, newPlanKey, parsePlanInput, PlanError, pounds
 import { productId, stripe, stripeConfigured, StripeError, type Interval } from "@/lib/stripe";
 import { hasLiveSubscription } from "@/lib/subscription";
 import { applySubscription, moveSubscription, type StripeSubscription } from "@/lib/subscription-sync";
+import { log } from "@/server/log";
 
 // The Owner area's Plans page (edit, add, hide and archive plans; the trial and extra-user prices;
 // moving subscribers to new prices) and the Plan section on a business's page (put it on a plan,
@@ -93,7 +94,9 @@ export async function savePlan(key: string, _: FormState, form: FormData): Promi
       });
       // Keep the product's name in Stripe in step (it shows on invoices). Not made yet is fine.
       if (before.name !== data.name && (await stripeConfigured())) {
-        await stripe("POST", `products/${productId(key)}`, { name: `Gigsaw ${data.name}` }).catch(() => null);
+        await stripe("POST", `products/${productId(key)}`, { name: `Gigsaw ${data.name}` }).catch((e) =>
+          log.warn("Couldn't rename the plan's product in Stripe", { plan: key, err: e }),
+        );
       }
       const priceChanged = before.monthlyMinor !== data.monthlyMinor || before.yearlyMinor !== data.yearlyMinor;
       await logActivity({ id: owner.id, agencyId: null }, "PLAN", key, "plan changed", data.name);
@@ -175,7 +178,8 @@ export async function moveSubscribersToCurrentPrices(key: string, _: FormState):
         const r = await moveSubscription(a.id, a.stripeSubscriptionId!, plan, a.billingInterval as Interval, "none");
         if (r.changed) moved++;
         else already++;
-      } catch {
+      } catch (e) {
+        log.warn("Couldn't move a subscription to the current prices", { agencyId: a.id, plan: a.plan, err: e });
         failed.push(a.name);
       }
     }

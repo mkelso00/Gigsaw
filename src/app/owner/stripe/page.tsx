@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { stripe, StripeError } from "@/lib/stripe";
 import { maskKey, stripeKeys, stripeKeySources, type StripeKeys } from "@/lib/stripe-keys";
+import { log } from "@/server/log";
 
 export const metadata: Metadata = { title: "Stripe" };
 export const dynamic = "force-dynamic";
@@ -75,6 +76,7 @@ export default async function OwnerStripePage() {
         live: keys.secretKey.includes("_live_"),
       };
     } catch (e) {
+      log.warn("Couldn't read the Stripe account for the Owner area", { err: e });
       problem = e instanceof StripeError ? e.message : "Couldn't reach Stripe just now.";
     }
   }

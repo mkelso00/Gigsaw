@@ -14,6 +14,8 @@ import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
 import { clearStripeKeyCache, STRIPE_KEY_NAMES } from "@/lib/stripe-keys";
 import { sendWelcome } from "@/lib/welcome";
+import { env } from "@/server/env";
+import { log } from "@/server/log";
 
 /** A password if one was typed, or none ("") when they'll set their own from the welcome email. */
 async function optionalPasswordHash(form: FormData) {
@@ -196,10 +198,13 @@ export async function saveStripeKeys(_: FormState, form: FormData): Promise<Form
       if (!value) continue;
       if (!shapes[k][0].test(value)) throw new FormError(shapes[k][1]);
       if (k === "secretKey") {
-        const res = await fetch(`${process.env.STRIPE_API_BASE ?? "https://api.stripe.com"}/v1/account`, {
+        const res = await fetch(`${env().stripeApiBase}/v1/account`, {
           headers: { Authorization: `Bearer ${value}` },
           signal: AbortSignal.timeout(15_000),
-        }).catch(() => null);
+        }).catch((e) => {
+          log.warn("Couldn't reach Stripe to check a new secret key", { err: e });
+          return null;
+        });
         if (!res) throw new FormError("Couldn't reach Stripe to check the key. Please try again.");
         if (res.status === 401) throw new FormError("Stripe didn't accept that secret key. Copy it again from Developers, API keys.");
       }

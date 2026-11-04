@@ -3,6 +3,7 @@ import { createSession, currentUser, homePath } from "@/lib/auth";
 import { appUrl } from "@/lib/messaging";
 import { checkCallback, exchangeCode, OAuthError, parseProvider, providerCredentials, redirectUri, verifyIdToken, type Identity } from "@/lib/oauth";
 import { findUserForIdentity, linkToUser, savePendingSignup, takeFlow } from "@/lib/oauth-flow";
+import { log } from "@/server/log";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ provider
     const idToken = await exchangeCode(provider, { code: checked.code, verifier: checked.flow.verifier, ...creds, redirectUri: uri });
     identity = await verifyIdToken(provider, idToken, { clientId: creds.clientId, nonce: checked.flow.nonce });
   } catch (e) {
-    console.error(`[oauth] ${provider} sign in failed:`, e instanceof OAuthError ? e.message : e);
+    log.warn("Sign in with a provider failed", { provider, intent, ...(e instanceof OAuthError ? { reason: e.message } : { err: e }) });
     redirect(back(intent, "failed"));
   }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { env } from "@/server/env";
 import { stripeKeys } from "./stripe-keys";
 import { loadCatalogue } from "./plan-store";
 import { CURRENCY, findPlan, type PlanKey } from "./plans";
@@ -59,8 +60,8 @@ export async function stripe<T = Record<string, unknown>>(
   const key = (await stripeKeys()).secretKey;
   if (!key) throw new StripeError("Stripe isn't connected yet");
   const body = encodeForm(params);
-  // STRIPE_API_BASE is only for testing against a stand-in server.
-  const url = `${process.env.STRIPE_API_BASE ?? "https://api.stripe.com"}/v1/${path}${method === "GET" && body ? `?${body}` : ""}`;
+  // STRIPE_API_BASE is only for testing against a stand-in server (ignored in production).
+  const url = `${env().stripeApiBase}/v1/${path}${method === "GET" && body ? `?${body}` : ""}`;
   const res = await fetch(url, {
     method,
     headers: {

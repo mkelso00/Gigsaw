@@ -10,6 +10,7 @@ import { describeDiscount, fromStripeCoupon } from "@/lib/discounts";
 import { parseLookupKey, stripe, stripeConfigured } from "@/lib/stripe";
 import type { StripeSubscription } from "@/lib/subscription-sync";
 import { billingState } from "@/lib/subscription";
+import { log } from "@/server/log";
 
 // Settings > Plan for a business that pays by card: its trial or subscription, how much of the
 // plan it's using this month, and changing plan.
@@ -42,7 +43,10 @@ export async function SubscriptionPlan({
   let paying: number | null = null;
   let discount = "";
   if (b.subscribed && stripeOn && agency.stripeSubscriptionId) {
-    const sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`).catch(() => null);
+    const sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`).catch((e) => {
+      log.warn("Couldn't read the subscription from Stripe for the plan page", { agencyId: agency.id, err: e });
+      return null;
+    });
     const item = sub?.items.data.map((i) => parseLookupKey(i.price.lookup_key)).find((k) => k && k.kind !== "EXTRA_USER");
     if (item) paying = item.amountMinor;
     if (sub?.discount) discount = describeDiscount(fromStripeCoupon(sub.discount.coupon));

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { env } from "@/server/env";
 
 // Archived bookings are left out of every booking query unless the query asks about archivedAt
 // itself (e.g. the Archived list, or billing, which counts them).
@@ -30,7 +31,7 @@ const globalForPrisma = globalThis as unknown as { prisma?: Client };
 
 export const prisma = globalForPrisma.prisma ?? makeClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (!env().isProduction) globalForPrisma.prisma = prisma;
 
 /** An agency's settings, created with defaults the first time they're needed. */
 export async function getSettings(agencyId: string) {

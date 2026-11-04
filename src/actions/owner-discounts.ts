@@ -10,6 +10,7 @@ import { findPlan } from "@/lib/plans";
 import { ensureProduct, stripe, stripeConfigured, StripeError } from "@/lib/stripe";
 import { hasLiveSubscription } from "@/lib/subscription";
 import { applySubscription, type StripeSubscription } from "@/lib/subscription-sync";
+import { log } from "@/server/log";
 
 // Discount codes (Owner area → Discount codes): each is a Stripe coupon (how much comes off, for
 // how long, which plans) plus a promotion code (the word customers type at checkout, with its
@@ -58,7 +59,9 @@ export async function createDiscountCode(_: FormState, form: FormData): Promise<
         promo = await stripe<{ id: string }>("POST", "promotion_codes", promotionCodeParams(spec, coupon.id));
       } catch (e) {
         // Don't leave a coupon behind with no code.
-        await stripe("DELETE", `coupons/${coupon.id}`).catch(() => null);
+        await stripe("DELETE", `coupons/${coupon.id}`).catch((err) =>
+          log.warn("Couldn't delete a Stripe coupon left without a code; delete it in Stripe", { coupon: coupon.id, err }),
+        );
         throw e;
       }
       await prisma.discountCode.create({

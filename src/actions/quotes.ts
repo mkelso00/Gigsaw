@@ -24,6 +24,7 @@ import {
 } from "@/lib/quote-server";
 import { canWithdraw, looksLikeQuoteToken, parseAmount, parseQuoteLines, quoteRef, quoteTotals } from "@/lib/quotes";
 import { localDateKey } from "@/lib/time";
+import { log } from "@/server/log";
 
 // Quotes: staff make, change, send and withdraw them; the customer accepts or declines at
 // /q/<token> with no login. Every staff lookup includes the agency.
@@ -187,7 +188,7 @@ export async function acceptQuoteAnswer(token: string, _: FormState, form: FormD
     try {
       await depositLinkFor(done.quoteId);
     } catch (e) {
-      console.error("Quote accepted, but the deposit link couldn't be made", e);
+      log.error("Quote accepted, but the deposit link couldn't be made", { err: e });
     }
     after(() => afterAccepted(done.quoteId));
   });

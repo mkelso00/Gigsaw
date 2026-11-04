@@ -18,6 +18,10 @@ const {
   verifyIdToken,
 } = await import("@/lib/oauth");
 const { calendarLinks } = await import("@/lib/calendar-links");
+const { parseEnv } = await import("@/server/env");
+
+/** The server's settings from a set of variables, as the app would read them. */
+const cfg = (raw: Record<string, string>) => parseEnv(raw).env;
 
 const NOW = Date.UTC(2026, 10, 21, 12, 0, 0);
 const CLIENT = "client-123.apps.example";
@@ -55,7 +59,7 @@ const keysOf =
   async () =>
     jwks as never[];
 const check = (token: string, over: Partial<Parameters<typeof verifyIdToken>[2]> = {}, provider: "google" | "microsoft" = "google") =>
-  verifyIdToken(provider, token, { clientId: CLIENT, nonce: NONCE, now: NOW, env: {}, getKeys: keysOf(k1.jwk), ...over });
+  verifyIdToken(provider, token, { clientId: CLIENT, nonce: NONCE, now: NOW, env: cfg({}), getKeys: keysOf(k1.jwk), ...over });
 
 describe("PKCE, state and the authorisation request", () => {
   it("makes the S256 challenge from RFC 7636's example", () => {
@@ -76,7 +80,7 @@ describe("PKCE, state and the authorisation request", () => {
 
   it("sends state, nonce and the code challenge, never the verifier", () => {
     const flow = newFlow("google", "login", NOW);
-    const url = new URL(authorizeUrl(flow, { clientId: CLIENT, redirectUri: redirectUri("google", "https://app.gigsaw.live/"), env: {} }));
+    const url = new URL(authorizeUrl(flow, { clientId: CLIENT, redirectUri: redirectUri("google", "https://app.gigsaw.live/"), env: cfg({}) }));
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     const q = Object.fromEntries(url.searchParams);
     expect(q).toMatchObject({
@@ -93,24 +97,24 @@ describe("PKCE, state and the authorisation request", () => {
   });
 
   it("uses Microsoft's common tenant with the code in the query string", () => {
-    const url = new URL(authorizeUrl(newFlow("microsoft", "login", NOW), { clientId: CLIENT, redirectUri: "https://x/cb", env: {} }));
+    const url = new URL(authorizeUrl(newFlow("microsoft", "login", NOW), { clientId: CLIENT, redirectUri: "https://x/cb", env: cfg({}) }));
     expect(url.origin + url.pathname).toBe("https://login.microsoftonline.com/common/oauth2/v2.0/authorize");
     expect(url.searchParams.get("response_mode")).toBe("query");
   });
 
   it("only uses a test provider outside production", () => {
-    expect(endpoints("google", { OAUTH_TEST_BASE: "http://localhost:4245", NODE_ENV: "development" }).token).toBe("http://localhost:4245/google/token");
-    expect(endpoints("google", { OAUTH_TEST_BASE: "http://localhost:4245", NODE_ENV: "production" }).token).toBe("https://oauth2.googleapis.com/token");
-    expect(endpoints("microsoft", { OAUTH_TEST_BASE: "http://evil", NODE_ENV: "production" }).jwks).toBe(
+    expect(endpoints("google", cfg({ OAUTH_TEST_BASE: "http://localhost:4245", NODE_ENV: "development" })).token).toBe("http://localhost:4245/google/token");
+    expect(endpoints("google", cfg({ OAUTH_TEST_BASE: "http://localhost:4245", NODE_ENV: "production" })).token).toBe("https://oauth2.googleapis.com/token");
+    expect(endpoints("microsoft", cfg({ OAUTH_TEST_BASE: "http://evil", NODE_ENV: "production" })).jwks).toBe(
       "https://login.microsoftonline.com/common/discovery/v2.0/keys",
     );
   });
 
   it("shows a provider only when both its id and secret are set", () => {
-    expect(configuredProviders({})).toEqual([]);
-    expect(configuredProviders({ GOOGLE_CLIENT_ID: "a" })).toEqual([]);
-    expect(configuredProviders({ GOOGLE_CLIENT_ID: "a", GOOGLE_CLIENT_SECRET: "b", MICROSOFT_CLIENT_ID: "c" })).toEqual(["google"]);
-    expect(configuredProviders({ GOOGLE_CLIENT_ID: "a", GOOGLE_CLIENT_SECRET: "b", MICROSOFT_CLIENT_ID: "c", MICROSOFT_CLIENT_SECRET: "d" })).toEqual([
+    expect(configuredProviders(cfg({}))).toEqual([]);
+    expect(configuredProviders(cfg({ GOOGLE_CLIENT_ID: "a" }))).toEqual([]);
+    expect(configuredProviders(cfg({ GOOGLE_CLIENT_ID: "a", GOOGLE_CLIENT_SECRET: "b", MICROSOFT_CLIENT_ID: "c" }))).toEqual(["google"]);
+    expect(configuredProviders(cfg({ GOOGLE_CLIENT_ID: "a", GOOGLE_CLIENT_SECRET: "b", MICROSOFT_CLIENT_ID: "c", MICROSOFT_CLIENT_SECRET: "d" }))).toEqual([
       "google",
       "microsoft",
     ]);

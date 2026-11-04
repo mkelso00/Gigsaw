@@ -16,6 +16,7 @@ import { FormError, confirmed, handleForm, oneOf, required, str, type FormState 
 import { formatMoney, toMinor } from "@/lib/money";
 import { formatDate, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { buildSchedule } from "@/lib/schedule";
+import { log } from "@/server/log";
 
 /** A booking that belongs to the user's agency. Anything else is treated as not found. */
 async function ownBooking(user: AgencyUser, bookingId: string) {
@@ -273,7 +274,7 @@ export async function logCheckInForArtist(bookingId: string, _: FormState, form:
       data: { bookingId, artistId: booking.artistId!, userId: user.id, kind, source: "AGENT", at, note: str(form, "note") },
     });
     await logActivity(user, "BOOKING", bookingId, "check-in logged by agency", kind.toLowerCase().replaceAll("_", " "));
-    if (kind === "ARRIVED") await notifyClientOfArrival(bookingId).catch((e) => console.error("[gigsaw] client arrival message failed", e));
+    if (kind === "ARRIVED") await notifyClientOfArrival(bookingId).catch((e) => log.error("Client arrival message failed", { bookingId, err: e }));
     revalidatePath("/", "layout");
     return { ok: "Check-in logged." };
   });

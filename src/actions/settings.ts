@@ -21,10 +21,11 @@ async function syncExtraUsersQuietly(agencyId: string) {
   try {
     await syncExtraUsers(agencyId);
   } catch (e) {
-    console.error("Couldn't update extra users in Stripe", e);
+    log.warn("Couldn't update extra users in Stripe", { agencyId, err: e });
   }
 }
 import { isValidTimeZone } from "@/lib/time";
+import { log } from "@/server/log";
 
 /**
  * Save one settings page. Each page only sends its own fields, so only the fields present are

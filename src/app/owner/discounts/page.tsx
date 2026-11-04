@@ -12,6 +12,7 @@ import { findPlan } from "@/lib/plans";
 import { stripe, stripeConfigured, StripeError } from "@/lib/stripe";
 import { formatDate } from "@/lib/time";
 import { OwnerNote, StripeNotice } from "../stripe-notice";
+import { log } from "@/server/log";
 
 export const metadata: Metadata = { title: "Discount codes" };
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function OwnerDiscountsPage() {
       const list = await stripe<{ data: StripePromo[] }>("GET", "promotion_codes", { limit: 100 });
       for (const p of list.data) fromStripe.set(p.id, p);
     } catch (e) {
+      log.warn("Couldn't read promotion codes from Stripe", { err: e });
       problem = e instanceof StripeError ? e.message : "Couldn't reach Stripe just now.";
     }
   }

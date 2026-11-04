@@ -1,5 +1,6 @@
 import "server-only";
 import webpush from "web-push";
+import { env } from "@/server/env";
 import { prisma } from "./db";
 import { isPushEndpoint } from "./push-hosts";
 
@@ -13,13 +14,8 @@ let cached: Keys | null = null;
 
 export async function vapidKeys(): Promise<Keys> {
   if (cached) return cached;
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    cached = {
-      publicKey: process.env.VAPID_PUBLIC_KEY,
-      privateKey: process.env.VAPID_PRIVATE_KEY,
-    };
-    return cached;
-  }
+  const own = env().vapid;
+  if (own) return (cached = own);
   const stored = await prisma.appSecret.findUnique({ where: { key: "vapid" } });
   if (stored) return (cached = JSON.parse(stored.value) as Keys);
   const fresh = webpush.generateVAPIDKeys();
@@ -35,8 +31,7 @@ export async function vapidKeys(): Promise<Keys> {
 }
 
 function subject() {
-  const from = process.env.MAIL_FROM?.match(/[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+/)?.[0];
-  return `mailto:${from ?? "alerts@send.gigsaw.live"}`;
+  return `mailto:${env().mailFromAddress ?? "alerts@send.gigsaw.live"}`;
 }
 
 export type PushPayload = {
