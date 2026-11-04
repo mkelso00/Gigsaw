@@ -178,6 +178,8 @@ model User {
   checkIns          CheckIn[]
   activity          Activity[]
   pushSubscriptions PushSubscription[]
+
+  @@index([agencyId]) // the team list, and the agent pickers on most forms
 }
 
 // A Google or Microsoft account someone signs in with. Matched by the provider's subject id,
@@ -203,6 +205,8 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId]) // sign out everywhere / other devices
 }
 
 model Artist {
@@ -294,6 +298,8 @@ model ContactNote {
   author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   body      String
   createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt]) // the contact page lists notes newest first
 }
 
 model Venue {
@@ -427,6 +433,14 @@ model Booking {
   @@index([artistId, setStart])
   @@index([slotId, arriveBy])
   @@index([eventId])
+  // The venue's and the payer's pages (newest first), and clearing the link when one is deleted.
+  @@index([venueId, setStart])
+  @@index([promoterId, setStart])
+  // Scans across every business by call time: the every-minute overdue check (runOverdueCheck)
+  // and the month's billable gigs (usageForMonth with no agency). A partial index for the overdue
+  // check isn't worth it: overdueAlertSentAt is only set once an alert goes, so nearly every row
+  // matches, and Prisma sends demo/status as parameters, which a partial index can't rely on.
+  @@index([arriveBy])
 }
 
 model Payment {
@@ -443,6 +457,7 @@ model Payment {
   cardPaymentId String?
   cardPayment   CardPayment? @relation(fields: [cardPaymentId], references: [id], onDelete: SetNull)
 
+  @@index([bookingId]) // nearly every booking list includes payments
   @@index([cardPaymentId])
 }
 
@@ -549,6 +564,8 @@ model PasswordReset {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt]) // rate limit on new links, and using up the others on reset
 }
 
 // A failed sign-in, counted per email ("email:...") and per IP address ("ip:...") to limit
@@ -578,6 +595,7 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([agencyId, createdAt])
+  @@index([createdAt]) // the Owner area's message log, across every business
 }
 
 // A regular weekly music slot at a venue, e.g. "Mondays 19:00-21:00, solo".
@@ -695,6 +713,7 @@ model Person {
   @@index([agencyId, importRef])
   @@index([agencyId])
   @@index([venueId])
+  @@index([companyId]) // the company's page lists its people
 }
 
 // A person's place in an act, e.g. Graham McKee, lead vocals, in Wonderlust.
@@ -755,6 +774,9 @@ model Event {
   quotes     Quote[]
 
   @@index([agencyId, date])
+  @@index([date]) // the every-minute event email check, across every business (runEventMessages)
+  @@index([customerId])
+  @@index([venueId])
 }
 
 // One item on an event's checklist, e.g. "Deposit received". Some tick themselves (key set).
@@ -899,6 +921,7 @@ model Enquiry {
 
   @@index([agencyId, status, createdAt])
   @@index([ipHash, createdAt])
+  @@index([bookingId]) // clearing the link when its booking is deleted
 }
 
 // Dates an act can't play (holiday, other work), blocked out by the act in their app or by the
@@ -949,6 +972,7 @@ model AvailabilityRequest {
   replies     AvailabilityReply[]
 
   @@index([agencyId, date])
+  @@index([bookingId]) // the booking page: when acts were last asked about this gig
 }
 
 // One act's answer to an availability request.
@@ -971,6 +995,7 @@ model AvailabilityReply {
 
   @@unique([requestId, artistId])
   @@index([artistId])
+  @@index([bookingId]) // clearing the link when its booking is deleted
 }
 
 // Gigsaw's subscription plans, edited in the Owner area → Plans. The key is fixed once made: it's
