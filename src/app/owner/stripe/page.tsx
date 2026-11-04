@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { dismissOwnerCardPayment, giveCardPayment } from "@/actions/card-payments";
 import { saveStripeKeys } from "@/actions/owner";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/messaging";
+import { formatMoney } from "@/lib/money";
+import { formatDate } from "@/lib/time";
 import { stripe, StripeError } from "@/lib/stripe";
 import { maskKey, stripeKeys, stripeKeySources, type StripeKeys } from "@/lib/stripe-keys";
 
@@ -46,7 +50,13 @@ const WEBHOOKS = [
     title: "Card payments (connected accounts)",
     path: "/api/stripe/connect-webhook",
     listen: "Events on connected accounts",
-    events: ["checkout.session.completed", "checkout.session.async_payment_succeeded", "account.updated", "account.application.deauthorized"],
+    events: [
+      "checkout.session.completed",
+      "checkout.session.async_payment_succeeded",
+      "charge.refunded",
+      "account.updated",
+      "account.application.deauthorized",
+    ],
   },
 ];
 
@@ -69,6 +79,9 @@ export default async function OwnerStripePage() {
     }
   }
   const allSet = !!account && !!keys.webhookSecret && !!keys.connectWebhookSecret;
+  // Card payments into an account Gigsaw can't tie to any business (see recordCardPayment).
+  const unmatched = await prisma.cardPayment.findMany({ where: { agencyId: null, status: "UNMATCHED" }, orderBy: { paidAt: "asc" } });
+  const businesses = unmatched.length ? await prisma.agency.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }) : [];
 
   return (
     <div className="max-w-3xl">
@@ -76,6 +89,54 @@ export default async function OwnerStripePage() {
         title="Stripe"
         subtitle="Connect Gigsaw's Stripe account: subscriptions for businesses, and card payments into each business's own account."
       />
+
+      {unmatched.length > 0 && (
+        <section className="mb-8 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900" aria-label="Card payments to sort out">
+          <h2 className="font-semibold">Card payments Gigsaw couldn&apos;t tie to a business</h2>
+          <p className="mt-1">
+            Paid into a connected Stripe account that no business has any more. Pass each one to the business it&apos;s for, and it shows on their Payments page
+            to put on a booking.
+          </p>
+          <ul className="mt-3 space-y-3">
+            {unmatched.map((c) => (
+              <li key={c.id} className="rounded-xl bg-white px-4 py-3 text-ink-900">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-base font-semibold tabular-nums">{formatMoney(c.amountMinor, c.currency)}</span>
+                  <span className="text-ink-500">
+                    {formatDate(c.paidAt, "Europe/London")}
+                    {c.email && ` · ${c.email}`}
+                  </span>
+                </div>
+                <p className="mt-1 font-mono text-xs text-ink-500">
+                  {c.stripeAccountId} · {c.stripePaymentId || c.stripeSessionId}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <ActionForm action={giveCardPayment.bind(null, c.id)}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select name="agency" required aria-label="Business" className="input w-56" defaultValue="">
+                        <option value="" disabled>
+                          Choose a business
+                        </option>
+                        {businesses.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                      <SubmitButton className="btn btn-sm btn-primary">Pass on</SubmitButton>
+                    </div>
+                  </ActionForm>
+                  <ActionForm action={dismissOwnerCardPayment.bind(null, c.id)}>
+                    <ConfirmButton className="btn btn-sm" message="Clear this payment? Only do this if it's been sorted out in Stripe.">
+                      Sorted in Stripe
+                    </ConfirmButton>
+                  </ActionForm>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Status, like a desk's channel lights. */}
       <section className="card mb-8 divide-y divide-ink-100">

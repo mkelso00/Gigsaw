@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { stripeKeys } from "@/lib/stripe-keys";
-import { applyAccount, recordCardPayment, type StripeAccount } from "@/lib/card-payments";
+import { applyAccount, recordCardPayment, recordCardRefund, type StripeAccount } from "@/lib/card-payments";
 import { prisma } from "@/lib/db";
 import { verifyWebhook } from "@/lib/stripe";
+import { markStripeEvent, stripeEventSeen } from "@/lib/stripe-events";
 
 // Events from agencies' own Stripe accounts (Stripe Connect): card payments from venues and
-// customers, and changes to an account's set-up. In the Stripe dashboard add a webhook endpoint
-// at <site>/api/stripe/connect-webhook that listens to events on connected accounts, with
-// checkout.session.completed, checkout.session.async_payment_succeeded, account.updated and
-// account.application.deauthorized. Its signing secret is STRIPE_CONNECT_WEBHOOK_SECRET.
+// customers, refunds, and changes to an account's set-up. In the Stripe dashboard add a webhook
+// endpoint at <site>/api/stripe/connect-webhook that listens to events on connected accounts, with
+// checkout.session.completed, checkout.session.async_payment_succeeded, charge.refunded,
+// account.updated and account.application.deauthorized. Its signing secret is STRIPE_CONNECT_WEBHOOK_SECRET.
+//
+// A paid session is always saved before this answers 200, matched or not (see recordCardPayment);
+// if saving fails it answers 500 and Stripe tries again.
 
 type ConnectEvent = { id: string; type: string; account?: string; data: { object: Record<string, unknown> } };
 
@@ -21,13 +25,14 @@ export async function POST(req: Request) {
   const obj = event.data.object;
   // Only events from a connected account belong here; Gigsaw's own go to /api/stripe/webhook.
   if (!event.account) return NextResponse.json({ received: true, ignored: "not a connected account" });
+  if (await stripeEventSeen(event.id)) return NextResponse.json({ received: true, duplicate: true });
 
+  let result: string | undefined;
   if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     // Card payments are "paid" straight away; slower methods (e.g. bank debits) are recorded once they clear.
-    if (obj.mode === "payment") {
-      const result = await recordCardPayment(obj as Parameters<typeof recordCardPayment>[0], event.account);
-      return NextResponse.json({ received: true, result });
-    }
+    if (obj.mode === "payment") result = await recordCardPayment(obj as Parameters<typeof recordCardPayment>[0], event.account);
+  } else if (event.type === "charge.refunded") {
+    result = await recordCardRefund(obj as Parameters<typeof recordCardRefund>[0], event.account);
   } else if (event.type === "account.updated") {
     await applyAccount(obj as unknown as StripeAccount);
   } else if (event.type === "account.application.deauthorized") {
@@ -37,5 +42,6 @@ export async function POST(req: Request) {
       data: { stripeAccountId: null, stripeChargesEnabled: false, stripeDetailsDone: false },
     });
   }
-  return NextResponse.json({ received: true });
+  await markStripeEvent(event.id, event.type);
+  return NextResponse.json({ received: true, ...(result ? { result } : {}) });
 }
