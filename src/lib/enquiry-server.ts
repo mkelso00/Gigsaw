@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import type { Enquiry, Settings as AgencySettings } from "@prisma/client";
 import { createBookingWithReference } from "./bookings";
+import { env } from "@/server/env";
 import { prisma } from "./db";
 import {
   enquiryMakes,
@@ -32,7 +33,8 @@ let secret: string | null = null;
 
 /** A secret made once and kept in the database, so every server signs and checks stamps alike. */
 export async function enquirySecret() {
-  if (process.env.ENQUIRY_SECRET) return process.env.ENQUIRY_SECRET;
+  const own = env().enquirySecret;
+  if (own) return own;
   if (secret) return secret;
   await prisma.appSecret.createMany({ data: [{ key: "enquiry", value: randomBytes(32).toString("base64url") }], skipDuplicates: true });
   return (secret = (await prisma.appSecret.findUniqueOrThrow({ where: { key: "enquiry" } })).value);

@@ -640,6 +640,16 @@ model AppSecret {
   createdAt DateTime @default(now())
 }
 
+// The last run of each background job (src/lib/scheduler.ts, or /api/cron/overdue when an outside
+// scheduler calls it), so a health check can tell when the checks have stopped running.
+model SchedulerHeartbeat {
+  job           String    @id // overdue | reminders | event-emails
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  lastError     String    @default("")
+  updatedAt     DateTime  @updatedAt
+}
+
 // Records each reminder sent so it only goes once, e.g. ("WEEK", "person:abc", "2026-11-02").
 // The recipient is "person:<id>" for an act member, or "act:<id>" for an act with no members.
 model Reminder {

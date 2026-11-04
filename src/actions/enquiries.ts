@@ -22,6 +22,7 @@ import {
 import { clientIp, enquiryAttempts, enquirySecret, ipHash, MAX_PER_IP_PER_HOUR, notifyTeam, recordEnquiry, replyToCustomer } from "@/lib/enquiry-server";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { localDateKey } from "@/lib/time";
+import { log } from "@/server/log";
 
 // The enquiry form on a business's own website (/enquire/<slug>), enquiries staff add by hand,
 // and dealing with what comes in.
@@ -85,7 +86,7 @@ export async function submitEnquiry(slug: string, _: FormState, form: FormData):
         await replyToCustomer(enquiry.id);
         await notifyTeam(enquiry.id);
       } catch (e) {
-        console.error("Couldn't send the enquiry emails", e);
+        log.error("Couldn't send the enquiry emails", { err: e });
       }
     });
     revalidatePath("/", "layout");
@@ -115,7 +116,7 @@ export async function addEnquiry(_: FormState, form: FormData): Promise<FormStat
         try {
           await replyToCustomer(enquiry.id);
         } catch (e) {
-          console.error("Couldn't send the enquiry reply", e);
+          log.error("Couldn't send the enquiry reply", { err: e });
         }
       });
     }

@@ -8,6 +8,7 @@ import { checkSignature, checkSignerName, clientIp, contractHash } from "@/lib/c
 import { afterSigned, ContractError, liveContractDoc, sendContract, type ContractTarget } from "@/lib/contracts";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
+import { log } from "@/server/log";
 
 // Contracts signed online: staff send and cancel them; the client signs at /c/<token> with no login.
 
@@ -92,7 +93,7 @@ export async function signContract(token: string, hash: string, _: FormState, fo
       await afterSigned(c.id);
     } catch (e) {
       // The contract is signed either way; a message that fails is in the Outbox.
-      console.error("Contract signed, but the emails after it failed", e);
+      log.error("Contract signed, but the emails after it failed", { err: e });
     }
     return { ok: "signed" };
   });

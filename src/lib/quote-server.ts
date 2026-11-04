@@ -30,6 +30,7 @@ import {
 } from "./quotes";
 import { buildSchedule } from "./schedule";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
+import { log } from "@/server/log";
 
 // Quotes, server side: starting one, new versions, sending it, and the customer's answer. The
 // customer's Accept is one transaction that claims the quote (only a quote still out with them can
@@ -488,18 +489,18 @@ export async function afterAccepted(quoteId: string) {
     try {
       await onConfirmed(l.bookingId);
     } catch (e) {
-      console.error("Quote accepted, but telling an act failed", e);
+      log.error("Quote accepted, but telling an act failed", { err: e });
     }
   }
   try {
     await tellCustomerBooked(q);
   } catch (e) {
-    console.error("Quote accepted, but the customer's confirmation failed", e);
+    log.error("Quote accepted, but the customer's confirmation failed", { err: e });
   }
   try {
     await tellTeam(q, "ACCEPTED");
   } catch (e) {
-    console.error("Quote accepted, but telling the team failed", e);
+    log.error("Quote accepted, but telling the team failed", { err: e });
   }
 }
 
@@ -509,7 +510,7 @@ export async function afterDeclined(quoteId: string) {
   try {
     await tellTeam(q, "DECLINED");
   } catch (e) {
-    console.error("Quote declined, but telling the team failed", e);
+    log.error("Quote declined, but telling the team failed", { err: e });
   }
 }
 

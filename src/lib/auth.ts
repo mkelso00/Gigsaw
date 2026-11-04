@@ -8,6 +8,7 @@ import { lockDecision } from "./billing-lock";
 import { prisma } from "./db";
 import { ShownFormError } from "./forms";
 import type { Role } from "./constants";
+import { env } from "@/server/env";
 
 export const SESSION_COOKIE = "gigsaw_session";
 const SESSION_DAYS = 30;
@@ -28,7 +29,7 @@ export async function createSession(userId: string) {
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: env().isProduction,
     path: "/",
     expires: expiresAt,
   });

@@ -1,9 +1,10 @@
 import "server-only";
+import { env } from "@/server/env";
 import { prisma } from "./db";
 import { normalisePhone, redactLinks, renderEmail, type EmailContent } from "./message-format";
 import { pushTo, type PushPayload } from "./push";
 
-// Sends emails (Resend) and texts (Twilio) when their keys are set in the environment,
+// Sends emails (Resend) and texts (Twilio) when their keys are set in the environment (read in src/server/env.ts),
 // and records every message in the Message table either way. With no provider set up,
 // messages are kept as NOT_SENT so they can still be read in the Outbox.
 //
@@ -33,18 +34,16 @@ type Base = {
 };
 
 export function emailConfigured() {
-  return !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
+  return !!env().email;
 }
 
 export function smsConfigured() {
-  return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
+  return !!env().sms;
 }
 
 /** The public address of this site, for links in emails and texts. */
 export function appUrl() {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
-  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
-  return `http://localhost:${process.env.PORT ?? 3000}`;
+  return env().appUrl;
 }
 
 async function post(url: string, init: RequestInit) {
@@ -115,16 +114,17 @@ export async function sendEmail(
   if (!isEmail(to)) return "SKIPPED";
   const { html, text } = renderEmail(m.email);
   const replyTo = m.replyTo?.trim();
-  const send = emailConfigured()
+  const provider = env().email;
+  const send = provider
     ? () =>
         post("https://api.resend.com/emails", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            Authorization: `Bearer ${provider.apiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: process.env.MAIL_FROM,
+            from: provider.from,
             to: [to],
             subject: m.subject,
             text,
@@ -139,18 +139,18 @@ export async function sendEmail(
 export async function sendSms(m: Base & { to: string; text: string }) {
   const to = normalisePhone(m.to);
   if (!to) return "SKIPPED";
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const send = smsConfigured()
+  const twilio = env().sms;
+  const send = twilio
     ? () =>
-        post(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+        post(`https://api.twilio.com/2010-04-01/Accounts/${twilio.accountSid}/Messages.json`, {
           method: "POST",
           headers: {
-            Authorization: `Basic ${Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64")}`,
+            Authorization: `Basic ${Buffer.from(`${twilio.accountSid}:${twilio.authToken}`).toString("base64")}`,
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
             To: to,
-            From: process.env.TWILIO_FROM!,
+            From: twilio.from,
             Body: m.text,
           }).toString(),
         })

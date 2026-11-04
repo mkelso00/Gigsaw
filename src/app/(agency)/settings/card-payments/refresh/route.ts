@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { onboardingLink } from "@/lib/card-payments";
 import { appUrl } from "@/lib/messaging";
+import { log } from "@/server/log";
 
 // Stripe sends the admin here when an onboarding link has expired or was already used: make a
 // fresh one and carry on.
@@ -11,7 +12,8 @@ export async function GET() {
   if (!user.agency?.stripeAccountId) return NextResponse.redirect(back);
   try {
     return NextResponse.redirect(await onboardingLink(user.agency.stripeAccountId));
-  } catch {
+  } catch (e) {
+    log.warn("Couldn't make a fresh Stripe onboarding link", { agencyId: user.agencyId, err: e });
     return NextResponse.redirect(`${back}?error=1`);
   }
 }

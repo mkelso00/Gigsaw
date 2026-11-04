@@ -113,19 +113,29 @@ The grace period and venue radius are set in **Settings**. The rules live in `sr
 
 Messages go out once these are set in Railway → Variables. Until then, every message is saved to the **Outbox** (Owner area) and the agency's **Settings → Messages**, so nothing is lost and you can check the wording.
 
+Every variable is listed, grouped and explained in [`.env.example`](.env.example), and all of them are read in one place, `src/server/env.ts`. In production the server won't start without `DATABASE_URL` and a public address (`APP_URL`, or Railway's own domain once you've generated one): it stops straight away and the deploy log says what to set. It also warns once at start-up about anything half set up, such as `RESEND_API_KEY` without `MAIL_FROM`, naming the variables but never showing their values.
+
 | Variable | What it's for |
 | --- | --- |
+| `DATABASE_URL` | Required. The Postgres database. On Railway, `${{Postgres.DATABASE_URL}}`. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Card subscriptions. Products and prices are created in Stripe automatically. Add a webhook endpoint in Stripe pointing at `<your site>/api/stripe/webhook` with the events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated` and `customer.subscription.deleted`, and turn on the customer portal in Stripe's settings. |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | Card payments from venues and customers into each agency's own Stripe account. Uses the same `STRIPE_SECRET_KEY`; turn on Connect in the Stripe dashboard first. Add a second webhook endpoint that listens to events on **connected accounts**, pointing at `<your site>/api/stripe/connect-webhook`, with `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `account.updated` and `account.application.deauthorized`. Its signing secret goes here. |
 | `RESEND_API_KEY`, `MAIL_FROM` | Email via [Resend](https://resend.com). `MAIL_FROM` like `Gigsaw <bookings@send.gigsaw.live>` (the domain must be verified in Resend). Replies go to the agency email from Settings, not this address. |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Texts via [Twilio](https://www.twilio.com). `TWILIO_FROM` is your Twilio number, e.g. `+447700900000`. |
-| `APP_URL` | Optional. The site address used in links. Railway's own domain is used if this isn't set. It's also the start of the sign-in redirect addresses below, so set it if you use your own domain. |
+| `APP_URL` | The site address used in links, like `https://gigsaw.live`. Railway's own domain (`RAILWAY_PUBLIC_DOMAIN`, set by Railway when you generate a domain) is used if this isn't set; in production one of the two is required. It's also the start of the sign-in redirect addresses below, so set it if you use your own domain. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Shows "Sign in with Google" and "Sign up with Google". In Google Cloud Console, make an OAuth client (Web application) with the redirect URI `<your site>/api/auth/google/callback` and the scopes `openid`, `email` and `profile`. |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Optional. Shows "Sign in with Microsoft" for work, school and personal accounts. In Microsoft Entra, register an app for "any organisational directory and personal Microsoft accounts" with the Web redirect URI `<your site>/api/auth/microsoft/callback`, and add the optional `email` and `xms_edov` claims to the ID token. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Optional. Keys that sign phone notifications. If not set, Gigsaw makes a pair once and keeps it in the database, which is fine for most installs. Changing them means every phone has to turn reminders on again. |
 | `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker (late alerts and gig reminders) and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
+| `ENQUIRY_SECRET` | Optional. Signs the enquiry form's time stamp. If not set, Gigsaw makes one and keeps it in the database. |
+| `LOG_LEVEL` | Optional. `debug`, `info` (the default), `warn` or `error`. In production each log entry is one line of JSON (`level`, `msg`, `time` and details), so the logs can be searched and filtered by any of them. |
+| `SENTRY_DSN` | Optional. Also send server errors to [Sentry](https://sentry.io). Without it, errors are only in the logs. |
+| `PORT`, `NODE_ENV` | Set by Railway and by `npm start`. Don't set them by hand. |
+| `STRIPE_API_BASE`, `OAUTH_TEST_BASE` | Testing only: send Stripe calls or sign-ins to a stand-in server. Ignored in production. |
 
 Settings → Messages → **Send me a test** checks both are working.
+
+When a page fails, the error page shows a **Reference**. Every server error is logged as one line with that reference as `digest`, plus the route, method and a request id, so searching Railway's logs for the reference finds it.
 
 ## Deploying on Railway
 

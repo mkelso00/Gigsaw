@@ -1,11 +1,12 @@
 import "server-only";
 import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify, type JsonWebKey } from "node:crypto";
+import { env as serverEnv, type ServerEnv } from "@/server/env";
 
 // "Sign in with Google" and "Sign in with Microsoft": OpenID Connect, authorisation code flow with
 // PKCE, a random state and a nonce. No SDK: plain fetch, and id_tokens are checked against the
 // provider's published signing keys (JWKS) with node:crypto.
 //
-// Setup is two settings per provider on the server. Buttons only show for providers that are set up.
+// Setup is two settings per provider on the server (read in src/server/env.ts). Buttons only show for providers that are set up.
 //   Google:    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 //   Microsoft: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET (the "common" tenant: work, school and personal accounts)
 // Redirect URIs to register: <APP_URL>/api/auth/google/callback and <APP_URL>/api/auth/microsoft/callback
@@ -13,9 +14,9 @@ import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, 
 export type ProviderKey = "google" | "microsoft";
 export type OAuthIntent = "login" | "signup" | "link";
 
-export const PROVIDERS: Record<ProviderKey, { key: ProviderKey; label: string; db: "GOOGLE" | "MICROSOFT"; idEnv: string; secretEnv: string }> = {
-  google: { key: "google", label: "Google", db: "GOOGLE", idEnv: "GOOGLE_CLIENT_ID", secretEnv: "GOOGLE_CLIENT_SECRET" },
-  microsoft: { key: "microsoft", label: "Microsoft", db: "MICROSOFT", idEnv: "MICROSOFT_CLIENT_ID", secretEnv: "MICROSOFT_CLIENT_SECRET" },
+export const PROVIDERS: Record<ProviderKey, { key: ProviderKey; label: string; db: "GOOGLE" | "MICROSOFT" }> = {
+  google: { key: "google", label: "Google", db: "GOOGLE" },
+  microsoft: { key: "microsoft", label: "Microsoft", db: "MICROSOFT" },
 };
 
 export const PROVIDER_KEYS = Object.keys(PROVIDERS) as ProviderKey[];
@@ -23,7 +24,8 @@ export const PROVIDER_KEYS = Object.keys(PROVIDERS) as ProviderKey[];
 /** Personal Microsoft accounts (Outlook.com, Hotmail, Live) all sign in through this tenant. */
 export const MICROSOFT_CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
-type Env = Record<string, string | undefined>;
+/** The settings sign-in needs; the server's own unless a test passes others. */
+type Env = Pick<ServerEnv, "oauth" | "oauthTestBase">;
 
 export function parseProvider(s: string | null | undefined): ProviderKey | null {
   return s === "google" || s === "microsoft" ? s : null;
@@ -33,14 +35,12 @@ export function providerFromDb(s: string): ProviderKey | null {
   return PROVIDER_KEYS.find((k) => PROVIDERS[k].db === s) ?? null;
 }
 
-export function providerCredentials(p: ProviderKey, env: Env = process.env) {
-  const clientId = env[PROVIDERS[p].idEnv]?.trim();
-  const clientSecret = env[PROVIDERS[p].secretEnv]?.trim();
-  return clientId && clientSecret ? { clientId, clientSecret } : null;
+export function providerCredentials(p: ProviderKey, env: Env = serverEnv()) {
+  return env.oauth[p];
 }
 
 /** Providers with both settings in place, so their buttons can show. */
-export function configuredProviders(env: Env = process.env): ProviderKey[] {
+export function configuredProviders(env: Env = serverEnv()): ProviderKey[] {
   return PROVIDER_KEYS.filter((p) => providerCredentials(p, env));
 }
 
@@ -50,8 +50,8 @@ export type Endpoints = { authorize: string; token: string; jwks: string; issuer
  * Where each provider lives. OAUTH_TEST_BASE points both at a stand-in server for testing, and is
  * ignored in production so a stray setting can never send real sign-ins anywhere else.
  */
-export function endpoints(p: ProviderKey, env: Env = process.env): Endpoints {
-  const test = env.NODE_ENV !== "production" && env.OAUTH_TEST_BASE ? env.OAUTH_TEST_BASE.replace(/\/$/, "") : null;
+export function endpoints(p: ProviderKey, env: Env = serverEnv()): Endpoints {
+  const test = env.oauthTestBase;
   if (p === "google") {
     const base = test ? `${test}/google` : null;
     return {

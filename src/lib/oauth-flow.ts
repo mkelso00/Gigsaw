@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { randomToken, readSigned, signValue, type Identity, type OAuthFlow, PROVIDERS, type ProviderKey } from "./oauth";
 import { prisma } from "./db";
+import { env } from "@/server/env";
 
 // The database and cookie side of signing in with Google or Microsoft. See src/lib/oauth.ts.
 
@@ -25,7 +26,7 @@ const cookieOptions = (maxAgeSeconds: number, path: string) => ({
   httpOnly: true,
   // Lax: sent when the provider redirects the browser back to us (a top-level GET).
   sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
+  secure: env().isProduction,
   path,
   maxAge: maxAgeSeconds,
 });

@@ -16,6 +16,7 @@ import { parseLookupKey, stripe, stripeConfigured, StripeError } from "@/lib/str
 import { billingState, hasLiveSubscription } from "@/lib/subscription";
 import type { StripeSubscription } from "@/lib/subscription-sync";
 import { formatDate } from "@/lib/time";
+import { log } from "@/server/log";
 
 // The Plan and Discount sections of a business's page in the Owner area: put it on a plan, a custom
 // price by invoice, or a free account; extend or end its trial; and give it a discount.
@@ -46,6 +47,7 @@ export async function PlanSection({ agency, staffCount }: { agency: Agency; staf
     try {
       sub = await stripe<StripeSubscription>("GET", `subscriptions/${agency.stripeSubscriptionId}`);
     } catch (e) {
+      log.warn("Couldn't read a business's subscription from Stripe", { agencyId: agency.id, err: e });
       stripeProblem = e instanceof StripeError ? e.message : "Couldn't reach Stripe just now.";
     }
   }

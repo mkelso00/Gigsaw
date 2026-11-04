@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { refreshAccount } from "@/lib/card-payments";
 import { prisma } from "@/lib/db";
 import { stripeConfigured, StripeError } from "@/lib/stripe";
+import { log } from "@/server/log";
 
 export const metadata: Metadata = { title: "Card payments" };
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function CardPaymentSettings({ searchParams }: { searchPara
       await refreshAccount(agency.stripeAccountId);
       agency = await prisma.agency.findUniqueOrThrow({ where: { id: user.agencyId } });
     } catch (e) {
+      log.warn("Couldn't refresh the Stripe account for card payments", { agencyId: user.agencyId, err: e });
       problem = e instanceof StripeError ? `Stripe said: ${e.message}` : "We couldn't reach Stripe just now.";
     }
   }

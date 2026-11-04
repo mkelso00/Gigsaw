@@ -1,8 +1,10 @@
 import "server-only";
+import { env } from "@/server/env";
 import { prisma } from "./db";
 
 // Gigsaw's own Stripe keys. The owner can paste them in the Owner area (kept in AppSecret, never
-// shown back in full); anything not set there falls back to the server's environment variables.
+// shown back in full); anything not set there falls back to the server's environment variables
+// (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET, read in src/server/env.ts).
 // Read often, so cached for half a minute and cleared straight away when the owner saves.
 
 export const STRIPE_KEY_NAMES = {
@@ -21,17 +23,13 @@ async function load() {
   // If the database can't be read, carry on with the server's own variables rather than failing.
   const rows = await prisma.appSecret.findMany({ where: { key: { in: Object.values(STRIPE_KEY_NAMES) } } }).catch(() => []);
   const saved = new Map(rows.map((r) => [r.key, r.value]));
-  const env = {
-    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
-    connectWebhookSecret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET ?? "",
-  };
+  const fromEnv = env().stripe;
   const keys = {} as StripeKeys;
   const source = {} as StripeKeySource;
   for (const k of Object.keys(STRIPE_KEY_NAMES) as (keyof StripeKeys)[]) {
     const own = saved.get(STRIPE_KEY_NAMES[k]) ?? "";
-    keys[k] = own || env[k];
-    source[k] = own ? "owner" : env[k] ? "server" : "none";
+    keys[k] = own || fromEnv[k];
+    source[k] = own ? "owner" : fromEnv[k] ? "server" : "none";
   }
   cache = { at: Date.now(), keys, source };
   return cache;
