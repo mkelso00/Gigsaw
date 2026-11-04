@@ -14,9 +14,10 @@ How this was done: four independent read-only reviews (data and multi-tenancy; s
 | 1F: error and not-found pages in every area | ✅ Done (4 Nov) |
 | 1H: Stripe webhooks re-fetch and ignore stale subscriptions, event ids, idempotent checkout; unmatched card payments kept and flagged; refunds noted | ✅ Done (4 Nov) |
 | Also fixed: buttons stuck on "Saving…" after a redirect (page animation remounted the page) | ✅ Done (4 Nov) |
+| Also fixed: intermittent hydration error (#418, then "reading 'parentNode'" errors) on first loads in production: a bug in the React that Next 15.5 bundles, backported fix in `scripts/react-hydration-fix.cjs` (remove with Next 16) | ✅ Done (4 Nov) |
 | Wave 2 onwards | Not started |
 
-Open from wave 1: old offer links sent before 1A are bound to the booking's current act (decision: leave, or invalidate all outstanding links); add `charge.refunded` to the Connect webhook in Stripe; an intermittent hydration error (#418) on first dashboard load, seen about one load in three in production builds and not yet traced; existing Message rows still hold full links (needs a one-off data migration).
+Open from wave 1: old offer links sent before 1A are bound to the booking's current act (decision: leave, or invalidate all outstanding links); add `charge.refunded` to the Connect webhook in Stripe; existing Message rows still hold full links (needs a one-off data migration).
 
 ## 1. The short version
 

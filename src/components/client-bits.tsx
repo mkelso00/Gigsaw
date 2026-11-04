@@ -144,8 +144,8 @@ export function SelectedAction({
 }) {
   return (
     <button
+      // React sets the method (POST) itself for a server action; naming it too is an error in dev.
       formAction={action}
-      formMethod="post"
       className={`btn btn-sm ${danger ? "btn-danger" : ""}`}
       onClick={(e) => {
         const n = e.currentTarget.form?.querySelectorAll(`input[type=checkbox][name="${name}"]:checked`).length ?? 0;
