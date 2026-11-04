@@ -14,9 +14,14 @@ How this was done: four independent read-only reviews (data and multi-tenancy; s
 | 1F: error and not-found pages in every area | ✅ Done (4 Nov) |
 | 1H: Stripe webhooks re-fetch and ignore stale subscriptions, event ids, idempotent checkout; unmatched card payments kept and flagged; refunds noted | ✅ Done (4 Nov) |
 | Also fixed: buttons stuck on "Saving…" after a redirect (page animation remounted the page) | ✅ Done (4 Nov) |
-| Wave 2 onwards | Not started |
+| 2A, 2F: CI on GitHub (typecheck, tests incl. database tests on Postgres 16, build, migration order check); database test harness with tenant-isolation and claim tests | ✅ Done (4 Nov) |
+| 2B, 2C: one validated config (`src/server/env.ts`); JSON logs with error digests and request ids; optional Sentry; Stripe failures logged; scheduler heartbeat | ✅ Done (4 Nov) |
+| 2D: `/api/health`, `railway.json` (pre-deploy migrations, health check), cron with constant-time secret and per-job errors, deploy and backup runbook | ✅ Done (4 Nov) |
+| 2E: 16 indexes for hot paths; old message links redacted | ✅ Done (4 Nov) |
+| Dashboard hydration error (#418) | In progress |
+| Wave 3 onwards | Not started |
 
-Open from wave 1: old offer links sent before 1A are bound to the booking's current act (decision: leave, or invalidate all outstanding links); add `charge.refunded` to the Connect webhook in Stripe; an intermittent hydration error (#418) on first dashboard load, seen about one load in three in production builds and not yet traced; existing Message rows still hold full links (needs a one-off data migration).
+Open: add `charge.refunded` to the Connect webhook in Stripe; protect `main` on GitHub so CI must pass; confirm Railway picks up `railway.json` on the first deploy. Decided: old offer links sent before 1A are left as they are (they close the next time each offer is sent). Small follow-ups: `redactLinks` misses upper-case schemes and links run together; `savePushSubscription` lets a known endpoint move to another user; enquiry and contract IP still use the first X-Forwarded-For value.
 
 ## 1. The short version
 
