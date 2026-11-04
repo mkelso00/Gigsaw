@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  BY_HAND_CONFIG,
+  channelLabel,
   checkFormStamp,
   embedSnippet,
   enquiryMakes,
@@ -117,6 +119,34 @@ describe("checking an enquiry", () => {
     expect(isRealDate("2028-02-29")).toBe(true);
     expect(isRealDate("2027-02-29")).toBe(false);
     expect(isRealDate("12/06/2027")).toBe(false);
+  });
+});
+
+describe("an enquiry added by hand", () => {
+  const byHand = (over: Record<string, string>) => parseEnquiry(form({ ...good, acts: [], ...over }), BY_HAND_CONFIG, { today, acts, byHand: true });
+
+  it("reads a finish time and never the acts they like", () => {
+    const d = byHand({ endTime: "23:30" });
+    expect(d).toMatchObject({ startTime: "14:00", endTime: "23:30", acts: [] });
+    expect(Object.fromEntries(enquiryRows(d)).Date).toBe(`${formatDate(new Date("2027-06-12T12:00:00Z"), "UTC")}, 14:00 to 23:30`);
+    expect(() => byHand({ endTime: "late" })).toThrow("finish time");
+  });
+
+  it("can leave out the date, or the email when there's a phone number", () => {
+    expect(byHand({ date: "" })).toMatchObject({ date: "", startTime: "" });
+    expect(enquiryMakes(byHand({ date: "" }))).toBe("NOTHING");
+    expect(byHand({ email: "" })).toMatchObject({ email: "", phone: "07700 900123" });
+    expect(() => byHand({ email: "", phone: "" })).toThrow("email address or phone number");
+    expect(() => byHand({ email: "nope" })).toThrow("email address");
+    // The website form still needs both a date and an email.
+    expect(() => parseEnquiry(form({ ...good, email: "" }), config, { today, acts })).toThrow("email address");
+  });
+
+  it("allows links in a pasted email, and notes who added it", () => {
+    expect(byHand({ message: "see http://a.example http://b.example www.c.example" }).message).toContain("www.c.example");
+    const note = enquiryNote(byHand({}), "", "Enquiry by phone, added by Sam Patel");
+    expect(note.split("\n")[0]).toBe("Enquiry by phone, added by Sam Patel");
+    expect(channelLabel("PHONE")).toBe("Phone");
   });
 });
 

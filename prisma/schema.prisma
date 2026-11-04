@@ -63,6 +63,7 @@ model Agency {
   enquiries    Enquiry[]
   away         ArtistUnavailability[]
   availability AvailabilityRequest[]
+  quotes       Quote[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -250,6 +251,7 @@ model Artist {
   partOf   ActLink[]              @relation("ActChild")
   away     ArtistUnavailability[]
   asked    AvailabilityReply[]
+  quoted   QuoteLine[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -278,6 +280,7 @@ model Contact {
   people    Person[]
   events    Event[]
   enquiries Enquiry[]
+  quotes    Quote[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -319,6 +322,7 @@ model Venue {
   people       Person[]
   events       Event[]
   availability AvailabilityRequest[]
+  quoteLines   QuoteLine[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -412,6 +416,8 @@ model Booking {
   // Asking acts if they're free for this gig, and the "Yes" it was booked from.
   availabilityRequests AvailabilityRequest[]
   availabilityReplies  AvailabilityReply[]
+  // The quote line this booking was made from, when a customer accepted a quote.
+  quoteLines           QuoteLine[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -705,6 +711,7 @@ model Event {
   contracts  Contract[]
   payLinks   PayLink[]
   enquiries  Enquiry[]
+  quotes     Quote[]
 
   @@index([agencyId, date])
 }
@@ -827,12 +834,15 @@ model Enquiry {
   eventType String @default("") // one of EVENT_TYPES, or "" if the form doesn't ask
   date      String @default("") // "YYYY-MM-DD", or "" if not given
   startTime String @default("") // "HH:MM", or ""
+  endTime   String @default("") // "HH:MM", or "" (added by hand: the website form only asks for a start)
   venue     String @default("") // venue or town, as typed
   guests    Int?
   budget    String @default("") // as typed, e.g. "about £1,500"
   acts      Json   @default("[]") // acts they like: [{ id, name }]
   message   String @default("")
   source    String @default("") // the website it was sent from, if known
+  // How it came in: WEBSITE (the form) | EMAIL | PHONE | OTHER (the last three added by hand by staff).
+  channel   String @default("WEBSITE")
   // A one-way hash of the sender's IP address, for rate limiting. The address itself isn't kept.
   ipHash    String @default("")
 
@@ -844,6 +854,7 @@ model Enquiry {
   booking        Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   eventId        String?
   event          Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  quotes         Quote[]
 
   @@index([agencyId, status, createdAt])
   @@index([ipHash, createdAt])
@@ -965,4 +976,96 @@ model DiscountCode {
   stripePromotionCodeId String    @unique
   active                Boolean   @default(true)
   createdAt             DateTime  @default(now())
+}
+
+// A quote to a customer (usually from an enquiry): one or more lines, each an act (or "act to be
+// confirmed") with its times, place, sale price and the act's cost. The customer opens a private
+// link (/q/<token>) and accepts or declines it. Accepting makes a wedding or event with one booking
+// per line. Changing a quote after it's been sent makes a new version (same number, version + 1)
+// with its own link; the old link then points to the new one. Acts never see any of this.
+model Quote {
+  id             String   @id @default(cuid())
+  agencyId       String
+  agency         Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  number         String // e.g. "Q-0012", shared by every version
+  version        Int      @default(1)
+  // DRAFT | SENT | VIEWED | ACCEPTED | DECLINED | EXPIRED | WITHDRAWN (src/lib/quotes.ts)
+  status         String   @default("DRAFT")
+  // Set when a newer version replaces this one: it can't be accepted any more.
+  supersededById String?  @unique
+  supersededBy   Quote?   @relation("QuoteVersions", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes     Quote?   @relation("QuoteVersions")
+  enquiryId      String?
+  enquiry        Enquiry? @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  // The wedding or event made when the customer accepted.
+  eventId        String?
+  event          Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  agentId        String? // the lead agent: hears when the customer answers
+  createdById    String?
+
+  title           String // e.g. "Hannah & Sam's wedding"
+  eventType       String  @default("WEDDING")
+  timezone        String  @default("Europe/London")
+  currency        String  @default("GBP")
+  // The agency's booking fee, on top and all theirs (put on the first line's booking when accepted).
+  bookingFeeMinor Int     @default(0)
+  depositMinor    Int     @default(0)
+  depositDue      String? // "YYYY-MM-DD"
+  validUntil      String? // "YYYY-MM-DD", the last day it can be accepted
+  message         String  @default("") // a note to the customer
+  terms           String  @default("")
+
+  // The customer's private link, made when this version is first sent. It stops opening at tokenExpiresAt.
+  token          String?   @unique
+  tokenExpiresAt DateTime?
+  sentTo         String    @default("")
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  answeredAt     DateTime? // accepted or declined
+  withdrawnAt    DateTime?
+  // The customer's answer: their typed name (accepting), a message or reason, and where it came from.
+  answerName     String    @default("")
+  answerNote     String    @default("")
+  answerIp       String    @default("")
+  answerAgent    String    @default("")
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  lines     QuoteLine[]
+
+  @@unique([agencyId, number, version])
+  @@index([agencyId, status])
+  @@index([enquiryId])
+  @@index([contactId])
+  @@index([eventId])
+}
+
+// One line of a quote: an act (or none yet), what they do, when and where, and the money.
+model QuoteLine {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  sort        Int      @default(0)
+  // Null means "act to be confirmed": accepted as a Pending booking that needs an act.
+  artistId    String?
+  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  description String   @default("") // e.g. "Ceremony singer", "Evening band"
+  date        String // "YYYY-MM-DD"
+  arriveTime  String   @default("") // "HH:MM", blank means the start time
+  startTime   String // "HH:MM"
+  endTime     String   @default("")
+  venueId     String?
+  venue       Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  place       String   @default("") // a place not on file, e.g. "Marquee at Home Farm"
+  saleMinor   Int      @default(0) // what the customer pays for this line, before VAT
+  costMinor   Int? // the act's fee: staff only, never shown to the customer
+  vatPct      Float    @default(0)
+  // The booking made from this line when the quote was accepted.
+  bookingId   String?
+  booking     Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([quoteId])
+  @@index([bookingId])
 }

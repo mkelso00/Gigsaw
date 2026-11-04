@@ -22,6 +22,7 @@ export type MessageKind =
   | "CONTRACT"
   | "PAYMENT"
   | "ENQUIRY"
+  | "QUOTE"
   | "AVAILABILITY"
   | "TEST";
 

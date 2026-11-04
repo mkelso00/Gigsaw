@@ -30,6 +30,7 @@ const PUBLIC = [
   "/api/stripe/webhook",
   "/api/stripe/connect-webhook",
   "/pay/",
+  "/q/",
 ];
 
 export function middleware(req: NextRequest) {

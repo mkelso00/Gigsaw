@@ -3,7 +3,9 @@ import { companyToVenue } from "@/actions/crm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addContactNote, deleteContactNote } from "@/actions/crm";
+import { makeQuote } from "@/actions/quotes";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { QuoteList, quoteRowSelect } from "@/components/quote-list";
 import { DefinitionList, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { personName } from "@/lib/person-name";
 import { requireStaff } from "@/lib/auth";
@@ -11,14 +13,14 @@ import { CONTACT_TYPE_LABELS, type ContactType, actName } from "@/lib/constants"
 import { getSettings, prisma } from "@/lib/db";
 import { splitTags } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
-import { formatDate, formatDateTime } from "@/lib/time";
+import { formatDate, formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Contact" };
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [contact, settings] = await Promise.all([
+  const [contact, settings, quotes] = await Promise.all([
     prisma.contact.findFirst({
       where: { id, agencyId: user.agencyId },
       include: {
@@ -32,6 +34,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       },
     }),
     getSettings(user.agencyId),
+    // Each quote's latest version.
+    prisma.quote.findMany({ where: { agencyId: user.agencyId, contactId: id, supersededById: null }, orderBy: { createdAt: "desc" }, select: quoteRowSelect }),
   ]);
   if (!contact) notFound();
 
@@ -51,6 +55,13 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   This is a venue
                 </ConfirmButton>
               </form>
+            )}
+            {contact.type === "CLIENT" && (
+              <ActionForm action={makeQuote.bind(null, "contact", contact.id)}>
+                <SubmitButton className="btn" pendingText="Starting…">
+                  Make a quote
+                </SubmitButton>
+              </ActionForm>
             )}
             {contact.type === "PROMOTER" && (
               <Link href={`/bookings/new?promoterId=${contact.id}`} className="btn btn-primary">
@@ -116,6 +127,12 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-sm text-ink-500">Nobody linked yet. People whose company is {contact.company || contact.name} appear here.</p>
             )}
           </section>
+          {quotes.length > 0 && (
+            <section>
+              <h2 className="section-title mb-3">Quotes</h2>
+              <QuoteList quotes={quotes} today={localDateKey(new Date(), settings.defaultTimezone)} showCustomer={false} />
+            </section>
+          )}
           <section>
             <h2 className="section-title mb-3">Bookings</h2>
             {contact.bookings.length === 0 ? (

@@ -48,9 +48,19 @@ export function gigDateKey(b: { arriveBy: Date; timezone: string }) {
  * comes after GS-9999.
  */
 async function nextReference(agencyId: string): Promise<string> {
-  const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
+  return referenceAfter(await highestReference(agencyId), 1);
+}
+
+/** The highest booking number an agency has used (archived bookings included). Pass a transaction to read inside it. */
+export async function highestReference(agencyId: string, db: Pick<typeof prisma, "$queryRaw"> = prisma): Promise<number> {
+  const [row] = await db.$queryRaw<{ n: number | null }[]>`
     SELECT MAX(NULLIF(regexp_replace(reference, '[^0-9]', '', 'g'), '')::bigint)::int AS n FROM "Booking" WHERE "agencyId" = ${agencyId}`;
-  return `GS-${String((row?.n ?? 0) + 1).padStart(4, "0")}`;
+  return row?.n ?? 0;
+}
+
+/** The reference `step` numbers after `highest`, e.g. referenceAfter(231, 1) is "GS-0232". */
+export function referenceAfter(highest: number, step: number) {
+  return `GS-${String(highest + step).padStart(4, "0")}`;
 }
 
 export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">) {

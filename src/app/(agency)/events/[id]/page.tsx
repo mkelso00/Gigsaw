@@ -29,6 +29,7 @@ import { eventFormOptions } from "@/lib/event-options";
 import { PLAN_FIELDS, daysBetween, type EventMessage } from "@/lib/event-plan";
 import { autoDone, eventInclude, eventTotals, plannerUrl, sentEventMessages } from "@/lib/events";
 import { dealBreakdown, formatMoney } from "@/lib/money";
+import { quoteRef } from "@/lib/quotes";
 import { addDaysToKey, formatDateTime, localDateKey, localTime } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Wedding or event" };
@@ -49,7 +50,7 @@ const AUTO: { kind: EventMessage; label: string; from: number; to: number; who: 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [e, settings, options, acts, tasks, sent, payLinks] = await Promise.all([
+  const [e, settings, options, acts, tasks, sent, payLinks, quote] = await Promise.all([
     prisma.event.findFirst({ where: { id, agencyId: user.agencyId }, include: eventInclude }),
     getSettings(user.agencyId),
     eventFormOptions(user.agencyId),
@@ -57,6 +58,12 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     prisma.eventTask.findMany({ where: { eventId: id, event: { agencyId: user.agencyId } }, orderBy: [{ sort: "asc" }, { dueDate: "asc" }] }),
     sentEventMessages(id),
     prisma.payLink.findMany({ where: { eventId: id, agencyId: user.agencyId } }),
+    // The quote the customer accepted to book this, if any.
+    prisma.quote.findFirst({
+      where: { eventId: id, agencyId: user.agencyId, status: "ACCEPTED" },
+      orderBy: { answeredAt: "desc" },
+      select: { id: true, number: true, version: true, answerName: true, answeredAt: true },
+    }),
   ]);
   if (!e) notFound();
   const today = localDateKey(new Date(), e.timezone);
@@ -96,6 +103,25 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           </>
         }
       />
+
+      {quote && (
+        <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+          <span className="min-w-0 flex-1">
+            Booked from{" "}
+            <Link href={`/quotes/${quote.id}`} className="font-medium underline-offset-2 hover:underline">
+              quote {quoteRef(quote)}
+            </Link>
+            , accepted by {quote.answerName}
+            {quote.answeredAt ? ` on ${formatDateTime(quote.answeredAt, e.timezone)}` : ""}.{!contract.current && " Next: send the contract to sign."}
+          </span>
+          {!contract.current && (
+            <a href="#contract" className="btn btn-sm btn-primary">
+              Send contract to sign
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
@@ -319,15 +345,17 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </ActionForm>
           </section>
 
-          <ContractPanel
-            kind="event"
-            id={e.id}
-            status={contract}
-            timeZone={e.timezone}
-            signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
-            previewHref={`/print/events/${e.id}/contract`}
-            agencySigned={!!settings.signatureImage}
-          />
+          <div id="contract" className="scroll-mt-6">
+            <ContractPanel
+              kind="event"
+              id={e.id}
+              status={contract}
+              timeZone={e.timezone}
+              signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
+              previewHref={`/print/events/${e.id}/contract`}
+              agencySigned={!!settings.signatureImage}
+            />
+          </div>
 
           <section className="card card-pad">
             <h2 className="section-title">Customer&apos;s planner</h2>

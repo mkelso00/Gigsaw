@@ -172,6 +172,29 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: ["first_name", "event_type", "date", "business"],
   },
   {
+    key: "QUOTE",
+    group: "CUSTOMERS",
+    label: "Your quote",
+    hint: "Sent when you press Send on a quote. The link to see it and accept or decline is always added, with the total, deposit and valid-until date.",
+    example: {
+      subject: "Your quote from {business}: {event}",
+      intro: "Hi {first_name}, thank you for your enquiry. Here's your quote for {event} on {date}. You can accept it online in a minute.",
+    },
+    placeholders: ["first_name", "event", "date", "total", "valid_until", "business"],
+    manual: true,
+  },
+  {
+    key: "QUOTE_ACCEPTED",
+    group: "CUSTOMERS",
+    label: "Quote accepted: you're booked",
+    hint: "Sent to the customer when they accept a quote, listing what's booked, the deposit and a link to pay it by card if card payments are set up.",
+    example: {
+      subject: "You're booked: {event}",
+      intro: "Hi {first_name}, thank you for accepting your quote. {event} on {date} is booked with {business}.",
+    },
+    placeholders: ["first_name", "event", "date", "total", "business"],
+  },
+  {
     key: "NEW_ACT",
     group: "TEAM",
     label: "New act applied",
@@ -186,6 +209,14 @@ export const TEMPLATES: TemplateDef[] = [
     hint: "When someone fills in the enquiry form on your website. Who gets it is set in Enquiry form.",
     example: { subject: "New enquiry: {name}", intro: "{name} has sent an enquiry from your website." },
     placeholders: ["name", "event_type", "date", "business"],
+  },
+  {
+    key: "QUOTE_ANSWER",
+    group: "TEAM",
+    label: "Quote accepted or declined",
+    hint: "To the quote's lead agent (or your business email) when a customer accepts or declines a quote.",
+    example: { subject: "Quote accepted: {event}", intro: "{name} has accepted the quote for {event}. The bookings are made." },
+    placeholders: ["name", "event", "answer", "business"],
   },
 ];
 

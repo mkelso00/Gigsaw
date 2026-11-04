@@ -6,6 +6,7 @@ export const STAFF_ALERTS = [
   { key: "ACCEPTED", label: "An act accepts a booking", hint: "The booking is confirmed straight away.", channels: ["email"] },
   { key: "SIGNED", label: "A customer signs a contract", hint: "Bookings and weddings where you're the lead agent.", channels: ["email"] },
   { key: "PLANNER", label: "A customer fills in their planner", hint: "Weddings and events: the running order and details are in.", channels: ["email"] },
+  { key: "QUOTE", label: "A customer answers a quote", hint: "Accepted or declined, on quotes where you're the lead agent.", channels: ["email", "push"] },
   { key: "PAID", label: "A venue or customer pays by card", hint: "From a payment link, on bookings and events you lead.", channels: ["email"] },
   {
     key: "ENQUIRY",

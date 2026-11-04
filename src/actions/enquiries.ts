@@ -1,36 +1,30 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { requireAdmin, requireStaff } from "@/lib/auth";
-import { createBookingWithReference } from "@/lib/bookings";
-import { logActivity, prisma } from "@/lib/db";
+import { getSettings, logActivity, prisma } from "@/lib/db";
 import {
+  BY_HAND_CONFIG,
   checkFormStamp,
+  ENQUIRY_CHANNELS,
   ENQUIRY_FIELDS,
-  enquiryMakes,
-  enquiryNote,
-  enquiryTitle,
-  formatDay,
-  enquiryTypeLabel,
   isHttpsUrl,
   parseEnquiry,
   readEnquiryConfig,
   SLUG,
   slugify,
+  type EnquiryChannel,
   type EnquiryConfig,
 } from "@/lib/enquiries";
-import { clientIp, enquiryAttempts, enquirySecret, ipHash, MAX_PER_IP_PER_HOUR, notifyTeam, replyToCustomer } from "@/lib/enquiry-server";
-import { defaultTasks } from "@/lib/event-plan";
-import { FormError, handleForm, str, type FormState } from "@/lib/forms";
-import { defaultBookingFee } from "@/lib/money";
-import { buildSchedule } from "@/lib/schedule";
+import { clientIp, enquiryAttempts, enquirySecret, ipHash, MAX_PER_IP_PER_HOUR, notifyTeam, recordEnquiry, replyToCustomer } from "@/lib/enquiry-server";
+import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { localDateKey } from "@/lib/time";
 
-// The enquiry form on a business's own website (/enquire/<slug>), and dealing with what comes in.
+// The enquiry form on a business's own website (/enquire/<slug>), enquiries staff add by hand,
+// and dealing with what comes in.
 
 const TOO_MANY = "We've had a few enquiries from you already. Please try again later, or contact us directly.";
 
@@ -78,81 +72,12 @@ export async function submitEnquiry(slug: string, _: FormState, form: FormData):
     const source = str(form, "source")
       .replace(/[^\w.\-/~%]/g, "")
       .slice(0, 200);
-    const note = enquiryNote(d, source);
     // The person looking after enquiries (if one is chosen) looks after what they make.
     const agentId = config.notify.startsWith("USER:")
       ? ((await prisma.user.findFirst({ where: { id: config.notify.slice(5), agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))?.id ?? null)
       : null;
 
-    // The customer: the one already on file with this email, or a new private customer.
-    let contact = await prisma.contact.findFirst({ where: { agencyId, email: { equals: d.email, mode: "insensitive" } }, orderBy: { createdAt: "asc" } });
-    const contactCreated = !contact;
-    if (!contact) {
-      contact = await prisma.contact.create({
-        data: { agencyId, type: "CLIENT", name: d.name, email: d.email, phone: d.phone, tags: d.eventType === "WEDDING" ? "wedding" : "" },
-      });
-    } else if (!contact.phone && d.phone) {
-      await prisma.contact.update({ where: { id: contact.id }, data: { phone: d.phone } });
-    }
-    await prisma.contactNote.create({ data: { contactId: contact.id, body: note } });
-
-    let bookingId: string | null = null;
-    let eventId: string | null = null;
-    const makes = enquiryMakes(d);
-    if (makes === "EVENT") {
-      // A wedding: the agency adds the acts later. No automatic emails to the couple until they switch them on.
-      const e = await prisma.event.create({
-        data: {
-          agencyId,
-          name: enquiryTitle(d),
-          type: "WEDDING",
-          date: d.date,
-          timezone: tz,
-          customerId: contact.id,
-          venueText: d.venue,
-          guestCount: d.guests,
-          agentId,
-          notes: note,
-          autoEmails: false,
-          plannerToken: randomBytes(18).toString("base64url"),
-          tasks: { create: defaultTasks("WEDDING", d.date) },
-        },
-      });
-      eventId = e.id;
-    } else if (makes === "BOOKING") {
-      const eventType = d.eventType || "OTHER";
-      // Bookings need a time: with none given, 19:00 holds the place until it's agreed.
-      const time = d.startTime || "19:00";
-      const b = await createBookingWithReference(agencyId, {
-        ...buildSchedule(d.date, { arrive: time, setStart: time }, tz),
-        status: "ENQUIRY",
-        eventType,
-        eventName: enquiryTitle(d),
-        timezone: tz,
-        currency: settings.defaultCurrency,
-        commissionPct: settings.defaultCommission,
-        bookingFeeMinor: defaultBookingFee(settings, { eventType }),
-        promoterId: contact.id,
-        agentId,
-        tags: "website",
-        notes: d.startTime ? note : `${note}\n\nNo start time given: 19:00 is a placeholder.`,
-      });
-      bookingId = b.id;
-    }
-
-    const enquiry = await prisma.enquiry.create({
-      data: { agencyId, ...d, contactId: contact.id, contactCreated, bookingId, eventId, source, ipHash: ip },
-    });
-    const what = [d.name, d.eventType ? enquiryTypeLabel(d.eventType).toLowerCase() : "", d.date ? formatDay(d.date) : ""].filter(Boolean).join(", ");
-    await prisma.activity.create({
-      data: {
-        agencyId,
-        entity: bookingId ? "BOOKING" : eventId ? "EVENT" : "ENQUIRY",
-        entityId: bookingId ?? eventId ?? enquiry.id,
-        action: "sent an enquiry from your website",
-        detail: what,
-      },
-    });
+    const enquiry = await recordEnquiry({ settings, d, channel: "WEBSITE", source, ipHash: ip, agentId });
 
     // Emails and phone notifications go once the customer has seen the thank-you.
     after(async () => {
@@ -169,6 +94,37 @@ export async function submitEnquiry(slug: string, _: FormState, form: FormData):
   if (res?.error || !sent) return res;
   const embed = str(form, "embed") === "1";
   redirect(`/enquire/${slug}?sent=1${embed ? "&embed=1" : ""}`);
+}
+
+const BY_HAND_CHANNELS = ENQUIRY_CHANNELS.map((c) => c.value).filter((c): c is Exclude<EnquiryChannel, "WEBSITE"> => c !== "WEBSITE");
+
+/**
+ * Staff add an enquiry that came by email or phone. It makes the customer (or finds them by email)
+ * and a wedding or Enquiry booking exactly as the website form does. The customer only gets the
+ * automatic "Thanks for your enquiry" reply if it's ticked.
+ */
+export async function addEnquiry(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  const res = await handleForm(async () => {
+    const settings = await getSettings(user.agencyId);
+    const d = parseEnquiry(form, BY_HAND_CONFIG, { today: localDateKey(new Date(), settings.defaultTimezone), acts: [], byHand: true });
+    const channel = oneOf(str(form, "channel"), BY_HAND_CHANNELS, "EMAIL");
+    const enquiry = await recordEnquiry({ settings, d, channel, agentId: user.id, addedBy: { id: user.id, name: user.name } });
+    if (str(form, "autoReply") === "on" && d.email) {
+      after(async () => {
+        try {
+          await replyToCustomer(enquiry.id);
+        } catch (e) {
+          console.error("Couldn't send the enquiry reply", e);
+        }
+      });
+    }
+  });
+  if (res?.error) return res;
+  revalidatePath("/", "layout");
+  // The newest enquiry is at the top of the list. (A server action's redirect to a #fragment
+  // doesn't always finish navigating in Next 15, so it goes to the list itself.)
+  redirect("/enquiries");
 }
 
 /** Settings → Enquiry form. */

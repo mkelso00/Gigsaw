@@ -103,6 +103,8 @@ export type EnquiryData = {
   eventType: EventType | "";
   date: string;
   startTime: string;
+  /** Only asked for when staff add an enquiry by hand. */
+  endTime: string;
   venue: string;
   guests: number | null;
   budget: string;
@@ -142,23 +144,51 @@ function capped(value: string, max: number, label: string) {
   return value;
 }
 
+/** How an enquiry came in. Staff add the last three by hand from the Enquiries page. */
+export const ENQUIRY_CHANNELS = [
+  { value: "WEBSITE", label: "Website form" },
+  { value: "EMAIL", label: "Email" },
+  { value: "PHONE", label: "Phone" },
+  { value: "OTHER", label: "Other" },
+] as const;
+export type EnquiryChannel = (typeof ENQUIRY_CHANNELS)[number]["value"];
+
+export function channelLabel(c: string) {
+  return ENQUIRY_CHANNELS.find((x) => x.value === c)?.label ?? "";
+}
+
+/** Every field shown: what staff fill in when adding an enquiry by hand (acts they like aren't asked). */
+export const BY_HAND_CONFIG: EnquiryConfig = {
+  ...readEnquiryConfig({}),
+  fields: { ...readEnquiryConfig({}).fields, acts: false },
+};
+
 /**
  * Check and tidy what the customer sent. Only the fields the form shows are read. Acts must be the
  * business's own (by id); anything else is dropped. Throws a FormError with a message for the customer.
+ *
+ * `byHand`: staff typing in an enquiry that came by email or phone. The date can be left empty (it
+ * may not be known yet), a finish time is read, and an email address is only needed if there's no phone number.
  */
-export function parseEnquiry(form: FormData, config: EnquiryConfig, opts: { today: string; acts: { id: string; name: string }[] }): EnquiryData {
+export function parseEnquiry(
+  form: FormData,
+  config: EnquiryConfig,
+  opts: { today: string; acts: { id: string; name: string }[]; byHand?: boolean },
+): EnquiryData {
   const get = (k: string) => {
     const v = form.get(k);
     return typeof v === "string" ? v : "";
   };
   const on = config.fields;
 
-  const name = capped(line(get("name")), LIMITS.name, "Your name");
-  if (name.length < 2) throw new FormError("Please tell us your name");
+  const byHand = !!opts.byHand;
+  const name = capped(line(get("name")), LIMITS.name, byHand ? "The customer's name" : "Your name");
+  if (name.length < 2) throw new FormError(byHand ? "Enter the customer's name" : "Please tell us your name");
   const email = capped(line(get("email")).toLowerCase(), LIMITS.email, "Email");
-  if (!EMAIL.test(email)) throw new FormError("Please check your email address");
   const phone = capped(line(get("phone")), LIMITS.phone, "Phone number");
-  if (phone && (!/^[0-9+()\-. ]+$/.test(phone) || phone.replace(/\D/g, "").length < 7)) throw new FormError("Please check your phone number");
+  if (byHand && !email && !phone) throw new FormError("Enter the customer's email address or phone number");
+  if ((email || !byHand) && !EMAIL.test(email)) throw new FormError("Please check the email address");
+  if (phone && (!/^[0-9+()\-. ]+$/.test(phone) || phone.replace(/\D/g, "").length < 7)) throw new FormError("Please check the phone number");
 
   let eventType: EventType | "" = "";
   if (on.eventType) {
@@ -169,7 +199,7 @@ export function parseEnquiry(form: FormData, config: EnquiryConfig, opts: { toda
   }
 
   let date = "";
-  if (on.date) {
+  if (on.date && (!byHand || line(get("date")))) {
     date = line(get("date"));
     if (!isRealDate(date)) throw new FormError("Please choose the date of your event");
     if (date < opts.today) throw new FormError("That date has already passed");
@@ -177,9 +207,15 @@ export function parseEnquiry(form: FormData, config: EnquiryConfig, opts: { toda
   }
 
   let startTime = "";
-  if (on.time && on.date) {
+  let endTime = "";
+  // Times only mean something on a date (one added by hand may not have a date yet).
+  if (on.time && on.date && date) {
     startTime = line(get("startTime"));
     if (startTime && !TIME.test(startTime)) throw new FormError("Please check the start time");
+    if (byHand) {
+      endTime = line(get("endTime"));
+      if (endTime && !TIME.test(endTime)) throw new FormError("Please check the finish time");
+    }
   }
 
   const venue = on.venue ? capped(line(get("venue")), LIMITS.venue, "Venue or town") : "";
@@ -203,9 +239,10 @@ export function parseEnquiry(form: FormData, config: EnquiryConfig, opts: { toda
   }
 
   const message = on.message ? capped(block(get("message")), LIMITS.message, "Your message") : "";
-  if ((message.match(/https?:\/\/|www\./gi)?.length ?? 0) > LIMITS.links) throw new FormError("Please take the web links out of your message");
+  // Links are a sign of spam on the website form; staff pasting in an email may well have some.
+  if (!byHand && (message.match(/https?:\/\/|www\./gi)?.length ?? 0) > LIMITS.links) throw new FormError("Please take the web links out of your message");
 
-  return { name, email, phone, eventType, date, startTime, venue, guests, budget, acts, message };
+  return { name, email, phone, eventType, date, startTime, endTime, venue, guests, budget, acts, message };
 }
 
 /** What makes a booking: a wedding becomes a wedding (an event) and anything else an Enquiry booking. Nothing without a date. */
@@ -225,7 +262,13 @@ export function formatDay(key: string) {
 }
 
 /** An enquiry's details, as sent or as saved. */
-export type EnquiryDetails = Omit<EnquiryData, "name" | "email" | "phone" | "eventType"> & { name?: string; email?: string; phone?: string; eventType: string };
+export type EnquiryDetails = Omit<EnquiryData, "name" | "email" | "phone" | "eventType" | "endTime"> & {
+  name?: string;
+  email?: string;
+  phone?: string;
+  eventType: string;
+  endTime?: string;
+};
 
 /** The details as label and value pairs, for emails, the note on the customer and the enquiry list. Empty ones are left out. */
 export function enquiryRows(d: EnquiryDetails): [string, string][] {
@@ -237,7 +280,8 @@ export function enquiryRows(d: EnquiryDetails): [string, string][] {
   add("Email", d.email);
   add("Phone", d.phone);
   add("Type of event", d.eventType ? enquiryTypeLabel(d.eventType) : "");
-  add("Date", d.date ? `${formatDay(d.date)}${d.startTime ? `, starting ${d.startTime}` : ""}` : "");
+  const times = d.startTime ? (d.endTime ? `, ${d.startTime} to ${d.endTime}` : `, starting ${d.startTime}`) : "";
+  add("Date", d.date ? `${formatDay(d.date)}${times}` : "");
   add("Venue or town", d.venue);
   add("Guests", d.guests);
   add("Budget", d.budget);
@@ -246,10 +290,11 @@ export function enquiryRows(d: EnquiryDetails): [string, string][] {
   return rows;
 }
 
-/** The note added to the customer's record. */
-export function enquiryNote(d: EnquiryData, source: string) {
+/** The note added to the customer's record. `heading` replaces the first line (e.g. for an enquiry added by hand). */
+export function enquiryNote(d: EnquiryData, source: string, heading?: string) {
   const rows = enquiryRows({ ...d, name: undefined, email: undefined });
-  return [`Enquiry from the website form${source ? ` (${source})` : ""}`, ...rows.map(([k, v]) => (k === "Message" ? `\n${v}` : `${k}: ${v}`))].join("\n");
+  const first = heading ?? `Enquiry from the website form${source ? ` (${source})` : ""}`;
+  return [first, ...rows.map(([k, v]) => (k === "Message" ? `\n${v}` : `${k}: ${v}`))].join("\n");
 }
 
 /** The booking's or wedding's name, e.g. "Sam Jones's wedding" or "Sam Jones: private party". */

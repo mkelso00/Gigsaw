@@ -23,7 +23,8 @@ export default async function DashboardPage() {
   const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
 
-  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries] = await Promise.all([
+  const todayKey = localDateKey(now, settings.defaultTimezone);
+  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, quotesOut, quotesAccepted] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
@@ -81,6 +82,21 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       select: { id: true, name: true, eventType: true, date: true },
       take: 50,
+    }),
+    // Quotes with the customer, still open, and ones accepted in the last fortnight with no contract sent yet.
+    prisma.quote.count({
+      where: {
+        agencyId: user.agencyId,
+        supersededById: null,
+        status: { in: ["SENT", "VIEWED"] },
+        OR: [{ validUntil: null }, { validUntil: { gte: todayKey } }],
+      },
+    }),
+    prisma.quote.findMany({
+      where: { agencyId: user.agencyId, status: "ACCEPTED", answeredAt: { gte: new Date(now.getTime() - 14 * DAY) }, event: { contracts: { none: {} } } },
+      orderBy: { answeredAt: "desc" },
+      select: { id: true, title: true, eventId: true },
+      take: 20,
     }),
   ]);
 
@@ -166,6 +182,29 @@ export default async function DashboardPage() {
       ),
       href: "/enquiries",
       action: "Reply",
+    });
+  if (quotesAccepted.length > 0)
+    needs.push({
+      key: "quotes-accepted",
+      tone: "soon",
+      count: quotesAccepted.length,
+      text: (
+        <>
+          quote{quotesAccepted.length === 1 ? "" : "s"} accepted: send the contract to sign
+          <span className="text-ink-500"> · {quotesAccepted[0].title}</span>
+        </>
+      ),
+      href: quotesAccepted[0].eventId ? `/events/${quotesAccepted[0].eventId}#contract` : `/quotes/${quotesAccepted[0].id}`,
+      action: "Contract",
+    });
+  if (quotesOut > 0)
+    needs.push({
+      key: "quotes-out",
+      tone: "info",
+      count: quotesOut,
+      text: `quote${quotesOut === 1 ? " is" : "s are"} waiting for the customer's answer`,
+      href: "/enquiries?view=quotes",
+      action: "See",
     });
   if (overdueDeposits.length > 0)
     needs.push({
@@ -370,7 +409,9 @@ export default async function DashboardPage() {
                         ? `/events/${a.entityId}`
                         : a.entity === "ENQUIRY" && !a.action.includes("deleted")
                           ? `/enquiries?view=all#${a.entityId}`
-                          : null;
+                          : a.entity === "QUOTE" && !a.action.includes("deleted")
+                            ? `/quotes/${a.entityId}`
+                            : null;
                   const body = (
                     <>
                       <span className="font-medium">{a.user?.name ?? "Someone"}</span> {a.action}
