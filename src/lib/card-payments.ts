@@ -206,7 +206,10 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
   const t = payTarget(raw);
   // Cancelled gigs aren't on the event's invoice, but money paid for an event must land somewhere.
   let gigs = t.gigs;
-  if (!gigs.length && raw.eventId) gigs = await prisma.booking.findMany({ where: { eventId: raw.eventId }, include: gigInclude, orderBy: { setStart: "asc" } });
+  // Archived ones too (archivedAt: undefined), or money paid for an event whose bookings are all archived would have nowhere to go.
+  if (!gigs.length && raw.eventId) {
+    gigs = await prisma.booking.findMany({ where: { eventId: raw.eventId, archivedAt: undefined }, include: gigInclude, orderBy: { setStart: "asc" } });
+  }
   const amount = s.amount_total;
   const currency = s.currency.toUpperCase();
   const paidAt = new Date();

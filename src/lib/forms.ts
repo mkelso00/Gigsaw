@@ -50,6 +50,32 @@ export function splitTags(raw: string): string[] {
 /** An error whose message is safe to show to the user. */
 export class FormError extends Error {}
 
+const DIGEST_PREFIX = "gigsaw-form-error:";
+
+/**
+ * A FormError that also reaches the user when it's thrown outside handleForm, e.g. by requireStaff
+ * at the top of an action. Next hides a thrown error's message from the browser but passes on its
+ * digest, so the message travels there and ActionForm shows it (see formErrorFromDigest).
+ */
+export class ShownFormError extends FormError {
+  readonly digest: string;
+  constructor(message: string) {
+    super(message);
+    this.digest = DIGEST_PREFIX + encodeURIComponent(message);
+  }
+}
+
+/** The message of a ShownFormError that came back from a server action, or null for any other error. */
+export function formErrorFromDigest(e: unknown): string | null {
+  const digest = typeof e === "object" && e !== null && "digest" in e ? (e as { digest: unknown }).digest : null;
+  if (typeof digest !== "string" || !digest.startsWith(DIGEST_PREFIX)) return null;
+  try {
+    return decodeURIComponent(digest.slice(DIGEST_PREFIX.length));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What a form action returns. `confirm` asks the user to check something before saving
  * (e.g. a possible double booking); submitting again with "Save anyway" sends confirmed=yes.

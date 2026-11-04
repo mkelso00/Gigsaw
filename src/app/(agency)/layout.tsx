@@ -10,12 +10,14 @@ import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
 import { awayBetween } from "@/lib/away";
 import { getSettings, prisma } from "@/lib/db";
+import { isLocked } from "@/lib/billing-lock";
 import { OPEN_WHEN_LOCKED, billingState } from "@/lib/subscription";
 import { localDateKey } from "@/lib/time";
 import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
 export default async function AgencyLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireStaff();
+  // Open while locked, so Plan and Profile have their frame: each other page's own requireStaff sends it to Plan.
+  const user = await requireStaff({ allowLocked: true });
   const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
@@ -33,9 +35,10 @@ export default async function AgencyLayout({ children }: { children: React.React
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
   // A self-service business whose trial has ended (or subscription stopped) can only reach Plan and Profile.
+  // requireStaff enforces this for pages and actions; this screen is the fallback for anything that slips past.
   const billing = billingState(user.agency!);
   const path = (await headers()).get("x-pathname") ?? "";
-  const locked = billing.locked && !OPEN_WHEN_LOCKED.some((p) => path.startsWith(p));
+  const locked = isLocked(user) && !OPEN_WHEN_LOCKED.some((p) => path.startsWith(p));
   const navProps = {
     isAdmin: user.role === "ADMIN",
     isOwner: user.isOwner,
@@ -149,7 +152,7 @@ export default async function AgencyLayout({ children }: { children: React.React
               <div className="mx-auto max-w-xl py-16 text-center">
                 <h1 className="text-3xl font-semibold tracking-tight">{billing.label}</h1>
                 <p className="mt-3 text-ink-600">
-                  Choose a plan and add a card to carry on. Everything you&apos;ve set up is safe, and your acts&apos; app keeps working in the meantime.
+                  Choose a plan and add a card to carry on. Everything you&apos;ve set up is safe, and your acts&apos; app opens again as soon as you do.
                 </p>
                 {user.role === "ADMIN" ? (
                   <Link href="/settings/plan" className="btn btn-primary mt-6">

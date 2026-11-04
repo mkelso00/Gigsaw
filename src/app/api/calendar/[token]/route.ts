@@ -4,6 +4,7 @@ import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
+import { billingState } from "@/lib/subscription";
 import { localTime } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -23,11 +24,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const actIds = await actIdsFor({ artistId: act?.id ?? null, personId: person?.id ?? null, agencyId: owner.agencyId });
   const calendarName = act ? act.name : personName(person!);
 
-  const bookings = await prisma.booking.findMany({
-    where: { agencyId: owner.agencyId, artistId: { in: actIds }, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { in: ACT_VISIBLE } },
-    include: { venue: true, artist: { select: { name: true } } },
-    orderBy: { setStart: "asc" },
-  });
+  // Like the staff feed: a business whose trial or subscription has ended keeps the calendar, but it's empty until it pays.
+  const locked = billingState(owner.agency).locked;
+  const bookings = locked
+    ? []
+    : await prisma.booking.findMany({
+        where: { agencyId: owner.agencyId, artistId: { in: actIds }, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { in: ACT_VISIBLE } },
+        include: { venue: true, artist: { select: { name: true } } },
+        orderBy: { setStart: "asc" },
+      });
 
   const { defaultTimezone } = await getSettings(owner.agencyId);
   const ics = buildIcs(

@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Plan" };
 export const dynamic = "force-dynamic";
 
 export default async function PlanSettings({ searchParams }: { searchParams: Promise<{ subscribed?: string }> }) {
-  const user = await requireAdmin();
+  const user = await requireAdmin({ allowLocked: true }); // Open while a plan is needed: this is where one is chosen
   const sp = await searchParams;
   const agencyId = user.agencyId!;
   const agency = user.agency!;

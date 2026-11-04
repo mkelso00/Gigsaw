@@ -7,11 +7,13 @@ import { prisma } from "@/lib/db";
 import { handleForm, type FormState } from "@/lib/forms";
 import { TEAM_FEED_STATUSES } from "@/lib/team-calendar";
 
+// Profile settings: open while the business is locked (trial ended, subscription cancelled).
+
 const newToken = () => randomBytes(24).toString("base64url");
 
 /** Choose what goes in your calendar feed. The first save makes your private link. */
 export async function saveCalendarSync(_: FormState, form: FormData): Promise<FormState> {
-  const user = await requireStaff();
+  const user = await requireStaff({ allowLocked: true });
   return handleForm(async () => {
     const scope = form.get("scope") === "ALL" ? "ALL" : "MINE";
     const picked = form.getAll("status").map(String);
@@ -32,13 +34,13 @@ export async function saveCalendarSync(_: FormState, form: FormData): Promise<Fo
 
 /** A new link: the old one stops working straight away (e.g. if it was shared by mistake). */
 export async function resetCalendarLink() {
-  const user = await requireStaff();
+  const user = await requireStaff({ allowLocked: true });
   await prisma.user.update({ where: { id: user.id }, data: { calendarToken: newToken() } });
   revalidatePath("/profile");
 }
 
 export async function turnOffCalendarSync() {
-  const user = await requireStaff();
+  const user = await requireStaff({ allowLocked: true });
   await prisma.user.update({ where: { id: user.id }, data: { calendarToken: null } });
   revalidatePath("/profile");
 }

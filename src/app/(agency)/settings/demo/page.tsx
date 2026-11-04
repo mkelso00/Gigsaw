@@ -9,7 +9,9 @@ export const metadata: Metadata = { title: "Demo data" };
 
 export default async function DemoSettings() {
   const user = await requireAdmin();
-  const demoBookings = await prisma.booking.count({ where: { agencyId: user.agencyId, demo: true } });
+  // Archived ones too (archivedAt: undefined): with every demo booking archived the page would say "Not loaded",
+  // while Load refuses because the demo acts are still there.
+  const demoBookings = await prisma.booking.count({ where: { agencyId: user.agencyId, demo: true, archivedAt: undefined } });
   return (
     <SettingsPage title="Demo data">
       <SettingsSection title={demoBookings ? `Loaded: ${demoBookings} bookings` : "Not loaded"}>

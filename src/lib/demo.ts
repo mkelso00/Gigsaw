@@ -755,9 +755,11 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
 /** Remove every demo record, plus anything hanging off the demo artists. Real data is left alone. */
 export async function removeDemoData(prisma: Db, agencyId: string) {
   const artistIds = (await prisma.artist.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((a) => a.id);
-  const bookingIds = (await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }] }, select: { id: true } })).map(
-    (b) => b.id,
-  );
+  // Archived bookings too (archivedAt: undefined switches off the hidden-archive filter in db.ts): they
+  // still point at the demo acts, so leaving them would block deleting the acts and undo the lot.
+  const bookingIds = (
+    await prisma.booking.findMany({ where: { agencyId, OR: [{ demo: true }, { artistId: { in: artistIds } }], archivedAt: undefined }, select: { id: true } })
+  ).map((b) => b.id);
   const contactIds = (await prisma.contact.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((c) => c.id);
   const venueIds = (await prisma.venue.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((v) => v.id);
   const personIds = (await prisma.person.findMany({ where: { agencyId, demo: true }, select: { id: true } })).map((p) => p.id);
