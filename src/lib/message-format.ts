@@ -11,6 +11,22 @@ export function normalisePhone(raw: string, defaultCountryCode = "44"): string |
   return /^\+\d{8,15}$/.test(s) ? s : null;
 }
 
+// Pages opened by a secret link: the part after the prefix is the key, e.g. /reset-password/<token>.
+const SECRET_LINK = /(https?:\/\/[^\s/?#<>"']+)?\/(reset-password|o|c|pay|w|f|join|v|q)\/[^\s/?#<>"'),\]]+/g;
+
+/**
+ * Hide the key in secret links before a message is saved, so the message log can't be used to
+ * open someone's offer, contract, payment or password reset. The page prefix stays, so staff
+ * can still see which link was sent: https://gigsaw.live/o/abc123 becomes https://gigsaw.live/o/…
+ */
+export function redactLinks(text: string): string {
+  return text.replace(SECRET_LINK, (match, host: string | undefined, prefix: string, at: number) => {
+    // A path on its own only counts at the start of a word, not inside another path.
+    if (!host && at > 0 && !/[\s(<"'[]/.test(text[at - 1])) return match;
+    return `${host ?? ""}/${prefix}/…`;
+  });
+}
+
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** The content of a branded email. Everything except title is optional. */

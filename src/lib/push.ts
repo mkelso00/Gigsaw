@@ -1,6 +1,7 @@
 import "server-only";
 import webpush from "web-push";
 import { prisma } from "./db";
+import { isPushEndpoint } from "./push-hosts";
 
 // Phone notifications (web push). The keys that sign them (VAPID) come from the
 // VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY variables if set, otherwise Gigsaw makes a pair
@@ -47,9 +48,15 @@ export type PushPayload = {
 
 /**
  * Send one notification to a subscription. Returns "gone" when the phone has turned
- * notifications off or the app was removed (the subscription should be deleted).
+ * notifications off or the app was removed, and "blocked" when the address isn't a known push
+ * service (saved before that was checked). Either way the subscription should be deleted.
  */
-export async function pushTo(sub: { endpoint: string; p256dh: string; auth: string }, payload: PushPayload, ttlSeconds = 12 * 3600): Promise<"sent" | "gone"> {
+export async function pushTo(
+  sub: { endpoint: string; p256dh: string; auth: string },
+  payload: PushPayload,
+  ttlSeconds = 12 * 3600,
+): Promise<"sent" | "gone" | "blocked"> {
+  if (!isPushEndpoint(sub.endpoint)) return "blocked";
   const keys = await vapidKeys();
   try {
     await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), {
@@ -65,6 +72,7 @@ export async function pushTo(sub: { endpoint: string; p256dh: string; auth: stri
   } catch (e) {
     const status = (e as { statusCode?: number }).statusCode;
     if (status === 404 || status === 410) return "gone";
-    throw new Error(`${status ?? ""} ${(e as { body?: string }).body ?? (e instanceof Error ? e.message : String(e))}`.trim().slice(0, 300));
+    // Only the status is kept: what the service sent back is never stored or shown.
+    throw new Error(status ? `The push service replied ${status}.` : "Couldn't reach the push service.");
   }
 }
