@@ -533,6 +533,16 @@ model PasswordReset {
   createdAt DateTime  @default(now())
 }
 
+// A failed sign-in, counted per email ("email:...") and per IP address ("ip:...") to limit
+// password guessing. Rows older than the limit's window are deleted as new ones come in.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 // Every email or text Gigsaw sends (or would send, when no provider is set up).
 model Message {
   id        String   @id @default(cuid())

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { normalisePhone, renderEmail, type EmailContent } from "./message-format";
+import { normalisePhone, redactLinks, renderEmail, type EmailContent } from "./message-format";
 import { pushTo, type PushPayload } from "./push";
 
 // Sends emails (Resend) and texts (Twilio) when their keys are set in the environment,
@@ -86,10 +86,11 @@ async function record(
       channel: m.channel,
       to: m.to,
       subject: m.subject ?? "",
-      body: m.body,
+      // Secret links are sent in full but never kept: the log only shows which page they open.
+      body: redactLinks(m.body),
       status,
       provider: send ? provider : "",
-      error,
+      error: redactLinks(error),
     },
   });
   return status;
@@ -177,8 +178,10 @@ export async function sendPush(m: Base & { userId: string; payload: PushPayload;
         body: m.payload.body,
       },
       async () => {
-        gone = (await pushTo(sub, m.payload, m.ttlSeconds)) === "gone";
-        if (gone) throw new Error("This device has turned notifications off. It has been removed.");
+        const result = await pushTo(sub, m.payload, m.ttlSeconds);
+        gone = result !== "sent";
+        if (result === "gone") throw new Error("This device has turned notifications off. It has been removed.");
+        if (result === "blocked") throw new Error("This device's address isn't a known push service. It has been removed.");
       },
       "web-push",
     );

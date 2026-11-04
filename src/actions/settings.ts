@@ -3,7 +3,7 @@ import { checkSignature } from "@/lib/contract-doc";
 
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
+import { endOtherSessions, hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
@@ -175,8 +175,14 @@ export async function changePassword(_: FormState, form: FormData): Promise<Form
       where: { id: user.id },
       data: { passwordHash: await hashPassword(next) },
     });
+    // Anyone signed in elsewhere (perhaps with the old password) is signed out; this browser stays in.
+    await endOtherSessions(user.id);
     revalidatePath("/profile");
-    return { ok: hadPassword ? "Password changed." : "Password set. You can now sign in with your email and password too." };
+    return {
+      ok: hadPassword
+        ? "Password changed. You've been signed out on your other devices."
+        : "Password set. You can now sign in with your email and password too.",
+    };
   });
 }
 

@@ -39,6 +39,12 @@ export async function destroySession() {
   jar.delete(SESSION_COOKIE);
 }
 
+/** Sign this login out everywhere except here (e.g. after a password change). */
+export async function endOtherSessions(userId: string) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value ?? "";
+  await prisma.session.deleteMany({ where: { userId, token: { not: token } } });
+}
+
 /** The signed-in user (with their agency), or null. Cached per request. */
 export const currentUser = cache(async () => {
   const jar = await cookies();

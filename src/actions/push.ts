@@ -3,6 +3,7 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { sendPush } from "@/lib/messaging";
+import { isPushEndpoint } from "@/lib/push-hosts";
 
 type Sub = { endpoint: string; keys?: { p256dh?: string; auth?: string } };
 
@@ -12,7 +13,8 @@ export async function savePushSubscription(sub: Sub, device: string) {
   const endpoint = String(sub?.endpoint ?? "");
   const p256dh = String(sub?.keys?.p256dh ?? "");
   const auth = String(sub?.keys?.auth ?? "");
-  if (!/^https:\/\//.test(endpoint) || !p256dh || !auth) return { ok: false };
+  // Only the browsers' own push services, so nobody can make the server call another address.
+  if (!isPushEndpoint(endpoint) || !p256dh || !auth) return { ok: false };
   const data = { userId: user.id, p256dh, auth, device: device.slice(0, 60) };
   await prisma.pushSubscription.upsert({
     where: { endpoint },
