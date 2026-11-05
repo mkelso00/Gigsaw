@@ -8,7 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { localDateKey } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
-export const metadata: Metadata = { title: "Weddings & events" };
+export const metadata: Metadata = { title: "Wedding bookings" };
 
 const TYPE: Record<string, string> = { WEDDING: "Wedding", PRIVATE_PARTY: "Private party", CORPORATE: "Corporate", OTHER: "Event" };
 const dayLabel = (key: string) =>
@@ -43,8 +43,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   return (
     <div>
       <PageHeader
-        title="Weddings & events"
-        subtitle="One booking per customer, with every act they've booked. Each act only sees its own booking and fee."
+        title="Wedding bookings"
+        subtitle="Weddings, parties and other private events: one booking per customer, with every act they've booked. Each act only sees its own booking and fee."
         actions={
           <Link href="/events/new" className="btn btn-primary">
             New wedding or event

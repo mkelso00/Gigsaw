@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connectStripe, disconnectStripe } from "@/actions/card-payments";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { requireAdmin } from "@/lib/auth";
 import { refreshAccount } from "@/lib/card-payments";
@@ -133,11 +133,11 @@ export default async function CardPaymentSettings({ searchParams }: { searchPara
           description="Stops card payments through Gigsaw. Your Stripe account and its money stay yours, and payments already made stay logged."
         >
           <SettingsCard pad>
-            <form action={disconnectStripe}>
+            <ServerForm action={disconnectStripe}>
               <ConfirmButton message="Disconnect Stripe? Payment links you've sent will stop taking cards." className="btn btn-danger">
                 Disconnect Stripe
               </ConfirmButton>
-            </form>
+            </ServerForm>
           </SettingsCard>
         </SettingsSection>
       )}

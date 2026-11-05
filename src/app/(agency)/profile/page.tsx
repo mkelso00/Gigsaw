@@ -6,7 +6,7 @@ import { disconnectSignIn } from "@/actions/oauth";
 import { changePassword, saveMyNotifications, updateMyDetails } from "@/actions/settings";
 import { toggleTheme } from "@/actions/theme";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { OAuthNotice, ProviderLogo } from "@/components/oauth-buttons";
 import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
@@ -40,9 +40,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
     <SettingsPage
       title="Profile"
       actions={
-        <form action={logout}>
+        <ServerForm action={logout}>
           <button className="btn">Sign out</button>
-        </form>
+        </ServerForm>
       }
     >
       <SettingsSection title="Your details" description="Your mobile is used for texts about late acts and turned-down bookings.">
@@ -130,16 +130,16 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                 </span>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <form action={resetCalendarLink}>
+                <ServerForm action={resetCalendarLink}>
                   <ConfirmButton message="Make a new link? The old one stops working, so you'll need to add the calendar again." className="btn btn-sm">
                     Make a new link
                   </ConfirmButton>
-                </form>
-                <form action={turnOffCalendarSync}>
+                </ServerForm>
+                <ServerForm action={turnOffCalendarSync}>
                   <ConfirmButton message="Turn off calendar sync? The link stops working and the calendar stops updating." className="btn btn-sm btn-danger">
                     Turn off
                   </ConfirmButton>
-                </form>
+                </ServerForm>
               </div>
             </SettingsCard>
           )}
@@ -234,11 +234,11 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                       last ? (
                         <span className="text-xs text-ink-500">Your only way to sign in</span>
                       ) : (
-                        <form action={disconnectSignIn.bind(null, p)}>
+                        <ServerForm action={disconnectSignIn.bind(null, p)}>
                           <ConfirmButton message={`Disconnect ${PROVIDERS[p].label}? You won't be able to sign in with it.`} className="btn btn-sm">
                             Disconnect
                           </ConfirmButton>
-                        </form>
+                        </ServerForm>
                       )
                     ) : configured.includes(p) ? (
                       <a href={`/api/auth/${p}?intent=link`} className="btn btn-sm">
@@ -260,9 +260,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
             title={theme === "dark" ? "Dark" : "Light"}
             sub="Just for you, on this device."
             right={
-              <form action={toggleTheme.bind(null, theme)}>
+              <ServerForm action={toggleTheme.bind(null, theme)}>
                 <button className="btn btn-sm">Switch to {theme === "dark" ? "light" : "dark"}</button>
-              </form>
+              </ServerForm>
             }
           />
         </SettingsCard>

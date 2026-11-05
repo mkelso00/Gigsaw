@@ -20,6 +20,7 @@ export type QuoteEditorValues = {
   deposit: string;
   depositDue: string;
   validUntil: string;
+  tellActs: boolean;
   message: string;
   terms: string;
 };
@@ -338,7 +339,13 @@ export function QuoteEditor({
             <input name="validUntil" type="date" defaultValue={values.validUntil} className="input" />
             <span className="hint block">After this day the customer can&apos;t accept it.</span>
           </label>
-          <div />
+          <label className="flex items-start gap-2 self-center text-sm">
+            <input name="tellActs" type="checkbox" defaultChecked={values.tellActs} className="mt-0.5" />
+            <span>
+              Email the acts when the customer accepts
+              <span className="hint block">Untick to tell them yourself. The bookings are still made.</span>
+            </span>
+          </label>
           <label className="block sm:col-span-2">
             <span className="label">A note to the customer</span>
             <textarea name="message" rows={3} defaultValue={values.message} maxLength={3000} className="input" placeholder="Shown at the top of their quote" />

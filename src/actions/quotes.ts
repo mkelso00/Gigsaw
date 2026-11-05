@@ -96,6 +96,7 @@ export async function saveQuote(quoteId: string, _: FormState, form: FormData): 
           depositMinor,
           depositDue: depositMinor > 0 && depositDue ? depositDue : null,
           validUntil: validUntil || null,
+          tellActs: form.get("tellActs") === "on",
           message: str(form, "message").slice(0, 3000),
           terms: str(form, "terms").slice(0, 20000),
         },

@@ -17,7 +17,7 @@ import { CopyBooking } from "@/components/copy-booking";
 import { PayLinksCard } from "@/components/pay-links-card";
 import { cardPaymentsReady } from "@/lib/card-payments";
 import { appUrl } from "@/lib/messaging";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { ArrivalPanel } from "@/components/arrival-panel";
 import { ContractPanel } from "@/components/contract-panel";
 import { ArtistDot, DefinitionList, Field, PageHeader, StatusBadge } from "@/components/ui";
@@ -197,9 +197,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               </a>
             </DropMenu>
             {booking.archivedAt && (
-              <form action={setBookingArchived.bind(null, booking.id, false)}>
+              <ServerForm action={setBookingArchived.bind(null, booking.id, false)}>
                 <button className="btn">Restore</button>
-              </form>
+              </ServerForm>
             )}
           </>
         }
@@ -284,11 +284,11 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                       {c.source === "AGENT" ? `· logged by ${c.user?.name ?? "agency"}` : "· from the act app"}
                       {c.note && <span className="text-slate-500"> · “{c.note}”</span>}
                     </span>
-                    <form action={deleteCheckIn.bind(null, c.id)}>
+                    <ServerForm action={deleteCheckIn.bind(null, c.id)}>
                       <ConfirmButton message="Remove this check-in?" className="btn btn-sm btn-danger">
                         Remove
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   </li>
                 ))}
               </ul>
@@ -371,11 +371,11 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                         {money(p.amountMinor)}
                       </td>
                       <td className="text-right">
-                        <form action={deletePayment.bind(null, p.id)}>
+                        <ServerForm action={deletePayment.bind(null, p.id)}>
                           <ConfirmButton message="Remove this payment?" className="btn btn-sm btn-danger">
                             Remove
                           </ConfirmButton>
-                        </form>
+                        </ServerForm>
                       </td>
                     </tr>
                   ))}
@@ -597,21 +597,21 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
 
           {booking.archivedAt ? (
             user.role === "ADMIN" && (
-              <form action={deleteBooking.bind(null, booking.id)}>
+              <ServerForm action={deleteBooking.bind(null, booking.id)}>
                 <ConfirmButton message={`Delete ${booking.reference} for good? This removes its payments and check-ins too.`} className="btn btn-danger w-full">
                   Delete for good
                 </ConfirmButton>
-              </form>
+              </ServerForm>
             )
           ) : (
-            <form action={setBookingArchived.bind(null, booking.id, true)}>
+            <ServerForm action={setBookingArchived.bind(null, booking.id, true)}>
               <ConfirmButton
                 message={`Archive ${booking.reference}? It leaves your lists and calendar. You can restore it from Archived.`}
                 className="btn w-full"
               >
                 Archive booking
               </ConfirmButton>
-            </form>
+            </ServerForm>
           )}
         </div>
       </div>

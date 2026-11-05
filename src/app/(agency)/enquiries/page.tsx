@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { deleteEnquiry, setEnquiryStatus } from "@/actions/enquiries";
 import { makeQuote } from "@/actions/quotes";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { FilterPanel } from "@/components/header-actions";
 import { QuoteList, QuoteStatusBadge, quoteRowSelect } from "@/components/quote-list";
 import { Empty, PageHeader } from "@/components/ui";
@@ -307,19 +307,19 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                   )}
                   {!e.booking && !e.event && <span className="text-xs text-ink-500">No date given, so no booking was made.</span>}
                   <span className="ml-auto flex flex-wrap gap-2">
-                    <form action={setEnquiryStatus.bind(null, e.id, e.status === "NEW" ? "DONE" : "NEW")}>
+                    <ServerForm action={setEnquiryStatus.bind(null, e.id, e.status === "NEW" ? "DONE" : "NEW")}>
                       <button className={`btn btn-sm ${e.status === "NEW" ? "btn-primary" : ""}`}>
                         {e.status === "NEW" ? "Mark dealt with" : "Back to new"}
                       </button>
-                    </form>
-                    <form action={deleteEnquiry.bind(null, e.id)}>
+                    </ServerForm>
+                    <ServerForm action={deleteEnquiry.bind(null, e.id)}>
                       <ConfirmButton
                         className="btn btn-sm btn-danger"
                         message="Delete this enquiry as spam? Its Enquiry booking or wedding goes too (if nothing's been added to it), and the customer if they were new."
                       >
                         Spam
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   </span>
                 </div>
               </li>

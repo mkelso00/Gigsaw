@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { createStaffUser, removeStaffUser } from "@/actions/settings";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
@@ -48,11 +48,11 @@ export default async function UsersSettings() {
                 <span className="flex items-center gap-2">
                   <Badge tone={u.role === "ADMIN" ? "green" : "grey"}>{u.role === "ADMIN" ? "Admin" : "Agent"}</Badge>
                   {u.id !== user.id && !u.isOwner && (
-                    <form action={removeStaffUser.bind(null, u.id)}>
+                    <ServerForm action={removeStaffUser.bind(null, u.id)}>
                       <ConfirmButton message={`Remove ${u.name}'s access?`} className="btn btn-sm">
                         Remove
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   )}
                 </span>
               }

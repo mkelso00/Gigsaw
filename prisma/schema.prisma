@@ -1098,6 +1098,8 @@ model Quote {
   answerAgent     String    @default("")
   // Accepting: the customer's drawn signature, a PNG data URL (checked like contract signatures).
   answerSignature String    @default("")
+  // When the customer accepts: email and text the acts that they're booked (untick to tell them yourself).
+  tellActs        Boolean   @default(true)
 
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt

@@ -6,6 +6,7 @@ import { AuthShell } from "@/components/auth-shell";
 import { homePath, requireUser } from "@/lib/auth";
 import { isLocked, lockedPath } from "@/lib/billing-lock";
 import { billingState } from "@/lib/subscription";
+import { ServerForm } from "@/components/forms";
 
 export const metadata: Metadata = { title: "Choose a plan" };
 export const dynamic = "force-dynamic";
@@ -33,9 +34,9 @@ export default async function LockedPage() {
             Your profile
           </Link>
         )}
-        <form action={logout}>
+        <ServerForm action={logout}>
           <button className="btn h-11 w-full">Sign out</button>
-        </form>
+        </ServerForm>
       </div>
     </AuthShell>
   );

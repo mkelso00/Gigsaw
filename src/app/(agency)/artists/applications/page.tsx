@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { approveApplication, declineApplication, makeJoinLink, removeJoinLink } from "@/actions/join";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import { Empty, PageHeader } from "@/components/ui";
 import { ACT_TYPE_LABELS, type JoinMember } from "@/lib/act-profile";
 import { requireStaff } from "@/lib/auth";
@@ -49,20 +49,20 @@ export default async function ApplicationsPage() {
             </div>
             {isAdmin && (
               <div className="flex flex-wrap gap-2">
-                <form action={makeJoinLink}>
+                <ServerForm action={makeJoinLink}>
                   <button className="btn btn-sm">Make a new link</button>
-                </form>
-                <form action={removeJoinLink}>
+                </ServerForm>
+                <ServerForm action={removeJoinLink}>
                   <button className="btn btn-sm">Switch the link off</button>
-                </form>
+                </ServerForm>
                 <span className="self-center text-xs text-ink-500">A new link stops the old one working.</span>
               </div>
             )}
           </>
         ) : isAdmin ? (
-          <form action={makeJoinLink}>
+          <ServerForm action={makeJoinLink}>
             <button className="btn btn-primary">Make a join link</button>
-          </form>
+          </ServerForm>
         ) : (
           <p className="text-sm text-ink-500">There&apos;s no join link yet. An admin can make one here.</p>
         )}
@@ -145,9 +145,9 @@ export default async function ApplicationsPage() {
                   <ActionForm action={approveApplication.bind(null, a.id)}>
                     <SubmitButton pendingText="Approving…">Approve and add {a.actName}</SubmitButton>
                   </ActionForm>
-                  <form action={declineApplication.bind(null, a.id)}>
+                  <ServerForm action={declineApplication.bind(null, a.id)}>
                     <button className="btn">Decline</button>
-                  </form>
+                  </ServerForm>
                   <span className="text-xs text-ink-500">
                     Approving adds the act and its members, and lets {a.contactName} log in. Declining sends nothing.
                   </span>

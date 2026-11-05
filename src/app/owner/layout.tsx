@@ -5,6 +5,7 @@ import { Icon } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { requireOwner } from "@/lib/auth";
 import { OwnerNav } from "./owner-nav";
+import { ServerForm } from "@/components/forms";
 
 export const metadata: Metadata = { title: { default: "Owner", template: "%s · Gigsaw owner" } };
 
@@ -30,14 +31,14 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
               Back to my business
             </Link>
           )}
-          <form action={logout}>
+          <ServerForm action={logout}>
             <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-ink-400 hover:bg-white/[0.04] hover:text-white">
               <span className="flex h-[18px] w-[18px] items-center justify-center rounded bg-ink-800 text-[9px] font-semibold text-volt-300">
                 {user.name.slice(0, 1).toUpperCase()}
               </span>
               Sign out
             </button>
-          </form>
+          </ServerForm>
         </div>
       </aside>
       <div className="min-w-0 flex-1 lg:py-2 lg:pr-2">

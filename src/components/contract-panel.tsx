@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cancelContract, sendContractToSign } from "@/actions/contracts";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { contractState, contractStatusLabel } from "@/lib/contract-doc";
 import { contractUrl, type contractStatusFor } from "@/lib/contracts";
 import { formatDate } from "@/lib/time";
@@ -119,11 +119,11 @@ export function ContractPanel({
             sendForm(state === "NONE" ? "Send contract to sign" : open ? "Send again" : "Send the new version to sign")
           )}
           {open && (
-            <form action={cancelContract.bind(null, open.id)} className="mt-2">
+            <ServerForm action={cancelContract.bind(null, open.id)} className="mt-2">
               <ConfirmButton message="Cancel this contract? The link stops working and it can't be signed." className="btn btn-sm w-full">
                 Cancel the contract
               </ConfirmButton>
-            </form>
+            </ServerForm>
           )}
           {!agencySigned && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">

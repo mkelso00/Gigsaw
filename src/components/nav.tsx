@@ -6,8 +6,17 @@ import { useEffect, useState } from "react";
 import { logout } from "@/actions/auth";
 import { Icon } from "@/components/icons";
 import { SETTINGS_PAGES } from "@/components/settings-ui";
+import { ServerForm } from "@/components/forms";
 
-type NavItem = { href: string; label: string; icon: string; live?: boolean; mobileOnly?: boolean };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  live?: boolean;
+  mobileOnly?: boolean;
+  /** Other pages that belong to this item, so it stays lit on them (e.g. a quote under Quotes & enquiries). */
+  also?: string[];
+};
 
 // The menu, in sections. On phones it becomes one scrolling strip and the headings are hidden.
 const SECTIONS: { title?: string; links: NavItem[] }[] = [
@@ -22,10 +31,9 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
     links: [
       { href: "/calendar", label: "Calendar", icon: "calendar" },
       { href: "/rota", label: "Rota", icon: "rota" },
-      { href: "/bookings", label: "All bookings", icon: "bookings" },
-      { href: "/events", label: "Weddings & events", icon: "heart" },
-      { href: "/enquiries", label: "Enquiries", icon: "inbox" },
-      { href: "/quotes", label: "Quotes", icon: "doc" },
+      { href: "/bookings", label: "Venue bookings", icon: "bookings" },
+      { href: "/events", label: "Wedding bookings", icon: "heart" },
+      { href: "/enquiries", label: "Quotes & enquiries", icon: "inbox", also: ["/quotes"] },
     ],
   },
   {
@@ -146,7 +154,8 @@ export function NavLinks({
             // The most specific link wins, so /reports/venues doesn't also light up Reports.
             const matches = (href: string) => path === href || path.startsWith(`${href}/`);
             const active =
-              matches(l.href) && !sections.some((x) => x.links.some((o) => o.href.length > l.href.length && o.href.startsWith(l.href) && matches(o.href)));
+              (matches(l.href) && !sections.some((x) => x.links.some((o) => o.href.length > l.href.length && o.href.startsWith(l.href) && matches(o.href)))) ||
+              !!l.also?.some(matches);
             return (
               <Link
                 key={l.href}
@@ -218,9 +227,9 @@ export function MobileMenu(props: Parameters<typeof NavLinks>[0] & { logo: React
             <div className="mt-auto border-t border-white/[0.06] px-5 py-4">
               <div className="truncate text-sm font-medium text-white">{props.user.name}</div>
               <div className="truncate text-xs text-ink-500">{props.user.email}</div>
-              <form action={logout} className="mt-3">
+              <ServerForm action={logout} className="mt-3">
                 <button className="text-sm text-ink-400 hover:text-white">Sign out</button>
-              </form>
+              </ServerForm>
             </div>
           </div>
         </div>

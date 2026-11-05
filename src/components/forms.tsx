@@ -41,6 +41,108 @@ function redirectFrom(e: unknown): { url: string; replace: boolean } | null {
   return url ? { url, replace: parts[1] === "replace" } : null;
 }
 
+/**
+ * Runs a server action outside a React transition, with its own busy flag. Inside a transition (a form's
+ * action prop or useActionState) Next 15.5 often never finished showing the result: the server had saved and
+ * sent the new page back, but the button stayed on "Saving…" or a tick didn't appear. Here the busy flag clears
+ * as soon as the server answers and the caller asks for the page again. A redirect() from the action is
+ * followed here, and if Next stalls on the way, the page is opened directly after a few seconds.
+ */
+function useActionRunner() {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const busy = useRef(false);
+  const [, setCrash] = useState();
+  // What was on screen when the action started: if no fresh render has been shown a few seconds after it
+  // finished, Next has stalled, so the page is reloaded (only where the page has a RenderStamp).
+  const shownAtStart = useRef<string | undefined>(undefined);
+  /** Opens where the action sent us. True if that's another page, false if it's this one (just shown again). */
+  const go = (to: { url: string; replace: boolean }) => {
+    if (to.replace) router.replace(to.url);
+    else router.push(to.url);
+    const target = new URL(to.url, window.location.href);
+    const here = () => window.location.pathname + window.location.search;
+    if (here() === target.pathname + target.search) {
+      watch();
+      return false;
+    }
+    const before = shownAtStart.current;
+    setTimeout(() => {
+      // Only if nothing new has been shown at all (a page without a RenderStamp falls back to the address).
+      const stalled = before === undefined ? here() !== target.pathname + target.search : window.__gigsawRendered === before;
+      if (stalled) window.location.assign(target.href);
+    }, 4000);
+    return true;
+  };
+  const watch = () => {
+    const before = shownAtStart.current;
+    if (before === undefined) return;
+    setTimeout(() => {
+      if (window.__gigsawRendered === before) window.location.reload();
+    }, 3000);
+  };
+  const run = async (fn: () => Promise<void>, onMessage: (message: string) => void) => {
+    if (busy.current) return;
+    shownAtStart.current = window.__gigsawRendered;
+    busy.current = true;
+    setPending(true);
+    let moving = false;
+    try {
+      await fn();
+    } catch (e) {
+      const to = redirectFrom(e);
+      // A refusal thrown before the action's own error handling (e.g. a locked plan) still shows as a message.
+      const message = to ? null : formErrorFromDigest(e);
+      // The button stays on "Saving…" while the next page opens, so it can't be pressed twice.
+      if (to) moving = go(to);
+      else if (message) onMessage(message);
+      // Anything else goes to the page's error screen, as it would from a render.
+      else
+        setCrash(() => {
+          throw e;
+        });
+    } finally {
+      if (!moving) {
+        busy.current = false;
+        setPending(false);
+      }
+    }
+  };
+  return { pending, run, watch };
+}
+
+/**
+ * A plain form for a server action that returns nothing (tick a task, withdraw, delete). Use it instead of
+ * <form action={…}>, which can leave the page not showing the change (see useActionRunner).
+ */
+export function ServerForm({
+  action,
+  children,
+  ...props
+}: Omit<React.FormHTMLAttributes<HTMLFormElement>, "action" | "onSubmit"> & { action: (form: FormData) => unknown }) {
+  const router = useRouter();
+  const { pending, run, watch } = useActionRunner();
+  return (
+    <form
+      {...props}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        void run(
+          async () => {
+            await action(data);
+            router.refresh();
+            watch();
+          },
+          (message) => window.alert(message),
+        );
+      }}
+    >
+      <PendingContext.Provider value={pending}>{children}</PendingContext.Provider>
+    </form>
+  );
+}
+
 /** Everything a form would send, as one string, to tell whether anything has changed. */
 function snapshot(form: HTMLFormElement) {
   return JSON.stringify([...new FormData(form)].map(([k, v]) => [k, typeof v === "string" ? v : v.name]));
@@ -67,58 +169,20 @@ export function ActionForm({
   className?: string;
   saveBar?: boolean | { label: string };
 }) {
-  // The action runs outside a React transition, with its own busy flag. Inside a transition (useActionState) the
-  // button stayed on "Saving…" for good about one save in three: the server had saved and sent the new page back,
-  // but React never finished showing it. Here the button frees itself once the server answers, and the page is
-  // asked for again so it always shows what was saved.
   const router = useRouter();
   const [state, setState] = useState<FormState>(undefined);
-  const [pending, setPending] = useState(false);
-  const busy = useRef(false);
-  const [, setCrash] = useState();
-  /** Opens where the action sent us. True if that's another page, false if it's this one (just shown again). */
-  const go = (to: { url: string; replace: boolean }) => {
-    if (to.replace) router.replace(to.url);
-    else router.push(to.url);
-    // Next occasionally never finishes moving to the new page. If the address hasn't changed after a few
-    // seconds, open the page directly so nobody is left looking at a form that has already been saved.
-    const target = new URL(to.url, window.location.href);
-    const here = () => window.location.pathname + window.location.search;
-    if (here() === target.pathname + target.search) return false;
-    setTimeout(() => {
-      if (here() !== target.pathname + target.search) window.location.assign(target.href);
-    }, 4000);
-    return true;
-  };
-  const formAction = async (data: FormData) => {
-    if (busy.current) return;
-    busy.current = true;
-    setPending(true);
-    let moving = false;
-    try {
-      const next = await action(state, data);
-      setState(next);
-      router.refresh();
-    } catch (e) {
-      // A redirect from the action (e.g. "Save" then back to the page) arrives as an error: go there.
-      const to = redirectFrom(e);
-      // A refusal thrown before the action's own error handling (e.g. a locked plan) still shows as a message.
-      const message = to ? null : formErrorFromDigest(e);
-      // The button stays on "Saving…" while the next page opens, so it can't be pressed twice.
-      if (to) moving = go(to);
-      else if (message) setState({ error: message });
-      // Anything else goes to the page's error screen, as it would from a render.
-      else
-        setCrash(() => {
-          throw e;
-        });
-    } finally {
-      if (!moving) {
-        busy.current = false;
-        setPending(false);
-      }
-    }
-  };
+  const { pending, run, watch } = useActionRunner();
+  const formAction = (data: FormData) =>
+    run(
+      async () => {
+        const next = await action(state, data);
+        setState(next);
+        router.refresh();
+        // A refusal changes nothing on the server, so there's no fresh page to wait for.
+        if (!next?.error && !next?.confirm) watch();
+      },
+      (message) => setState({ error: message }),
+    );
   const ref = useRef<HTMLFormElement>(null);
   const [dismissed, setDismissed] = useState<FormState>(undefined);
   // What the form held when it was loaded or last saved, to tell when something has changed.

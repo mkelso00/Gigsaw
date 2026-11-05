@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteVenue, updateVenue, venueToCompany } from "@/actions/crm";
 import { VenueForm } from "@/components/crm-forms";
-import { ConfirmButton } from "@/components/forms";
+import { ConfirmButton, ServerForm } from "@/components/forms";
 import { ScheduleEditor } from "@/components/schedule-editor";
 import { VenueShareCard } from "@/components/venue-share-card";
 import { personName } from "@/lib/person-name";
@@ -61,11 +61,11 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
               Statement
             </Link>
             {!venue.bookings.length && !slots.length && (
-              <form action={venueToCompany.bind(null, venue.id)}>
+              <ServerForm action={venueToCompany.bind(null, venue.id)}>
                 <ConfirmButton message={`Move ${venue.name} to Companies & customers? Use this for a client company, not a place you play.`} className="btn">
                   Not a venue
                 </ConfirmButton>
-              </form>
+              </ServerForm>
             )}
             <Link href={`/bookings/new?venueId=${venue.id}`} className="btn btn-primary">
               New booking here
@@ -79,9 +79,9 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <VenueForm action={updateVenue.bind(null, venue.id)} venue={venue} defaultTimezone={settings.defaultTimezone} />
-          <form action={deleteVenue.bind(null, venue.id)} className="mt-4">
+          <ServerForm action={deleteVenue.bind(null, venue.id)} className="mt-4">
             <ConfirmButton message={`Delete ${venue.name}? Bookings stay but lose their venue.`}>Delete venue</ConfirmButton>
-          </form>
+          </ServerForm>
         </div>
         <div className="space-y-6">
           <section className="card card-pad" id="people">

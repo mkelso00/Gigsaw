@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { issueStatements, setStatementPaid } from "@/actions/owner";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { isMonthKey, monthIsOver, monthLabel, shiftMonth } from "@/lib/billing";
@@ -125,9 +125,9 @@ export default async function OwnerBillingPage({ searchParams }: { searchParams:
                   </td>
                   <td className="text-right">
                     {s && (
-                      <form action={setStatementPaid.bind(null, s.id, s.status !== "PAID")}>
+                      <ServerForm action={setStatementPaid.bind(null, s.id, s.status !== "PAID")}>
                         <button className="btn btn-sm">{s.status === "PAID" ? "Mark unpaid" : "Mark paid"}</button>
-                      </form>
+                      </ServerForm>
                     )}
                   </td>
                 </tr>

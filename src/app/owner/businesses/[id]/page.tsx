@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { addAgencyAdmin, resendWelcome, resetUserPassword, setStatementPaid, updateAgency } from "@/actions/owner";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { Badge, SettingsCard, SettingsSection } from "@/components/settings-ui";
@@ -179,9 +179,9 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                 </span>
                 {!u.isOwner && (
                   <div className="flex w-full items-center gap-2 pl-[52px] sm:w-auto sm:pl-0">
-                    <form action={resendWelcome.bind(null, u.id)}>
+                    <ServerForm action={resendWelcome.bind(null, u.id)}>
                       <button className="btn btn-sm">Resend welcome</button>
-                    </form>
+                    </ServerForm>
                     <details className="relative">
                       <summary className="btn btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">Set password</summary>
                       <ActionForm
@@ -269,9 +269,9 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                   </span>
                   <span className="font-mono font-semibold tabular-nums">{formatMoney(s.amountMinor, s.currency)}</span>
                   <Badge tone={s.status === "PAID" ? "green" : "amber"}>{s.status === "PAID" ? "Paid" : "Unpaid"}</Badge>
-                  <form action={setStatementPaid.bind(null, s.id, s.status !== "PAID")}>
+                  <ServerForm action={setStatementPaid.bind(null, s.id, s.status !== "PAID")}>
                     <button className="btn btn-sm">{s.status === "PAID" ? "Mark unpaid" : "Mark paid"}</button>
-                  </form>
+                  </ServerForm>
                 </div>
               ))}
             </SettingsCard>

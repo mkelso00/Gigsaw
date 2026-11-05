@@ -18,7 +18,7 @@ import { ContractPanel } from "@/components/contract-panel";
 import { EventForm } from "@/components/event-form";
 import { PayLinksCard } from "@/components/pay-links-card";
 import { cardPaymentsReady } from "@/lib/card-payments";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { ArtistDot, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { BOOKING_STATUS_LABELS, actName } from "@/lib/constants";
@@ -308,7 +308,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 const late = !done && task.dueDate && task.dueDate < today;
                 return (
                   <li key={task.id} className="group flex items-start gap-2">
-                    <form action={toggleEventTask.bind(null, task.id)}>
+                    <ServerForm action={toggleEventTask.bind(null, task.id)}>
                       <button
                         disabled={auto && !task.doneAt}
                         className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border text-xs ${done ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink-300 hover:border-ink-950"}`}
@@ -316,7 +316,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                       >
                         {done ? "✓" : ""}
                       </button>
-                    </form>
+                    </ServerForm>
                     <div className="min-w-0 flex-1 text-sm">
                       <div className={done ? "text-ink-500 line-through" : ""}>{task.title}</div>
                       <div className={`text-xs ${late ? "font-medium text-rose-700" : "text-ink-500"}`}>
@@ -328,11 +328,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                     {!task.key && (
-                      <form action={deleteEventTask.bind(null, task.id)} className="opacity-0 group-hover:opacity-100">
+                      <ServerForm action={deleteEventTask.bind(null, task.id)} className="opacity-0 group-hover:opacity-100">
                         <button className="text-xs text-ink-400 hover:text-rose-700" aria-label={`Delete "${task.title}"`}>
                           ✕
                         </button>
-                      </form>
+                      </ServerForm>
                     )}
                   </li>
                 );
@@ -473,11 +473,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </section>
           )}
 
-          <form action={deleteEvent.bind(null, e.id)}>
+          <ServerForm action={deleteEvent.bind(null, e.id)}>
             <ConfirmButton message="Delete this wedding or event? The acts' bookings stay as normal bookings." className="btn btn-danger w-full">
               Delete
             </ConfirmButton>
-          </form>
+          </ServerForm>
         </div>
       </div>
     </div>

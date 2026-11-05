@@ -7,7 +7,7 @@ import { addActMember, addActPart, removeActMember, removeActPart } from "@/acti
 import { arrivalDetail } from "@/components/arrival-panel";
 import { AwayCard } from "@/components/away-card";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { ArrivalBadge, ArtistDot, Empty, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { punctuality } from "@/lib/arrival";
 import { requireStaff } from "@/lib/auth";
@@ -232,11 +232,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                       </Link>
                       {l.role && <span className="text-ink-500">· {l.role}</span>}
                     </span>
-                    <form action={removeActPart.bind(null, l.id)}>
+                    <ServerForm action={removeActPart.bind(null, l.id)}>
                       <ConfirmButton message={`Take ${l.child.name} out of ${artist.name}?`} className="btn btn-sm">
                         Remove
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   </li>
                 ))}
               </ul>
@@ -295,11 +295,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                         {m.person.login ? " · has app login" : ""}
                       </div>
                     </div>
-                    <form action={removeActMember.bind(null, m.id)}>
+                    <ServerForm action={removeActMember.bind(null, m.id)}>
                       <ConfirmButton message={`Take ${personName(m.person)} out of ${artist.name}?`} className="btn btn-sm">
                         Remove
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   </li>
                 ))}
               </ul>
@@ -348,11 +348,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               it with the artist&apos;s team.
             </p>
             <CopyField value={feedUrl} />
-            <form action={resetCalendarToken.bind(null, artist.id)} className="mt-3">
+            <ServerForm action={resetCalendarToken.bind(null, artist.id)} className="mt-3">
               <ConfirmButton message="Make a new link? The old one will stop working." className="btn btn-sm">
                 Make a new link
               </ConfirmButton>
-            </form>
+            </ServerForm>
           </section>
 
           {artist.notes && (

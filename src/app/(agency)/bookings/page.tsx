@@ -13,7 +13,7 @@ import { unresolvedPastWhere } from "@/lib/billing";
 import { formatMoney } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
 
-export const metadata: Metadata = { title: "Bookings" };
+export const metadata: Metadata = { title: "Venue bookings" };
 
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
@@ -23,7 +23,13 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const now = new Date();
   const dayAgo = new Date(now.getTime() - 86_400_000);
 
-  const where: Prisma.BookingWhereInput = { agencyId: user.agencyId, ...(archived ? { archivedAt: { not: null } } : {}) };
+  // Venue bookings by default: gigs that aren't part of a wedding or event (those live under Wedding bookings).
+  const showAll = archived || sp.show === "all";
+  const where: Prisma.BookingWhereInput = {
+    agencyId: user.agencyId,
+    ...(archived ? { archivedAt: { not: null } } : {}),
+    ...(showAll ? {} : { eventId: null }),
+  };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   const unresolved = sp.status === "UNRESOLVED";
   if (unresolved) Object.assign(where, unresolvedPastWhere());
@@ -61,11 +67,13 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader
-        title={archived ? "Archived bookings" : "Bookings"}
+        title={archived ? "Archived bookings" : showAll ? "All bookings" : "Venue bookings"}
         subtitle={
           archived
             ? "Tidied away: not in any list, calendar or report. Restore them, or delete them for good."
-            : "Every show from first hold to final settlement."
+            : showAll
+              ? "Every gig, including the acts booked for weddings and events."
+              : "Gigs at venues, from first hold to final settlement. Weddings and private events are under Wedding bookings."
         }
         actions={
           <>
@@ -99,9 +107,31 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         }
       />
 
+      {!archived && (
+        <div className="mb-4 flex gap-4 border-b border-ink-100 text-sm">
+          {[
+            { label: "Venue bookings", all: false },
+            { label: "All bookings, with weddings", all: true },
+          ].map((tab) => {
+            const q = new URLSearchParams(Object.entries(sp).filter(([k, v]) => k !== "show" && !!v) as [string, string][]);
+            if (tab.all) q.set("show", "all");
+            const on = tab.all === showAll;
+            return (
+              <Link
+                key={tab.label}
+                href={`/bookings${q.size ? `?${q}` : ""}`}
+                className={`-mb-px border-b-2 pb-2 ${on ? "border-ink-950 font-medium text-ink-950" : "border-transparent text-ink-500 hover:text-ink-950"}`}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
       <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           {archived && <input type="hidden" name="view" value="archived" />}
+          {showAll && !archived && <input type="hidden" name="show" value="all" />}
           <label className="min-w-48 flex-1">
             <span className="label">Search</span>
             <input name="q" defaultValue={sp.q} placeholder="Reference, venue, city, promoter, tag" className="input" />

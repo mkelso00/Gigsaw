@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteDraftQuote, getQuoteLink, newVersion, sendQuoteNow, withdrawQuote } from "@/actions/quotes";
 import { CopyField } from "@/components/client-bits";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { QuoteStatusBadge } from "@/components/quote-list";
 import { PageHeader, Stat } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -232,6 +232,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             </div>
             <dl className="mt-3 space-y-1.5 text-sm">
               <Line k="Valid until" v={q.validUntil ? formatDay(q.validUntil) : "No end date"} />
+              <Line k="When accepted" v={q.tellActs ? "The acts are emailed" : "The acts aren't emailed: tell them yourself"} />
               {q.sentAt && <Line k="Sent" v={`${when(q.sentAt)}${q.sentTo ? ` to ${q.sentTo}` : ", as a link you sent yourself"}`} />}
               {q.viewedAt && <Line k="Opened" v={when(q.viewedAt)} />}
               {q.answeredAt && <Line k={status === "ACCEPTED" ? "Accepted" : "Answered"} v={when(q.answeredAt)} />}
@@ -270,21 +271,21 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               </div>
             )}
             {canWithdraw(q) && (
-              <form action={withdrawQuote.bind(null, q.id)} className="mt-4">
+              <ServerForm action={withdrawQuote.bind(null, q.id)} className="mt-4">
                 <ConfirmButton message="Withdraw this quote? The customer's link will say it's been withdrawn and they can't accept it." className="btn w-full">
                   Withdraw
                 </ConfirmButton>
-              </form>
+              </ServerForm>
             )}
             {canEdit(q) && (
-              <form action={deleteDraftQuote.bind(null, q.id)} className="mt-4">
+              <ServerForm action={deleteDraftQuote.bind(null, q.id)} className="mt-4">
                 <ConfirmButton
                   message={q.version > 1 ? "Delete this draft? The version before it goes back to being the live one." : "Delete this draft quote?"}
                   className="btn btn-danger w-full"
                 >
                   Delete draft
                 </ConfirmButton>
-              </form>
+              </ServerForm>
             )}
           </section>
 

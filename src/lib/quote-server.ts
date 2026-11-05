@@ -154,6 +154,7 @@ export async function newQuoteVersion(user: { id: string; agencyId: string }, qu
         depositMinor: q.depositMinor,
         depositDue: q.depositDue,
         validUntil: q.validUntil && q.validUntil >= todayIn(q.timezone) ? q.validUntil : addDaysToKey(todayIn(q.timezone), 14),
+        tellActs: q.tellActs,
         message: q.message,
         terms: q.terms,
         lines: {
@@ -520,7 +521,8 @@ export async function depositLinkFor(quoteId: string) {
 export async function afterAccepted(quoteId: string) {
   const q = await prisma.quote.findUnique({ where: { id: quoteId }, include: quoteInclude });
   if (!q || q.status !== "ACCEPTED") return;
-  for (const l of q.lines) {
+  // Unticked on the quote: the bookings are made, but staff tell the acts themselves.
+  for (const l of q.tellActs ? q.lines : []) {
     if (!l.bookingId || !l.artistId) continue;
     try {
       await onConfirmed(l.bookingId);

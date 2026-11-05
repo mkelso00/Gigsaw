@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { addOwnAway, removeOwnAway } from "@/actions/availability";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { requireUser } from "@/lib/auth";
 import { blockLength, formatRange } from "@/lib/availability";
 import { getSettings, prisma } from "@/lib/db";
@@ -95,14 +95,14 @@ export default async function AwayPage() {
                     {[many ? b.artist.name : "", b.note, b.source === "AGENCY" ? "added by your agency" : ""].filter(Boolean).join(" · ") || "No note"}
                   </div>
                 </div>
-                <form action={removeOwnAway.bind(null, b.id)}>
+                <ServerForm action={removeOwnAway.bind(null, b.id)}>
                   <ConfirmButton
                     message={`Remove ${formatRange(b.startDate, b.endDate)}? You'll show as free again.`}
                     className="h-9 rounded-lg border border-white/10 px-3 text-sm text-ink-300 hover:bg-white/[0.06] hover:text-white"
                   >
                     Remove
                   </ConfirmButton>
-                </form>
+                </ServerForm>
               </li>
             ))}
           </ul>

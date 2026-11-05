@@ -59,6 +59,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
           deposit: q.depositMinor ? input(q.depositMinor) : "",
           depositDue: q.depositDue ?? "",
           validUntil: q.validUntil ?? "",
+          tellActs: q.tellActs,
           message: q.message,
           terms: q.terms,
         }}

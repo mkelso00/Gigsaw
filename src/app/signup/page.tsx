@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { forgetPendingSignup } from "@/actions/oauth";
 import { signUp } from "@/actions/signup";
 import { AuthShell } from "@/components/auth-shell";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import { OAuthButtons, OAuthNotice, ProviderLogo } from "@/components/oauth-buttons";
 import { currentUser, homePath } from "@/lib/auth";
 import { formatMoney } from "@/lib/money";
@@ -44,9 +44,9 @@ export default async function SignUpPage({
             <span className="block font-medium text-ink-950">Signing up with {PROVIDERS[linked.provider].label}</span>
             <span className="block break-all text-ink-500">{linked.email}</span>
           </span>
-          <form action={forgetPendingSignup}>
+          <ServerForm action={forgetPendingSignup}>
             <button className="btn btn-sm">Use a password</button>
-          </form>
+          </ServerForm>
         </div>
       ) : (
         <OAuthButtons providers={configuredProviders()} intent="signup" verb="Sign up" />

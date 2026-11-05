@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { askMoreActs, bookFromReply, remindAvailability, setRequestClosed } from "@/actions/availability";
 import { ActPicker } from "@/components/act-picker";
 import { AutoRefresh, CopyField } from "@/components/client-bits";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import { ArtistDot, PageHeader, Stat } from "@/components/ui";
 import { ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { requireStaff } from "@/lib/auth";
@@ -88,9 +88,9 @@ export default async function AvailabilityRequestPage({ params, searchParams }: 
                 </SubmitButton>
               </ActionForm>
             )}
-            <form action={setRequestClosed.bind(null, r.id, !r.closedAt)}>
+            <ServerForm action={setRequestClosed.bind(null, r.id, !r.closedAt)}>
               <button className="btn">{r.closedAt ? "Reopen" : "Close"}</button>
-            </form>
+            </ServerForm>
           </>
         }
       />

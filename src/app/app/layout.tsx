@@ -4,6 +4,7 @@ import { logout } from "@/actions/auth";
 import { Logo } from "@/components/logo";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
+import { ServerForm } from "@/components/forms";
 
 export const metadata: Metadata = { title: { default: "My bookings", template: "%s · Gigsaw" } };
 export const viewport: Viewport = { themeColor: "#15181c" };
@@ -18,9 +19,9 @@ export default async function ArtistAppLayout({ children }: { children: React.Re
           <Link href="/app">
             <Logo size={28} sub={settings.agencyName} />
           </Link>
-          <form action={logout}>
+          <ServerForm action={logout}>
             <button className="text-xs text-ink-400 hover:text-white">Sign out</button>
-          </form>
+          </ServerForm>
         </header>
         <main className="px-5 pt-2 pb-16">
           <p className="mb-6 text-[15px] text-ink-400">Hi {user.name.split(" ")[0]}</p>

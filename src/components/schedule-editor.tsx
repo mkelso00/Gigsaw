@@ -1,6 +1,6 @@
 import type { VenueSlot } from "@prisma/client";
 import { createSlots, deleteSlot, updateSlot } from "@/actions/slots";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { Field } from "@/components/ui";
 import { BOOKING_STATUS_LABELS, CURRENCIES, EVENT_TYPES, EVENT_TYPE_LABELS, eventTypeLabel } from "@/lib/constants";
 import { formatMoney, minorToInput } from "@/lib/money";
@@ -174,11 +174,11 @@ export function ScheduleEditor({
                       <SubmitButton>Save slot</SubmitButton>
                     </div>
                   </ActionForm>
-                  <form action={deleteSlot.bind(null, s.id)} className="mt-3">
+                  <ServerForm action={deleteSlot.bind(null, s.id)} className="mt-3">
                     <ConfirmButton message="Remove this slot? Bookings already booked in it stay booked." className="btn btn-sm btn-danger">
                       Remove slot
                     </ConfirmButton>
-                  </form>
+                  </ServerForm>
                 </div>
               </details>
             ))}

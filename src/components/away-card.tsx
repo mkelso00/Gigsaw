@@ -1,5 +1,5 @@
 import { addAway, removeAway } from "@/actions/availability";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { blockLength, formatRange } from "@/lib/availability";
 import type { AwayEntry } from "@/lib/away";
 
@@ -26,11 +26,11 @@ export function AwayCard({ artistId, actName, entries, today }: { artistId: stri
                 </div>
               </div>
               {e.own ? (
-                <form action={removeAway.bind(null, e.id)}>
+                <ServerForm action={removeAway.bind(null, e.id)}>
                   <ConfirmButton message={`Remove ${formatRange(e.startDate, e.endDate)} for ${actName}?`} className="btn btn-sm">
                     Remove
                   </ConfirmButton>
-                </form>
+                </ServerForm>
               ) : (
                 <span className="text-xs text-ink-400">On {e.actName}</span>
               )}

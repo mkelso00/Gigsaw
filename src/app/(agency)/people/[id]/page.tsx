@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deletePerson, setPersonLogin, updatePerson } from "@/actions/people";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { PersonForm } from "@/components/person-form";
 import { ArtistDot, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -151,11 +151,11 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             </ActionForm>
           </section>
 
-          <form action={deletePerson.bind(null, p.id)}>
+          <ServerForm action={deletePerson.bind(null, p.id)}>
             <ConfirmButton message={`Delete ${personName(p)}? Their acts and bookings stay.`} className="btn btn-danger w-full">
               Delete person
             </ConfirmButton>
-          </form>
+          </ServerForm>
         </div>
       </div>
     </div>

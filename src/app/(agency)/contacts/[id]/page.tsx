@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addContactNote, deleteContactNote } from "@/actions/crm";
 import { makeQuote } from "@/actions/quotes";
-import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
+import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { QuoteList, quoteRowSelect } from "@/components/quote-list";
 import { DefinitionList, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { personName } from "@/lib/person-name";
@@ -50,11 +50,11 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               Edit
             </Link>
             {contact.type !== "CLIENT" && (
-              <form action={companyToVenue.bind(null, contact.id)}>
+              <ServerForm action={companyToVenue.bind(null, contact.id)}>
                 <ConfirmButton message={`Make ${contact.company || contact.name} a venue? Its people move to the venue.`} className="btn">
                   This is a venue
                 </ConfirmButton>
-              </form>
+              </ServerForm>
             )}
             {contact.type === "CLIENT" && (
               <ActionForm action={makeQuote.bind(null, "contact", contact.id)}>
@@ -188,11 +188,11 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <span>
                       {n.author?.name ?? "Someone"} · {formatDateTime(n.createdAt, settings.defaultTimezone)}
                     </span>
-                    <form action={deleteContactNote.bind(null, n.id)}>
+                    <ServerForm action={deleteContactNote.bind(null, n.id)}>
                       <ConfirmButton message="Delete this note?" className="text-rose-600 hover:underline">
                         Delete
                       </ConfirmButton>
-                    </form>
+                    </ServerForm>
                   </div>
                 </li>
               ))}
