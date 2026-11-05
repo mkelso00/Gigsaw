@@ -1,7 +1,7 @@
 import "server-only";
 import { env } from "@/server/env";
 import { prisma } from "./db";
-import { normalisePhone, redactLinks, renderEmail, type EmailContent } from "./message-format";
+import { fromWithName, normalisePhone, redactLinks, renderEmail, type EmailContent } from "./message-format";
 import { pushTo, type PushPayload } from "./push";
 
 // Sends emails (Resend) and texts (Twilio) when their keys are set in the environment (read in src/server/env.ts),
@@ -98,6 +98,16 @@ async function record(
 
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
+/** Message kinds that come from Gigsaw itself rather than from the business. */
+const PLATFORM_KINDS: MessageKind[] = ["PASSWORD_RESET", "WELCOME"];
+
+/** The business name to send as, or null to keep the configured sender name. */
+async function senderName(agencyId: string | null | undefined, kind: MessageKind) {
+  if (!agencyId || PLATFORM_KINDS.includes(kind)) return null;
+  const s = await prisma.settings.findUnique({ where: { agencyId }, select: { agencyName: true, agency: { select: { name: true } } } }).catch(() => null);
+  return s?.agencyName || s?.agency?.name || null;
+}
+
 /**
  * Send a branded email. `replyTo` should be a real person or inbox (e.g. the agency's email),
  * so replies don't go to the no-reply sending address.
@@ -115,6 +125,9 @@ export async function sendEmail(
   const { html, text } = renderEmail(m.email);
   const replyTo = m.replyTo?.trim();
   const provider = env().email;
+  // Customers, acts and staff see the business's own name as the sender. Gigsaw's own account
+  // emails (password resets, welcomes) keep the name in MAIL_FROM.
+  const from = provider ? fromWithName(provider.from, env().mailFromAddress, await senderName(m.agencyId, m.kind)) : "";
   const send = provider
     ? () =>
         post("https://api.resend.com/emails", {
@@ -124,7 +137,7 @@ export async function sendEmail(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: provider.from,
+            from,
             to: [to],
             subject: m.subject,
             text,

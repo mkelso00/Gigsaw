@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalisePhone, redactLinks, renderEmail } from "@/lib/message-format";
+import { fromWithName, normalisePhone, redactLinks, renderEmail } from "@/lib/message-format";
 
 describe("normalisePhone", () => {
   it("turns UK mobile numbers into international format", () => {
@@ -74,5 +74,22 @@ describe("redactLinks", () => {
     const { text } = renderEmail({ title: "Reset your password", cta: { label: "Choose a new password", url: "https://gigsaw.live/reset-password/abcdef" } });
     expect(redactLinks(text)).toContain("Choose a new password: https://gigsaw.live/reset-password/…");
     expect(redactLinks(text)).not.toContain("abcdef");
+  });
+});
+
+describe("fromWithName", () => {
+  const base = "Gigsaw <alerts@send.gigsaw.live>";
+  const address = "alerts@send.gigsaw.live";
+  it("sends as the business name with Gigsaw's address", () => {
+    expect(fromWithName(base, address, "Suave Agency")).toBe('"Suave Agency" <alerts@send.gigsaw.live>');
+  });
+  it("keeps the configured sender when there's no name or address", () => {
+    expect(fromWithName(base, address, "")).toBe(base);
+    expect(fromWithName(base, address, null)).toBe(base);
+    expect(fromWithName(base, null, "Suave Agency")).toBe(base);
+  });
+  it("can't break the header", () => {
+    expect(fromWithName(base, address, 'Bad "Name" <x@y.z>\r\nBcc: a@b.c')).toBe('"Bad Name x@y.z Bcc: a@b.c" <alerts@send.gigsaw.live>');
+    expect(fromWithName(base, address, "A".repeat(80))).toBe(`"${"A".repeat(60)}" <alerts@send.gigsaw.live>`);
   });
 });

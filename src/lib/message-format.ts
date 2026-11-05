@@ -117,3 +117,19 @@ ${c.intro ? para(c.intro) : ""}${highlight}${changes}${rows}${cta}${c.outro ? pa
     .join("\n\n");
   return { html, text };
 }
+
+/**
+ * The From line for an email sent on behalf of a business: its name with Gigsaw's verified
+ * sending address, e.g. `"Suave Agency" <alerts@send.gigsaw.live>`. The name is cleaned so it
+ * can't break the header (no quotes, angle brackets or line breaks) and kept to 60 characters.
+ * With no usable name or address, the configured MAIL_FROM is used as it is.
+ */
+export function fromWithName(mailFrom: string, address: string | null, name: string | null | undefined) {
+  const clean = (name ?? "")
+    .replace(/[\r\n\t"<>\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60)
+    .trim();
+  return clean && address ? `"${clean}" <${address}>` : mailFrom;
+}
