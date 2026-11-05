@@ -20,6 +20,7 @@ import {
   depositLinkFor,
   newQuoteVersion,
   QuoteError,
+  publishQuote,
   sendQuote,
 } from "@/lib/quote-server";
 import { canWithdraw, looksLikeQuoteToken, parseAmount, parseQuoteLines, quoteRef, quoteTotals } from "@/lib/quotes";
@@ -118,6 +119,17 @@ export async function sendQuoteNow(quoteId: string, _: FormState, form: FormData
     await logActivity(user, "QUOTE", quoteId, r.resent ? `sent quote ${quoteRef(r.quote)} again` : `sent quote ${quoteRef(r.quote)}`, str(form, "to"));
     revalidatePath("/", "layout");
     return { ok: `Quote ${r.resent ? "sent again" : "sent"} to ${str(form, "to").toLowerCase()}.` };
+  });
+}
+
+/** Give the quote its customer link without emailing it, for staff to send themselves. */
+export async function getQuoteLink(quoteId: string, _: FormState): Promise<FormState> {
+  const user = await requireStaff();
+  return quoteForm(async () => {
+    const q = await publishQuote(user, quoteId);
+    await logActivity(user, "QUOTE", quoteId, `made a link for quote ${quoteRef(q)}`);
+    revalidatePath("/", "layout");
+    return { ok: "Your link is ready. Copy it and send it to the customer." };
   });
 }
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteDraftQuote, newVersion, sendQuoteNow, withdrawQuote } from "@/actions/quotes";
+import { deleteDraftQuote, getQuoteLink, newVersion, sendQuoteNow, withdrawQuote } from "@/actions/quotes";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
 import { QuoteStatusBadge } from "@/components/quote-list";
@@ -232,7 +232,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             </div>
             <dl className="mt-3 space-y-1.5 text-sm">
               <Line k="Valid until" v={q.validUntil ? formatDay(q.validUntil) : "No end date"} />
-              {q.sentAt && <Line k="Sent" v={`${when(q.sentAt)}${q.sentTo ? ` to ${q.sentTo}` : ""}`} />}
+              {q.sentAt && <Line k="Sent" v={`${when(q.sentAt)}${q.sentTo ? ` to ${q.sentTo}` : ", as a link you sent yourself"}`} />}
               {q.viewedAt && <Line k="Opened" v={when(q.viewedAt)} />}
               {q.answeredAt && <Line k={status === "ACCEPTED" ? "Accepted" : "Answered"} v={when(q.answeredAt)} />}
               {q.withdrawnAt && <Line k="Withdrawn" v={when(q.withdrawnAt)} />}
@@ -254,10 +254,19 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                 <p className="hint">The email uses your “Your quote” wording from Settings, Notifications.</p>
               </ActionForm>
             )}
+            {canSend(q) && (
+              <ActionForm action={getQuoteLink.bind(null, q.id)} className="mt-3">
+                <SubmitButton className="btn w-full" pendingText="Making the link…">
+                  Get a link to send yourself
+                </SubmitButton>
+                <p className="hint">For WhatsApp, a text or your own email. No email is sent from Gigsaw.</p>
+              </ActionForm>
+            )}
             {q.token && (
               <div className="mt-4 border-t border-ink-100 pt-4">
-                <span className="label">Customer&apos;s link</span>
+                <span className="label">Link to send the customer</span>
                 <CopyField value={quoteUrl(q.token)} />
+                <p className="hint">Anyone with this link can see the quote and sign it, so send it only to the customer.</p>
               </div>
             )}
             {canWithdraw(q) && (

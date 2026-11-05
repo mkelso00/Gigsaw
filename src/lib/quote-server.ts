@@ -203,6 +203,34 @@ export function readyToSend(q: FullQuote, today: string): string | null {
  * Email the quote to the customer: the first time (which makes this version's private link) or
  * again. The first send is a claim on the draft, so two presses send it once.
  */
+/**
+ * Make a draft quote live without emailing it: it gets its customer link, which staff copy and
+ * send themselves (WhatsApp, a text, their own email). Same checks and claim as the first send.
+ */
+export async function publishQuote(user: { agencyId: string }, quoteId: string) {
+  const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
+  if (!q) throw new QuoteError("Quote not found");
+  if (!canSend(q)) throw new QuoteError("This quote already has its link.");
+  const problem = readyToSend(q, todayIn(q.timezone));
+  if (problem) throw new QuoteError(problem);
+  const token = newQuoteToken();
+  const claimed = await prisma.quote.updateMany({
+    where: { id: q.id, status: "DRAFT", supersededById: null },
+    data: {
+      status: "SENT",
+      sentAt: new Date(),
+      sentTo: "",
+      token,
+      tokenExpiresAt: tokenExpiry(
+        q.lines.map((l) => l.date),
+        q.validUntil,
+      ),
+    },
+  });
+  if (claimed.count !== 1) throw new QuoteError("This quote has just been sent.");
+  return q;
+}
+
 export async function sendQuote(user: { id: string; agencyId: string; email: string }, quoteId: string, to: string) {
   const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
   if (!q) throw new QuoteError("Quote not found");

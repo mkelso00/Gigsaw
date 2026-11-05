@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, startTransition, useActionState, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { formErrorFromDigest, type FormState } from "@/lib/forms";
 
@@ -30,6 +31,16 @@ export function SubmitButton({
 
 const PendingContext = createContext(false);
 
+/** Where a server action's redirect() is sending the browser, from the error Next hands back for it. */
+function redirectFrom(e: unknown): { url: string; replace: boolean } | null {
+  const digest = typeof e === "object" && e !== null && "digest" in e ? (e as { digest: unknown }).digest : null;
+  if (typeof digest !== "string" || !digest.startsWith("NEXT_REDIRECT;")) return null;
+  // "NEXT_REDIRECT;push;/quotes/abc;307;". The address itself can hold ";", so take everything between type and status.
+  const parts = digest.split(";");
+  const url = parts.slice(2, -2).join(";");
+  return url ? { url, replace: parts[1] === "replace" } : null;
+}
+
 /** Everything a form would send, as one string, to tell whether anything has changed. */
 function snapshot(form: HTMLFormElement) {
   return JSON.stringify([...new FormData(form)].map(([k, v]) => [k, typeof v === "string" ? v : v.name]));
@@ -56,16 +67,58 @@ export function ActionForm({
   className?: string;
   saveBar?: boolean | { label: string };
 }) {
-  const [state, formAction, pending] = useActionState(async (prev: FormState, data: FormData): Promise<FormState> => {
+  // The action runs outside a React transition, with its own busy flag. Inside a transition (useActionState) the
+  // button stayed on "Saving…" for good about one save in three: the server had saved and sent the new page back,
+  // but React never finished showing it. Here the button frees itself once the server answers, and the page is
+  // asked for again so it always shows what was saved.
+  const router = useRouter();
+  const [state, setState] = useState<FormState>(undefined);
+  const [pending, setPending] = useState(false);
+  const busy = useRef(false);
+  const [, setCrash] = useState();
+  /** Opens where the action sent us. True if that's another page, false if it's this one (just shown again). */
+  const go = (to: { url: string; replace: boolean }) => {
+    if (to.replace) router.replace(to.url);
+    else router.push(to.url);
+    // Next occasionally never finishes moving to the new page. If the address hasn't changed after a few
+    // seconds, open the page directly so nobody is left looking at a form that has already been saved.
+    const target = new URL(to.url, window.location.href);
+    const here = () => window.location.pathname + window.location.search;
+    if (here() === target.pathname + target.search) return false;
+    setTimeout(() => {
+      if (here() !== target.pathname + target.search) window.location.assign(target.href);
+    }, 4000);
+    return true;
+  };
+  const formAction = async (data: FormData) => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    let moving = false;
     try {
-      return await action(prev, data);
+      const next = await action(state, data);
+      setState(next);
+      router.refresh();
     } catch (e) {
+      // A redirect from the action (e.g. "Save" then back to the page) arrives as an error: go there.
+      const to = redirectFrom(e);
       // A refusal thrown before the action's own error handling (e.g. a locked plan) still shows as a message.
-      const message = formErrorFromDigest(e);
-      if (message) return { error: message };
-      throw e;
+      const message = to ? null : formErrorFromDigest(e);
+      // The button stays on "Saving…" while the next page opens, so it can't be pressed twice.
+      if (to) moving = go(to);
+      else if (message) setState({ error: message });
+      // Anything else goes to the page's error screen, as it would from a render.
+      else
+        setCrash(() => {
+          throw e;
+        });
+    } finally {
+      if (!moving) {
+        busy.current = false;
+        setPending(false);
+      }
     }
-  }, undefined);
+  };
   const ref = useRef<HTMLFormElement>(null);
   const [dismissed, setDismissed] = useState<FormState>(undefined);
   // What the form held when it was loaded or last saved, to tell when something has changed.
@@ -110,7 +163,7 @@ export function ActionForm({
         e.preventDefault();
         // Include the button that was pressed, so "Save anyway" can send confirmed=yes.
         const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
-        startTransition(() => formAction(data));
+        void formAction(data);
       }}
       onChange={() => {
         // A warning was about what the form held then: once something changes it's checked again on the next save,
