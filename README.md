@@ -158,13 +158,13 @@ Every push to `main` deploys on Railway. `railway.json` in the repo sets out the
 
 1. **Build**: `npm run build` (Nixpacks).
 2. **Pre-deploy**: `npx prisma migrate deploy` applies any new migrations. It runs once per deploy, before the new version starts, while the old version is still serving. If it fails, the deploy stops there and the old version keeps running.
-3. **Start**: `npm run start:app` (just `next start`, no migrations).
+3. **Start**: `npm run start:app` runs `prisma migrate deploy` again and then `next start`. This is a safety net: on one live project the pre-deploy step didn't run (a command set in Railway's own settings can override `railway.json`), the new code went live without its new column, and quotes failed. Running it again is safe: with nothing new to apply it does nothing, and Prisma locks the database so two copies starting at once can't both apply the same migration.
 4. **Health check**: Railway calls `GET /api/health` and only switches traffic to the new version once it answers 200 (it waits up to 2 minutes). The old version is then stopped.
 5. **Restarts**: if the app crashes, Railway restarts it, up to 10 times in a row.
 
 `/api/health` is public and returns `{ status, db, time, version }`: 200 when the database answers within 2 seconds, 503 when it doesn't. `version` is the deployed commit. Railway only uses it during a deploy, so to be told about problems later, point an uptime monitor (for example Better Stack or UptimeRobot) at `https://<your site>/api/health`.
 
-For local or manual use, `npm start` still runs the migrations first and then starts the app, so `npm run build && npm start` works as before. Use `npm run start:app` to start without migrating.
+For local or manual use, `npm start` also runs the migrations first and then starts the app. To start without migrating, run `npx next start`.
 
 ### If a migration fails
 
