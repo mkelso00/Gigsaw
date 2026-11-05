@@ -175,10 +175,10 @@ export const TEMPLATES: TemplateDef[] = [
     key: "QUOTE",
     group: "CUSTOMERS",
     label: "Your quote",
-    hint: "Sent when you press Send on a quote. The link to see it and accept or decline is always added, with the total, deposit and valid-until date.",
+    hint: "Sent when you press Send on a quote. The link to see it and sign or decline is always added, with the total, deposit and valid-until date.",
     example: {
       subject: "Your quote from {business}: {event}",
-      intro: "Hi {first_name}, thank you for your enquiry. Here's your quote for {event} on {date}. You can accept it online in a minute.",
+      intro: "Hi {first_name}, thank you for your enquiry. Here's your quote for {event} on {date}. You can sign and approve it online in a minute.",
     },
     placeholders: ["first_name", "event", "date", "total", "valid_until", "business"],
     manual: true,

@@ -288,7 +288,7 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
   return { quote: q, resent: !first, sent: status === "SENT" || status === "NOT_SENT" };
 }
 
-export type QuoteAnswer = { name: string; note: string; ip: string; agent: string };
+export type QuoteAnswer = { name: string; note: string; ip: string; agent: string; signature?: string };
 
 /**
  * The customer accepts. In one transaction: claim the quote (only one still out with them, not
@@ -314,7 +314,15 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
         const now = new Date();
         const claimed = await tx.quote.updateMany({
           where: { id: q.id, token, status: { in: OPEN_STATUSES }, supersededById: null, OR: [{ validUntil: null }, { validUntil: { gte: today } }] },
-          data: { status: "ACCEPTED", answeredAt: now, answerName: answer.name, answerNote: answer.note, answerIp: answer.ip, answerAgent: answer.agent },
+          data: {
+            status: "ACCEPTED",
+            answeredAt: now,
+            answerName: answer.name,
+            answerNote: answer.note,
+            answerIp: answer.ip,
+            answerAgent: answer.agent,
+            answerSignature: answer.signature ?? "",
+          },
         });
         if (claimed.count !== 1) return null;
 

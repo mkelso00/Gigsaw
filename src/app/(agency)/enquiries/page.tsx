@@ -96,8 +96,12 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
   return (
     <div>
       <PageHeader
-        title="Enquiries"
-        subtitle="From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Make a quote from any of them."
+        title={view === "quotes" ? "Quotes" : "Enquiries"}
+        subtitle={
+          view === "quotes"
+            ? "Every quote you've sent, newest first. To make one, open an enquiry or a customer and press Make a quote. The customer signs and approves it online, and it becomes a booked wedding or event."
+            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Make a quote from any of them."
+        }
         actions={
           <>
             <Link href="/enquiries/new" className="btn btn-primary">

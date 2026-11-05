@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { acceptQuoteAnswer, declineQuoteAnswer } from "@/actions/quotes";
+import { PrintButton } from "@/components/client-bits";
+import { SignaturePad } from "@/components/signature-pad";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -14,7 +16,7 @@ import { formatDateTime, localDateKey } from "@/lib/time";
 
 // The customer's quote: a private link (no login), made for their phone. It shows what's quoted,
 // when and where, and what they pay (the acts' prices, the booking fee and VAT), never what the
-// acts are paid. They accept (typing their name) or decline. Once answered, withdrawn or replaced
+// acts are paid. They sign and approve (typing their name and drawing a signature) or decline. Once answered, withdrawn or replaced
 // by a newer version, the same link only shows where things stand.
 
 export const metadata: Metadata = { title: "Your quote", robots: { index: false, follow: false } };
@@ -114,8 +116,17 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
         <div role="status" className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-emerald-950">
           <div className="text-lg font-semibold">Thank you, you&apos;re booked</div>
           <p className="mt-1 text-sm">
-            Accepted by {q.answerName} on {formatDateTime(q.answeredAt!, q.timezone)}. We&apos;ve emailed you a confirmation.
+            Signed and approved by {q.answerName} on {formatDateTime(q.answeredAt!, q.timezone)}. We&apos;ve emailed you a confirmation.
           </p>
+          {q.answerSignature && (
+            <div className="mt-3 inline-block rounded-lg bg-white px-3 py-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={q.answerSignature} alt={`Signature of ${q.answerName}`} className="h-12 max-w-[240px] object-contain" />
+            </div>
+          )}
+          <div className="no-print mt-3">
+            <PrintButton />
+          </div>
           {payLink && (
             <a href={payUrl(payLink.token)} className="btn btn-primary mt-4 h-12 w-full text-base">
               Pay your deposit of {m(q.depositMinor)}
@@ -187,12 +198,16 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
       {!problem && (
         <>
           <ActionForm action={acceptQuoteAnswer.bind(null, token)} className="card card-pad">
-            <h2 className="text-xl font-semibold tracking-tight">Accept your quote</h2>
-            <p className="mt-1 text-sm text-ink-600">Accepting books everything above with {brand}.</p>
+            <h2 className="text-xl font-semibold tracking-tight">Sign and approve your quote</h2>
+            <p className="mt-1 text-sm text-ink-600">Signing books everything above with {brand}.</p>
             <label className="mt-5 block">
               <span className="label">Your full name</span>
               <input name="name" required autoComplete="name" maxLength={120} defaultValue={q.contact?.name ?? ""} className="input h-12 text-base" />
             </label>
+            <div className="mt-4">
+              <span className="label">Your signature</span>
+              <SignaturePad name="signature" />
+            </div>
             <label className="mt-4 block">
               <span className="label">A message for us (optional)</span>
               <textarea name="note" rows={3} maxLength={2000} className="input text-base" />
@@ -205,9 +220,11 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
               </span>
             </label>
             <SubmitButton className="btn btn-primary mt-5 h-12 w-full text-base" pendingText="Booking…">
-              Accept and book
+              Sign and approve
             </SubmitButton>
-            <p className="mt-3 text-center text-xs text-ink-500">We record your name, the time, your IP address and device, so there&apos;s a clear record.</p>
+            <p className="mt-3 text-center text-xs text-ink-500">
+              We record your name, signature, the time, your IP address and device, so there&apos;s a clear record.
+            </p>
           </ActionForm>
 
           <details className="mt-4">

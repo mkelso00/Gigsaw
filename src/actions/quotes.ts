@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { requireStaff } from "@/lib/auth";
 import { EVENT_TYPES } from "@/lib/constants";
-import { checkSignerName, clientIp } from "@/lib/contract-doc";
+import { checkSignerName, clientIp, checkSignature } from "@/lib/contract-doc";
 import { logActivity, prisma } from "@/lib/db";
 import { isRealDate } from "@/lib/enquiries";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
@@ -175,14 +175,16 @@ async function answerFrom(form: FormData, field: string) {
   };
 }
 
-/** The customer accepts: their typed name and a tick, and an optional message. */
+/** The customer accepts: their typed name, a drawn signature, a tick, and an optional message. */
 export async function acceptQuoteAnswer(token: string, _: FormState, form: FormData): Promise<FormState> {
   if (!looksLikeQuoteToken(token)) return { error: "This link isn't valid." };
   const res = await quoteForm(async () => {
     const name = checkSignerName(str(form, "name"));
     if (!name) throw new FormError("Type your full name");
+    const signature = checkSignature(str(form, "signature"));
+    if (!signature) throw new FormError("Draw your signature in the box");
     if (form.get("agree") !== "on") throw new FormError("Tick the box to say you accept the quote");
-    const done = await acceptQuote(token, { name, ...(await answerFrom(form, "note")) });
+    const done = await acceptQuote(token, { name, signature, ...(await answerFrom(form, "note")) });
     // A second tap (or another device) finds it already accepted: nothing more happens.
     if (!done) return;
     try {

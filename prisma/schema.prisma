@@ -1084,18 +1084,20 @@ model Quote {
   terms           String  @default("")
 
   // The customer's private link, made when this version is first sent. It stops opening at tokenExpiresAt.
-  token          String?   @unique
-  tokenExpiresAt DateTime?
-  sentTo         String    @default("")
-  sentAt         DateTime?
-  viewedAt       DateTime?
-  answeredAt     DateTime? // accepted or declined
-  withdrawnAt    DateTime?
+  token           String?   @unique
+  tokenExpiresAt  DateTime?
+  sentTo          String    @default("")
+  sentAt          DateTime?
+  viewedAt        DateTime?
+  answeredAt      DateTime? // accepted or declined
+  withdrawnAt     DateTime?
   // The customer's answer: their typed name (accepting), a message or reason, and where it came from.
-  answerName     String    @default("")
-  answerNote     String    @default("")
-  answerIp       String    @default("")
-  answerAgent    String    @default("")
+  answerName      String    @default("")
+  answerNote      String    @default("")
+  answerIp        String    @default("")
+  answerAgent     String    @default("")
+  // Accepting: the customer's drawn signature, a PNG data URL (checked like contract signatures).
+  answerSignature String    @default("")
 
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt

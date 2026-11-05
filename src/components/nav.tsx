@@ -25,6 +25,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
       { href: "/bookings", label: "All bookings", icon: "bookings" },
       { href: "/events", label: "Weddings & events", icon: "heart" },
       { href: "/enquiries", label: "Enquiries", icon: "inbox" },
+      { href: "/quotes", label: "Quotes", icon: "doc" },
     ],
   },
   {

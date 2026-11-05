@@ -105,9 +105,18 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       {status === "ACCEPTED" && (
         <div className="mb-6 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
           <div className="font-semibold">
-            Accepted by {q.answerName} on {when(q.answeredAt!)}
+            Signed and approved by {q.answerName} on {when(q.answeredAt!)}
           </div>
+          {q.answerSignature && (
+            <div className="mt-2 inline-block rounded-lg bg-white px-3 py-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={q.answerSignature} alt={`Signature of ${q.answerName}`} className="h-12 max-w-[240px] object-contain" />
+            </div>
+          )}
           {q.answerNote && <p className="mt-1 whitespace-pre-line">“{q.answerNote}”</p>}
+          <p className="mt-1 text-xs text-emerald-900/70">
+            Recorded: {q.answerIp || "IP not known"} · {q.answerAgent.slice(0, 80) || "device not known"}
+          </p>
           {q.event && (
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={`/events/${q.event.id}`} className="btn btn-sm btn-primary">
