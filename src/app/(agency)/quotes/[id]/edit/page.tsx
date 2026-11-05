@@ -11,7 +11,7 @@ import { defaultBookingFee, minorToInput } from "@/lib/money";
 import { canEdit, quoteRef } from "@/lib/quotes";
 import { localDateKey } from "@/lib/time";
 
-export const metadata: Metadata = { title: "Edit quote" };
+export const metadata: Metadata = { title: "Edit proposal" };
 export const dynamic = "force-dynamic";
 
 export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,12 +36,12 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         eyebrow={
           <>
             <Link href={`/quotes/${q.id}`} className="hover:underline">
-              Quote {quoteRef(q)}
+              Proposal {quoteRef(q)}
             </Link>
             {q.contact ? ` · for ${q.contact.name}` : ""}
           </>
         }
-        title={q.version > 1 ? `Edit version ${q.version}` : "Edit quote"}
+        title={q.version > 1 ? `Edit version ${q.version}` : "Edit proposal"}
         subtitle="Prices and times are what the customer sees. The act's fee and what you make are only ever shown to your team."
       />
       <QuoteEditor

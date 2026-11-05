@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   const cur = settings.defaultCurrency;
 
   const todayKey = localDateKey(now, settings.defaultTimezone);
-  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, quotesOut, quotesAccepted] = await Promise.all([
+  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, quotesOut] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
@@ -91,12 +91,6 @@ export default async function DashboardPage() {
         status: { in: ["SENT", "VIEWED"] },
         OR: [{ validUntil: null }, { validUntil: { gte: todayKey } }],
       },
-    }),
-    prisma.quote.findMany({
-      where: { agencyId: user.agencyId, status: "ACCEPTED", answeredAt: { gte: new Date(now.getTime() - 14 * DAY) }, event: { contracts: { none: {} } } },
-      orderBy: { answeredAt: "desc" },
-      select: { id: true, title: true, eventId: true },
-      take: 20,
     }),
   ]);
 
@@ -170,7 +164,7 @@ export default async function DashboardPage() {
       count: enquiries.length,
       text: (
         <>
-          new enquir{enquiries.length === 1 ? "y" : "ies"}
+          new lead{enquiries.length === 1 ? "" : "s"}
           <span className="text-ink-500">
             {" "}
             · latest{" "}
@@ -183,26 +177,12 @@ export default async function DashboardPage() {
       href: "/enquiries",
       action: "Reply",
     });
-  if (quotesAccepted.length > 0)
-    needs.push({
-      key: "quotes-accepted",
-      tone: "soon",
-      count: quotesAccepted.length,
-      text: (
-        <>
-          quote{quotesAccepted.length === 1 ? "" : "s"} accepted: send the contract to sign
-          <span className="text-ink-500"> · {quotesAccepted[0].title}</span>
-        </>
-      ),
-      href: quotesAccepted[0].eventId ? `/events/${quotesAccepted[0].eventId}#contract` : `/quotes/${quotesAccepted[0].id}`,
-      action: "Contract",
-    });
   if (quotesOut > 0)
     needs.push({
       key: "quotes-out",
       tone: "info",
       count: quotesOut,
-      text: `quote${quotesOut === 1 ? " is" : "s are"} waiting for the customer's answer`,
+      text: `proposal${quotesOut === 1 ? " is" : "s are"} waiting for the customer's answer`,
       href: "/enquiries?view=quotes",
       action: "See",
     });

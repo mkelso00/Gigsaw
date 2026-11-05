@@ -84,21 +84,21 @@ export const canNewVersion = (q: QuoteState) => !q.supersededById && ["SENT", "V
 
 /** Why the customer can't answer, in their words, or null if they can. */
 export function answerProblem(q: QuoteState, today: string): string | null {
-  if (q.supersededById) return "This quote has been updated.";
+  if (q.supersededById) return "This proposal has been updated.";
   switch (effectiveStatus(q, today)) {
     case "SENT":
     case "VIEWED":
       return null;
     case "ACCEPTED":
-      return "You've accepted this quote.";
+      return "You've accepted this proposal.";
     case "DECLINED":
-      return "You've declined this quote.";
+      return "You've declined this proposal.";
     case "EXPIRED":
-      return "This quote has expired.";
+      return "This proposal has expired.";
     case "WITHDRAWN":
-      return "This quote has been withdrawn.";
+      return "This proposal has been withdrawn.";
     default:
-      return "This quote isn't ready yet.";
+      return "This proposal isn't ready yet.";
   }
 }
 
@@ -285,7 +285,7 @@ export function parseQuoteLines(raw: string, currency: string, own: { artistIds:
     throw new FormError("The lines couldn't be read. Reload the page and try again.");
   }
   if (!Array.isArray(list)) throw new FormError("The lines couldn't be read. Reload the page and try again.");
-  if (list.length > MAX_LINES) throw new FormError(`A quote can have up to ${MAX_LINES} lines`);
+  if (list.length > MAX_LINES) throw new FormError(`A proposal can have up to ${MAX_LINES} lines`);
   return list.map((item, i) => {
     const r = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
     const n = list.length > 1 ? ` on line ${i + 1}` : "";

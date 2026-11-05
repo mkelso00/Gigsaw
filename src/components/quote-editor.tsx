@@ -105,9 +105,9 @@ export function QuoteEditor({
 
       <section className="card card-pad grid gap-4 sm:grid-cols-[1fr_220px]">
         <label className="block">
-          <span className="label">Name of the quote</span>
+          <span className="label">Name of the proposal</span>
           <input name="title" required maxLength={120} defaultValue={values.title} className="input" placeholder="e.g. Hannah and Sam's wedding" />
-          <span className="hint block">The customer sees this at the top of their quote.</span>
+          <span className="hint block">The customer sees this at the top of their proposal.</span>
         </label>
         <label className="block">
           <span className="label">Type of event</span>
@@ -123,7 +123,7 @@ export function QuoteEditor({
 
       <section>
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-[17px] font-semibold tracking-tight">What&apos;s quoted</h2>
+          <h2 className="text-[17px] font-semibold tracking-tight">What&apos;s proposed</h2>
           <span className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">
             {lines.length} line{lines.length === 1 ? "" : "s"}
           </span>
@@ -348,12 +348,12 @@ export function QuoteEditor({
           </label>
           <label className="block sm:col-span-2">
             <span className="label">A note to the customer</span>
-            <textarea name="message" rows={3} defaultValue={values.message} maxLength={3000} className="input" placeholder="Shown at the top of their quote" />
+            <textarea name="message" rows={3} defaultValue={values.message} maxLength={3000} className="input" placeholder="Shown at the top of their proposal" />
           </label>
           <label className="block sm:col-span-2">
             <span className="label">Terms</span>
             <textarea name="terms" rows={5} defaultValue={values.terms} maxLength={20000} className="input" />
-            <span className="hint block">Filled in from your contract wording in Settings. Change it for this quote if you need to.</span>
+            <span className="hint block">Filled in from your contract wording in Settings. Change it for this proposal if you need to.</span>
           </label>
         </div>
 
@@ -392,7 +392,7 @@ export function QuoteEditor({
             {totals.costMissing && <p className="mt-2 text-xs text-amber-800">Some lines have no act&apos;s fee yet, so what we make is a guess.</p>}
             {depositMinor > totals.totalMinor && totals.totalMinor > 0 && <p className="mt-2 text-xs text-rose-700">The deposit is more than the total.</p>}
           </div>
-          <SubmitButton className="btn btn-primary w-full">Save quote</SubmitButton>
+          <SubmitButton className="btn btn-primary w-full">Save proposal</SubmitButton>
         </aside>
       </section>
     </ActionForm>

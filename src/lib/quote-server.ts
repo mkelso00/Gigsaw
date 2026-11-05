@@ -122,7 +122,7 @@ export async function createDraftQuote(user: { id: string; agencyId: string }, f
       if (!isUnique(e)) throw e;
     }
   }
-  throw new Error("Could not allocate a quote number");
+  throw new Error("Could not allocate a proposal number");
 }
 
 /**
@@ -133,9 +133,9 @@ export async function createDraftQuote(user: { id: string; agencyId: string }, f
 export async function newQuoteVersion(user: { id: string; agencyId: string }, quoteId: string) {
   return prisma.$transaction(async (tx) => {
     const q = await tx.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } } } });
-    if (!q) throw new QuoteError("Quote not found");
+    if (!q) throw new QuoteError("Proposal not found");
     if (!canNewVersion(q))
-      throw new QuoteError(q.status === "ACCEPTED" ? "This quote has been accepted: change the bookings instead." : "This quote can't be copied.");
+      throw new QuoteError(q.status === "ACCEPTED" ? "This proposal has been accepted: change the bookings instead." : "This proposal can't be copied.");
     const top = await tx.quote.aggregate({ where: { agencyId: user.agencyId, number: q.number }, _max: { version: true } });
     const next = await tx.quote.create({
       data: {
@@ -180,7 +180,7 @@ export async function newQuoteVersion(user: { id: string; agencyId: string }, qu
       where: { id: q.id, supersededById: null, status: { in: ["SENT", "VIEWED", "DECLINED", "EXPIRED", "WITHDRAWN"] } },
       data: { supersededById: next.id },
     });
-    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this quote. Reload the page.");
+    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this proposal. Reload the page.");
     return next;
   });
 }
@@ -210,8 +210,8 @@ export function readyToSend(q: FullQuote, today: string): string | null {
  */
 export async function publishQuote(user: { agencyId: string }, quoteId: string) {
   const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
-  if (!q) throw new QuoteError("Quote not found");
-  if (!canSend(q)) throw new QuoteError("This quote already has its link.");
+  if (!q) throw new QuoteError("Proposal not found");
+  if (!canSend(q)) throw new QuoteError("This proposal already has its link.");
   const problem = readyToSend(q, todayIn(q.timezone));
   if (problem) throw new QuoteError(problem);
   const token = newQuoteToken();
@@ -228,16 +228,16 @@ export async function publishQuote(user: { agencyId: string }, quoteId: string) 
       ),
     },
   });
-  if (claimed.count !== 1) throw new QuoteError("This quote has just been sent.");
+  if (claimed.count !== 1) throw new QuoteError("This proposal has just been sent.");
   return q;
 }
 
 export async function sendQuote(user: { id: string; agencyId: string; email: string }, quoteId: string, to: string) {
   const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
-  if (!q) throw new QuoteError("Quote not found");
+  if (!q) throw new QuoteError("Proposal not found");
   const today = todayIn(q.timezone);
   const first = canSend(q);
-  if (!first && !canResend(q, today)) throw new QuoteError("This quote can't be sent. Make a new version to change it.");
+  if (!first && !canResend(q, today)) throw new QuoteError("This proposal can't be sent. Make a new version to change it.");
   const email = to.trim().toLowerCase();
   if (!isEmail(email)) throw new QuoteError("Enter the customer's email address");
   const problem = readyToSend(q, today);
@@ -259,13 +259,13 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
         ),
       },
     });
-    if (claimed.count !== 1) throw new QuoteError("This quote has just been sent.");
+    if (claimed.count !== 1) throw new QuoteError("This proposal has just been sent.");
   } else {
     const claimed = await prisma.quote.updateMany({
       where: { id: q.id, status: { in: OPEN_STATUSES }, supersededById: null },
       data: { sentAt: new Date(), sentTo: email },
     });
-    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this quote.");
+    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this proposal.");
   }
 
   const brand = brandOf(q);
@@ -287,15 +287,15 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
     agencyId: q.agencyId,
     to: email,
     replyTo: agent?.email || user.email || q.agency.settings?.agencyEmail,
-    subject: w.subject ?? `Your quote from ${brand}: ${q.title}`,
+    subject: w.subject ?? `Your proposal from ${brand}: ${q.title}`,
     email: {
       brand,
       preheader: `${m(t.totalMinor)} for ${q.title}`,
-      title: q.version > 1 ? "Your updated quote" : "Your quote",
+      title: q.version > 1 ? "Your updated proposal" : "Your proposal",
       intro:
         w.intro ??
-        `Hi${name ? ` ${name}` : ""}, thank you for getting in touch. Here's your ${q.version > 1 ? "updated " : ""}quote for ${q.title} on ${formatDay(firstDate)}. You can read it and accept it online: it takes a minute and works on your phone.`,
-      highlight: q.version > 1 ? { label: "Updated", value: "This replaces the quote we sent before" } : undefined,
+        `Hi${name ? ` ${name}` : ""}, thank you for getting in touch. Here's your ${q.version > 1 ? "updated " : ""}proposal for ${q.title} on ${formatDay(firstDate)}. You can read it and accept it online: it takes a minute and works on your phone.`,
+      highlight: q.version > 1 ? { label: "Updated", value: "This replaces the proposal we sent before" } : undefined,
       rows: [
         ...q.lines.map(
           (l, i) =>
@@ -310,7 +310,7 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
         ...(q.depositMinor ? ([["Deposit", `${m(q.depositMinor)}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`]] as [string, string][]) : []),
         ...(q.validUntil ? ([["Valid until", formatDay(q.validUntil)]] as [string, string][]) : []),
       ],
-      cta: { label: "See your quote", url: quoteUrl(token!) },
+      cta: { label: "See your proposal", url: quoteUrl(token!) },
       outro: `Questions? Just reply to this email to reach ${agent?.name ?? brand}.`,
     },
   });
@@ -332,7 +332,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
   if (q.status === "ACCEPTED") return null;
   const problem = answerProblem(q, today);
   if (problem) throw new QuoteError(problem);
-  if (!q.lines.length) throw new QuoteError("This quote has nothing on it. Please contact us.");
+  if (!q.lines.length) throw new QuoteError("This proposal has nothing on it. Please contact us.");
   const settings = q.agency.settings ?? (await getSettings(q.agencyId));
 
   // Booking numbers are taken inside the transaction; if someone else takes the same one at that
@@ -381,7 +381,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
                 ...where,
                 guestCount: q.enquiry?.guests ?? null,
                 agentId: q.agentId,
-                notes: `Booked from quote ${ref}, accepted by ${answer.name}.`,
+                notes: `Booked from proposal ${ref}, accepted by ${answer.name}.`,
                 plannerToken: randomBytes(18).toString("base64url"),
                 tasks: { create: defaultTasks(kind, date) },
               },
@@ -448,12 +448,12 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
         }
         await tx.activity.createMany({
           data: [
-            { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer accepted quote ${ref}`, detail: answer.name, createdAt: now },
+            { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer accepted proposal ${ref}`, detail: answer.name, createdAt: now },
             {
               agencyId: q.agencyId,
               entity: "EVENT",
               entityId: event.id,
-              action: `booked from quote ${ref}`,
+              action: `booked from proposal ${ref}`,
               detail: q.title,
               createdAt: new Date(now.getTime() + 1),
             },
@@ -461,7 +461,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
               agencyId: q.agencyId,
               entity: "BOOKING",
               entityId: b.id,
-              action: `booked from quote ${ref}`,
+              action: `booked from proposal ${ref}`,
               detail: b.status === "CONFIRMED" ? "confirmed" : "pending: act to be confirmed",
               createdAt: new Date(now.getTime() + 2 + i),
             })),
@@ -471,7 +471,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
                     agencyId: q.agencyId,
                     entity: "BOOKING",
                     entityId: q.enquiry.bookingId,
-                    action: `replaced by the bookings from quote ${ref}`,
+                    action: `replaced by the bookings from proposal ${ref}`,
                     createdAt: new Date(now.getTime() + 2 + made.length),
                   },
                 ]
@@ -501,7 +501,7 @@ export async function declineQuote(token: string, answer: QuoteAnswer) {
   });
   if (claimed.count !== 1) return false;
   await prisma.activity.create({
-    data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer declined quote ${quoteRef(q)}`, detail: answer.note.slice(0, 200) },
+    data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer declined proposal ${quoteRef(q)}`, detail: answer.note.slice(0, 200) },
   });
   return true;
 }
@@ -527,18 +527,18 @@ export async function afterAccepted(quoteId: string) {
     try {
       await onConfirmed(l.bookingId);
     } catch (e) {
-      log.error("Quote accepted, but telling an act failed", { err: e });
+      log.error("Proposal accepted, but telling an act failed", { err: e });
     }
   }
   try {
     await tellCustomerBooked(q);
   } catch (e) {
-    log.error("Quote accepted, but the customer's confirmation failed", { err: e });
+    log.error("Proposal accepted, but the customer's confirmation failed", { err: e });
   }
   try {
     await tellTeam(q, "ACCEPTED");
   } catch (e) {
-    log.error("Quote accepted, but telling the team failed", { err: e });
+    log.error("Proposal accepted, but telling the team failed", { err: e });
   }
 }
 
@@ -548,7 +548,7 @@ export async function afterDeclined(quoteId: string) {
   try {
     await tellTeam(q, "DECLINED");
   } catch (e) {
-    log.error("Quote declined, but telling the team failed", { err: e });
+    log.error("Proposal declined, but telling the team failed", { err: e });
   }
 }
 
@@ -580,7 +580,7 @@ async function tellCustomerBooked(q: FullQuote) {
       brand,
       title: "Thank you, you're booked",
       highlight: { label: "Booked", value: `${q.title}, ${formatDay(firstDate)}`, tone: "good" },
-      intro: w.intro ?? `Hi ${name}, thank you for accepting your quote. Here's what's booked with ${brand}:`,
+      intro: w.intro ?? `Hi ${name}, thank you for accepting your proposal. Here's what's booked with ${brand}:`,
       rows: [
         ...q.lines.map(
           (l) => [lineTitle(l), `${formatDay(l.date)}, ${lineTimes(l).toLowerCase()}${linePlace(l) ? `\n${linePlace(l)}` : ""}`] as [string, string],
@@ -608,7 +608,7 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
   if (!w.on) return;
   const t = quoteTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
-  const subject = w.subject ?? `Quote ${accepted ? "accepted" : "declined"}: ${q.title} (${quoteRef(q)})`;
+  const subject = w.subject ?? `Proposal ${accepted ? "accepted" : "declined"}: ${q.title} (${quoteRef(q)})`;
   const url = accepted && q.eventId ? `${appUrl()}/events/${q.eventId}` : `${appUrl()}/quotes/${q.id}`;
   const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { id: true, email: true, notifyPrefs: true } }) : null;
   const to = agent ? (wants(agent.notifyPrefs, "QUOTE", "email") ? agent.email : null) : q.agency.settings?.agencyEmail;
@@ -629,15 +629,15 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
         intro:
           w.intro ??
           (accepted
-            ? `${who} has accepted the quote for ${q.title}. The wedding or event and its bookings are made, and the acts have been told.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""} Next: send the contract to sign.`
-            : `${who} has declined the quote for ${q.title}.`),
+            ? `${who} has accepted the proposal for ${q.title}. It's signed and locked in: the wedding or event and its bookings are made${q.tellActs ? ", and the acts have been told" : ". The acts haven't been emailed, so tell them yourself"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
+            : `${who} has declined the proposal for ${q.title}.`),
         rows: [
-          ["Quote", quoteRef(q)],
+          ["Proposal", quoteRef(q)],
           ["Total", m(t.totalMinor)],
           ["We make", m(t.agencyMinor)],
           ...(q.answerNote ? ([[accepted ? "Their message" : "Their reason", q.answerNote]] as [string, string][]) : []),
         ],
-        cta: { label: accepted ? "Open the event" : "Open the quote", url },
+        cta: { label: accepted ? "Open the event" : "Open the proposal", url },
       },
     });
   }
@@ -659,7 +659,7 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
 export async function markViewed(q: { id: string; agencyId: string; number: string; version: number }) {
   const done = await prisma.quote.updateMany({ where: { id: q.id, status: "SENT" }, data: { status: "VIEWED", viewedAt: new Date() } });
   if (done.count)
-    await prisma.activity.create({ data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer opened quote ${quoteRef(q)}` } });
+    await prisma.activity.create({ data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer opened proposal ${quoteRef(q)}` } });
 }
 
 /** A quote out with the customer past its valid-until date is saved as Expired. */

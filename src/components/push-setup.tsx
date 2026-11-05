@@ -164,7 +164,7 @@ export function PushSetup({ publicKey }: { publicKey: string }) {
 /** Internal users (Profile): notifications on this phone or computer, e.g. when a new enquiry comes in. */
 export function StaffPushSetup({ publicKey }: { publicKey: string }) {
   const { state, busy, note, turnOn, test, turnOff } = usePush(publicKey, {
-    on: "Done. New enquiries will show up on this device.",
+    on: "Done. New leads will show up on this device.",
     off: "Notifications are off on this device. You'll still get emails.",
   });
   if (state === "checking") return null;

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import EnquiriesPage from "../enquiries/page";
 
-export const metadata: Metadata = { title: "Quotes" };
+export const metadata: Metadata = { title: "Proposals" };
 
 /** Quotes have their own place in the menu: the Enquiries page, opened on its Quotes tab. */
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {

@@ -9,7 +9,7 @@ export type TaskKey = "CONTRACT" | "DEPOSIT" | "PLANNER" | "BALANCE" | "ITINERAR
 export function defaultTasks(type: string, date: string): { key: TaskKey; title: string; dueDate: string | null; sort: number }[] {
   const who = type === "WEDDING" ? "the couple" : "the customer";
   return [
-    { key: "CONTRACT", title: "Contract sent and signed", dueDate: null, sort: 1 },
+    { key: "CONTRACT", title: "Proposal or contract signed", dueDate: null, sort: 1 },
     { key: "DEPOSIT", title: "Deposit received", dueDate: null, sort: 2 },
     { key: "PLANNER", title: `Details from ${who} (planner filled in)`, dueDate: addDaysToKey(date, -42), sort: 3 },
     { key: "BALANCE", title: "Balance paid", dueDate: addDaysToKey(date, -14), sort: 4 },

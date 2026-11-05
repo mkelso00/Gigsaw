@@ -75,7 +75,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const lastBooking = e.bookings.at(-1);
   const contractDoc = eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings);
   const contract = await contractStatusFor(user.agencyId, { kind: "event", id: e.id }, contractDoc);
-  const contractSigned = contractState(contract.current) === "SIGNED" && !contract.changes.length;
+  // A signed proposal is the agreement: once the customer has signed it the booking is locked in.
+  const contractSigned = !!quote || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
 
   return (
     <div>
@@ -110,16 +111,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <span className="min-w-0 flex-1">
             Booked from{" "}
             <Link href={`/quotes/${quote.id}`} className="font-medium underline-offset-2 hover:underline">
-              quote {quoteRef(quote)}
+              proposal {quoteRef(quote)}
             </Link>
-            , accepted by {quote.answerName}
-            {quote.answeredAt ? ` on ${formatDateTime(quote.answeredAt, e.timezone)}` : ""}.{!contract.current && " Next: send the contract to sign."}
+            , signed and approved by {quote.answerName}
+            {quote.answeredAt ? ` on ${formatDateTime(quote.answeredAt, e.timezone)}` : ""}. It&apos;s locked in: no separate contract needed.
           </span>
-          {!contract.current && (
-            <a href="#contract" className="btn btn-sm btn-primary">
-              Send contract to sign
-            </a>
-          )}
         </div>
       )}
 

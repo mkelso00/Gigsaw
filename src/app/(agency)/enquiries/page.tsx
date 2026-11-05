@@ -13,10 +13,10 @@ import { channelLabel, ENQUIRY_EVENT_TYPES, enquiryRows, enquiryTypeLabel } from
 import { effectiveStatus, OPEN_STATUSES, QUOTE_STATUS_LABELS, QUOTE_STATUSES, quoteRef, type QuoteStatus } from "@/lib/quotes";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
-export const metadata: Metadata = { title: "Enquiries" };
+export const metadata: Metadata = { title: "Inbound leads" };
 export const dynamic = "force-dynamic";
 
-const VIEWS = { new: "New", done: "Dealt with", all: "All", quotes: "Quotes" } as const;
+const VIEWS = { new: "New", done: "Dealt with", all: "All leads", quotes: "Proposals" } as const;
 type View = keyof typeof VIEWS;
 
 /** Enquiries from the form on the business's website or added by hand, new ones first, each with what it made and its quote. */
@@ -96,16 +96,16 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
   return (
     <div>
       <PageHeader
-        title={view === "quotes" ? "Quotes" : "Enquiries"}
+        title={view === "quotes" ? "Proposals" : "Inbound leads"}
         subtitle={
           view === "quotes"
-            ? "Every quote you've sent, newest first. To make one, open an enquiry or a customer and press Make a quote. The customer signs and approves it online, and it becomes a booked wedding or event."
-            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Make a quote from any of them."
+            ? "Every proposal you've sent, newest first. To make one, open a lead or a customer and press Make a proposal. The customer signs and approves it online, and it becomes a booked wedding or event."
+            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Make a proposal from any of them."
         }
         actions={
           <>
             <Link href="/enquiries/new" className="btn btn-primary">
-              Add enquiry
+              Add lead
             </Link>
             {user.role === "ADMIN" && (
               <Link href="/settings/enquiries" className="btn">
@@ -149,7 +149,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
               <input type="hidden" name="view" value="quotes" />
               <label className="min-w-48 flex-1">
                 <span className="label">Search</span>
-                <input name="q" defaultValue={sp.q} placeholder="Quote name or customer" className="input" />
+                <input name="q" defaultValue={sp.q} placeholder="Proposal name or customer" className="input" />
               </label>
               <label>
                 <span className="label">Status</span>
@@ -166,7 +166,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
             </form>
           </FilterPanel>
           {sortedQuotes.length === 0 ? (
-            <Empty>{sp.q || quoteStatus ? "No quotes match." : "No quotes yet. Press Make a quote on an enquiry to start one."}</Empty>
+            <Empty>{sp.q || quoteStatus ? "No proposals match." : "No proposals yet. Press Make a proposal on a lead to start one."}</Empty>
           ) : (
             <QuoteList quotes={sortedQuotes} today={today} />
           )}
@@ -200,10 +200,10 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
       {view === "quotes" ? null : enquiries.length === 0 ? (
         <Empty>
           {sp.q || sp.type ? (
-            "No enquiries match."
+            "No leads match."
           ) : view === "new" ? (
             <>
-              No new enquiries.{" "}
+              No new leads.{" "}
               {settings.enquiryOn ? (
                 "New ones from your website will show up here."
               ) : (
@@ -241,7 +241,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                       {e.eventType && <span className="badge bg-ink-100 text-ink-700">{enquiryTypeLabel(e.eventType)}</span>}
                       {e.channel !== "WEBSITE" && <span className="badge bg-ink-100 text-ink-700">{channelLabel(e.channel)}</span>}
                       {quote && (
-                        <Link href={`/quotes/${quote.id}`} className="inline-flex items-center gap-1.5 hover:underline" title="This enquiry's quote">
+                        <Link href={`/quotes/${quote.id}`} className="inline-flex items-center gap-1.5 hover:underline" title="This lead's proposal">
                           <span className="font-mono text-[11px] text-ink-500">{quoteRef(quote)}</span>
                           <QuoteStatusBadge q={quote} today={today} />
                         </Link>
@@ -279,13 +279,13 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
                   {quote ? (
                     <Link href={`/quotes/${quote.id}`} className="btn btn-sm">
-                      Quote {quoteRef(quote)}
+                      Proposal {quoteRef(quote)}
                     </Link>
                   ) : (
                     e.contact && (
                       <ActionForm action={makeQuote.bind(null, "enquiry", e.id)}>
                         <SubmitButton className="btn btn-sm btn-volt" pendingText="Starting…">
-                          Make a quote
+                          Make a proposal
                         </SubmitButton>
                       </ActionForm>
                     )
@@ -315,7 +315,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                     <ServerForm action={deleteEnquiry.bind(null, e.id)}>
                       <ConfirmButton
                         className="btn btn-sm btn-danger"
-                        message="Delete this enquiry as spam? Its Enquiry booking or wedding goes too (if nothing's been added to it), and the customer if they were new."
+                        message="Delete this lead as spam? Its Enquiry booking or wedding goes too (if nothing's been added to it), and the customer if they were new."
                       >
                         Spam
                       </ConfirmButton>

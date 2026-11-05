@@ -19,7 +19,7 @@ import { formatDateTime, localDateKey } from "@/lib/time";
 // acts are paid. They sign and approve (typing their name and drawing a signature) or decline. Once answered, withdrawn or replaced
 // by a newer version, the same link only shows where things stand.
 
-export const metadata: Metadata = { title: "Your quote", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Your proposal", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
 export default async function CustomerQuotePage({ params }: { params: Promise<{ token: string }> }) {
@@ -57,7 +57,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
     return shell(
       <section className="card card-pad text-center">
         <h1 className="text-2xl font-semibold tracking-tight">This link has expired</h1>
-        <p className="mt-2 text-ink-600">Please get in touch with {brand} if you need a copy of your quote.</p>
+        <p className="mt-2 text-ink-600">Please get in touch with {brand} if you need a copy of your proposal.</p>
       </section>,
     );
   }
@@ -77,18 +77,18 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
     for (let i = 0; next?.supersededById && i < 20; i++) next = await prisma.quote.findUnique({ where: { id: next.supersededById } });
     return shell(
       <section className="card card-pad text-center">
-        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Quote {quoteRef(q)}</div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">This quote has been updated</h1>
+        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {quoteRef(q)}</div>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">This proposal has been updated</h1>
         {next?.token && next.status !== "DRAFT" ? (
           <>
-            <p className="mt-2 text-ink-600">There&apos;s a newer version of your quote for {q.title}.</p>
+            <p className="mt-2 text-ink-600">There&apos;s a newer version of your proposal for {q.title}.</p>
             <Link href={`/q/${next.token}`} className="btn btn-primary mt-5 h-12 w-full text-base">
-              See the latest quote
+              See the latest proposal
             </Link>
           </>
         ) : (
           <p className="mt-2 text-ink-600">
-            {brand} is updating your quote for {q.title}. You&apos;ll get the new one by email shortly.
+            {brand} is updating your proposal for {q.title}. You&apos;ll get the new one by email shortly.
           </p>
         )}
       </section>,
@@ -107,7 +107,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
   return shell(
     <>
       <div className="mb-6">
-        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Quote {quoteRef(q)}</div>
+        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {quoteRef(q)}</div>
         <h1 className="mt-2 text-[28px] leading-tight font-semibold tracking-tight">{q.title}</h1>
         {q.contact && <p className="mt-1 text-ink-600">For {q.contact.name}</p>}
       </div>
@@ -184,7 +184,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
 
       {q.validUntil && status !== "ACCEPTED" && status !== "DECLINED" && (
         <p className="mb-4 text-sm text-ink-600">
-          {status === "EXPIRED" ? "This quote was valid until" : "This quote is valid until"} {formatDay(q.validUntil)}.
+          {status === "EXPIRED" ? "This proposal was valid until" : "This proposal is valid until"} {formatDay(q.validUntil)}.
         </p>
       )}
 
@@ -198,7 +198,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
       {!problem && (
         <>
           <ActionForm action={acceptQuoteAnswer.bind(null, token)} className="card card-pad">
-            <h2 className="text-xl font-semibold tracking-tight">Sign and approve your quote</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Sign and approve your proposal</h2>
             <p className="mt-1 text-sm text-ink-600">Signing books everything above with {brand}.</p>
             <label className="mt-5 block">
               <span className="label">Your full name</span>
@@ -215,7 +215,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
             <label className="mt-4 flex items-start gap-3 rounded-xl bg-ink-50 p-4 text-[15px]">
               <input type="checkbox" name="agree" required className="mt-0.5 h-6 w-6 shrink-0" />
               <span>
-                I accept this quote{q.terms ? " and its terms" : ""}, and I&apos;d like to book it with {brand}
+                I accept this proposal{q.terms ? " and its terms" : ""}, and I&apos;d like to book it with {brand}
                 {q.depositMinor > 0 ? `. I'll pay the deposit of ${m(q.depositMinor)}${q.depositDue ? ` by ${formatDay(q.depositDue)}` : ""}` : ""}.
               </span>
             </label>
@@ -229,7 +229,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
 
           <details className="mt-4">
             <summary className="cursor-pointer px-1 py-2 text-center text-sm text-ink-600 underline-offset-2 hover:underline">
-              No thanks, decline this quote
+              No thanks, decline this proposal
             </summary>
             <ActionForm action={declineQuoteAnswer.bind(null, token)} className="card card-pad mt-2">
               <label className="block">
@@ -237,7 +237,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
                 <textarea name="reason" rows={3} maxLength={2000} className="input text-base" />
               </label>
               <SubmitButton className="btn mt-4 h-12 w-full text-base" pendingText="Sending…">
-                Decline the quote
+                Decline the proposal
               </SubmitButton>
             </ActionForm>
           </details>

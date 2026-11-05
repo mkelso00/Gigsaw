@@ -14,7 +14,7 @@ type NavItem = {
   icon: string;
   live?: boolean;
   mobileOnly?: boolean;
-  /** Other pages that belong to this item, so it stays lit on them (e.g. a quote under Quotes & enquiries). */
+  /** Other pages that belong to this item, so it stays lit on them (e.g. a proposal under Leads & proposals). */
   also?: string[];
 };
 
@@ -33,7 +33,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
       { href: "/rota", label: "Rota", icon: "rota" },
       { href: "/bookings", label: "Venue bookings", icon: "bookings" },
       { href: "/events", label: "Wedding bookings", icon: "heart" },
-      { href: "/enquiries", label: "Quotes & enquiries", icon: "inbox", also: ["/quotes"] },
+      { href: "/enquiries", label: "Leads & proposals", icon: "inbox", also: ["/quotes"] },
     ],
   },
   {

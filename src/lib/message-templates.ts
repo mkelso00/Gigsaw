@@ -174,11 +174,11 @@ export const TEMPLATES: TemplateDef[] = [
   {
     key: "QUOTE",
     group: "CUSTOMERS",
-    label: "Your quote",
-    hint: "Sent when you press Send on a quote. The link to see it and sign or decline is always added, with the total, deposit and valid-until date.",
+    label: "Your proposal",
+    hint: "Sent when you press Send on a proposal. The link to see it and sign or decline is always added, with the total, deposit and valid-until date.",
     example: {
-      subject: "Your quote from {business}: {event}",
-      intro: "Hi {first_name}, thank you for your enquiry. Here's your quote for {event} on {date}. You can sign and approve it online in a minute.",
+      subject: "Your proposal from {business}: {event}",
+      intro: "Hi {first_name}, thank you for your enquiry. Here's your proposal for {event} on {date}. You can sign and approve it online in a minute.",
     },
     placeholders: ["first_name", "event", "date", "total", "valid_until", "business"],
     manual: true,
@@ -186,11 +186,11 @@ export const TEMPLATES: TemplateDef[] = [
   {
     key: "QUOTE_ACCEPTED",
     group: "CUSTOMERS",
-    label: "Quote accepted: you're booked",
-    hint: "Sent to the customer when they accept a quote, listing what's booked, the deposit and a link to pay it by card if card payments are set up.",
+    label: "Proposal accepted: you're booked",
+    hint: "Sent to the customer when they accept a proposal, listing what's booked, the deposit and a link to pay it by card if card payments are set up.",
     example: {
       subject: "You're booked: {event}",
-      intro: "Hi {first_name}, thank you for accepting your quote. {event} on {date} is booked with {business}.",
+      intro: "Hi {first_name}, thank you for accepting your proposal. {event} on {date} is booked with {business}.",
     },
     placeholders: ["first_name", "event", "date", "total", "business"],
   },
@@ -213,9 +213,9 @@ export const TEMPLATES: TemplateDef[] = [
   {
     key: "QUOTE_ANSWER",
     group: "TEAM",
-    label: "Quote accepted or declined",
-    hint: "To the quote's lead agent (or your business email) when a customer accepts or declines a quote.",
-    example: { subject: "Quote accepted: {event}", intro: "{name} has accepted the quote for {event}. The bookings are made." },
+    label: "Proposal accepted or declined",
+    hint: "To the proposal's lead agent (or your business email) when a customer accepts or declines a proposal.",
+    example: { subject: "Proposal accepted: {event}", intro: "{name} has accepted the proposal for {event}. The bookings are made." },
     placeholders: ["name", "event", "answer", "business"],
   },
 ];

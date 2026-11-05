@@ -6,7 +6,7 @@ import { Field, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { ENQUIRY_CHANNELS, ENQUIRY_EVENT_TYPES } from "@/lib/enquiries";
 
-export const metadata: Metadata = { title: "Add enquiry" };
+export const metadata: Metadata = { title: "Add a lead" };
 
 /** An enquiry that came by email or phone, typed in by staff. It's saved just like one from the website form. */
 export default async function NewEnquiryPage() {
@@ -16,11 +16,11 @@ export default async function NewEnquiryPage() {
       <PageHeader
         eyebrow={
           <Link href="/enquiries" className="hover:underline">
-            Enquiries
+            Inbound leads
           </Link>
         }
-        title="Add an enquiry"
-        subtitle="For enquiries that come by email or phone. The customer is added (or found, if their email is already on file) with a note, and a date makes a wedding or an Enquiry booking, just like the form on your website."
+        title="Add a lead"
+        subtitle="For leads that come in by email or phone. The customer is added (or found, if their email is already on file) with a note, and a date makes a wedding or an Enquiry booking, just like the form on your website."
       />
       <ActionForm action={addEnquiry} className="space-y-6">
         <section className="card card-pad grid gap-4 sm:grid-cols-2">
@@ -88,7 +88,7 @@ export default async function NewEnquiryPage() {
         </label>
 
         <div className="flex flex-wrap gap-2">
-          <SubmitButton pendingText="Adding…">Add enquiry</SubmitButton>
+          <SubmitButton pendingText="Adding…">Add lead</SubmitButton>
           <Link href="/enquiries" className="btn">
             Cancel
           </Link>

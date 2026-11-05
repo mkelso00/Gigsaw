@@ -59,7 +59,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             {contact.type === "CLIENT" && (
               <ActionForm action={makeQuote.bind(null, "contact", contact.id)}>
                 <SubmitButton className="btn" pendingText="Starting…">
-                  Make a quote
+                  Make a proposal
                 </SubmitButton>
               </ActionForm>
             )}
@@ -129,7 +129,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </section>
           {quotes.length > 0 && (
             <section>
-              <h2 className="section-title mb-3">Quotes</h2>
+              <h2 className="section-title mb-3">Proposals</h2>
               <QuoteList quotes={quotes} today={localDateKey(new Date(), settings.defaultTimezone)} showCustomer={false} />
             </section>
           )}

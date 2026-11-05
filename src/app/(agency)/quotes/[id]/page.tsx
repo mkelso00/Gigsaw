@@ -14,7 +14,7 @@ import { linePlace, quoteInclude, quoteUrl, readyToSend } from "@/lib/quote-serv
 import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, quoteRef, quoteTotals } from "@/lib/quotes";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
-export const metadata: Metadata = { title: "Quote" };
+export const metadata: Metadata = { title: "Proposal" };
 export const dynamic = "force-dynamic";
 
 /** One quote, for staff: what's on it (with the acts' fees and what we make), sending it, and its history. */
@@ -52,12 +52,12 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       <PageHeader
         eyebrow={
           <>
-            Quote {quoteRef(q)}
+            Proposal {quoteRef(q)}
             {q.enquiry && (
               <>
                 {" · "}
                 <Link href={`/enquiries?view=all#${q.enquiry.id}`} className="hover:underline">
-                  from {q.enquiry.name}&apos;s enquiry
+                  from {q.enquiry.name}&apos;s lead
                 </Link>
               </>
             )}
@@ -153,9 +153,9 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       <div className="grid gap-8 xl:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-8">
           <section>
-            <h2 className="mb-3 text-[17px] font-semibold tracking-tight">What&apos;s quoted</h2>
+            <h2 className="mb-3 text-[17px] font-semibold tracking-tight">What&apos;s proposed</h2>
             {q.lines.length === 0 ? (
-              <p className="card card-pad text-sm text-ink-500">Nothing on it yet. Edit the quote to add a line.</p>
+              <p className="card card-pad text-sm text-ink-500">Nothing on it yet. Edit the proposal to add a line.</p>
             ) : (
               <div className="card overflow-x-auto">
                 <table className="table">
@@ -250,9 +250,9 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                 </label>
                 {notReady && <p className="text-xs text-amber-800">{notReady}</p>}
                 <SubmitButton className={`btn w-full ${canSend(q) ? "btn-primary" : ""}`} pendingText="Sending…">
-                  {canSend(q) ? "Send quote" : "Send it again"}
+                  {canSend(q) ? "Send proposal" : "Send it again"}
                 </SubmitButton>
-                <p className="hint">The email uses your “Your quote” wording from Settings, Notifications.</p>
+                <p className="hint">The email uses your “Your proposal” wording from Settings, Notifications.</p>
               </ActionForm>
             )}
             {canSend(q) && (
@@ -267,12 +267,12 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               <div className="mt-4 border-t border-ink-100 pt-4">
                 <span className="label">Link to send the customer</span>
                 <CopyField value={quoteUrl(q.token)} />
-                <p className="hint">Anyone with this link can see the quote and sign it, so send it only to the customer.</p>
+                <p className="hint">Anyone with this link can see the proposal and sign it, so send it only to the customer.</p>
               </div>
             )}
             {canWithdraw(q) && (
               <ServerForm action={withdrawQuote.bind(null, q.id)} className="mt-4">
-                <ConfirmButton message="Withdraw this quote? The customer's link will say it's been withdrawn and they can't accept it." className="btn w-full">
+                <ConfirmButton message="Withdraw this proposal? The customer's link will say it's been withdrawn and they can't accept it." className="btn w-full">
                   Withdraw
                 </ConfirmButton>
               </ServerForm>
@@ -280,7 +280,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             {canEdit(q) && (
               <ServerForm action={deleteDraftQuote.bind(null, q.id)} className="mt-4">
                 <ConfirmButton
-                  message={q.version > 1 ? "Delete this draft? The version before it goes back to being the live one." : "Delete this draft quote?"}
+                  message={q.version > 1 ? "Delete this draft? The version before it goes back to being the live one." : "Delete this draft proposal?"}
                   className="btn btn-danger w-full"
                 >
                   Delete draft

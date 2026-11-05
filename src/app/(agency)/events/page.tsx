@@ -26,6 +26,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       customer: { select: { name: true } },
       venue: { select: { name: true, city: true } },
       tasks: true,
+      // A signed proposal counts as the contract.
+      quotes: { where: { status: "ACCEPTED" }, select: { id: true }, take: 1 },
       bookings: { where: { archivedAt: null }, include: { payments: true, artist: { select: { name: true } } }, orderBy: { setStart: "asc" } },
     },
     orderBy: { date: past ? "desc" : "asc" },
@@ -35,8 +37,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const rows = events.map((e) => {
     const totals = eventTotals(e.bookings);
     const sent = sentByEvent.get(e.id)!;
-    const done = e.tasks.filter((t) => t.doneAt || autoDone(t.key, e, totals, sent)).length;
-    const overdue = e.tasks.some((t) => !t.doneAt && !autoDone(t.key, e, totals, sent) && t.dueDate && t.dueDate < today);
+    const done = e.tasks.filter((t) => t.doneAt || autoDone(t.key, e, totals, sent, e.quotes.length > 0)).length;
+    const overdue = e.tasks.some((t) => !t.doneAt && !autoDone(t.key, e, totals, sent, e.quotes.length > 0) && t.dueDate && t.dueDate < today);
     return { e, totals, done, overdue };
   });
 

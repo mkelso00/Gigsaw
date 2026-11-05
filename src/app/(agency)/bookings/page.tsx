@@ -79,7 +79,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           <>
             {newEnquiries > 0 && !archived && (
               <Link href="/enquiries" className="btn">
-                New enquiries
+                New leads
                 <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-semibold text-ink-950">{newEnquiries}</span>
               </Link>
             )}
