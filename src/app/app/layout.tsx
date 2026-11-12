@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
 import { ServerForm } from "@/components/forms";
+import { RenderStamp } from "@/components/render-stamp";
 
 export const metadata: Metadata = { title: { default: "My bookings", template: "%s · Gigsaw" } };
 export const viewport: Viewport = { themeColor: "#15181c" };
@@ -14,6 +15,7 @@ export default async function ArtistAppLayout({ children }: { children: React.Re
   const settings = await getSettings(user.agencyId);
   return (
     <div className="min-h-screen bg-ink-950 text-white">
+      <RenderStamp at={crypto.randomUUID()} />
       <div className="mx-auto max-w-lg">
         <header className="sticky top-0 z-10 flex items-center justify-between bg-ink-950/85 px-5 py-4 backdrop-blur">
           <Link href="/app">

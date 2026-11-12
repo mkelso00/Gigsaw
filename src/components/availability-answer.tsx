@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { answerAvailabilityByToken, answerAvailabilityInApp, type AnswerResult } from "@/actions/availability";
+import { refreshAndWatch } from "@/components/render-stamp";
 
 /**
  * Yes / No for "Are you free?", with an optional note. Used on the private link page (light,
@@ -22,17 +23,22 @@ export function AvailabilityAnswer({
   dark?: boolean;
 }) {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(!answer);
   const [text, setText] = useState(note);
   const [result, setResult] = useState<AnswerResult | null>(null);
-  const send = (a: "YES" | "NO") =>
-    start(async () => {
+  // Not in a React transition: Next 15.5 sometimes never finished one, leaving the buttons greyed out.
+  const send = async (a: "YES" | "NO") => {
+    setPending(true);
+    try {
       const r = token ? await answerAvailabilityByToken(token, a, text) : await answerAvailabilityInApp(replyId!, a, text);
       setResult(r);
       if (r.ok) setEditing(false);
-      router.refresh();
-    });
+      refreshAndWatch(router);
+    } finally {
+      setPending(false);
+    }
+  };
 
   const box = dark ? "bg-white/[0.06] text-ink-200" : "bg-ink-100 text-ink-700";
   if (!editing)

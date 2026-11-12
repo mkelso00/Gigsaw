@@ -42,41 +42,26 @@ export async function linkFromCopyField(page: Page, pathPrefix: string, timeout 
 }
 
 /**
- * Expect something to show after a save on a page that has no reload watchdog (the customer's
- * and act's link pages). Next 15.5 sometimes saves but never redraws; the server has the change,
- * so if it hasn't shown after a while the page is loaded again, as a person would.
+ * Expect something to show after a save. Next 15.5 sometimes saves but never redraws; the app's own
+ * watchdog (refreshAndWatch / ActionForm) reloads the page after about 3 seconds, so this allows
+ * for that but doesn't paper over it: if the change never shows, the test fails.
  */
-export async function expectAfterSave(page: Page, locator: Locator, timeout = 10_000) {
-  try {
-    await expect(locator).toBeVisible({ timeout });
-  } catch {
-    test.info().annotations.push({ type: "stalled redraw", description: `${new URL(page.url()).pathname} didn't show the change until it was reloaded` });
-    await page.reload();
-    await expect(locator).toBeVisible({ timeout });
-  }
+export async function expectAfterSave(page: Page, locator: Locator, timeout = 15_000) {
+  void page;
+  await expect(locator).toBeVisible({ timeout });
 }
 
 /**
  * Click a link and wait for the page it opens (`arrived`, e.g. that page's heading).
  *
- * In the production build Next 15.5 sometimes fetches the next page but never shows it, most
- * often between the bookings list and a booking, or between tabs of the same list. The app's
- * watchdog only covers saves, not links, so if nothing has happened after a few seconds the link's
- * address is opened directly, as a person would by reloading, and the test is annotated
- * "stalled navigation" so it shows in the report. Anything else (a wrong link, a broken page)
- * still fails.
+ * In the production build Next 15.5 sometimes fetches the next page but never shows it. The app's
+ * NavWatchdog opens the link directly after 5 seconds, so this allows for that; if the page never
+ * opens, the test fails.
  */
-export async function follow(page: Page, link: Locator, arrived: Locator, timeout = 8_000) {
-  const href = await link.getAttribute("href");
-  if (!href) throw new Error("That link has no address");
+export async function follow(page: Page, link: Locator, arrived: Locator, timeout = 15_000) {
+  void page;
   await link.click();
-  try {
-    await expect(arrived).toBeVisible({ timeout });
-  } catch {
-    test.info().annotations.push({ type: "stalled navigation", description: `${href} didn't open from the link, so it was opened directly` });
-    await page.goto(new URL(href, page.url()).href);
-    await expect(arrived).toBeVisible();
-  }
+  await expect(arrived).toBeVisible({ timeout });
 }
 
 /** Pick an option in one of the app's type-to-search boxes (Combobox). */

@@ -13,6 +13,7 @@ import { payUrl } from "@/lib/card-payments";
 import { linePlace, markExpired, markViewed, proposalInclude } from "@/lib/proposal-server";
 import { answerProblem, effectiveStatus, lineTimes, looksLikeProposalToken, proposalRef, proposalTotals, tokenOpens } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
+import { RenderStamp } from "@/components/render-stamp";
 
 // The customer's proposal: a private link (no login), made for their phone. It shows what's proposed,
 // when and where, and what they pay (the acts' prices, the booking fee and VAT), never what the
@@ -34,6 +35,7 @@ export default async function CustomerProposalPage({ params }: { params: Promise
 
   const shell = (children: React.ReactNode) => (
     <div className="min-h-screen bg-ink-50 px-4 py-8 text-ink-950 sm:py-12">
+      <RenderStamp at={crypto.randomUUID()} />
       <div className="mx-auto max-w-xl">
         <header className="mb-6 flex items-center gap-3">
           {logo ? (

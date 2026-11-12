@@ -32,8 +32,7 @@ test("create a booking with New booking and find it in Venue bookings", async ({
   await expect(heading).toContainText("Pending");
   await expect(page.getByText(eventName)).toBeVisible();
 
-  // And it's in Venue bookings. Opened from the dashboard: from a booking's own page the menu
-  // link doesn't work at the moment (see the fixme test below).
+  // And it's in Venue bookings.
   await page.goto("/dashboard");
   await follow(page, page.getByRole("link", { name: "Venue bookings" }), page.getByRole("heading", { level: 1, name: "Venue bookings" }));
   await page.getByRole("textbox", { name: "Search", exact: true }).fill(act.name);
@@ -45,10 +44,9 @@ test("create a booking with New booking and find it in Venue bookings", async ({
   await expect(row).toContainText("Pending");
 });
 
-// Known problem in the production build (Next 15.5): on a booking's page, the menu's Venue
-// bookings link usually fetches the list but never shows it, so nothing happens (other menu links work,
-// and a reload of the list is fine). Turn this back on once that's fixed.
-test.fixme("the menu's Venue bookings link works from a booking's page", async ({ page }) => {
+// On a booking's page the menu's Venue bookings link used to fetch the list but never show it
+// (Next 15.5). The app's NavWatchdog now opens it directly if that happens.
+test("the menu's Venue bookings link works from a booking's page", async ({ page }) => {
   const act = await createAct(stamp("E2E Menu Act"));
   const venue = await createVenue(stamp("E2E Menu Hall"));
   const day = Date.now() + 40 * 86_400_000;
@@ -64,5 +62,5 @@ test.fixme("the menu's Venue bookings link works from a booking's page", async (
   const link = page.getByRole("link", { name: "Venue bookings" });
   await hydrated(link);
   await link.click();
-  await expect(page.getByRole("heading", { level: 1, name: "Venue bookings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Venue bookings" })).toBeVisible({ timeout: 15_000 });
 });

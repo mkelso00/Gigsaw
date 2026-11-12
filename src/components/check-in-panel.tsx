@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { artistCheckIn, type CheckInPayload } from "@/actions/checkin";
 import type { CheckInKind } from "@/lib/constants";
+import { refreshAndWatch } from "@/components/render-stamp";
 
 type Position = { latitude: number; longitude: number; accuracyM: number } | null;
 
@@ -43,7 +44,6 @@ export function CheckInPanel({
   windowMessage?: string;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<CheckInKind | null>(null);
   const [eta, setEta] = useState(30);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -51,21 +51,27 @@ export function CheckInPanel({
   const send = (kind: CheckInKind) => {
     setBusy(kind);
     setResult(null);
-    startTransition(async () => {
-      const { pos, problem } = await getPosition();
-      const payload: CheckInPayload = { kind, ...(pos ?? {}), etaMinutes: kind === "ON_THE_WAY" ? eta : null };
-      const res = await artistCheckIn(bookingId, payload);
-      setResult({ ok: res.ok, text: res.ok && problem ? `${res.message} ${problem}` : res.message });
-      setBusy(null);
-      if (res.ok) router.refresh();
-    });
+    // Not in a React transition: Next 15.5 sometimes never finished one, leaving the buttons greyed out.
+    void (async () => {
+      try {
+        const { pos, problem } = await getPosition();
+        const payload: CheckInPayload = { kind, ...(pos ?? {}), etaMinutes: kind === "ON_THE_WAY" ? eta : null };
+        const res = await artistCheckIn(bookingId, payload);
+        setResult({ ok: res.ok, text: res.ok && problem ? `${res.message} ${problem}` : res.message });
+        if (res.ok) refreshAndWatch(router);
+      } catch {
+        setResult({ ok: false, text: "That didn't go through. Check your signal and try again." });
+      } finally {
+        setBusy(null);
+      }
+    })();
   };
 
   if (!windowOpen) {
     return <p className="rounded-xl bg-white/[0.04] p-4 text-center text-sm text-ink-400">{windowMessage}</p>;
   }
 
-  const disabled = pending || busy !== null;
+  const disabled = busy !== null;
   return (
     <div className="space-y-3">
       {!hasArrived && (
