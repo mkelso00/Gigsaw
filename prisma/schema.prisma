@@ -1057,7 +1057,7 @@ model Quote {
   agency         Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   number         String // e.g. "Q-0012", shared by every version
   version        Int      @default(1)
-  // DRAFT | SENT | VIEWED | ACCEPTED | DECLINED | EXPIRED | WITHDRAWN (src/lib/quotes.ts)
+  // DRAFT | SENT | VIEWED | ACCEPTED | DECLINED | EXPIRED | WITHDRAWN (src/lib/proposals.ts)
   status         String   @default("DRAFT")
   // Set when a newer version replaces this one: it can't be accepted any more.
   supersededById String?  @unique
