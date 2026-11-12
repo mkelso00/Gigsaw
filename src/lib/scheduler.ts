@@ -1,5 +1,6 @@
 import { log } from "@/server/log";
 import { withHeartbeat } from "@/server/scheduler-health";
+import { runAsLeader } from "@/server/scheduler-lock";
 import { runOverdueCheck } from "./alerts";
 import { runEventMessages } from "./events";
 import { runReminders } from "./reminders";
@@ -15,7 +16,9 @@ let running = false;
 export function startScheduler() {
   if (started) return;
   started = true;
-  const tick = async () => {
+  // With more than one server up, only the one holding the scheduler lock runs the jobs each time (src/server/scheduler-lock.ts).
+  const tick = () => runAsLeader(runAll);
+  const runAll = async () => {
     if (running) return;
     running = true;
     try {
