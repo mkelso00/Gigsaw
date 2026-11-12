@@ -1,5 +1,5 @@
 import "server-only";
-import type { CalendarConnection, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { ACT_FEED_SELECT } from "@/lib/act-calendar";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/messaging";
@@ -7,7 +7,7 @@ import { actIdsFor, actTree } from "@/lib/people";
 import { billingState } from "@/lib/subscription";
 import { log } from "@/server/log";
 import { ACT_FEED_DAYS_BACK, belongsInCalendar, calendarContent, CALENDAR_STATUSES, contentHash, planSync, type Provider } from "./content";
-import { CalendarAccessError, CalendarClient, CalendarSetupError, type ClientDeps } from "./providers";
+import { CalendarAccessError, CalendarClient, CalendarSetupError, type ClientDeps, type StoredConnection } from "./providers";
 
 // Puts acts' gigs straight into their connected Google or Outlook calendars (docs/calendar-connect.md).
 // These are the entry points the rest of the app calls:
@@ -76,7 +76,7 @@ function agencyOpen(agency: Gig["agency"]) {
   return agency.status === "ACTIVE" && !billingState(agency).locked;
 }
 
-function clientFor(conn: CalendarConnection) {
+function clientFor(conn: StoredConnection) {
   return new CalendarClient(conn, {
     ...clientDeps,
     saveTokens: async (update) => {
@@ -330,6 +330,23 @@ export async function removeConnectionEvents(connectionId: string): Promise<void
     log.error("Removing a calendar's events failed", { connectionId, err: e });
   }
 }
+
+/**
+ * A usable access token for a connection: the stored one while it lasts, otherwise a fresh one from
+ * the refresh token (saved, with Microsoft's new refresh token when one comes back). Withdrawn access
+ * sets NEEDS_RECONNECT and lastError before rethrowing. Unlike the entry points this throws
+ * (CalendarAccessError, CalendarSetupError, CalendarApiError), since the caller needs the token.
+ */
+export async function getAccessToken(connection: StoredConnection): Promise<string> {
+  try {
+    return await clientFor(connection).accessToken();
+  } catch (e) {
+    if (e instanceof CalendarAccessError) await recordFailure(connection, e, { gettingToken: true });
+    throw e;
+  }
+}
+
+export { CalendarAccessError, CalendarApiError, CalendarSetupError } from "./providers";
 
 /** Before deleting logins: take their connected calendars' events out, since the connections go with them. Never throws. */
 export async function removeCalendarsOfLogins(where: Prisma.UserWhereInput): Promise<void> {

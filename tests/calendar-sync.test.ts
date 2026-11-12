@@ -288,7 +288,7 @@ describe("calendar API addresses", () => {
     expect(apiBase("GOOGLE", { oauthTestBase: null })).toBe("https://www.googleapis.com/calendar/v3");
     expect(apiBase("MICROSOFT", { oauthTestBase: null })).toBe("https://graph.microsoft.com/v1.0");
     expect(apiBase("GOOGLE", { oauthTestBase: "http://stand.in" })).toBe("http://stand.in/google/calendar/v3");
-    expect(apiBase("MICROSOFT", { oauthTestBase: "http://stand.in" })).toBe("http://stand.in/microsoft/graph/v1.0");
+    expect(apiBase("MICROSOFT", { oauthTestBase: "http://stand.in" })).toBe("http://stand.in/graph/v1.0");
   });
 });
 
@@ -330,16 +330,16 @@ describe("calendar client", () => {
     expect(await cl.createEvent(content, "ckgig1")).toBe("AAMk1");
     expect(calls[0].url).toBe("http://stand.in/microsoft/common/oauth2/v2.0/token");
     expect(new URLSearchParams(calls[0].body).get("scope")).toContain("Calendars.ReadWrite");
-    expect(calls[1].url).toBe("http://stand.in/microsoft/graph/v1.0/me/calendar/events");
+    expect(calls[1].url).toBe("http://stand.in/graph/v1.0/me/calendar/events");
     expect(openToken(saved[0].refreshTokenEnc as string, KEY)).toBe("refresh-2");
 
     const chosen = client(conn({ provider: "MICROSOFT", calendarId: "AQMkCal" }), (c) =>
       c.url.endsWith("/token") ? { status: 200, json: { access_token: "a", expires_in: 3600 } } : { status: 201, json: { id: "x" } },
     );
     await chosen.cl.createEvent(content, "ckgig1");
-    expect(chosen.calls[1].url).toBe("http://stand.in/microsoft/graph/v1.0/me/calendars/AQMkCal/events");
+    expect(chosen.calls[1].url).toBe("http://stand.in/graph/v1.0/me/calendars/AQMkCal/events");
     await chosen.cl.updateEvent("x", content, "ckgig1");
-    expect(chosen.calls[2]).toMatchObject({ method: "PATCH", url: "http://stand.in/microsoft/graph/v1.0/me/events/x" });
+    expect(chosen.calls[2]).toMatchObject({ method: "PATCH", url: "http://stand.in/graph/v1.0/me/events/x" });
   });
 
   it("treats invalid_grant as access withdrawn", async () => {

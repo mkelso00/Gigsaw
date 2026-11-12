@@ -60,7 +60,7 @@ async function standIn(input: string | URL | Request, init?: RequestInit): Promi
   const token = (init?.headers as Record<string, string>)?.Authorization?.replace("Bearer at-", "") ?? "";
   if (fake.revoked.has(token) || fake.apiRefuses.has(token)) return json(401, { error: { code: 401 } });
   const google = url.pathname.match(/^\/google\/calendar\/v3\/calendars\/[^/]+\/events(?:\/([^/]+))?$/);
-  const ms = url.pathname.match(/^\/microsoft\/graph\/v1\.0\/me\/(?:calendar\/events|events\/([^/]+))$/);
+  const ms = url.pathname.match(/^\/graph\/v1\.0\/me\/(?:calendar\/events|events\/([^/]+))$/);
   if (!google && !ms) return json(404);
   const id = decodeURIComponent((google ?? ms)![1] ?? "");
   if (method === "POST") {
@@ -369,6 +369,24 @@ describeDb("calendar sync (database)", () => {
     } finally {
       fake.apiRefuses.delete(refresh);
       await prisma.calendarConnection.update({ where: { id: connB }, data: { status: "ACTIVE", lastError: "" } });
+    }
+  });
+
+  it("getAccessToken refreshes and saves, and marks withdrawn access for reconnecting", async () => {
+    await prisma.calendarConnection.update({ where: { id: connA }, data: { accessTokenExpiresAt: new Date(0) } });
+    const c = await connection(connA);
+    const { openToken } = await import("@/server/token-box");
+    const refresh = openToken(c.refreshTokenEnc, KEY);
+    expect(await sync.getAccessToken(c)).toBe(`at-${refresh}`);
+    expect((await connection(connA)).accessTokenExpiresAt!.getTime()).toBeGreaterThan(Date.now());
+
+    fake.revoked.add(refresh);
+    try {
+      await expect(sync.getAccessToken({ ...c, accessTokenEnc: "" })).rejects.toBeInstanceOf(sync.CalendarAccessError);
+      expect((await connection(connA)).status).toBe("NEEDS_RECONNECT");
+    } finally {
+      fake.revoked.delete(refresh);
+      await prisma.calendarConnection.update({ where: { id: connA }, data: { status: "ACTIVE", lastError: "" } });
     }
   });
 
