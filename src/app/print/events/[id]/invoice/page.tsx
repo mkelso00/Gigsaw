@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DocumentShell } from "@/components/document";
+import { Invoice } from "@/components/invoice";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { eventTotals } from "@/lib/events";
-import { cardPaymentsReady, payUrl } from "@/lib/card-payments";
+import { cardPaymentsReady } from "@/lib/card-payments";
 import { receivedOnInvoice } from "@/lib/pay-links";
-import { dealBreakdown, formatMoney } from "@/lib/money";
+import { dealBreakdown } from "@/lib/money";
 import { formatDate, localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
@@ -33,101 +33,57 @@ export default async function EventInvoicePage({ params }: { params: Promise<{ i
   ]);
   if (!e) notFound();
   const t = eventTotals(e.bookings);
-  const received = receivedOnInvoice(e.bookings.flatMap((b) => b.payments));
   // The card payment link, if one's been made and there's something to pay.
   const payLink =
     t.outstanding > 0 && (await cardPaymentsReady(user.agency!))
       ? await prisma.payLink.findFirst({ where: { eventId: e.id, kind: "BALANCE", agencyId: user.agencyId } })
       : null;
-  const money = (m: number) => formatMoney(m, t.currency);
   const day = formatDate(new Date(`${e.date}T12:00:00Z`), "UTC");
   const ref = e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase();
 
   return (
-    <DocumentShell title="Invoice" reference={`INV-${ref}`} settings={settings}>
-      <div className="mb-8 grid grid-cols-2 gap-6 text-sm">
-        <div>
-          <div className="font-medium text-slate-500">Bill to</div>
+    <Invoice
+      reference={`INV-${ref}`}
+      settings={settings}
+      currency={t.currency}
+      timeZone={e.timezone}
+      billTo={
+        <>
           <div className="font-semibold">
             {e.customer?.company && e.customer.company !== "Private client" ? e.customer.company : e.customer?.name || "Customer"}
           </div>
           <div className="whitespace-pre-line">{e.customer?.address}</div>
           <div>{e.customer?.email}</div>
-        </div>
-        <div className="text-right">
-          <div>
-            <span className="text-slate-500">Invoice date</span> {formatDate(new Date(), settings.defaultTimezone)}
-          </div>
+        </>
+      }
+      details={
+        <>
           <div>
             <span className="text-slate-500">Event</span> {e.name}, {day}
           </div>
           {(e.venue || e.venueText) && (
             <div className="text-slate-500">{e.venue ? `${e.venue.name}${e.venue.city ? `, ${e.venue.city}` : ""}` : e.venueText}</div>
           )}
-        </div>
-      </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b-2 border-slate-300 text-left">
-            <th className="py-2">Description</th>
-            <th className="py-2 text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {e.bookings.map((b) => (
-            <tr key={b.id} className="border-b border-slate-100">
-              <td className="py-3">
-                {actName(b)}, {localTime(b.setStart, b.timezone)}
-                {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
-                <span className="block text-xs text-slate-500">{b.reference}</span>
-              </td>
-              <td className="py-3 text-right">{money(dealBreakdown(b).grossMinor)}</td>
-            </tr>
-          ))}
-          {t.fees > 0 && (
-            <tr className="border-b border-slate-100">
-              <td className="py-3">Booking fee</td>
-              <td className="py-3 text-right">{money(t.fees)}</td>
-            </tr>
-          )}
-          <tr>
-            <td className="py-2 text-right text-slate-500">Subtotal</td>
-            <td className="py-2 text-right">{money(t.sale + t.fees)}</td>
-          </tr>
-          {t.vat > 0 && (
-            <tr>
-              <td className="py-2 text-right text-slate-500">VAT</td>
-              <td className="py-2 text-right">{money(t.vat)}</td>
-            </tr>
-          )}
-          <tr>
-            <td className="py-2 text-right font-semibold">Total</td>
-            <td className="py-2 text-right font-semibold">{money(t.total)}</td>
-          </tr>
-          {received.card.map((c, i) => (
-            <tr key={i}>
-              <td className="py-1 text-right text-slate-500">Paid by card, {formatDate(c.paidAt, e.timezone)}</td>
-              <td className="py-1 text-right">−{money(c.amountMinor)}</td>
-            </tr>
-          ))}
-          {received.otherMinor > 0 && (
-            <tr>
-              <td className="py-1 text-right text-slate-500">{received.card.length ? "Other payments" : "Paid so far"}</td>
-              <td className="py-1 text-right">−{money(received.otherMinor)}</td>
-            </tr>
-          )}
-          <tr className="border-t-2 border-slate-300">
-            <td className="py-3 text-right text-lg font-bold">Balance due</td>
-            <td className="py-3 text-right text-lg font-bold">{money(t.outstanding)}</td>
-          </tr>
-        </tbody>
-      </table>
-      {payLink && (
-        <p className="mt-6 text-sm">
-          <span className="font-medium">Pay by card:</span> <span className="break-all">{payUrl(payLink.token)}</span>
-        </p>
-      )}
-      {settings.invoiceTerms && <p className="mt-8 text-sm whitespace-pre-line text-slate-600">{settings.invoiceTerms}</p>}
-    </DocumentShell>
+        </>
+      }
+      lines={e.bookings.map((b) => ({
+        key: b.id,
+        description: (
+          <>
+            {actName(b)}, {localTime(b.setStart, b.timezone)}
+            {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
+            <span className="block text-xs text-slate-500">{b.reference}</span>
+          </>
+        ),
+        amountMinor: dealBreakdown(b).grossMinor,
+      }))}
+      bookingFeeMinor={t.fees}
+      subtotalMinor={t.sale + t.fees}
+      vat={{ label: "VAT", amountMinor: t.vat }}
+      totalMinor={t.total}
+      received={receivedOnInvoice(e.bookings.flatMap((b) => b.payments))}
+      balanceMinor={t.outstanding}
+      payLinkToken={payLink?.token}
+    />
   );
 }
