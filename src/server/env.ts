@@ -35,6 +35,11 @@ export type ServerEnv = {
     google: { clientId: string; clientSecret: string } | null;
     microsoft: { clientId: string; clientSecret: string } | null;
   };
+  /**
+   * Key that encrypts connected calendars' tokens (CALENDAR_TOKEN_KEY: 32 random bytes, base64). Calendar
+   * connect is offered only when this and the provider's GOOGLE_ or MICROSOFT_ settings are set.
+   */
+  calendarTokenKey: Buffer | null;
   /** A stand-in sign-in server for testing. Always null in production. */
   oauthTestBase: string | null;
   /** Gigsaw's own Stripe keys from the environment ("" when not set). Keys saved in the Owner area take priority. */
@@ -176,6 +181,17 @@ export function parseEnv(raw: RawEnv): EnvCheck {
     ? { clientId: read(raw, "MICROSOFT_CLIENT_ID"), clientSecret: read(raw, "MICROSOFT_CLIENT_SECRET") }
     : null;
 
+  // Calendar connect: the same Google and Microsoft apps as sign-in, plus a key for the stored tokens.
+  const rawCalendarKey = read(raw, "CALENDAR_TOKEN_KEY");
+  let calendarTokenKey: Buffer | null = null;
+  if (rawCalendarKey) {
+    const k = Buffer.from(rawCalendarKey, "base64");
+    if (k.length === 32) calendarTokenKey = k;
+    else warnings.push("CALENDAR_TOKEN_KEY must be 32 random bytes in base64 (openssl rand -base64 32), so calendar connect is off.");
+  }
+  if (calendarTokenKey && !google && !microsoft)
+    warnings.push("CALENDAR_TOKEN_KEY is set but neither Google nor Microsoft sign-in is, so there's no calendar to connect.");
+
   // Stripe. Keys saved in the Owner area take priority, so these are only warnings.
   const stripe = {
     secretKey: read(raw, "STRIPE_SECRET_KEY"),
@@ -234,6 +250,7 @@ export function parseEnv(raw: RawEnv): EnvCheck {
       sms,
       vapid,
       oauth: { google, microsoft },
+      calendarTokenKey,
       oauthTestBase,
       stripe,
       stripeApiBase,

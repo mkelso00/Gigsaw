@@ -64,6 +64,7 @@ model Agency {
   away         ArtistUnavailability[]
   availability AvailabilityRequest[]
   quotes       Quote[]
+  calendarConnections CalendarConnection[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -178,6 +179,7 @@ model User {
   checkIns          CheckIn[]
   activity          Activity[]
   pushSubscriptions PushSubscription[]
+  calendarConnections CalendarConnection[]
 
   @@index([agencyId]) // the team list, and the agent pickers on most forms
 }
@@ -1137,5 +1139,50 @@ model QuoteLine {
   booking     Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@index([quoteId])
+  @@index([bookingId])
+}
+
+// A login's own Google or Outlook calendar, connected so Gigsaw can put their gigs straight into it
+// (see docs/calendar-connect.md). One per login and provider. Tokens are encrypted with
+// CALENDAR_TOKEN_KEY (src/server/token-box.ts) and never leave the server.
+model CalendarConnection {
+  id                   String    @id @default(cuid())
+  agencyId             String
+  agency               Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             String // GOOGLE | MICROSOFT
+  accountEmail         String    @default("")
+  // Which calendar the gigs go in: "primary" (Google) or the default calendar (Microsoft) unless one is chosen.
+  calendarId           String    @default("primary")
+  calendarName         String    @default("")
+  refreshTokenEnc      String
+  accessTokenEnc       String    @default("")
+  accessTokenExpiresAt DateTime?
+  status               String    @default("ACTIVE") // ACTIVE | NEEDS_RECONNECT
+  lastError            String    @default("")
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  events               CalendarEventLink[]
+
+  @@unique([userId, provider])
+  @@index([agencyId])
+}
+
+// Which event in a connected calendar stands for which booking, so a change updates it and a
+// cancellation removes it. bookingId is a plain string (no relation) so the link outlives a deleted
+// booking long enough to remove its event.
+model CalendarEventLink {
+  id           String             @id @default(cuid())
+  connectionId String
+  connection   CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  bookingId    String
+  externalId   String
+  // Hash of what was last sent, so an unchanged gig isn't sent again.
+  contentHash  String             @default("")
+  syncedAt     DateTime           @default(now())
+
+  @@unique([connectionId, bookingId])
   @@index([bookingId])
 }

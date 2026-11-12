@@ -12,15 +12,15 @@ import type { prisma } from "@/lib/db";
 // the seed and can run again and again on the same database, alongside other test files.
 // Load the app's modules inside beforeAll (await import(...)), so a skipped run never loads them.
 
-export const testDatabaseUrl = process.env.TEST_DATABASE_URL ?? "";
+const testDatabaseUrl = process.env.TEST_DATABASE_URL ?? "";
 
 /** The database's name, from its URL. */
-export function databaseName(url: string) {
+function databaseName(url: string) {
   return decodeURIComponent(url.split("?")[0].split("/").pop() ?? "");
 }
 
 /** A name that says it's for tests: has "test" in it, or is an agent worktree's own (gigsaw_w…). */
-export function isTestDatabaseName(name: string) {
+function isTestDatabaseName(name: string) {
   return /test/i.test(name) || /^gigsaw_w\w+$/.test(name);
 }
 
