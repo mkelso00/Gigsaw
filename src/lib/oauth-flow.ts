@@ -31,17 +31,27 @@ const cookieOptions = (maxAgeSeconds: number, path: string) => ({
   maxAge: maxAgeSeconds,
 });
 
-export async function saveFlow(flow: OAuthFlow) {
+/** Keep a short-lived, signed value in a cookie that only `path` sees, until its `exp`. Calendar connect uses it too. */
+export async function saveSignedCookie(name: string, value: { exp: number }, path: string) {
   const jar = await cookies();
-  jar.set(FLOW_COOKIE, signValue(flow, await cookieKey()), cookieOptions(Math.ceil((flow.exp - Date.now()) / 1000), "/api/auth"));
+  jar.set(name, signValue(value, await cookieKey()), cookieOptions(Math.ceil((value.exp - Date.now()) / 1000), path));
+}
+
+/** A value saved by saveSignedCookie, if it's unchanged and still valid. Used up on reading, so it can't be replayed. */
+export async function takeSignedCookie<T extends { exp: number }>(name: string, path: string): Promise<T | null> {
+  const jar = await cookies();
+  const value = readSigned<T>(jar.get(name)?.value, await cookieKey());
+  jar.set(name, "", cookieOptions(0, path));
+  return value;
+}
+
+export async function saveFlow(flow: OAuthFlow) {
+  await saveSignedCookie(FLOW_COOKIE, flow, "/api/auth");
 }
 
 /** The flow this browser started, if it's still valid. Used up on reading. */
 export async function takeFlow(): Promise<OAuthFlow | null> {
-  const jar = await cookies();
-  const flow = readSigned<OAuthFlow>(jar.get(FLOW_COOKIE)?.value, await cookieKey());
-  jar.set(FLOW_COOKIE, "", cookieOptions(0, "/api/auth"));
-  return flow;
+  return takeSignedCookie<OAuthFlow>(FLOW_COOKIE, "/api/auth");
 }
 
 /** Someone who signed up with Google or Microsoft: who they are, kept while they fill in the rest. */

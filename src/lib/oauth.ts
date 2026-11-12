@@ -95,18 +95,26 @@ export function newFlow(provider: ProviderKey, intent: OAuthIntent, now = Date.n
   return { provider, intent, state: randomToken(), verifier: randomToken(48), nonce: randomToken(), exp: now + FLOW_MINUTES * 60_000 };
 }
 
-export function authorizeUrl(flow: OAuthFlow, opts: { clientId: string; redirectUri: string; env?: Env }) {
+/** The parts of a flow the provider sees or checks: sign-in's own, or calendar connect's (src/lib/calendar-connect.ts). */
+type FlowSecrets = { provider: ProviderKey; state: string; verifier: string; nonce: string };
+
+/**
+ * The address that sends someone to the provider. Sign-in asks for "openid email profile"; calendar connect
+ * passes its own `scope` and `extra` parameters (offline access, consent), which replace the defaults.
+ */
+export function authorizeUrl(flow: FlowSecrets, opts: { clientId: string; redirectUri: string; env?: Env; scope?: string; extra?: Record<string, string> }) {
   const url = new URL(endpoints(flow.provider, opts.env).authorize);
   const params: Record<string, string> = {
     client_id: opts.clientId,
     response_type: "code",
     redirect_uri: opts.redirectUri,
-    scope: "openid email profile",
+    scope: opts.scope ?? "openid email profile",
     state: flow.state,
     nonce: flow.nonce,
     code_challenge: pkceChallenge(flow.verifier),
     code_challenge_method: "S256",
     prompt: "select_account",
+    ...opts.extra,
   };
   if (flow.provider === "microsoft") params.response_mode = "query";
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -149,11 +157,11 @@ export type CallbackProblem = "cancelled" | "expired" | "state" | "failed";
  * Checks the provider's redirect back to us against the flow we started: same provider, same
  * state (stops someone else's sign-in being slipped into this browser), not expired, and a code.
  */
-export function checkCallback(
-  flow: OAuthFlow | null,
+export function checkCallback<F extends { provider: ProviderKey; state: string } = OAuthFlow>(
+  flow: F | null,
   provider: ProviderKey,
   params: { code?: string | null; state?: string | null; error?: string | null },
-): { ok: true; code: string; flow: OAuthFlow } | { ok: false; problem: CallbackProblem } {
+): { ok: true; code: string; flow: F } | { ok: false; problem: CallbackProblem } {
   if (params.error) return { ok: false, problem: params.error === "access_denied" ? "cancelled" : "failed" };
   if (!flow || flow.provider !== provider) return { ok: false, problem: "expired" };
   if (!params.state || !sameString(params.state, flow.state)) return { ok: false, problem: "state" };
@@ -166,10 +174,21 @@ export function checkCallback(
 
 export class OAuthError extends Error {}
 
-export async function exchangeCode(
-  provider: ProviderKey,
-  opts: { code: string; verifier: string; clientId: string; clientSecret: string; redirectUri: string; env?: Env; fetcher?: typeof fetch },
-): Promise<string> {
+type ExchangeOpts = { code: string; verifier: string; clientId: string; clientSecret: string; redirectUri: string; env?: Env; fetcher?: typeof fetch };
+
+/** What the token endpoint sends back. Sign-in only needs the id_token; calendar connect keeps the rest. */
+export type TokenResponse = {
+  id_token?: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+};
+
+/** Swaps the code (with the PKCE verifier) for tokens. Throws an OAuthError if the provider refuses. */
+export async function exchangeCodeForTokens(provider: ProviderKey, opts: ExchangeOpts): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: opts.code,
@@ -184,8 +203,15 @@ export async function exchangeCode(
     body: body.toString(),
     signal: AbortSignal.timeout(15_000),
   });
-  const json = (await res.json().catch(() => ({}))) as { id_token?: string; error?: string; error_description?: string };
-  if (!res.ok || !json.id_token) throw new OAuthError(`Token exchange failed: ${json.error ?? res.status} ${json.error_description ?? ""}`.trim());
+  const json = (await res.json().catch(() => ({}))) as TokenResponse;
+  if (!res.ok) throw new OAuthError(`Token exchange failed: ${json.error ?? res.status} ${json.error_description ?? ""}`.trim());
+  return json;
+}
+
+/** Swaps the code for an id_token, for signing in. */
+export async function exchangeCode(provider: ProviderKey, opts: ExchangeOpts): Promise<string> {
+  const json = await exchangeCodeForTokens(provider, opts);
+  if (!json.id_token) throw new OAuthError(`Token exchange failed: ${json.error ?? "no id_token"} ${json.error_description ?? ""}`.trim());
   return json.id_token;
 }
 
