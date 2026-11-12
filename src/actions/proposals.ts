@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { requireStaff } from "@/lib/auth";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { EVENT_TYPES } from "@/lib/constants";
 import { checkSignerName, clientIp, checkSignature } from "@/lib/contract-doc";
 import { logActivity, prisma } from "@/lib/db";
@@ -215,6 +216,7 @@ export async function acceptProposalAnswer(token: string, _: FormState, form: Fo
       log.error("Proposal accepted, but the deposit link couldn't be made", { err: e });
     }
     after(() => afterAccepted(done.proposalId));
+    queueCalendarSync(done.bookings.map((b) => b.id));
   });
   if (res?.error) return res;
   revalidatePath(`/q/${token}`);

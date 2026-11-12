@@ -1,5 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
+import { queueCalendarSync } from "./calendar-sync/queue";
 import { prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { wants } from "./notify-prefs";
@@ -132,6 +133,7 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
     data: { offerResponse: answer, respondedAt: new Date(), ...(answer === "ACCEPTED" ? { status: "CONFIRMED" } : {}) },
   });
   if (claim.count !== 1) return false;
+  if (answer === "ACCEPTED") queueCalendarSync(b.id);
   await prisma.activity.create({
     data: {
       agencyId: b.agencyId,

@@ -468,7 +468,7 @@ describeDb("connecting, choosing and disconnecting (database)", () => {
     const flow = cc.newCalendarFlow("microsoft", user.id);
     tokenReply("microsoft", flow);
     const { connectionId } = await cc.finishConnect(user, "microsoft", flow, { code: "c", state: flow.state }, opts);
-    routes[`${BASE}/graph/v1.0/me/calendars`] = () => ({
+    routes[`${BASE}/microsoft/graph/v1.0/me/calendars`] = () => ({
       body: {
         value: [
           { id: "AAA", name: "Birthdays", canEdit: false },

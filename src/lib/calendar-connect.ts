@@ -20,6 +20,7 @@ import {
 import { env as serverEnv, type ServerEnv } from "@/server/env";
 import { openToken, sealToken } from "@/server/token-box";
 import { log } from "@/server/log";
+import { apiBase } from "@/lib/calendar-sync/providers";
 
 // Connecting an act's own Google or Outlook calendar (docs/calendar-connect.md): the start of the flow, the
 // callback, storing the connection, choosing which calendar, and disconnecting. It reuses sign-in's OAuth
@@ -216,9 +217,8 @@ export class ReconnectNeeded extends Error {}
 
 /** Google's calendar API and Microsoft Graph, or the stand-in for tests. */
 export function calendarApiBase(provider: ProviderKey, env: Pick<ServerEnv, "oauthTestBase"> = serverEnv()) {
-  const test = env.oauthTestBase;
-  if (provider === "google") return test ? `${test}/google/calendar/v3` : "https://www.googleapis.com/calendar/v3";
-  return test ? `${test}/graph/v1.0` : "https://graph.microsoft.com/v1.0";
+  // One place for the API addresses (and their test stand-ins), shared with the sync engine.
+  return apiBase(provider === "google" ? "GOOGLE" : "MICROSOFT", env);
 }
 
 type Connection = CalendarConnection;

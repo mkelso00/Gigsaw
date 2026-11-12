@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { parseActProfile } from "@/lib/act-profile";
 import { actBookingCounts, actInUseMessage } from "@/lib/archive";
+import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { CONTACT_TYPES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
@@ -13,6 +15,12 @@ import { isValidTimeZone } from "@/lib/time";
 
 // Every lookup below includes the user's agencyId, so one agency can never read or change
 // another agency's records, even by guessing an id.
+
+/** Gigs that may be in acts' connected calendars (the act feed goes back 90 days), to sync after a change to an act or venue. */
+async function calendarGigIds(where: { agencyId: string; artistId?: string; venueId?: string }) {
+  const since = new Date(Date.now() - 90 * 86_400_000);
+  return (await prisma.booking.findMany({ where: { ...where, setStart: { gte: since } }, select: { id: true } })).map((b) => b.id);
+}
 
 // ---------- Artists ----------
 
@@ -58,8 +66,10 @@ export async function createArtist(_: FormState, form: FormData): Promise<FormSt
 export async function updateArtist(artistId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   const res = await handleForm(async () => {
-    await ownArtist(user, artistId);
-    await prisma.artist.update({ where: { id: artistId }, data: await artistData(form, user.agencyId) });
+    const before = await ownArtist(user, artistId);
+    const saved = await prisma.artist.update({ where: { id: artistId }, data: await artistData(form, user.agencyId) });
+    // The act's name is in its calendar events.
+    if (saved.name !== before.name) queueCalendarSync(await calendarGigIds({ agencyId: user.agencyId, artistId }));
     await logActivity(user, "ARTIST", artistId, "updated artist");
   });
   if (res?.error) return res;
@@ -74,6 +84,8 @@ export async function deleteArtist(artistId: string, _: FormState): Promise<Form
     // Archived bookings count too: they still point at the act, so deleting it would fail.
     const inUse = actInUseMessage(await actBookingCounts(prisma, artistId));
     if (inUse) throw new FormError(inUse);
+    // The login's connected calendar goes with it: take Gigsaw's events out first (a band's gigs, say).
+    await removeCalendarsOfLogins({ artistId, role: "ARTIST" });
     // Together, so the act's login isn't removed if the act itself can't be deleted.
     await prisma.$transaction([prisma.user.deleteMany({ where: { artistId, role: "ARTIST" } }), prisma.artist.delete({ where: { id: artistId } })]);
     await logActivity(user, "ARTIST", artistId, "deleted artist");
@@ -225,6 +237,8 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
     if (!before) throw new FormError("Venue not found");
     await prisma.venue.update({ where: { id: venueId }, data });
     let note = "";
+    // The venue's name, address and time zone are in the acts' calendar events.
+    const gigIds = await calendarGigIds({ agencyId: user.agencyId, venueId });
     if (before.timezone !== data.timezone) {
       // Keep future bookings on the venue's clock. Their stored UTC times stay as they are,
       // so the agency should check the times on those bookings.
@@ -235,6 +249,7 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
       });
       note = ` Time zone changed: check the times on ${n.count} upcoming booking(s).`;
     }
+    queueCalendarSync(gigIds);
     await logActivity(user, "VENUE", venueId, "updated venue");
     revalidatePath("/", "layout");
     return { ok: `Venue saved.${note}` };
@@ -243,7 +258,10 @@ export async function updateVenue(venueId: string, _: FormState, form: FormData)
 
 export async function deleteVenue(venueId: string) {
   const user = await requireStaff();
+  // Read before: the gigs lose their venue, so their events lose the address.
+  const gigIds = await calendarGigIds({ agencyId: user.agencyId, venueId });
   const { count } = await prisma.venue.deleteMany({ where: { id: venueId, agencyId: user.agencyId } });
+  if (count) queueCalendarSync(gigIds);
   if (count) await logActivity(user, "VENUE", venueId, "deleted venue");
   redirect("/venues");
 }

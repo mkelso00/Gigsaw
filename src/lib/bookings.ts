@@ -5,6 +5,7 @@ import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES, BOOKING_STATUS_L
 import { prisma } from "./db";
 import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from "./forms";
 import { toMinor } from "./money";
+import { queueCalendarSync } from "./calendar-sync/queue";
 import { buildSchedule } from "./schedule";
 import { isValidTimeZone, localDateKey, zonedToUtc } from "./time";
 
@@ -68,13 +69,16 @@ type Db = Pick<typeof prisma, "booking" | "$queryRaw">;
 
 /**
  * Inside a transaction (`db`), a clash on the number fails the whole transaction, so the caller
- * retries it (see isReferenceClash).
+ * retries it (see isReferenceClash). Outside one, the act's connected calendars are brought up to
+ * date; inside one, the caller does that (queueCalendarSync) once the transaction has committed.
  */
 export async function createBookingWithReference(agencyId: string, data: Omit<Prisma.BookingUncheckedCreateInput, "reference" | "agencyId">, db: Db = prisma) {
   // Retry if two people create a booking at the same moment and grab the same number.
   for (let attempt = 0; attempt < (db === prisma ? 5 : 1); attempt++) {
     try {
-      return await db.booking.create({ data: { ...data, agencyId, reference: await nextReference(agencyId, db) } });
+      const booking = await db.booking.create({ data: { ...data, agencyId, reference: await nextReference(agencyId, db) } });
+      if (db === prisma) queueCalendarSync(booking.id);
+      return booking;
     } catch (e) {
       if (db !== prisma || !isReferenceClash(e)) throw e;
     }

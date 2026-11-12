@@ -4,6 +4,8 @@ import { checkSignature } from "@/lib/contract-doc";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { endOtherSessions, hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
+import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
@@ -157,6 +159,8 @@ export async function removeStaffUser(userId: string) {
     },
   });
   if (!u) return;
+  // A connected calendar goes with the login: take Gigsaw's events out of it first.
+  await removeCalendarsOfLogins({ id: u.id });
   await prisma.user.delete({ where: { id: u.id } });
   await logActivity(admin, "USER", userId, "removed team member", u.name);
   await syncExtraUsersQuietly(admin.agencyId!);
@@ -203,7 +207,10 @@ export async function loadDemoData(_: FormState): Promise<FormState> {
 
 export async function clearDemoData(_: FormState): Promise<FormState> {
   const admin = await requireAdmin();
+  // The demo logins removeDemoData deletes take their connected calendars with them: empty those first.
+  await removeCalendarsOfLogins({ agencyId: admin.agencyId, OR: [{ demo: true }, { artist: { demo: true } }, { person: { demo: true } }] });
   const res = await removeDemoData(prisma, admin.agencyId);
+  queueCalendarSync(res.bookingIds);
   await logActivity(admin, "SETTINGS", admin.agencyId, "removed demo data", `${res.bookings} bookings`);
   revalidatePath("/", "layout");
   return {

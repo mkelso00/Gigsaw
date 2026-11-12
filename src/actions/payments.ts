@@ -3,6 +3,7 @@
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { logActivities, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
@@ -64,6 +65,7 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
       if (payments.length) await tx.payment.createMany({ data: payments });
       if (settled.length) await tx.booking.updateMany({ where: { id: { in: settled } }, data: { status: "SETTLED" } });
     });
+    queueCalendarSync(settled);
     await logActivities(user, "BOOKING", log);
     revalidatePath("/", "layout");
     if (!count) return { ok: "Already paid." };

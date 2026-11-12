@@ -22,7 +22,7 @@ that leaves the feed (cancelled, archived, deleted, act changed to someone else)
 | Tables `CalendarConnection`, `CalendarEventLink` | `prisma/schema.prisma`, migration `20261205000000_calendar_connect` | groundwork (done) |
 | Token encryption (`sealToken`, `openToken`, AES-256-GCM with `CALENDAR_TOKEN_KEY`) | `src/server/token-box.ts` | groundwork (done) |
 | Setting `env().calendarTokenKey` | `src/server/env.ts` | groundwork (done) |
-| Entry points `syncBookingToCalendars`, `resyncConnection`, `removeConnectionEvents` | `src/lib/calendar-sync/index.ts` | **sync engine** (placeholders now) |
+| Entry points `syncBookingToCalendars`, `resyncConnection`, `removeConnectionEvents` | `src/lib/calendar-sync/index.ts` | **sync engine** (done) |
 | Google Calendar and Microsoft Graph clients, token refresh, event content, hashing, retries | `src/lib/calendar-sync/*` | **sync engine** |
 | Calling `syncBookingToCalendars` wherever a booking changes | booking write paths (`src/actions/*`, `src/lib/*`) | **sync engine** |
 | Scheduler job: retry failed syncs and a nightly top-up | `src/lib/scheduler.ts` / cron jobs | **sync engine** |
@@ -48,6 +48,31 @@ that leaves the feed (cancelled, archived, deleted, act changed to someone else)
 - Only the connection's own act's bookings are synced: `user.artistId`. Staff logins aren't connected yet; the
   table allows it later.
 
+## How the sync engine behaves
+
+- **Files**: `src/lib/calendar-sync/index.ts` (entry points), `content.ts` (event content, hashing, which gigs
+  belong), `providers.ts` (Google and Graph clients, token refresh), `queue.ts` (`queueCalendarSync`, used by the
+  booking write paths), `job.ts` (scheduler job). The words come from `src/lib/act-calendar.ts`, which the
+  subscribe feed uses too, so a connected calendar never says more than the feed.
+- **Which gigs**: the feed's rule (the login's acts and the bands they're in, statuses an act sees, not archived,
+  back 90 days), less cancelled ones, which are removed rather than shown as cancelled. A person's login works
+  the same way as in their feed. A gig already in the calendar isn't taken out just because it's now old.
+  A business that's locked (trial or subscription ended) gets no new or changed events, but removals still happen.
+- **Times**: the venue's wall-clock time with its IANA zone (`Europe/London`) for both providers.
+- **Booking writes** call `queueCalendarSync(ids)` after the write commits. It never waits for the provider: one
+  in-process queue, started with Next's `after()` inside a request, worked through one gig at a time.
+- **Failures**: `invalid_grant` (or similar), a 401 straight after a refresh, a 403 that isn't a rate limit, a
+  calendar that's gone, or a refresh token that won't decrypt set `NEEDS_RECONNECT` with `lastError`. Anything else
+  sets `lastError` only. Connections in `NEEDS_RECONNECT` are skipped until the connect flow sets them `ACTIVE`
+  again and calls `resyncConnection`, which clears `lastError` and sets `lastSyncedAt` when everything matches.
+- **Scheduler** (`calendar-sync` job, every minute, time-boxed to 20 seconds): retries connections with a
+  `lastError` every 15 minutes, and resyncs each connection about once a day (`lastSyncedAt`).
+- **Logins deleted** (an act, a person, a team member, demo data): `removeCalendarsOfLogins` empties their
+  calendars first, since the connection rows go with the login.
+- **Stand-in for tests**: with `OAUTH_TEST_BASE`, tokens go to `<base>/google/token` and
+  `<base>/microsoft/common/oauth2/v2.0/token` (as sign-in), events to `<base>/google/calendar/v3/...` and
+  `<base>/microsoft/graph/v1.0/...`.
+
 ## Providers
 
 | | Google | Microsoft |
@@ -60,7 +85,7 @@ that leaves the feed (cancelled, archived, deleted, act changed to someone else)
 `OAUTH_TEST_BASE` (tests only, ignored in production) points both the sign-in and the calendar APIs at a stand-in.
 
 The connect flow uses these stand-in paths under it: `/google/authorize`, `/google/token`, `/google/jwks`,
-`/google/revoke`, `/google/calendar/v3/…` and `/microsoft/common/oauth2/v2.0/…`, `/graph/v1.0/…`.
+`/google/revoke`, `/google/calendar/v3/…` and `/microsoft/common/oauth2/v2.0/…`, `/microsoft/graph/v1.0/…`.
 
 ## How the connect flow works
 

@@ -1,6 +1,7 @@
 import "server-only";
 import type { AgencyUser } from "./auth";
 import { findClashes } from "./clash-check";
+import { queueCalendarSync } from "./calendar-sync/queue";
 import { getSettings, logActivity, prisma } from "./db";
 import { FormError } from "./forms";
 import { toMinor } from "./money";
@@ -75,6 +76,7 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       cost = { dealType: "BUY_SELL", artistFeeMinor };
     }
     await prisma.booking.update({ where: { id: b.id }, data: { ...schedule, feeMinor, ...cost } });
+    queueCalendarSync(b.id);
     await logActivity(
       user,
       "BOOKING",

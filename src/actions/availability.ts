@@ -6,6 +6,7 @@ import { requireStaff, requireUser, type AgencyUser } from "@/lib/auth";
 import { checkAwayRange, formatRange, isAnswer, type ReplyAnswer } from "@/lib/availability";
 import { answerAvailability, newReplyToken, requestToday, sendAvailability } from "@/lib/availability-requests";
 import { createBookingWithReference, isReferenceClash } from "@/lib/bookings";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { EVENT_TYPES, LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, oneOf, optStr, str, type FormState } from "@/lib/forms";
@@ -320,6 +321,7 @@ export async function bookFromReply(replyId: string, _: FormState): Promise<Form
       }
     }
     id = saved.id;
+    if (saved.made) queueCalendarSync(saved.id);
     if (saved.made) {
       if (onGig) await logActivity(user, "BOOKING", id, "act added from Who's free", reply.artist.name);
       else await logActivity(user, "BOOKING", id, "added from Who's free", `${reply.artist.name} said they're free`);

@@ -7,7 +7,7 @@ import { log } from "./log";
 // failed, and why), so a health check can tell when late-arrival alerts or reminders have quietly
 // stopped. Runs from the built-in scheduler and from /api/cron/overdue both count.
 
-const SCHEDULER_JOBS = ["overdue", "reminders", "event-emails"] as const;
+const SCHEDULER_JOBS = ["overdue", "reminders", "event-emails", "calendar-sync"] as const;
 export type SchedulerJob = (typeof SCHEDULER_JOBS)[number];
 
 /** The scheduler runs every minute; a job with no success for this long is treated as stuck. */

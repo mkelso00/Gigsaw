@@ -6,6 +6,7 @@ import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
 import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, NEEDS_ACT, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
 import { onConfirmed } from "@/lib/confirmations";
 import { offerResetFor } from "@/lib/offer-links";
@@ -78,6 +79,8 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     if (hold) return hold;
     // A different act or a cancellation ends the old offer link.
     await prisma.booking.update({ where: { id: bookingId }, data: { ...data, ...offerResetFor(old, data) } });
+    // Also takes it out of the old act's calendars when the act changed.
+    queueCalendarSync(bookingId);
     await logActivity(user, "BOOKING", bookingId, "updated");
     if (data.status === "CONFIRMED" && old.status !== "CONFIRMED") await onConfirmed(bookingId);
     // Newly awaiting confirmation, or a different act: send the offer.
@@ -104,6 +107,7 @@ export async function setBookingStatus(bookingId: string, _: FormState, form: Fo
     if (before.status === status) return { ok: "No change." };
     if (!before.artistId && NEEDS_ACT.includes(status)) throw new FormError(`Add an act first (Edit), then set it to ${BOOKING_STATUS_LABELS[status]}.`);
     await prisma.booking.update({ where: { id: bookingId }, data: { status, ...offerResetFor(before, { status }) } });
+    queueCalendarSync(bookingId);
     await logActivity(
       user,
       "BOOKING",
@@ -153,6 +157,8 @@ export async function deleteBooking(bookingId: string) {
   // Only archived bookings can be deleted, so nothing live is lost by mistake.
   if (!b.archivedAt) return;
   await prisma.booking.delete({ where: { id: b.id } });
+  // The calendar links outlive the booking (they're found by its id), so its events can still be removed.
+  queueCalendarSync(b.id);
   await logActivity(user, "BOOKING", bookingId, "deleted", b.reference);
   revalidatePath("/", "layout");
   redirect("/bookings");
@@ -167,6 +173,7 @@ export async function archiveBookings(form: FormData) {
   if (!ids.length) return;
   const gigs = await prisma.booking.findMany({ where: { id: { in: ids }, agencyId: user.agencyId }, select: { id: true, reference: true } });
   await prisma.booking.updateMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId }, data: { archivedAt: new Date() } });
+  queueCalendarSync(gigs.map((g) => g.id));
   await logActivities(
     user,
     "BOOKING",
@@ -183,6 +190,7 @@ export async function restoreBookings(form: FormData) {
   const where = { id: { in: ids }, agencyId: user.agencyId, archivedAt: { not: null } };
   const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
   await prisma.booking.updateMany({ where, data: { archivedAt: null } });
+  queueCalendarSync(gigs.map((g) => g.id));
   await logActivities(
     user,
     "BOOKING",
@@ -199,6 +207,8 @@ export async function deleteBookings(form: FormData) {
   const where = { id: { in: ids }, agencyId: user.agencyId!, archivedAt: { not: null } };
   const gigs = await prisma.booking.findMany({ where, select: { id: true, reference: true } });
   await prisma.booking.deleteMany({ where });
+  // Ids read before deleting: the calendar links are found by them.
+  queueCalendarSync(gigs.map((g) => g.id));
   await logActivities(
     user,
     "BOOKING",
@@ -212,6 +222,7 @@ export async function setBookingArchived(bookingId: string, archived: boolean) {
   const user = await requireStaff();
   const b = await ownBooking(user, bookingId);
   await prisma.booking.update({ where: { id: b.id }, data: { archivedAt: archived ? new Date() : null } });
+  queueCalendarSync(b.id);
   await logActivity(user, "BOOKING", b.id, archived ? "archived" : "restored from the archive", b.reference);
   revalidatePath("/", "layout");
   if (archived) redirect("/bookings");

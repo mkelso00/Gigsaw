@@ -4,6 +4,7 @@ import type { Artist } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference } from "@/lib/bookings";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { applyBulkChange } from "@/lib/bulk";
 import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
@@ -252,6 +253,7 @@ async function bookSlot(
           ...offerResetFor(existing, { artistId: artist.id }),
         },
       });
+      queueCalendarSync(existing.id);
       await logActivity(user, "BOOKING", existing.id, "act added", artist.name);
       return existing.id;
     }

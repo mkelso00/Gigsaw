@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference } from "@/lib/bookings";
+import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { findClashes } from "@/lib/clash-check";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
@@ -121,6 +122,7 @@ export async function updateEvent(eventId: string, _: FormState, form: FormData)
       where: { eventId, agencyId: user.agencyId, archivedAt: undefined },
       data: { venueId: basics.venueId, promoterId: basics.customerId, eventName: basics.name },
     });
+    queueCalendarSync((await prisma.booking.findMany({ where: { eventId, agencyId: user.agencyId }, select: { id: true } })).map((b) => b.id));
     await logActivity(user, "EVENT", eventId, "updated");
     revalidatePath("/", "layout");
     return { ok: before.date !== basics.date ? "Saved. The date changed: move each act's booking on its booking too." : "Saved." };
