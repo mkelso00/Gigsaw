@@ -3,8 +3,8 @@ import EnquiriesPage from "../enquiries/page";
 
 export const metadata: Metadata = { title: "Proposals" };
 
-/** Quotes have their own place in the menu: the Enquiries page, opened on its Quotes tab. */
-export default async function QuotesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+/** Proposals have their own place in the menu: the Enquiries page, opened on its Proposals tab. */
+export default async function ProposalsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   return EnquiriesPage({ searchParams: Promise.resolve({ ...sp, view: "quotes" }) });
 }

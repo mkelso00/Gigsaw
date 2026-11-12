@@ -5,15 +5,15 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import type { FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
-import { draftMoney, MAX_LINES, quoteTotals, type QuoteLineDraft } from "@/lib/quotes";
+import { draftMoney, MAX_LINES, proposalTotals, type ProposalLineDraft } from "@/lib/proposals";
 
-// The quote editor: the lines (act, what they do, when, where, price and the act's fee), the
+// The proposal editor: the lines (act, what they do, when, where, price and the act's fee), the
 // booking fee, deposit, dates and wording, with the totals worked out as you type. The cost and
 // what the agency makes are for staff: the customer's page never shows them.
 
-type Line = QuoteLineDraft & { key: string };
+type Line = ProposalLineDraft & { key: string };
 
-export type QuoteEditorValues = {
+export type ProposalEditorValues = {
   title: string;
   eventType: string;
   bookingFee: string;
@@ -28,7 +28,7 @@ export type QuoteEditorValues = {
 let seq = 0;
 const newKey = () => `l${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-export function QuoteEditor({
+export function ProposalEditor({
   action,
   values,
   lines: start,
@@ -40,8 +40,8 @@ export function QuoteEditor({
   defaultFee,
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
-  values: QuoteEditorValues;
-  lines: QuoteLineDraft[];
+  values: ProposalEditorValues;
+  lines: ProposalLineDraft[];
   currency: string;
   acts: ComboOption[];
   venues: ComboOption[];
@@ -58,7 +58,7 @@ export function QuoteEditor({
   const money = (s: string) => draftMoney({ sale: s, cost: "", vatPct: "" }, currency).saleMinor;
   const totals = useMemo(
     () =>
-      quoteTotals(
+      proposalTotals(
         lines.map((l) => draftMoney(l, currency)),
         money(fee),
       ),
@@ -66,7 +66,7 @@ export function QuoteEditor({
   ); // eslint-disable-line react-hooks/exhaustive-deps
   const depositMinor = money(deposit);
 
-  const set = (key: string, patch: Partial<QuoteLineDraft>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const set = (key: string, patch: Partial<ProposalLineDraft>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const add = () =>
     setLines((ls) => {
       const last = ls.at(-1);
@@ -137,7 +137,7 @@ export function QuoteEditor({
           {lines.map((l, i) => {
             const d = totals.lines[i];
             return (
-              <li key={l.key} className="card p-4 sm:p-5" data-quote-line={i + 1}>
+              <li key={l.key} className="card p-4 sm:p-5" data-proposal-line={i + 1}>
                 <div className="mb-3 flex items-center gap-2">
                   <span className="flex items-center gap-2 font-mono text-[10.5px] font-medium tracking-[0.12em] text-ink-500 uppercase">
                     <span className="h-1.5 w-1.5 rounded-full bg-volt-400 shadow-[0_0_6px_var(--color-volt-400)]" aria-hidden />
@@ -363,7 +363,7 @@ export function QuoteEditor({
               <span className="h-1.5 w-1.5 rounded-full bg-volt-400 shadow-[0_0_6px_var(--color-volt-400)]" aria-hidden />
               Customer pays
             </div>
-            <div className="mt-3 text-[28px] leading-none font-semibold tracking-[-0.03em] text-volt-300 tabular-nums" data-testid="quote-total">
+            <div className="mt-3 text-[28px] leading-none font-semibold tracking-[-0.03em] text-volt-300 tabular-nums" data-testid="proposal-total">
               {m(totals.totalMinor)}
             </div>
             <dl className="mt-4 space-y-1.5 text-sm text-white/80 tabular-nums">
@@ -383,7 +383,7 @@ export function QuoteEditor({
               <Row
                 k="We make"
                 v={
-                  <span className="font-semibold text-ink-950" data-testid="quote-margin">
+                  <span className="font-semibold text-ink-950" data-testid="proposal-margin">
                     {m(totals.agencyMinor)}
                   </span>
                 }

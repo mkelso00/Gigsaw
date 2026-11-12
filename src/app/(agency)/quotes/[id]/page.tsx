@@ -1,29 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteDraftQuote, getQuoteLink, newVersion, sendQuoteNow, withdrawQuote } from "@/actions/quotes";
+import { deleteDraftProposal, getProposalLink, newVersion, sendProposalNow, withdrawProposal } from "@/actions/proposals";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
-import { QuoteStatusBadge } from "@/components/quote-list";
+import { ProposalStatusBadge } from "@/components/proposal-list";
 import { PageHeader, Stat } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDay } from "@/lib/enquiries";
 import { formatMoney } from "@/lib/money";
-import { linePlace, quoteInclude, quoteUrl, readyToSend } from "@/lib/quote-server";
-import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, quoteRef, quoteTotals } from "@/lib/quotes";
+import { linePlace, proposalInclude, proposalUrl, readyToSend } from "@/lib/proposal-server";
+import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, proposalRef, proposalTotals } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Proposal" };
 export const dynamic = "force-dynamic";
 
-/** One quote, for staff: what's on it (with the acts' fees and what we make), sending it, and its history. */
-export default async function QuotePage({ params }: { params: Promise<{ id: string }> }) {
+/** One proposal, for staff: what's on it (with the acts' fees and what we make), sending it, and its history. */
+export default async function ProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
   const q = await prisma.quote.findFirst({
     where: { id, agencyId: user.agencyId },
-    include: { ...quoteInclude, event: { select: { id: true, name: true } }, enquiry: { select: { id: true, name: true } }, supersededBy: true },
+    include: { ...proposalInclude, event: { select: { id: true, name: true } }, enquiry: { select: { id: true, name: true } }, supersededBy: true },
   });
   if (!q) notFound();
   const [versions, activity] = await Promise.all([
@@ -41,7 +41,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
   ]);
   const today = localDateKey(new Date(), q.timezone);
   const status = effectiveStatus(q, today);
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
   const when = (d: Date) => formatDateTime(d, q.timezone);
   const notReady = canSend(q) ? readyToSend(q, today) : null;
@@ -52,7 +52,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
       <PageHeader
         eyebrow={
           <>
-            Proposal {quoteRef(q)}
+            Proposal {proposalRef(q)}
             {q.enquiry && (
               <>
                 {" · "}
@@ -228,7 +228,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
           <section className="card card-pad">
             <div className="flex items-center justify-between gap-3">
               <h2 className="section-title">Status</h2>
-              <QuoteStatusBadge q={q} today={today} />
+              <ProposalStatusBadge q={q} today={today} />
             </div>
             <dl className="mt-3 space-y-1.5 text-sm">
               <Line k="Valid until" v={q.validUntil ? formatDay(q.validUntil) : "No end date"} />
@@ -243,7 +243,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             </dl>
 
             {(canSend(q) || canResend(q, today)) && (
-              <ActionForm action={sendQuoteNow.bind(null, q.id)} className="mt-4 space-y-3 border-t border-ink-100 pt-4">
+              <ActionForm action={sendProposalNow.bind(null, q.id)} className="mt-4 space-y-3 border-t border-ink-100 pt-4">
                 <label className="block">
                   <span className="label">Send to</span>
                   <input name="to" type="email" required defaultValue={q.sentTo || q.contact?.email || ""} className="input" />
@@ -256,7 +256,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
               </ActionForm>
             )}
             {canSend(q) && (
-              <ActionForm action={getQuoteLink.bind(null, q.id)} className="mt-3">
+              <ActionForm action={getProposalLink.bind(null, q.id)} className="mt-3">
                 <SubmitButton className="btn w-full" pendingText="Making the link…">
                   Get a link to send yourself
                 </SubmitButton>
@@ -266,19 +266,19 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
             {q.token && (
               <div className="mt-4 border-t border-ink-100 pt-4">
                 <span className="label">Link to send the customer</span>
-                <CopyField value={quoteUrl(q.token)} />
+                <CopyField value={proposalUrl(q.token)} />
                 <p className="hint">Anyone with this link can see the proposal and sign it, so send it only to the customer.</p>
               </div>
             )}
             {canWithdraw(q) && (
-              <ServerForm action={withdrawQuote.bind(null, q.id)} className="mt-4">
+              <ServerForm action={withdrawProposal.bind(null, q.id)} className="mt-4">
                 <ConfirmButton message="Withdraw this proposal? The customer's link will say it's been withdrawn and they can't accept it." className="btn w-full">
                   Withdraw
                 </ConfirmButton>
               </ServerForm>
             )}
             {canEdit(q) && (
-              <ServerForm action={deleteDraftQuote.bind(null, q.id)} className="mt-4">
+              <ServerForm action={deleteDraftProposal.bind(null, q.id)} className="mt-4">
                 <ConfirmButton
                   message={q.version > 1 ? "Delete this draft? The version before it goes back to being the live one." : "Delete this draft proposal?"}
                   className="btn btn-danger w-full"
@@ -299,7 +299,7 @@ export default async function QuotePage({ params }: { params: Promise<{ id: stri
                       Version {v.version}
                       {v.id === latest.id ? " (latest)" : ""}
                     </Link>
-                    <QuoteStatusBadge q={v} today={today} />
+                    <ProposalStatusBadge q={v} today={today} />
                   </li>
                 ))}
               </ul>

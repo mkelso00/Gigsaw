@@ -12,31 +12,31 @@ import { isRealDate } from "@/lib/enquiries";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import {
-  acceptQuote,
+  acceptProposal,
   afterAccepted,
   afterDeclined,
-  createDraftQuote,
-  declineQuote,
+  createDraftProposal,
+  declineProposal,
   depositLinkFor,
-  newQuoteVersion,
-  QuoteError,
-  publishQuote,
-  sendQuote,
-} from "@/lib/quote-server";
-import { canWithdraw, looksLikeQuoteToken, parseAmount, parseQuoteLines, quoteRef, quoteTotals } from "@/lib/quotes";
+  newProposalVersion,
+  ProposalError,
+  publishProposal,
+  sendProposal,
+} from "@/lib/proposal-server";
+import { canWithdraw, looksLikeProposalToken, parseAmount, parseProposalLines, proposalRef, proposalTotals } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 import { log } from "@/server/log";
 
-// Quotes: staff make, change, send and withdraw them; the customer accepts or declines at
+// Proposals: staff make, change, send and withdraw them; the customer accepts or declines at
 // /q/<token> with no login. Every staff lookup includes the agency.
 
-/** Turn a QuoteError (a message meant for the person) into a form message. */
-async function quoteForm(fn: () => Promise<FormState | void>): Promise<FormState> {
+/** Turn a ProposalError (a message meant for the person) into a form message. */
+async function proposalForm(fn: () => Promise<FormState | void>): Promise<FormState> {
   return handleForm(async () => {
     try {
       return await fn();
     } catch (e) {
-      if (e instanceof QuoteError) throw new FormError(e.message);
+      if (e instanceof ProposalError) throw new FormError(e.message);
       throw e;
     }
   });
@@ -46,32 +46,32 @@ async function quoteForm(fn: () => Promise<FormState | void>): Promise<FormState
  * "Turn into a proposal" on a lead (or "Make a proposal" on a customer): a draft, filled in from the lead,
  * opened in the editor. The lead counts as dealt with from then on, so it leaves the New tab.
  */
-export async function makeQuote(from: "enquiry" | "contact", id: string, _: FormState): Promise<FormState> {
+export async function makeProposal(from: "enquiry" | "contact", id: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
-  let quoteId = "";
-  const res = await quoteForm(async () => {
-    const q = await createDraftQuote(user, from === "enquiry" ? { enquiryId: id } : { contactId: id });
-    await logActivity(user, "QUOTE", q.id, `started proposal ${quoteRef(q)}`, q.title);
+  let proposalId = "";
+  const res = await proposalForm(async () => {
+    const q = await createDraftProposal(user, from === "enquiry" ? { enquiryId: id } : { contactId: id });
+    await logActivity(user, "QUOTE", q.id, `started proposal ${proposalRef(q)}`, q.title);
     if (from === "enquiry") await prisma.enquiry.updateMany({ where: { id, agencyId: user.agencyId, status: "NEW" }, data: { status: "DONE", doneAt: new Date() } });
-    quoteId = q.id;
+    proposalId = q.id;
   });
   if (res?.error) return res;
   revalidatePath("/", "layout");
-  redirect(`/quotes/${quoteId}/edit`);
+  redirect(`/quotes/${proposalId}/edit`);
 }
 
-/** Save the draft from the editor. Only a draft can be changed: a sent quote gets a new version first. */
-export async function saveQuote(quoteId: string, _: FormState, form: FormData): Promise<FormState> {
+/** Save the draft from the editor. Only a draft can be changed: a sent proposal gets a new version first. */
+export async function saveProposal(proposalId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
-  const res = await quoteForm(async () => {
-    const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId } });
+  const res = await proposalForm(async () => {
+    const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId } });
     if (!q) throw new FormError("Proposal not found");
     if (q.status !== "DRAFT" || q.supersededById) throw new FormError("This proposal has been sent, so it can't be changed. Make a new version instead.");
     const [acts, venues] = await Promise.all([
       prisma.artist.findMany({ where: { agencyId: user.agencyId }, select: { id: true } }),
       prisma.venue.findMany({ where: { agencyId: user.agencyId }, select: { id: true } }),
     ]);
-    const lines = parseQuoteLines(str(form, "lines"), q.currency, {
+    const lines = parseProposalLines(str(form, "lines"), q.currency, {
       artistIds: new Set(acts.map((a) => a.id)),
       venueIds: new Set(venues.map((v) => v.id)),
     });
@@ -86,7 +86,7 @@ export async function saveQuote(quoteId: string, _: FormState, form: FormData): 
     const validUntil = str(form, "validUntil");
     if (validUntil && !isRealDate(validUntil)) throw new FormError("Check the valid-until date");
     if (validUntil && validUntil < today) throw new FormError("The valid-until date has already passed");
-    const total = quoteTotals(lines, bookingFeeMinor).totalMinor;
+    const total = proposalTotals(lines, bookingFeeMinor).totalMinor;
     if (depositMinor > total) throw new FormError(`The deposit can't be more than the total (${formatMoney(total, q.currency)})`);
 
     await prisma.$transaction(async (tx) => {
@@ -109,54 +109,54 @@ export async function saveQuote(quoteId: string, _: FormState, form: FormData): 
       await tx.quoteLine.deleteMany({ where: { quoteId: q.id } });
       if (lines.length) await tx.quoteLine.createMany({ data: lines.map((l, i) => ({ ...l, quoteId: q.id, sort: i })) });
     });
-    await logActivity(user, "QUOTE", q.id, `saved proposal ${quoteRef(q)}`, title);
+    await logActivity(user, "QUOTE", q.id, `saved proposal ${proposalRef(q)}`, title);
   });
   if (res?.error) return res;
   revalidatePath("/", "layout");
-  redirect(`/quotes/${quoteId}`);
+  redirect(`/quotes/${proposalId}`);
 }
 
-/** Send the quote (or send the same one again) to the customer by email. */
-export async function sendQuoteNow(quoteId: string, _: FormState, form: FormData): Promise<FormState> {
+/** Send the proposal (or send the same one again) to the customer by email. */
+export async function sendProposalNow(proposalId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
-  return quoteForm(async () => {
-    const r = await sendQuote(user, quoteId, str(form, "to"));
-    await logActivity(user, "QUOTE", quoteId, r.resent ? `sent proposal ${quoteRef(r.quote)} again` : `sent proposal ${quoteRef(r.quote)}`, str(form, "to"));
+  return proposalForm(async () => {
+    const r = await sendProposal(user, proposalId, str(form, "to"));
+    await logActivity(user, "QUOTE", proposalId, r.resent ? `sent proposal ${proposalRef(r.proposal)} again` : `sent proposal ${proposalRef(r.proposal)}`, str(form, "to"));
     revalidatePath("/", "layout");
     return { ok: `Proposal ${r.resent ? "sent again" : "sent"} to ${str(form, "to").toLowerCase()}.` };
   });
 }
 
-/** Give the quote its customer link without emailing it, for staff to send themselves. */
-export async function getQuoteLink(quoteId: string, _: FormState): Promise<FormState> {
+/** Give the proposal its customer link without emailing it, for staff to send themselves. */
+export async function getProposalLink(proposalId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
-  return quoteForm(async () => {
-    const q = await publishQuote(user, quoteId);
-    await logActivity(user, "QUOTE", quoteId, `made a link for proposal ${quoteRef(q)}`);
+  return proposalForm(async () => {
+    const q = await publishProposal(user, proposalId);
+    await logActivity(user, "QUOTE", proposalId, `made a link for proposal ${proposalRef(q)}`);
     revalidatePath("/", "layout");
     return { ok: "Your link is ready. Copy it and send it to the customer." };
   });
 }
 
-/** Withdraw a quote that's out with the customer: its link then only says so. */
-export async function withdrawQuote(quoteId: string) {
+/** Withdraw a proposal that's out with the customer: its link then only says so. */
+export async function withdrawProposal(proposalId: string) {
   const user = await requireStaff();
-  const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId } });
+  const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId } });
   if (!q || !canWithdraw(q)) return;
   const done = await prisma.quote.updateMany({
     where: { id: q.id, agencyId: user.agencyId, supersededById: null, status: { in: ["SENT", "VIEWED", "EXPIRED"] } },
     data: { status: "WITHDRAWN", withdrawnAt: new Date() },
   });
-  if (done.count) await logActivity(user, "QUOTE", q.id, `withdrew proposal ${quoteRef(q)}`, q.title);
+  if (done.count) await logActivity(user, "QUOTE", q.id, `withdrew proposal ${proposalRef(q)}`, q.title);
   revalidatePath("/", "layout");
 }
 
-/** Change a quote that's been sent, or quote again after a decline: a new version, opened in the editor. */
-export async function newVersion(quoteId: string, _: FormState): Promise<FormState> {
+/** Change a proposal that's been sent, or make a new one after a decline: a new version, opened in the editor. */
+export async function newVersion(proposalId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
   let nextId = "";
-  const res = await quoteForm(async () => {
-    const next = await newQuoteVersion(user, quoteId);
+  const res = await proposalForm(async () => {
+    const next = await newProposalVersion(user, proposalId);
     await logActivity(user, "QUOTE", next.id, `made version ${next.version} of proposal ${next.number}`, next.title);
     nextId = next.id;
   });
@@ -169,15 +169,15 @@ export async function newVersion(quoteId: string, _: FormState): Promise<FormSta
  * Delete a draft. If it was a new version of a sent proposal, the sent one's link works again. If it was the
  * lead's only proposal, the lead goes back to New, as it was before the proposal was made.
  */
-export async function deleteDraftQuote(quoteId: string) {
+export async function deleteDraftProposal(proposalId: string) {
   const user = await requireStaff();
   const q = await prisma.quote.findFirst({
-    where: { id: quoteId, agencyId: user.agencyId, status: "DRAFT" },
+    where: { id: proposalId, agencyId: user.agencyId, status: "DRAFT" },
     include: { supersedes: { select: { id: true } } },
   });
   if (!q) return;
   await prisma.quote.deleteMany({ where: { id: q.id, agencyId: user.agencyId, status: "DRAFT" } });
-  await logActivity(user, "QUOTE", q.id, `deleted the draft of proposal ${quoteRef(q)}`, q.title);
+  await logActivity(user, "QUOTE", q.id, `deleted the draft of proposal ${proposalRef(q)}`, q.title);
   if (q.enquiryId && !(await prisma.quote.count({ where: { enquiryId: q.enquiryId, agencyId: user.agencyId } })))
     await prisma.enquiry.updateMany({ where: { id: q.enquiryId, agencyId: user.agencyId, status: "DONE" }, data: { status: "NEW", doneAt: null } });
   revalidatePath("/", "layout");
@@ -198,23 +198,23 @@ async function answerFrom(form: FormData, field: string) {
 }
 
 /** The customer accepts: their typed name, a drawn signature, a tick, and an optional message. */
-export async function acceptQuoteAnswer(token: string, _: FormState, form: FormData): Promise<FormState> {
-  if (!looksLikeQuoteToken(token)) return { error: "This link isn't valid." };
-  const res = await quoteForm(async () => {
+export async function acceptProposalAnswer(token: string, _: FormState, form: FormData): Promise<FormState> {
+  if (!looksLikeProposalToken(token)) return { error: "This link isn't valid." };
+  const res = await proposalForm(async () => {
     const name = checkSignerName(str(form, "name"));
     if (!name) throw new FormError("Type your full name");
     const signature = checkSignature(str(form, "signature"));
     if (!signature) throw new FormError("Draw your signature in the box");
     if (form.get("agree") !== "on") throw new FormError("Tick the box to say you accept the proposal");
-    const done = await acceptQuote(token, { name, signature, ...(await answerFrom(form, "note")) });
+    const done = await acceptProposal(token, { name, signature, ...(await answerFrom(form, "note")) });
     // A second tap (or another device) finds it already accepted: nothing more happens.
     if (!done) return;
     try {
-      await depositLinkFor(done.quoteId);
+      await depositLinkFor(done.proposalId);
     } catch (e) {
       log.error("Proposal accepted, but the deposit link couldn't be made", { err: e });
     }
-    after(() => afterAccepted(done.quoteId));
+    after(() => afterAccepted(done.proposalId));
   });
   if (res?.error) return res;
   revalidatePath(`/q/${token}`);
@@ -222,10 +222,10 @@ export async function acceptQuoteAnswer(token: string, _: FormState, form: FormD
 }
 
 /** The customer declines, with a reason if they like. */
-export async function declineQuoteAnswer(token: string, _: FormState, form: FormData): Promise<FormState> {
-  if (!looksLikeQuoteToken(token)) return { error: "This link isn't valid." };
-  const res = await quoteForm(async () => {
-    const done = await declineQuote(token, { name: "", ...(await answerFrom(form, "reason")) });
+export async function declineProposalAnswer(token: string, _: FormState, form: FormData): Promise<FormState> {
+  if (!looksLikeProposalToken(token)) return { error: "This link isn't valid." };
+  const res = await proposalForm(async () => {
+    const done = await declineProposal(token, { name: "", ...(await answerFrom(form, "reason")) });
     if (!done) return;
     const q = await prisma.quote.findUnique({ where: { token }, select: { id: true } });
     if (q) after(() => afterDeclined(q.id));

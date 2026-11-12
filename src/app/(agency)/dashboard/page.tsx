@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   const cur = settings.defaultCurrency;
 
   const todayKey = localDateKey(now, settings.defaultTimezone);
-  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, quotesOut] = await Promise.all([
+  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, proposalsOut] = await Promise.all([
     prisma.booking.findMany({
       where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
       include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
       select: { id: true, name: true, eventType: true, date: true },
       take: 50,
     }),
-    // Quotes with the customer, still open, and ones accepted in the last fortnight with no contract sent yet.
+    // Proposals with the customer, still open, and ones accepted in the last fortnight with no contract sent yet.
     prisma.quote.count({
       where: {
         agencyId: user.agencyId,
@@ -177,12 +177,12 @@ export default async function DashboardPage() {
       href: "/enquiries",
       action: "Reply",
     });
-  if (quotesOut > 0)
+  if (proposalsOut > 0)
     needs.push({
-      key: "quotes-out",
+      key: "proposals-out",
       tone: "info",
-      count: quotesOut,
-      text: `proposal${quotesOut === 1 ? " is" : "s are"} waiting for the customer's answer`,
+      count: proposalsOut,
+      text: `proposal${proposalsOut === 1 ? " is" : "s are"} waiting for the customer's answer`,
       href: "/enquiries?view=quotes",
       action: "See",
     });

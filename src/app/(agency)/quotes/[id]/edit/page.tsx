@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { saveQuote } from "@/actions/quotes";
-import { QuoteEditor } from "@/components/quote-editor";
+import { saveProposal } from "@/actions/proposals";
+import { ProposalEditor } from "@/components/proposal-editor";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { defaultBookingFee, minorToInput } from "@/lib/money";
-import { canEdit, quoteRef } from "@/lib/quotes";
+import { canEdit, proposalRef } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Edit proposal" };
 export const dynamic = "force-dynamic";
 
-export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
   const [q, settings, acts, venues] = await Promise.all([
@@ -24,7 +24,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
     prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
   ]);
   if (!q) notFound();
-  // Once sent, a quote is changed by making a new version (from its page).
+  // Once sent, a proposal is changed by making a new version (from its page).
   if (!canEdit(q)) redirect(`/quotes/${q.id}`);
   const cur = q.currency;
   const input = (minor: number | null) => (minor === null ? "" : minorToInput(minor, cur));
@@ -36,7 +36,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         eyebrow={
           <>
             <Link href={`/quotes/${q.id}`} className="hover:underline">
-              Proposal {quoteRef(q)}
+              Proposal {proposalRef(q)}
             </Link>
             {q.contact ? ` · for ${q.contact.name}` : ""}
           </>
@@ -44,8 +44,8 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         title={q.version > 1 ? `Edit version ${q.version}` : "Edit proposal"}
         subtitle="Prices and times are what the customer sees. The act's fee and what you make are only ever shown to your team."
       />
-      <QuoteEditor
-        action={saveQuote.bind(null, q.id)}
+      <ProposalEditor
+        action={saveProposal.bind(null, q.id)}
         currency={cur}
         defaultDate={q.lines[0]?.date || localDateKey(new Date(), q.timezone)}
         defaultFee={fee ? minorToInput(fee, cur) : ""}
