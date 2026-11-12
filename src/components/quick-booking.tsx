@@ -3,37 +3,57 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { loadQuickBookingLists, type QuickBookingLists } from "@/actions/quick-booking";
 import { addRotaGig } from "@/actions/slots";
-import { Combobox, type ComboOption } from "@/components/combobox";
+import { Combobox } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Icon } from "@/components/icons";
-import { awayLine, awayOn, type AwayBlock } from "@/lib/availability";
+import { awayLine, awayOn } from "@/lib/availability";
 import { BOOKING_STATUS_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/constants";
+
+// One empty list for while the real ones load, so the pickers' memos don't rerun on every render.
+const NONE: never[] = [];
 
 /**
  * The "New booking" button on every agency page, with a short form in a pop-up. Press "n" to open it.
  * Act, venue and who pays are type-to-search. Ctrl+Enter (or Enter in a box) books it; after a
  * booking the form clears and goes back to Act, ready for the next one.
+ *
+ * The acts, venues and contacts to pick from are loaded the first time it opens (or the button is
+ * pointed at), then kept. `version` changes whenever the server sends the layout again (after a save
+ * or a refresh), so the next opening fetches them afresh and picks up anything added since.
  */
-export function QuickBooking({
-  acts,
-  venues,
-  contacts,
-  currency,
-  today,
-  away = [],
-}: {
-  acts: ComboOption[];
-  venues: ComboOption[];
-  contacts: ComboOption[];
-  currency: string;
-  today: string;
-  /** Days acts have blocked out, from today on (a band's list includes its acts' days). */
-  away?: (AwayBlock & { own: boolean; actName: string })[];
-}) {
+export function QuickBooking({ currency, today, version }: { currency: string; today: string; version: string }) {
   const router = useRouter();
   const ref = useRef<HTMLDialogElement>(null);
   const actRef = useRef<HTMLInputElement>(null);
+  const [lists, setLists] = useState<QuickBookingLists | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const versionRef = useRef(version);
+  const loads = useRef<{ version: string | null; pending: boolean }>({ version: null, pending: false });
+  // Stable, so the keyboard shortcut's listener (added once) can call it.
+  const load = useCallback(() => {
+    const v = versionRef.current;
+    if (loads.current.pending || loads.current.version === v) return;
+    loads.current.pending = true;
+    setLoadFailed(false);
+    loadQuickBookingLists()
+      .then((l) => {
+        loads.current.version = v;
+        setLists(l);
+      })
+      .catch(() => setLoadFailed(true))
+      .finally(() => {
+        loads.current.pending = false;
+      });
+  }, []);
+  useEffect(() => {
+    versionRef.current = version;
+    // Booked one with the pop-up still open: bring its lists up to date straight away.
+    if (ref.current?.open) load();
+  }, [version, load]);
+  const acts = lists?.acts ?? NONE;
+  const away = lists?.away ?? NONE;
   const [type, setType] = useState("GIG");
   const [actId, setActId] = useState("");
   const [status, setStatus] = useState("PENDING");
@@ -46,6 +66,7 @@ export function QuickBooking({
   );
   const chosenAway = actId && awayToday.has(actId) ? awayLine(acts.find((a) => a.id === actId)?.name ?? "This act", awayToday.get(actId)!) : null;
   const open = () => {
+    load();
     ref.current?.showModal();
     actRef.current?.focus();
   };
@@ -88,7 +109,14 @@ export function QuickBooking({
   const noAct = !actId;
   return (
     <>
-      <button type="button" onClick={open} className="btn btn-volt hidden h-11 shrink-0 rounded-xl px-4 lg:inline-flex" title="New booking (press N)">
+      <button
+        type="button"
+        onClick={open}
+        onPointerEnter={load}
+        onFocus={load}
+        className="btn btn-volt hidden h-11 shrink-0 rounded-xl px-4 lg:inline-flex"
+        title="New booking (press N)"
+      >
         <Icon name="plus" className="h-4 w-4" />
         <span className="hidden sm:inline">New booking</span>
       </button>
@@ -147,6 +175,19 @@ export function QuickBooking({
                   {chosenAway} You can still book them.
                 </p>
               )}
+              {!lists &&
+                (loadFailed ? (
+                  <p role="alert" className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Couldn&apos;t load your acts, venues and contacts.{" "}
+                    <button type="button" onClick={load} className="font-medium underline">
+                      Try again
+                    </button>
+                  </p>
+                ) : (
+                  <p role="status" className="mt-1.5 text-xs text-ink-500">
+                    Loading acts, venues and contacts…
+                  </p>
+                ))}
             </div>
             <label>
               <span className={label}>Date</span>
@@ -156,7 +197,13 @@ export function QuickBooking({
               <label htmlFor="qb-venue" className={label}>
                 Venue
               </label>
-              <Combobox id="qb-venue" name="venueId" options={venues} emptyLabel="No venue (e.g. a private address)" placeholder="Type a venue or town" />
+              <Combobox
+                id="qb-venue"
+                name="venueId"
+                options={lists?.venues ?? NONE}
+                emptyLabel="No venue (e.g. a private address)"
+                placeholder="Type a venue or town"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
               <label className="col-span-2 sm:col-span-1">
@@ -218,7 +265,13 @@ export function QuickBooking({
               <label htmlFor="qb-payer" className={label}>
                 Who pays
               </label>
-              <Combobox id="qb-payer" name="promoterId" options={contacts} emptyLabel="The venue's usual payer" placeholder="Type a company or customer" />
+              <Combobox
+                id="qb-payer"
+                name="promoterId"
+                options={lists?.contacts ?? NONE}
+                emptyLabel="The venue's usual payer"
+                placeholder="Type a company or customer"
+              />
             </div>
             <p id="qb-status-hint" className="-mt-2 text-xs text-ink-500 sm:col-span-2">
               {noAct && status !== "PENDING" && status !== "ENQUIRY"

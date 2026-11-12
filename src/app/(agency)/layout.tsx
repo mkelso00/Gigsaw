@@ -10,7 +10,6 @@ import { RenderStamp } from "@/components/render-stamp";
 import { MobileTopIcons, SearchSlot } from "@/components/header-actions";
 import { MobileMenu, NavLinks } from "@/components/nav";
 import { requireStaff } from "@/lib/auth";
-import { awayBetween } from "@/lib/away";
 import { getSettings, prisma } from "@/lib/db";
 import { isLocked } from "@/lib/billing-lock";
 import { OPEN_WHEN_LOCKED, billingState } from "@/lib/subscription";
@@ -22,18 +21,13 @@ export default async function AgencyLayout({ children }: { children: React.React
   const user = await requireStaff({ allowLocked: true });
   const theme = (await cookies()).get("gigsaw_theme")?.value === "dark" ? "dark" : "light";
   const settings = await getSettings(user.agencyId);
-  const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const }, select: { id: true, name: true } };
   const today = localDateKey(new Date(), settings.defaultTimezone);
-  const [unfilled, noAct, acts, venues, contacts, newActs, newEnquiries, away] = await Promise.all([
+  // New booking's acts, venues, contacts and away days load when it's opened (loadQuickBookingLists), not here on every page.
+  const [unfilled, noAct, newActs, newEnquiries] = await Promise.all([
     unfilledSlots(user.agencyId, settings.defaultTimezone, 7),
     oneOffsNeedingAct(user.agencyId, 7),
-    prisma.artist.findMany(pick),
-    prisma.venue.findMany({ ...pick, select: { id: true, name: true, city: true } }),
-    prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
     prisma.enquiry.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
-    // Days acts can't play, so New booking can mark them as away for the chosen date.
-    awayBetween(user.agencyId, today, "9999-12-31"),
   ]);
   const unfilledThisWeek = unfilled.length + noAct;
   // A self-service business whose trial has ended (or subscription stopped) can only reach Plan and Profile.
@@ -53,9 +47,11 @@ export default async function AgencyLayout({ children }: { children: React.React
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  // New for every render sent from the server; New booking also uses it to know its lists may be out of date.
+  const rendered = crypto.randomUUID();
   return (
     <div className="min-h-screen bg-[#0b0d0f] lg:flex">
-      <RenderStamp at={crypto.randomUUID()} />
+      <RenderStamp at={rendered} />
       <aside className="no-print overflow-x-hidden bg-[#0b0d0f] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:flex-col">
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <Link href="/dashboard">
@@ -121,14 +117,7 @@ export default async function AgencyLayout({ children }: { children: React.React
                 </Suspense>
               </SearchSlot>
               <div className="ml-auto">
-                <QuickBooking
-                  acts={acts}
-                  venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city }))}
-                  contacts={contacts.map((c) => ({ id: c.id, name: c.name, detail: c.company }))}
-                  currency={settings.defaultCurrency}
-                  today={today}
-                  away={away.map(({ artistId, startDate, endDate, note, actName, own }) => ({ artistId, startDate, endDate, note, actName, own }))}
-                />
+                <QuickBooking currency={settings.defaultCurrency} today={today} version={rendered} />
               </div>
             </div>
             {billing.mode === "STRIPE" && !billing.subscribed && !billing.locked && billing.trialDaysLeft !== null && billing.trialDaysLeft <= 7 && (
