@@ -4,15 +4,14 @@ import { calendarLinks } from "@/lib/calendar-links";
 /**
  * One-tap buttons that subscribe the artist's phone calendar to their private gig feed.
  * Subscribed calendars update by themselves when gigs are added or changed.
+ * `bare` leaves out the card and heading, for use inside "Your calendar" (src/components/your-calendar.tsx).
  */
-export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: string }) {
+export function CalendarConnect({ feedUrl, name, bare = false }: { feedUrl: string; name: string; bare?: boolean }) {
   const { webcal, google, outlook, outlook365 } = calendarLinks(feedUrl, name);
   const btn = "flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-medium transition";
-  return (
-    <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
-      <h2 className="text-sm font-medium text-ink-400">Put your bookings in your phone&apos;s calendar</h2>
-      <p className="mt-1 text-sm text-ink-300">Tap once. New bookings and any changes then appear in your calendar automatically.</p>
-      <div className="mt-4 grid gap-2">
+  const body = (
+    <>
+      <div className={bare ? "grid gap-2" : "mt-4 grid gap-2"}>
         <a href={webcal} className={`${btn} bg-white text-ink-950 hover:bg-ink-100`}>
           iPhone / Apple Calendar
         </a>
@@ -37,6 +36,14 @@ export function CalendarConnect({ feedUrl, name }: { feedUrl: string; name: stri
         </div>
         <p className="mt-2">Google Calendar checks for changes every few hours; Apple Calendar lets you choose how often in its settings.</p>
       </details>
+    </>
+  );
+  if (bare) return body;
+  return (
+    <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
+      <h2 className="text-sm font-medium text-ink-400">Put your bookings in your phone&apos;s calendar</h2>
+      <p className="mt-1 text-sm text-ink-300">Tap once. New bookings and any changes then appear in your calendar automatically.</p>
+      {body}
     </section>
   );
 }

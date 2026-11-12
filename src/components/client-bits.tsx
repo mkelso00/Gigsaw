@@ -30,6 +30,17 @@ export function AutoRefresh({ seconds = 30 }: { seconds?: number }) {
   );
 }
 
+/**
+ * Scrolls the element with this id into view once, when shown. For a message far down a phone screen after a
+ * redirect: a server action's redirect drops the #fragment, so the browser doesn't scroll there by itself.
+ */
+export function ScrollIntoViewOnLoad({ id }: { id: string }) {
+  useEffect(() => {
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, [id]);
+  return null;
+}
+
 /** Fills the latitude / longitude inputs with the device's current position. */
 export function UseMyLocation() {
   const [msg, setMsg] = useState("");

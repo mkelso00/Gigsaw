@@ -12,6 +12,7 @@ import { ArrivalBadge, ArtistDot, Empty, Field, PageHeader, Stat, StatusBadge } 
 import { punctuality } from "@/lib/arrival";
 import { requireStaff } from "@/lib/auth";
 import { awayBetween } from "@/lib/away";
+import { staffCalendarLine } from "@/lib/calendar-connect";
 import { arrivalFor } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
 import { ACT_TYPE_LABELS } from "@/lib/act-profile";
@@ -44,6 +45,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           select: {
             email: true,
             pushSubscriptions: { select: { device: true } },
+            calendarConnections: { select: { provider: true, accountEmail: true, status: true } },
           },
         },
         bookings: {
@@ -95,6 +97,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const feedUrl = `${proto}://${host}/api/calendar/${artist.calendarToken}`;
+  // Whether the act's login has its own Google or Outlook calendar connected (docs/calendar-connect.md).
+  const calendarLine = artist.login ? staffCalendarLine(artist.login.calendarConnections) : null;
 
   return (
     <div>
@@ -330,6 +334,11 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                   ? `Phone reminders on: ${[...new Set(artist.login.pushSubscriptions.map((p) => p.device || "Phone"))].join(", ")}.`
                   : "Phone reminders are off. They can turn them on in their app; until then reminders go by email and text."}
             </p>
+            {calendarLine && (
+              <p className="-mt-3 mb-4 text-sm text-ink-500" data-testid="calendar-connect-status">
+                {calendarLine}
+              </p>
+            )}
             <ActionForm action={setArtistLogin.bind(null, artist.id)} className="space-y-3">
               <Field label="Email">
                 <input name="email" type="email" required defaultValue={artist.login?.email ?? artist.email} className="input" />

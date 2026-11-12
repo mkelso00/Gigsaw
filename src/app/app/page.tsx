@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { CalendarConnect } from "@/components/calendar-connect";
+import { YourCalendar } from "@/components/your-calendar";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { AvailabilityAnswer } from "@/components/availability-answer";
 import { CheckInPanel } from "@/components/check-in-panel";
@@ -9,6 +10,7 @@ import { PushSetup } from "@/components/push-setup";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
 import { requireUser } from "@/lib/auth";
+import { calendarProviders, canConnectCalendar } from "@/lib/calendar-connect";
 import { canAnswer, formatRange, requestTimes } from "@/lib/availability";
 import { requestPlace } from "@/lib/availability-requests";
 import { arrivalFor } from "@/lib/bookings";
@@ -22,15 +24,16 @@ import { actName, ACT_VISIBLE } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
-export default async function ArtistHome() {
+export default async function ArtistHome({ searchParams }: { searchParams: Promise<{ calendar?: string; p?: string }> }) {
   const user = await requireUser(["ARTIST"]);
+  const sp = await searchParams;
   // A person's login sees every act they're in; an act's own login sees that act.
   const actIds = await actIdsFor(user);
   if (!actIds.length) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
   const now = new Date();
   const settings = await getSettings(user.agencyId);
   const today = localDateKey(now, settings.defaultTimezone);
-  const [feedOwner, keys, bookings, asks, awayCount] = await Promise.all([
+  const [feedOwner, keys, bookings, asks, awayCount, calendars] = await Promise.all([
     user.personId
       ? prisma.person.findFirst({
           where: { id: user.personId, agencyId: user.agencyId },
@@ -79,7 +82,14 @@ export default async function ArtistHome() {
       orderBy: { request: { date: "asc" } },
     }),
     prisma.artistUnavailability.count({ where: { agencyId: user.agencyId, artistId: { in: actIds }, endDate: { gte: today } } }),
+    prisma.calendarConnection.findMany({
+      where: { userId: user.id, agencyId: user.agencyId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, provider: true, accountEmail: true, calendarName: true, status: true, lastError: true },
+    }),
   ]);
+  // Connecting a calendar is for an act's own login, once the site has it set up; otherwise the subscribe buttons stay as they were.
+  const calendarChoices = canConnectCalendar(user) ? calendarProviders() : [];
   const openAsks = asks.filter((a) => canAnswer(a.request, localDateKey(now, a.request.timezone)));
   const unanswered = openAsks.filter((a) => !a.answer).length;
   const feedName = feedOwner ? ("name" in feedOwner ? feedOwner.name : personName(feedOwner)) : "";
@@ -248,7 +258,11 @@ export default async function ArtistHome() {
 
       <PushSetup publicKey={pushKey} />
 
-      {feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${feedName} bookings`} />}
+      {calendarChoices.length || calendars.length ? (
+        <YourCalendar connections={calendars} providers={calendarChoices} feedUrl={feedUrl} feedName={`${feedName} bookings`} notice={sp} />
+      ) : (
+        feedUrl && <CalendarConnect feedUrl={feedUrl} name={`${feedName} bookings`} />
+      )}
 
       {stats.tracked > 0 && (
         <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
