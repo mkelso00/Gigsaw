@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { acceptQuoteAnswer, declineQuoteAnswer } from "@/actions/quotes";
+import { acceptProposalAnswer, declineProposalAnswer } from "@/actions/proposals";
 import { PrintButton } from "@/components/client-bits";
 import { SignaturePad } from "@/components/signature-pad";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -10,11 +10,11 @@ import { prisma } from "@/lib/db";
 import { formatDay, readEnquiryConfig } from "@/lib/enquiries";
 import { formatMoney } from "@/lib/money";
 import { payUrl } from "@/lib/card-payments";
-import { linePlace, markExpired, markViewed, quoteInclude } from "@/lib/quote-server";
-import { answerProblem, effectiveStatus, lineTimes, looksLikeQuoteToken, quoteRef, quoteTotals, tokenOpens } from "@/lib/quotes";
+import { linePlace, markExpired, markViewed, proposalInclude } from "@/lib/proposal-server";
+import { answerProblem, effectiveStatus, lineTimes, looksLikeProposalToken, proposalRef, proposalTotals, tokenOpens } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
-// The customer's quote: a private link (no login), made for their phone. It shows what's quoted,
+// The customer's proposal: a private link (no login), made for their phone. It shows what's proposed,
 // when and where, and what they pay (the acts' prices, the booking fee and VAT), never what the
 // acts are paid. They sign and approve (typing their name and drawing a signature) or decline. Once answered, withdrawn or replaced
 // by a newer version, the same link only shows where things stand.
@@ -22,10 +22,10 @@ import { formatDateTime, localDateKey } from "@/lib/time";
 export const metadata: Metadata = { title: "Your proposal", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
 
-export default async function CustomerQuotePage({ params }: { params: Promise<{ token: string }> }) {
+export default async function CustomerProposalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  if (!looksLikeQuoteToken(token)) notFound();
-  const q = await prisma.quote.findUnique({ where: { token }, include: quoteInclude });
+  if (!looksLikeProposalToken(token)) notFound();
+  const q = await prisma.quote.findUnique({ where: { token }, include: proposalInclude });
   if (!q || q.agency.status !== "ACTIVE") notFound();
   const settings = q.agency.settings;
   const brand = settings?.agencyName || q.agency.name;
@@ -77,7 +77,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
     for (let i = 0; next?.supersededById && i < 20; i++) next = await prisma.quote.findUnique({ where: { id: next.supersededById } });
     return shell(
       <section className="card card-pad text-center">
-        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {quoteRef(q)}</div>
+        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {proposalRef(q)}</div>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">This proposal has been updated</h1>
         {next?.token && next.status !== "DRAFT" ? (
           <>
@@ -97,7 +97,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
 
   const status = effectiveStatus(q, today);
   if (status === "DRAFT") notFound();
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
   const problem = answerProblem(q, today);
   const firstName = (q.contact?.name ?? "").split(" ")[0];
@@ -107,7 +107,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
   return shell(
     <>
       <div className="mb-6">
-        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {quoteRef(q)}</div>
+        <div className="font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">Proposal {proposalRef(q)}</div>
         <h1 className="mt-2 text-[28px] leading-tight font-semibold tracking-tight">{q.title}</h1>
         {q.contact && <p className="mt-1 text-ink-600">For {q.contact.name}</p>}
       </div>
@@ -197,7 +197,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
 
       {!problem && (
         <>
-          <ActionForm action={acceptQuoteAnswer.bind(null, token)} className="card card-pad">
+          <ActionForm action={acceptProposalAnswer.bind(null, token)} className="card card-pad">
             <h2 className="text-xl font-semibold tracking-tight">Sign and approve your proposal</h2>
             <p className="mt-1 text-sm text-ink-600">Signing books everything above with {brand}.</p>
             <label className="mt-5 block">
@@ -231,7 +231,7 @@ export default async function CustomerQuotePage({ params }: { params: Promise<{ 
             <summary className="cursor-pointer px-1 py-2 text-center text-sm text-ink-600 underline-offset-2 hover:underline">
               No thanks, decline this proposal
             </summary>
-            <ActionForm action={declineQuoteAnswer.bind(null, token)} className="card card-pad mt-2">
+            <ActionForm action={declineProposalAnswer.bind(null, token)} className="card card-pad mt-2">
               <label className="block">
                 <span className="label">Can you tell us why? (optional)</span>
                 <textarea name="reason" rows={3} maxLength={2000} className="input text-base" />

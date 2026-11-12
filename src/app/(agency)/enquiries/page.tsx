@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { deleteEnquiry, setEnquiryStatus } from "@/actions/enquiries";
-import { makeQuote } from "@/actions/quotes";
+import { makeProposal } from "@/actions/proposals";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { FilterPanel } from "@/components/header-actions";
-import { QuoteList, QuoteStatusBadge, quoteRowSelect } from "@/components/quote-list";
+import { ProposalList, ProposalStatusBadge, proposalRowSelect } from "@/components/proposal-list";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { channelLabel, ENQUIRY_EVENT_TYPES, enquiryRows, enquiryTypeLabel } from "@/lib/enquiries";
-import { effectiveStatus, OPEN_STATUSES, QUOTE_STATUS_LABELS, QUOTE_STATUSES, quoteRef, type QuoteStatus } from "@/lib/quotes";
+import { effectiveStatus, OPEN_STATUSES, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, proposalRef, type ProposalStatus } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Inbound leads" };
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const VIEWS = { new: "New", done: "Dealt with", all: "All leads", quotes: "Proposals" } as const;
 type View = keyof typeof VIEWS;
 
-/** Enquiries from the form on the business's website or added by hand, new ones first, each with what it made and its quote. */
+/** Enquiries from the form on the business's website or added by hand, new ones first, each with what it made and its proposal. */
 export default async function EnquiriesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
   const sp = await searchParams;
@@ -34,18 +34,18 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
   if (sp.q) {
     where.OR = ["name", "email", "phone", "venue", "message", "budget"].map((k) => ({ [k]: { contains: sp.q, mode: "insensitive" } }));
   }
-  // The Quotes tab: every quote's latest version, those waiting for an answer first.
-  const quoteStatus = QUOTE_STATUSES.find((s) => s === sp.status);
+  // The Proposals tab: every proposal's latest version, those waiting for an answer first.
+  const proposalStatus = PROPOSAL_STATUSES.find((s) => s === sp.status);
   const live = { OR: [{ validUntil: null }, { validUntil: { gte: today } }] };
-  const quoteWhere =
-    quoteStatus === "EXPIRED"
+  const proposalWhere =
+    proposalStatus === "EXPIRED"
       ? { OR: [{ status: "EXPIRED" }, { status: { in: OPEN_STATUSES }, validUntil: { lt: today } }] }
-      : quoteStatus && OPEN_STATUSES.includes(quoteStatus)
-        ? { status: quoteStatus, ...live }
-        : quoteStatus
-          ? { status: quoteStatus }
+      : proposalStatus && OPEN_STATUSES.includes(proposalStatus)
+        ? { status: proposalStatus, ...live }
+        : proposalStatus
+          ? { status: proposalStatus }
           : {};
-  const [enquiries, counts, quotes, openQuotes] = await Promise.all([
+  const [enquiries, counts, proposals, openProposals] = await Promise.all([
     view === "quotes"
       ? Promise.resolve([])
       : prisma.enquiry.findMany({
@@ -56,7 +56,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
             booking: { select: { id: true, reference: true, status: true } },
             event: { select: { id: true, name: true } },
             contact: { select: { id: true, name: true } },
-            // The quote that counts: the newest version that hasn't been replaced.
+            // The proposal that counts: the newest version that hasn't been replaced.
             quotes: {
               where: { supersededById: null },
               orderBy: { createdAt: "desc" },
@@ -72,7 +72,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
             agencyId: user.agencyId,
             supersededById: null,
             AND: [
-              quoteWhere,
+              proposalWhere,
               sp.q
                 ? { OR: [{ title: { contains: sp.q, mode: "insensitive" as const } }, { contact: { name: { contains: sp.q, mode: "insensitive" as const } } }] }
                 : {},
@@ -80,18 +80,18 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
           },
           orderBy: { updatedAt: "desc" },
           take: 200,
-          select: quoteRowSelect,
+          select: proposalRowSelect,
         })
       : Promise.resolve([]),
     prisma.quote.count({ where: { agencyId: user.agencyId, supersededById: null, status: { in: OPEN_STATUSES }, ...live } }),
   ]);
   const count = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
-  const tabCount: Record<View, number> = { new: count("NEW"), done: count("DONE"), all: count("NEW") + count("DONE"), quotes: openQuotes };
+  const tabCount: Record<View, number> = { new: count("NEW"), done: count("DONE"), all: count("NEW") + count("DONE"), quotes: openProposals };
   const link = (v: View) =>
     `/enquiries?${new URLSearchParams({ ...(v !== "new" ? { view: v } : {}), ...(sp.type && v !== "quotes" ? { type: sp.type } : {}), ...(sp.q ? { q: sp.q } : {}) })}`;
   // Waiting for the customer, then drafts, then the rest.
-  const order = (s: QuoteStatus) => (OPEN_STATUSES.includes(s) ? 0 : s === "DRAFT" ? 1 : 2);
-  const sortedQuotes = [...quotes].sort((a, b) => order(effectiveStatus(a, today)) - order(effectiveStatus(b, today)));
+  const order = (s: ProposalStatus) => (OPEN_STATUSES.includes(s) ? 0 : s === "DRAFT" ? 1 : 2);
+  const sortedProposals = [...proposals].sort((a, b) => order(effectiveStatus(a, today)) - order(effectiveStatus(b, today)));
 
   return (
     <div>
@@ -160,11 +160,11 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
               </label>
               <label>
                 <span className="label">Status</span>
-                <select name="status" defaultValue={quoteStatus ?? ""} className="input">
+                <select name="status" defaultValue={proposalStatus ?? ""} className="input">
                   <option value="">Any status</option>
-                  {QUOTE_STATUSES.map((s) => (
+                  {PROPOSAL_STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {QUOTE_STATUS_LABELS[s]}
+                      {PROPOSAL_STATUS_LABELS[s]}
                     </option>
                   ))}
                 </select>
@@ -172,10 +172,10 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
               <button className="btn">Filter</button>
             </form>
           </FilterPanel>
-          {sortedQuotes.length === 0 ? (
-            <Empty>{sp.q || quoteStatus ? "No proposals match." : "No proposals yet. Press Turn into a proposal on a lead to start one."}</Empty>
+          {sortedProposals.length === 0 ? (
+            <Empty>{sp.q || proposalStatus ? "No proposals match." : "No proposals yet. Press Turn into a proposal on a lead to start one."}</Empty>
           ) : (
-            <QuoteList quotes={sortedQuotes} today={today} />
+            <ProposalList proposals={sortedProposals} today={today} />
           )}
         </>
       )}
@@ -230,7 +230,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
       ) : (
         <ul className="space-y-3">
           {enquiries.map((e) => {
-            const quote = e.quotes[0];
+            const proposal = e.quotes[0];
             const details = enquiryRows({ ...e, acts: Array.isArray(e.acts) ? (e.acts as { id: string; name: string }[]) : [] }).filter(
               ([k]) => !["Name", "Email", "Phone", "Type of event", "Message"].includes(k),
             );
@@ -247,10 +247,10 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                       )}
                       {e.eventType && <span className="badge bg-ink-100 text-ink-700">{enquiryTypeLabel(e.eventType)}</span>}
                       {e.channel !== "WEBSITE" && <span className="badge bg-ink-100 text-ink-700">{channelLabel(e.channel)}</span>}
-                      {quote && (
-                        <Link href={`/quotes/${quote.id}`} className="inline-flex items-center gap-1.5 hover:underline" title="This lead's proposal">
-                          <span className="font-mono text-[11px] text-ink-500">{quoteRef(quote)}</span>
-                          <QuoteStatusBadge q={quote} today={today} />
+                      {proposal && (
+                        <Link href={`/quotes/${proposal.id}`} className="inline-flex items-center gap-1.5 hover:underline" title="This lead's proposal">
+                          <span className="font-mono text-[11px] text-ink-500">{proposalRef(proposal)}</span>
+                          <ProposalStatusBadge q={proposal} today={today} />
                         </Link>
                       )}
                     </div>
@@ -284,13 +284,13 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                 {e.message && <p className="mt-4 rounded-lg bg-ink-50 p-3 text-sm whitespace-pre-line text-ink-800">{e.message}</p>}
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
-                  {quote ? (
-                    <Link href={`/quotes/${quote.id}`} className="btn btn-sm">
-                      Proposal {quoteRef(quote)}
+                  {proposal ? (
+                    <Link href={`/quotes/${proposal.id}`} className="btn btn-sm">
+                      Proposal {proposalRef(proposal)}
                     </Link>
                   ) : (
                     e.contact && (
-                      <ActionForm action={makeQuote.bind(null, "enquiry", e.id)}>
+                      <ActionForm action={makeProposal.bind(null, "enquiry", e.id)}>
                         <SubmitButton className="btn btn-sm btn-volt" pendingText="Starting…">
                           Turn into a proposal
                         </SubmitButton>

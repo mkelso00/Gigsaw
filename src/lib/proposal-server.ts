@@ -20,27 +20,27 @@ import {
   lineFee,
   lineTimes,
   lineTitle,
-  nextQuoteNumber,
+  nextProposalNumber,
   OPEN_STATUSES,
-  quoteRef,
-  quoteTotals,
+  proposalRef,
+  proposalTotals,
   spreadDeposit,
   tokenExpiry,
   tokenOpens,
-} from "./quotes";
+} from "./proposals";
 import { buildSchedule } from "./schedule";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 import { log } from "@/server/log";
 
-// Quotes, server side: starting one, new versions, sending it, and the customer's answer. The
-// customer's Accept is one transaction that claims the quote (only a quote still out with them can
+// Proposals, server side: starting one, new versions, sending it, and the customer's answer. The
+// customer's Accept is one transaction that claims the proposal (only a proposal still out with them can
 // be claimed, so a double tap books once) and makes the wedding or event and its bookings. The
 // messages to the acts, the customer and the team go after it has committed, from the one request
 // that made the claim.
 
-export class QuoteError extends Error {}
+export class ProposalError extends Error {}
 
-export const quoteInclude = {
+export const proposalInclude = {
   lines: {
     orderBy: { sort: "asc" },
     include: {
@@ -51,17 +51,17 @@ export const quoteInclude = {
   contact: true,
   agency: { include: { settings: true } },
 } satisfies Prisma.QuoteInclude;
-export type FullQuote = Prisma.QuoteGetPayload<{ include: typeof quoteInclude }>;
+export type FullProposal = Prisma.QuoteGetPayload<{ include: typeof proposalInclude }>;
 
 /** 24 random bytes: a link nobody can guess. */
-const newQuoteToken = () => randomBytes(24).toString("base64url");
-export const quoteUrl = (token: string) => `${appUrl()}/q/${token}`;
+const newProposalToken = () => randomBytes(24).toString("base64url");
+export const proposalUrl = (token: string) => `${appUrl()}/q/${token}`;
 
 const todayIn = (tz: string) => localDateKey(new Date(), tz);
-const brandOf = (q: FullQuote) => q.agency.settings?.agencyName || q.agency.name;
+const brandOf = (q: FullProposal) => q.agency.settings?.agencyName || q.agency.name;
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 
-async function highestQuoteNumber(agencyId: string) {
+async function highestProposalNumber(agencyId: string) {
   const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
     SELECT MAX(NULLIF(regexp_replace(number, '[^0-9]', '', 'g'), '')::bigint)::int AS n FROM "Quote" WHERE "agencyId" = ${agencyId}`;
   return row?.n ?? null;
@@ -72,16 +72,16 @@ export const linePlace = (l: { venue: { name: string; city: string } | null; pla
   l.venue ? `${l.venue.name}${l.venue.city ? `, ${l.venue.city}` : ""}` : l.place;
 
 /**
- * Start a draft quote for a customer, from an enquiry (filled in from what they asked for: the
+ * Start a draft proposal for a customer, from an enquiry (filled in from what they asked for: the
  * date, times, place and any acts they liked) or from the customer's page.
  */
-export async function createDraftQuote(user: { id: string; agencyId: string }, from: { enquiryId?: string | null; contactId?: string | null }) {
+export async function createDraftProposal(user: { id: string; agencyId: string }, from: { enquiryId?: string | null; contactId?: string | null }) {
   const settings = await getSettings(user.agencyId);
   const enquiry = from.enquiryId ? await prisma.enquiry.findFirst({ where: { id: from.enquiryId, agencyId: user.agencyId } }) : null;
-  if (from.enquiryId && !enquiry) throw new QuoteError("Enquiry not found");
+  if (from.enquiryId && !enquiry) throw new ProposalError("Enquiry not found");
   const contactId = enquiry?.contactId ?? from.contactId ?? null;
   const contact = contactId ? await prisma.contact.findFirst({ where: { id: contactId, agencyId: user.agencyId } }) : null;
-  if (!contact) throw new QuoteError("This enquiry has no customer. Add them first.");
+  if (!contact) throw new ProposalError("This enquiry has no customer. Add them first.");
 
   const eventType = enquiry?.eventType || "WEDDING";
   const title = enquiryTitle({ name: enquiry?.name ?? contact.name, eventType: eventType as Parameters<typeof enquiryTitle>[0]["eventType"] });
@@ -103,7 +103,7 @@ export async function createDraftQuote(user: { id: string; agencyId: string }, f
       return await prisma.quote.create({
         data: {
           agencyId: user.agencyId,
-          number: nextQuoteNumber(await highestQuoteNumber(user.agencyId)),
+          number: nextProposalNumber(await highestProposalNumber(user.agencyId)),
           enquiryId: enquiry?.id ?? null,
           contactId: contact.id,
           agentId: user.id,
@@ -126,16 +126,16 @@ export async function createDraftQuote(user: { id: string; agencyId: string }, f
 }
 
 /**
- * Copy a quote as the next version, a draft. If the old one is still out with the customer it's
- * replaced: its link can't be accepted any more and says the quote has been updated. Both happen in
+ * Copy a proposal as the next version, a draft. If the old one is still out with the customer it's
+ * replaced: its link can't be accepted any more and says the proposal has been updated. Both happen in
  * one transaction, and only if nobody has accepted the old one in the meantime.
  */
-export async function newQuoteVersion(user: { id: string; agencyId: string }, quoteId: string) {
+export async function newProposalVersion(user: { id: string; agencyId: string }, proposalId: string) {
   return prisma.$transaction(async (tx) => {
-    const q = await tx.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } } } });
-    if (!q) throw new QuoteError("Proposal not found");
+    const q = await tx.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } } } });
+    if (!q) throw new ProposalError("Proposal not found");
     if (!canNewVersion(q))
-      throw new QuoteError(q.status === "ACCEPTED" ? "This proposal has been accepted: change the bookings instead." : "This proposal can't be copied.");
+      throw new ProposalError(q.status === "ACCEPTED" ? "This proposal has been accepted: change the bookings instead." : "This proposal can't be copied.");
     const top = await tx.quote.aggregate({ where: { agencyId: user.agencyId, number: q.number }, _max: { version: true } });
     const next = await tx.quote.create({
       data: {
@@ -180,13 +180,13 @@ export async function newQuoteVersion(user: { id: string; agencyId: string }, qu
       where: { id: q.id, supersededById: null, status: { in: ["SENT", "VIEWED", "DECLINED", "EXPIRED", "WITHDRAWN"] } },
       data: { supersededById: next.id },
     });
-    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this proposal. Reload the page.");
+    if (claimed.count !== 1) throw new ProposalError("The customer has just answered this proposal. Reload the page.");
     return next;
   });
 }
 
-/** Everything a quote needs before it can go to the customer, or a reason it can't. */
-export function readyToSend(q: FullQuote, today: string): string | null {
+/** Everything a proposal needs before it can go to the customer, or a reason it can't. */
+export function readyToSend(q: FullProposal, today: string): string | null {
   if (!q.lines.length) return "Add at least one line first";
   for (const [i, l] of q.lines.entries()) {
     const n = q.lines.length > 1 ? ` on line ${i + 1}` : "";
@@ -195,26 +195,26 @@ export function readyToSend(q: FullQuote, today: string): string | null {
     if (!l.startTime) return `Enter the start time${n}`;
   }
   if (q.validUntil && q.validUntil < today) return "The valid-until date has passed. Change it first.";
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   if (q.depositMinor > t.totalMinor) return "The deposit is more than the total";
   return null;
 }
 
 /**
- * Email the quote to the customer: the first time (which makes this version's private link) or
+ * Email the proposal to the customer: the first time (which makes this version's private link) or
  * again. The first send is a claim on the draft, so two presses send it once.
  */
 /**
- * Make a draft quote live without emailing it: it gets its customer link, which staff copy and
+ * Make a draft proposal live without emailing it: it gets its customer link, which staff copy and
  * send themselves (WhatsApp, a text, their own email). Same checks and claim as the first send.
  */
-export async function publishQuote(user: { agencyId: string }, quoteId: string) {
-  const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
-  if (!q) throw new QuoteError("Proposal not found");
-  if (!canSend(q)) throw new QuoteError("This proposal already has its link.");
+export async function publishProposal(user: { agencyId: string }, proposalId: string) {
+  const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: proposalInclude });
+  if (!q) throw new ProposalError("Proposal not found");
+  if (!canSend(q)) throw new ProposalError("This proposal already has its link.");
   const problem = readyToSend(q, todayIn(q.timezone));
-  if (problem) throw new QuoteError(problem);
-  const token = newQuoteToken();
+  if (problem) throw new ProposalError(problem);
+  const token = newProposalToken();
   const claimed = await prisma.quote.updateMany({
     where: { id: q.id, status: "DRAFT", supersededById: null },
     data: {
@@ -228,24 +228,24 @@ export async function publishQuote(user: { agencyId: string }, quoteId: string) 
       ),
     },
   });
-  if (claimed.count !== 1) throw new QuoteError("This proposal has just been sent.");
+  if (claimed.count !== 1) throw new ProposalError("This proposal has just been sent.");
   return q;
 }
 
-export async function sendQuote(user: { id: string; agencyId: string; email: string }, quoteId: string, to: string) {
-  const q = await prisma.quote.findFirst({ where: { id: quoteId, agencyId: user.agencyId }, include: quoteInclude });
-  if (!q) throw new QuoteError("Proposal not found");
+export async function sendProposal(user: { id: string; agencyId: string; email: string }, proposalId: string, to: string) {
+  const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: proposalInclude });
+  if (!q) throw new ProposalError("Proposal not found");
   const today = todayIn(q.timezone);
   const first = canSend(q);
-  if (!first && !canResend(q, today)) throw new QuoteError("This proposal can't be sent. Make a new version to change it.");
+  if (!first && !canResend(q, today)) throw new ProposalError("This proposal can't be sent. Make a new version to change it.");
   const email = to.trim().toLowerCase();
-  if (!isEmail(email)) throw new QuoteError("Enter the customer's email address");
+  if (!isEmail(email)) throw new ProposalError("Enter the customer's email address");
   const problem = readyToSend(q, today);
-  if (problem) throw new QuoteError(problem);
+  if (problem) throw new ProposalError(problem);
 
   let token = q.token;
   if (first) {
-    token = newQuoteToken();
+    token = newProposalToken();
     const claimed = await prisma.quote.updateMany({
       where: { id: q.id, status: "DRAFT", supersededById: null },
       data: {
@@ -259,17 +259,17 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
         ),
       },
     });
-    if (claimed.count !== 1) throw new QuoteError("This proposal has just been sent.");
+    if (claimed.count !== 1) throw new ProposalError("This proposal has just been sent.");
   } else {
     const claimed = await prisma.quote.updateMany({
       where: { id: q.id, status: { in: OPEN_STATUSES }, supersededById: null },
       data: { sentAt: new Date(), sentTo: email },
     });
-    if (claimed.count !== 1) throw new QuoteError("The customer has just answered this proposal.");
+    if (claimed.count !== 1) throw new ProposalError("The customer has just answered this proposal.");
   }
 
   const brand = brandOf(q);
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
   const firstDate = q.lines.map((l) => l.date).sort()[0];
   const name = q.contact && q.contact.email.toLowerCase() === email ? firstName(q.contact.name) : "";
@@ -310,29 +310,29 @@ export async function sendQuote(user: { id: string; agencyId: string; email: str
         ...(q.depositMinor ? ([["Deposit", `${m(q.depositMinor)}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`]] as [string, string][]) : []),
         ...(q.validUntil ? ([["Valid until", formatDay(q.validUntil)]] as [string, string][]) : []),
       ],
-      cta: { label: "See your proposal", url: quoteUrl(token!) },
+      cta: { label: "See your proposal", url: proposalUrl(token!) },
       outro: `Questions? Just reply to this email to reach ${agent?.name ?? brand}.`,
     },
   });
-  return { quote: q, resent: !first, sent: status === "SENT" || status === "NOT_SENT" };
+  return { proposal: q, resent: !first, sent: status === "SENT" || status === "NOT_SENT" };
 }
 
-export type QuoteAnswer = { name: string; note: string; ip: string; agent: string; signature?: string };
+export type ProposalAnswer = { name: string; note: string; ip: string; agent: string; signature?: string };
 
 /**
- * The customer accepts. In one transaction: claim the quote (only one still out with them, not
+ * The customer accepts. In one transaction: claim the proposal (only one still out with them, not
  * past its date, not replaced), then make or reuse the enquiry's wedding or event, one booking per
  * line (Confirmed with an act, Pending for "act to be confirmed"), and mark the enquiry dealt with.
  * Returns null when there was nothing to claim (e.g. the second of two taps).
  */
-export async function acceptQuote(token: string, answer: QuoteAnswer) {
-  const q = await prisma.quote.findUnique({ where: { token }, include: { ...quoteInclude, enquiry: true } });
-  if (!q || q.agency.status !== "ACTIVE" || !tokenOpens(q, token)) throw new QuoteError("This link isn't valid any more. Please contact us.");
+export async function acceptProposal(token: string, answer: ProposalAnswer) {
+  const q = await prisma.quote.findUnique({ where: { token }, include: { ...proposalInclude, enquiry: true } });
+  if (!q || q.agency.status !== "ACTIVE" || !tokenOpens(q, token)) throw new ProposalError("This link isn't valid any more. Please contact us.");
   const today = todayIn(q.timezone);
   if (q.status === "ACCEPTED") return null;
   const problem = answerProblem(q, today);
-  if (problem) throw new QuoteError(problem);
-  if (!q.lines.length) throw new QuoteError("This proposal has nothing on it. Please contact us.");
+  if (problem) throw new ProposalError(problem);
+  if (!q.lines.length) throw new ProposalError("This proposal has nothing on it. Please contact us.");
   const settings = q.agency.settings ?? (await getSettings(q.agencyId));
 
   // Booking numbers are taken inside the transaction; if someone else takes the same one at that
@@ -355,7 +355,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
         });
         if (claimed.count !== 1) return null;
 
-        const ref = quoteRef(q);
+        const ref = proposalRef(q);
         const kind = eventKindFor(q.eventType);
         const first = q.lines[0];
         const date = q.lines.map((l) => l.date).sort()[0];
@@ -387,7 +387,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
               },
             });
 
-        const totals = quoteTotals(q.lines, q.bookingFeeMinor);
+        const totals = proposalTotals(q.lines, q.bookingFeeMinor);
         const deposits = spreadDeposit(
           q.depositMinor,
           totals.lines.map((d) => d.totalDueMinor),
@@ -478,7 +478,7 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
               : []),
           ],
         });
-        return { quoteId: q.id, eventId: event.id, bookings: made };
+        return { proposalId: q.id, eventId: event.id, bookings: made };
       });
     } catch (e) {
       if (isUnique(e) && attempt < 4) continue;
@@ -488,27 +488,27 @@ export async function acceptQuote(token: string, answer: QuoteAnswer) {
 }
 
 /** The customer declines. A claim like accepting, so it's recorded once. Returns false if there was nothing to claim. */
-export async function declineQuote(token: string, answer: QuoteAnswer) {
+export async function declineProposal(token: string, answer: ProposalAnswer) {
   const q = await prisma.quote.findUnique({ where: { token }, include: { agency: { select: { status: true } } } });
-  if (!q || q.agency.status !== "ACTIVE" || !tokenOpens(q, token)) throw new QuoteError("This link isn't valid any more. Please contact us.");
+  if (!q || q.agency.status !== "ACTIVE" || !tokenOpens(q, token)) throw new ProposalError("This link isn't valid any more. Please contact us.");
   const today = todayIn(q.timezone);
   if (q.status === "DECLINED") return false;
   const problem = answerProblem(q, today);
-  if (problem) throw new QuoteError(problem);
+  if (problem) throw new ProposalError(problem);
   const claimed = await prisma.quote.updateMany({
     where: { id: q.id, token, status: { in: OPEN_STATUSES }, supersededById: null },
     data: { status: "DECLINED", answeredAt: new Date(), answerName: answer.name, answerNote: answer.note, answerIp: answer.ip, answerAgent: answer.agent },
   });
   if (claimed.count !== 1) return false;
   await prisma.activity.create({
-    data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer declined proposal ${quoteRef(q)}`, detail: answer.note.slice(0, 200) },
+    data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer declined proposal ${proposalRef(q)}`, detail: answer.note.slice(0, 200) },
   });
   return true;
 }
 
 /** The deposit's "Pay now" link for the event, when card payments are set up and there's a deposit. */
-export async function depositLinkFor(quoteId: string) {
-  const q = await prisma.quote.findUnique({ where: { id: quoteId }, include: { agency: true } });
+export async function depositLinkFor(proposalId: string) {
+  const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: { agency: true } });
   if (!q?.eventId || q.depositMinor <= 0 || !(await cardPaymentsReady(q.agency))) return null;
   return ensurePayLink(q.agencyId, { eventId: q.eventId }, "DEPOSIT");
 }
@@ -518,10 +518,10 @@ export async function depositLinkFor(quoteId: string) {
  * through the usual confirmation), the customer gets their confirmation (with the deposit link if
  * there is one) and the lead agent hears. Each part is tried on its own, so one failure doesn't stop the rest.
  */
-export async function afterAccepted(quoteId: string) {
-  const q = await prisma.quote.findUnique({ where: { id: quoteId }, include: quoteInclude });
+export async function afterAccepted(proposalId: string) {
+  const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: proposalInclude });
   if (!q || q.status !== "ACCEPTED") return;
-  // Unticked on the quote: the bookings are made, but staff tell the acts themselves.
+  // Unticked on the proposal: the bookings are made, but staff tell the acts themselves.
   for (const l of q.tellActs ? q.lines : []) {
     if (!l.bookingId || !l.artistId) continue;
     try {
@@ -542,8 +542,8 @@ export async function afterAccepted(quoteId: string) {
   }
 }
 
-export async function afterDeclined(quoteId: string) {
-  const q = await prisma.quote.findUnique({ where: { id: quoteId }, include: quoteInclude });
+export async function afterDeclined(proposalId: string) {
+  const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: proposalInclude });
   if (!q || q.status !== "DECLINED") return;
   try {
     await tellTeam(q, "DECLINED");
@@ -552,11 +552,11 @@ export async function afterDeclined(quoteId: string) {
   }
 }
 
-async function tellCustomerBooked(q: FullQuote) {
+async function tellCustomerBooked(q: FullProposal) {
   const to = q.sentTo || q.contact?.email || "";
   if (!isEmail(to)) return;
   const brand = brandOf(q);
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
   const firstDate = q.lines.map((l) => l.date).sort()[0];
   const name = firstName(q.answerName || q.contact?.name || "");
@@ -595,7 +595,7 @@ async function tellCustomerBooked(q: FullQuote) {
 }
 
 /** The lead agent (or the business email, with no agent) hears the answer, by email and phone as they've chosen. */
-async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
+async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
   const brand = brandOf(q);
   const accepted = answer === "ACCEPTED";
   const who = q.answerName || q.contact?.name || "The customer";
@@ -606,9 +606,9 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
     business: brand,
   });
   if (!w.on) return;
-  const t = quoteTotals(q.lines, q.bookingFeeMinor);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
-  const subject = w.subject ?? `Proposal ${accepted ? "accepted" : "declined"}: ${q.title} (${quoteRef(q)})`;
+  const subject = w.subject ?? `Proposal ${accepted ? "accepted" : "declined"}: ${q.title} (${proposalRef(q)})`;
   const url = accepted && q.eventId ? `${appUrl()}/events/${q.eventId}` : `${appUrl()}/quotes/${q.id}`;
   const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { id: true, email: true, notifyPrefs: true } }) : null;
   const to = agent ? (wants(agent.notifyPrefs, "QUOTE", "email") ? agent.email : null) : q.agency.settings?.agencyEmail;
@@ -632,7 +632,7 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
             ? `${who} has accepted the proposal for ${q.title}. It's signed and locked in: the wedding or event and its bookings are made${q.tellActs ? ", and the acts have been told" : ". The acts haven't been emailed, so tell them yourself"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
             : `${who} has declined the proposal for ${q.title}.`),
         rows: [
-          ["Proposal", quoteRef(q)],
+          ["Proposal", proposalRef(q)],
           ["Total", m(t.totalMinor)],
           ["We make", m(t.agencyMinor)],
           ...(q.answerNote ? ([[accepted ? "Their message" : "Their reason", q.answerNote]] as [string, string][]) : []),
@@ -659,10 +659,10 @@ async function tellTeam(q: FullQuote, answer: "ACCEPTED" | "DECLINED") {
 export async function markViewed(q: { id: string; agencyId: string; number: string; version: number }) {
   const done = await prisma.quote.updateMany({ where: { id: q.id, status: "SENT" }, data: { status: "VIEWED", viewedAt: new Date() } });
   if (done.count)
-    await prisma.activity.create({ data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer opened proposal ${quoteRef(q)}` } });
+    await prisma.activity.create({ data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer opened proposal ${proposalRef(q)}` } });
 }
 
-/** A quote out with the customer past its valid-until date is saved as Expired. */
+/** A proposal out with the customer past its valid-until date is saved as Expired. */
 export async function markExpired(q: { id: string; timezone: string }) {
   await prisma.quote.updateMany({ where: { id: q.id, status: { in: OPEN_STATUSES }, validUntil: { lt: todayIn(q.timezone) } }, data: { status: "EXPIRED" } });
 }

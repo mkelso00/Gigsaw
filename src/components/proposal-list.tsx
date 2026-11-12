@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { formatMoney } from "@/lib/money";
-import { quoteRef, quoteTotals, statusLabel, statusStyle, type QuoteLineMoney, type QuoteState } from "@/lib/quotes";
+import { proposalRef, proposalTotals, statusLabel, statusStyle, type ProposalLineMoney, type ProposalState } from "@/lib/proposals";
 import { formatDate } from "@/lib/time";
 
-// Quotes in a list (the Quotes tab on Enquiries, a customer's page): a status light, what the
+// Proposals in a list (the Proposals tab on Enquiries, a customer's page): a status light, what the
 // customer pays and what the agency makes, and when it was sent, opened and answered.
 
-export function QuoteStatusBadge({ q, today }: { q: QuoteState; today: string }) {
+export function ProposalStatusBadge({ q, today }: { q: ProposalState; today: string }) {
   return (
     <span className={`badge ${statusStyle(q, today)}`}>
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--dot)]" />
@@ -15,7 +15,7 @@ export function QuoteStatusBadge({ q, today }: { q: QuoteState; today: string })
   );
 }
 
-export type QuoteRow = QuoteState & {
+export type ProposalRow = ProposalState & {
   id: string;
   number: string;
   version: number;
@@ -27,15 +27,15 @@ export type QuoteRow = QuoteState & {
   viewedAt: Date | null;
   answeredAt: Date | null;
   createdAt: Date;
-  lines: (QuoteLineMoney & { date: string })[];
+  lines: (ProposalLineMoney & { date: string })[];
   contact?: { id: string; name: string } | null;
 };
 
-export function QuoteList({ quotes, today, showCustomer = true }: { quotes: QuoteRow[]; today: string; showCustomer?: boolean }) {
+export function ProposalList({ proposals, today, showCustomer = true }: { proposals: ProposalRow[]; today: string; showCustomer?: boolean }) {
   return (
     <ul className="card divide-y divide-ink-100 overflow-hidden">
-      {quotes.map((q) => {
-        const t = quoteTotals(q.lines, q.bookingFeeMinor);
+      {proposals.map((q) => {
+        const t = proposalTotals(q.lines, q.bookingFeeMinor);
         const m = (x: number) => formatMoney(x, q.currency);
         const day = (d: Date) => formatDate(d, q.timezone);
         const first = q.lines
@@ -57,14 +57,14 @@ export function QuoteList({ quotes, today, showCustomer = true }: { quotes: Quot
             >
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[11px] tracking-[0.08em] text-ink-500">{quoteRef(q)}</span>
+                  <span className="font-mono text-[11px] tracking-[0.08em] text-ink-500">{proposalRef(q)}</span>
                   <span className="truncate text-sm font-medium text-ink-950">{q.title}</span>
                 </span>
                 <span className="mt-0.5 block text-xs text-ink-500">
                   {[showCustomer ? q.contact?.name : "", first ? formatDate(new Date(`${first}T12:00:00Z`), "UTC") : "", when].filter(Boolean).join(" · ")}
                 </span>
               </span>
-              <QuoteStatusBadge q={q} today={today} />
+              <ProposalStatusBadge q={q} today={today} />
               <span className="w-28 text-right text-sm tabular-nums">
                 <span className="block font-medium text-ink-950">{m(t.totalMinor)}</span>
                 <span className="block text-xs text-ink-500">makes {m(t.agencyMinor)}</span>
@@ -77,7 +77,7 @@ export function QuoteList({ quotes, today, showCustomer = true }: { quotes: Quot
   );
 }
 
-export const quoteRowSelect = {
+export const proposalRowSelect = {
   id: true,
   number: true,
   version: true,

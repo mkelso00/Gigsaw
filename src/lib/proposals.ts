@@ -1,10 +1,10 @@
-// Quotes to customers: the money on a quote, which statuses allow what, the customer's link and
-// checking what the quote editor sends. Pure (no database, no Node-only modules), so it can be
-// unit tested and used by the quote editor in the browser for its live totals.
+// Proposals to customers: the money on a proposal, which statuses allow what, the customer's link and
+// checking what the proposal editor sends. Pure (no database, no Node-only modules), so it can be
+// unit tested and used by the proposal editor in the browser for its live totals.
 //
 // The money is the events code's own: each line becomes a booking on the wedding or event with a
 // sale (fee) and a cost (the act's fee) on a sale-and-cost deal, its own VAT, and the agency's
-// booking fee on the first line only. So a quote's totals are exactly what the event will show.
+// booking fee on the first line only. So a proposal's totals are exactly what the event will show.
 
 import { FormError } from "./forms";
 import { dealBreakdown, toMinor, type DealBreakdown, type DealInput } from "./money";
@@ -12,10 +12,10 @@ import { addDaysToKey } from "./time";
 
 // ---------- Statuses ----------
 
-export const QUOTE_STATUSES = ["DRAFT", "SENT", "VIEWED", "ACCEPTED", "DECLINED", "EXPIRED", "WITHDRAWN"] as const;
-export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+export const PROPOSAL_STATUSES = ["DRAFT", "SENT", "VIEWED", "ACCEPTED", "DECLINED", "EXPIRED", "WITHDRAWN"] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 
-export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   DRAFT: "Draft",
   SENT: "Sent",
   VIEWED: "Opened",
@@ -26,7 +26,7 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
 };
 
 /** A soft badge with a coloured light, in the calm style of booking statuses. */
-const QUOTE_STATUS_STYLES: Record<QuoteStatus | "UPDATED", string> = {
+const PROPOSAL_STATUS_STYLES: Record<ProposalStatus | "UPDATED", string> = {
   DRAFT: "bg-ink-100 text-ink-700 [--dot:var(--color-ink-400)]",
   SENT: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
   VIEWED: "bg-volt-100 text-volt-700 [--dot:var(--color-volt-500)]",
@@ -38,52 +38,52 @@ const QUOTE_STATUS_STYLES: Record<QuoteStatus | "UPDATED", string> = {
 };
 
 /** Waiting for the customer: sent (or opened) and still open. */
-export const OPEN_STATUSES: QuoteStatus[] = ["SENT", "VIEWED"];
+export const OPEN_STATUSES: ProposalStatus[] = ["SENT", "VIEWED"];
 
-export type QuoteState = { status: string; supersededById: string | null; validUntil: string | null };
+export type ProposalState = { status: string; supersededById: string | null; validUntil: string | null };
 
 /**
- * The status as it stands today: a sent quote past its valid-until date is Expired, whether or
+ * The status as it stands today: a sent proposal past its valid-until date is Expired, whether or
  * not anyone has looked at it since (nothing has to run at midnight for this).
  */
-export function effectiveStatus(q: QuoteState, today: string): QuoteStatus {
-  const s = (QUOTE_STATUSES as readonly string[]).includes(q.status) ? (q.status as QuoteStatus) : "DRAFT";
+export function effectiveStatus(q: ProposalState, today: string): ProposalStatus {
+  const s = (PROPOSAL_STATUSES as readonly string[]).includes(q.status) ? (q.status as ProposalStatus) : "DRAFT";
   if (OPEN_STATUSES.includes(s) && q.validUntil && q.validUntil < today) return "EXPIRED";
   return s;
 }
 
 /** The label staff see, e.g. "Opened", or "Updated" for a version a newer one has replaced. */
-export function statusLabel(q: QuoteState, today: string) {
+export function statusLabel(q: ProposalState, today: string) {
   if (q.supersededById && effectiveStatus(q, today) !== "ACCEPTED") return "Updated";
-  return QUOTE_STATUS_LABELS[effectiveStatus(q, today)];
+  return PROPOSAL_STATUS_LABELS[effectiveStatus(q, today)];
 }
 
-export function statusStyle(q: QuoteState, today: string) {
-  if (q.supersededById && effectiveStatus(q, today) !== "ACCEPTED") return QUOTE_STATUS_STYLES.UPDATED;
-  return QUOTE_STATUS_STYLES[effectiveStatus(q, today)];
+export function statusStyle(q: ProposalState, today: string) {
+  if (q.supersededById && effectiveStatus(q, today) !== "ACCEPTED") return PROPOSAL_STATUS_STYLES.UPDATED;
+  return PROPOSAL_STATUS_STYLES[effectiveStatus(q, today)];
 }
 
 /** The customer can still accept or decline it: sent, not past its date, not withdrawn, not replaced by a newer version. */
-export function canAnswer(q: QuoteState, today: string) {
+export function canAnswer(q: ProposalState, today: string) {
   return !q.supersededById && OPEN_STATUSES.includes(effectiveStatus(q, today));
 }
 
 /** Only a draft is edited in place. Once sent, a change makes a new version. */
-export const canEdit = (q: QuoteState) => q.status === "DRAFT" && !q.supersededById;
+export const canEdit = (q: ProposalState) => q.status === "DRAFT" && !q.supersededById;
 export const canSend = canEdit;
 /** Send the same link again (e.g. the customer lost the email). */
 export const canResend = canAnswer;
-/** Take back a quote that's out with the customer. Its link then only says it's been withdrawn. */
-export const canWithdraw = (q: QuoteState) => !q.supersededById && (q.status === "SENT" || q.status === "VIEWED" || q.status === "EXPIRED");
+/** Take back a proposal that's out with the customer. Its link then only says it's been withdrawn. */
+export const canWithdraw = (q: ProposalState) => !q.supersededById && (q.status === "SENT" || q.status === "VIEWED" || q.status === "EXPIRED");
 /**
- * Make version + 1: to change a quote that's been sent, or to quote again after a decline,
- * expiry or withdrawal. Not for a draft (just edit it), an accepted quote (the bookings exist:
+ * Make version + 1: to change a proposal that's been sent, or to make a new one after a decline,
+ * expiry or withdrawal. Not for a draft (just edit it), an accepted proposal (the bookings exist:
  * change those) or a version that already has a newer one.
  */
-export const canNewVersion = (q: QuoteState) => !q.supersededById && ["SENT", "VIEWED", "DECLINED", "EXPIRED", "WITHDRAWN"].includes(q.status);
+export const canNewVersion = (q: ProposalState) => !q.supersededById && ["SENT", "VIEWED", "DECLINED", "EXPIRED", "WITHDRAWN"].includes(q.status);
 
 /** Why the customer can't answer, in their words, or null if they can. */
-export function answerProblem(q: QuoteState, today: string): string | null {
+export function answerProblem(q: ProposalState, today: string): string | null {
   if (q.supersededById) return "This proposal has been updated.";
   switch (effectiveStatus(q, today)) {
     case "SENT":
@@ -103,25 +103,25 @@ export function answerProblem(q: QuoteState, today: string): string | null {
 }
 
 /** "Q-0012", or "Q-0012 v2" for a later version. */
-export function quoteRef(q: { number: string; version: number }) {
+export function proposalRef(q: { number: string; version: number }) {
   return q.version > 1 ? `${q.number} v${q.version}` : q.number;
 }
 
-/** The next quote number after the highest one an agency has used, e.g. "Q-0013". */
-export function nextQuoteNumber(highest: number | null) {
+/** The next proposal number after the highest one an agency has used, e.g. "Q-0013". */
+export function nextProposalNumber(highest: number | null) {
   return `Q-${String((highest ?? 0) + 1).padStart(4, "0")}`;
 }
 
 // ---------- The customer's link ----------
 
 /** Links are 24 random bytes, base64url: 32 characters. Anything else is turned away before the database. */
-const QUOTE_TOKEN = /^[A-Za-z0-9_-]{32}$/;
-export const looksLikeQuoteToken = (t: unknown): t is string => typeof t === "string" && QUOTE_TOKEN.test(t);
+const PROPOSAL_TOKEN = /^[A-Za-z0-9_-]{32}$/;
+export const looksLikeProposalToken = (t: unknown): t is string => typeof t === "string" && PROPOSAL_TOKEN.test(t);
 
-/** How long after the last date on the quote (or its valid-until date, if later) the link still opens. */
+/** How long after the last date on the proposal (or its valid-until date, if later) the link still opens. */
 const TOKEN_DAYS_AFTER = 90;
 
-/** When a quote's link stops opening at all: well after the event, so the customer can still look back at what they accepted. */
+/** When a proposal's link stops opening at all: well after the event, so the customer can still look back at what they accepted. */
 export function tokenExpiry(lineDates: string[], validUntil: string | null): Date {
   const last = [...lineDates, validUntil ?? ""].filter(Boolean).sort().at(-1);
   const base = last ?? new Date().toISOString().slice(0, 10);
@@ -135,17 +135,17 @@ export function tokenOpens(q: { token: string | null; tokenExpiresAt: Date | nul
 
 // ---------- Money ----------
 
-export type QuoteLineMoney = { saleMinor: number; costMinor: number | null; vatPct: number };
+export type ProposalLineMoney = { saleMinor: number; costMinor: number | null; vatPct: number };
 
 /** A line as the booking it becomes: a sale-and-cost deal, with the booking fee on the first line only. */
-export function lineDeal(line: QuoteLineMoney, bookingFeeMinor: number): DealInput {
+export function lineDeal(line: ProposalLineMoney, bookingFeeMinor: number): DealInput {
   return { dealType: "BUY_SELL", feeMinor: line.saleMinor, artistFeeMinor: line.costMinor, commissionPct: 0, vatPct: line.vatPct, bookingFeeMinor };
 }
 
 /** The booking fee each line carries: all of it on the first. */
 export const lineFee = (index: number, bookingFeeMinor: number) => (index === 0 ? bookingFeeMinor : 0);
 
-export type QuoteTotals = {
+export type ProposalTotals = {
   lines: DealBreakdown[];
   /** The acts' prices together, before VAT: what the customer pays for the performances. */
   saleMinor: number;
@@ -161,8 +161,8 @@ export type QuoteTotals = {
   costMissing: boolean;
 };
 
-/** Add a quote up with dealBreakdown, line by line, as the event will once it's accepted. */
-export function quoteTotals(lines: QuoteLineMoney[], bookingFeeMinor: number): QuoteTotals {
+/** Add a proposal up with dealBreakdown, line by line, as the event will once it's accepted. */
+export function proposalTotals(lines: ProposalLineMoney[], bookingFeeMinor: number): ProposalTotals {
   if (!lines.length) {
     return {
       lines: [],
@@ -208,7 +208,7 @@ export function spreadDeposit(depositMinor: number, dues: number[]): number[] {
 
 // ---------- What the editor sends ----------
 
-export type QuoteLineInput = {
+export type ProposalLineInput = {
   artistId: string | null;
   description: string;
   date: string;
@@ -223,7 +223,7 @@ export type QuoteLineInput = {
 };
 
 /** A line as the editor holds it: everything as typed. */
-export type QuoteLineDraft = {
+export type ProposalLineDraft = {
   artistId: string;
   description: string;
   date: string;
@@ -277,7 +277,7 @@ function parseVat(raw: unknown): number {
  * agency's own (pass their ids); anything else becomes "act to be confirmed" or a typed place.
  * Throws a FormError naming the line that's wrong.
  */
-export function parseQuoteLines(raw: string, currency: string, own: { artistIds: Set<string>; venueIds: Set<string> }): QuoteLineInput[] {
+export function parseProposalLines(raw: string, currency: string, own: { artistIds: Set<string>; venueIds: Set<string> }): ProposalLineInput[] {
   let list: unknown;
   try {
     list = JSON.parse(raw || "[]");
@@ -322,7 +322,7 @@ export function parseQuoteLines(raw: string, currency: string, own: { artistIds:
 }
 
 /** The editor's money as minor units, for live totals while typing. Anything not yet a number counts as nothing. */
-export function draftMoney(l: Pick<QuoteLineDraft, "sale" | "cost" | "vatPct">, currency: string): QuoteLineMoney {
+export function draftMoney(l: Pick<ProposalLineDraft, "sale" | "cost" | "vatPct">, currency: string): ProposalLineMoney {
   const safe = (s: string) => {
     try {
       return s.trim() ? Math.max(0, toMinor(s, currency)) : null;
@@ -345,7 +345,7 @@ export function lineTimes(l: { startTime: string; endTime: string }) {
   return l.endTime ? `${l.startTime} to ${l.endTime}` : `From ${l.startTime}`;
 }
 
-/** The kinds of event a quote can be for, and the wedding or event type each becomes. */
+/** The kinds of event a proposal can be for, and the wedding or event type each becomes. */
 export function eventKindFor(eventType: string): "WEDDING" | "CORPORATE" | "PRIVATE_PARTY" | "OTHER" {
   return eventType === "WEDDING" || eventType === "CORPORATE" || eventType === "PRIVATE_PARTY" ? eventType : "OTHER";
 }

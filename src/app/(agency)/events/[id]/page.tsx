@@ -29,7 +29,7 @@ import { eventFormOptions } from "@/lib/event-options";
 import { PLAN_FIELDS, daysBetween, type EventMessage } from "@/lib/event-plan";
 import { autoDone, eventInclude, eventTotals, plannerUrl, sentEventMessages } from "@/lib/events";
 import { dealBreakdown, formatMoney } from "@/lib/money";
-import { quoteRef } from "@/lib/quotes";
+import { proposalRef } from "@/lib/proposals";
 import { addDaysToKey, formatDateTime, localDateKey, localTime } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Wedding or event" };
@@ -50,7 +50,7 @@ const AUTO: { kind: EventMessage; label: string; from: number; to: number; who: 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [e, settings, options, acts, tasks, sent, payLinks, quote] = await Promise.all([
+  const [e, settings, options, acts, tasks, sent, payLinks, proposal] = await Promise.all([
     prisma.event.findFirst({ where: { id, agencyId: user.agencyId }, include: eventInclude }),
     getSettings(user.agencyId),
     eventFormOptions(user.agencyId),
@@ -76,7 +76,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const contractDoc = eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings);
   const contract = await contractStatusFor(user.agencyId, { kind: "event", id: e.id }, contractDoc);
   // A signed proposal is the agreement: once the customer has signed it the booking is locked in.
-  const contractSigned = !!quote || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
+  const contractSigned = !!proposal || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
 
   return (
     <div>
@@ -105,16 +105,16 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         }
       />
 
-      {quote && (
+      {proposal && (
         <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
           <span className="min-w-0 flex-1">
             Booked from{" "}
-            <Link href={`/quotes/${quote.id}`} className="font-medium underline-offset-2 hover:underline">
-              proposal {quoteRef(quote)}
+            <Link href={`/quotes/${proposal.id}`} className="font-medium underline-offset-2 hover:underline">
+              proposal {proposalRef(proposal)}
             </Link>
-            , signed and approved by {quote.answerName}
-            {quote.answeredAt ? ` on ${formatDateTime(quote.answeredAt, e.timezone)}` : ""}. It&apos;s locked in: no separate contract needed.
+            , signed and approved by {proposal.answerName}
+            {proposal.answeredAt ? ` on ${formatDateTime(proposal.answeredAt, e.timezone)}` : ""}. It&apos;s locked in: no separate contract needed.
           </span>
         </div>
       )}

@@ -12,16 +12,16 @@ import {
   effectiveStatus,
   eventKindFor,
   lineDeal,
-  looksLikeQuoteToken,
-  nextQuoteNumber,
-  parseQuoteLines,
-  quoteRef,
-  quoteTotals,
+  looksLikeProposalToken,
+  nextProposalNumber,
+  parseProposalLines,
+  proposalRef,
+  proposalTotals,
   spreadDeposit,
   statusLabel,
   tokenExpiry,
   tokenOpens,
-} from "@/lib/quotes";
+} from "@/lib/proposals";
 
 const today = "2026-11-04";
 const q = (status: string, more: Partial<{ supersededById: string | null; validUntil: string | null }> = {}) => ({
@@ -31,7 +31,7 @@ const q = (status: string, more: Partial<{ supersededById: string | null; validU
   ...more,
 });
 
-describe("quote totals", () => {
+describe("proposal totals", () => {
   const lines = [
     { saleMinor: 45000, costMinor: 30000, vatPct: 20 }, // ceremony singer
     { saleMinor: 180000, costMinor: 140000, vatPct: 20 }, // evening band
@@ -39,7 +39,7 @@ describe("quote totals", () => {
   ];
 
   it("adds the lines up with dealBreakdown, booking fee on the first line only", () => {
-    const t = quoteTotals(lines, 5000);
+    const t = proposalTotals(lines, 5000);
     expect(t.saleMinor).toBe(255000);
     expect(t.bookingFeeMinor).toBe(5000);
     // VAT on the first line includes its booking fee: (45000 + 5000) * 20% + 180000 * 20%.
@@ -56,8 +56,8 @@ describe("quote totals", () => {
   });
 
   it("works with nothing on it yet", () => {
-    expect(quoteTotals([], 5000)).toMatchObject({ saleMinor: 0, totalMinor: 5000, agencyMinor: 5000, costMissing: false });
-    expect(quoteTotals([{ saleMinor: 10000, costMinor: 8000, vatPct: 0 }], 0)).toMatchObject({ totalMinor: 10000, agencyMinor: 2000, costMissing: false });
+    expect(proposalTotals([], 5000)).toMatchObject({ saleMinor: 0, totalMinor: 5000, agencyMinor: 5000, costMissing: false });
+    expect(proposalTotals([{ saleMinor: 10000, costMinor: 8000, vatPct: 0 }], 0)).toMatchObject({ totalMinor: 10000, agencyMinor: 2000, costMissing: false });
   });
 
   it("reads the editor's typing safely for live totals", () => {
@@ -75,13 +75,13 @@ describe("quote totals", () => {
   });
 });
 
-describe("quote statuses", () => {
-  it("expires a sent quote after its valid-until date without anything having to run", () => {
+describe("proposal statuses", () => {
+  it("expires a sent proposal after its valid-until date without anything having to run", () => {
     expect(effectiveStatus(q("SENT"), today)).toBe("SENT");
     expect(effectiveStatus(q("VIEWED", { validUntil: "2026-11-04" }), today)).toBe("VIEWED"); // the last day still counts
     expect(effectiveStatus(q("VIEWED", { validUntil: "2026-11-03" }), today)).toBe("EXPIRED");
     expect(effectiveStatus(q("SENT", { validUntil: null }), today)).toBe("SENT");
-    // Answered quotes stay answered.
+    // Answered proposals stay answered.
     expect(effectiveStatus(q("ACCEPTED", { validUntil: "2026-01-01" }), today)).toBe("ACCEPTED");
     expect(effectiveStatus(q("NONSENSE"), today)).toBe("DRAFT");
   });
@@ -103,7 +103,7 @@ describe("quote statuses", () => {
     expect(answerProblem(q("DECLINED"), today)).toMatch(/declined/);
   });
 
-  it("edits drafts in place and changes sent quotes by a new version", () => {
+  it("edits drafts in place and changes sent proposals by a new version", () => {
     expect(canEdit(q("DRAFT"))).toBe(true);
     expect(canSend(q("DRAFT"))).toBe(true);
     expect(canEdit(q("SENT"))).toBe(false);
@@ -114,7 +114,7 @@ describe("quote statuses", () => {
     expect(canNewVersion(q("SENT", { supersededById: "newer" }))).toBe(false);
   });
 
-  it("resends and withdraws only quotes that are out with the customer", () => {
+  it("resends and withdraws only proposals that are out with the customer", () => {
     expect(canResend(q("VIEWED"), today)).toBe(true);
     expect(canResend(q("VIEWED", { validUntil: "2026-10-01" }), today)).toBe(false);
     expect(canWithdraw(q("SENT"))).toBe(true);
@@ -130,11 +130,11 @@ describe("quote statuses", () => {
     expect(statusLabel(q("SENT", { validUntil: "2026-10-01" }), today)).toBe("Expired");
   });
 
-  it("numbers quotes and their versions", () => {
-    expect(nextQuoteNumber(null)).toBe("Q-0001");
-    expect(nextQuoteNumber(41)).toBe("Q-0042");
-    expect(quoteRef({ number: "Q-0042", version: 1 })).toBe("Q-0042");
-    expect(quoteRef({ number: "Q-0042", version: 3 })).toBe("Q-0042 v3");
+  it("numbers proposals and their versions", () => {
+    expect(nextProposalNumber(null)).toBe("Q-0001");
+    expect(nextProposalNumber(41)).toBe("Q-0042");
+    expect(proposalRef({ number: "Q-0042", version: 1 })).toBe("Q-0042");
+    expect(proposalRef({ number: "Q-0042", version: 3 })).toBe("Q-0042 v3");
     expect(eventKindFor("WEDDING")).toBe("WEDDING");
     expect(eventKindFor("GIG")).toBe("OTHER");
   });
@@ -142,11 +142,11 @@ describe("quote statuses", () => {
 
 describe("the customer's link", () => {
   it("only looks up strong random tokens", () => {
-    expect(looksLikeQuoteToken("a".repeat(32))).toBe(true);
-    expect(looksLikeQuoteToken("Ab-_".repeat(8))).toBe(true);
-    expect(looksLikeQuoteToken("short")).toBe(false);
-    expect(looksLikeQuoteToken("a".repeat(31) + "/")).toBe(false);
-    expect(looksLikeQuoteToken(undefined)).toBe(false);
+    expect(looksLikeProposalToken("a".repeat(32))).toBe(true);
+    expect(looksLikeProposalToken("Ab-_".repeat(8))).toBe(true);
+    expect(looksLikeProposalToken("short")).toBe(false);
+    expect(looksLikeProposalToken("a".repeat(31) + "/")).toBe(false);
+    expect(looksLikeProposalToken(undefined)).toBe(false);
   });
 
   it("is bound to its own version and stops opening after it runs out", () => {
@@ -180,7 +180,7 @@ describe("checking the editor's lines", () => {
     cost: "1400.00",
     vatPct: "20",
   };
-  const parse = (lines: unknown[]) => parseQuoteLines(JSON.stringify(lines), "GBP", own);
+  const parse = (lines: unknown[]) => parseProposalLines(JSON.stringify(lines), "GBP", own);
 
   it("turns what was typed into minor units", () => {
     expect(parse([good])).toEqual([
@@ -219,6 +219,6 @@ describe("checking the editor's lines", () => {
     expect(() => parse([{ ...good, cost: "-5" }])).toThrow("negative");
     expect(() => parse([{ ...good, vatPct: "120" }])).toThrow("VAT");
     expect(() => parse(Array(31).fill(good))).toThrow("up to 30");
-    expect(() => parseQuoteLines("{nope", "GBP", own)).toThrow("couldn't be read");
+    expect(() => parseProposalLines("{nope", "GBP", own)).toThrow("couldn't be read");
   });
 });
