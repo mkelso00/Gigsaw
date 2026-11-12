@@ -83,3 +83,91 @@ jobs:
           NODE_ENV: production
           APP_URL: http://localhost:3000
         run: npm run build
+
+  # End-to-end tests: a production build in a real browser (Playwright, Chromium) against its own
+  # freshly migrated and seeded database. See tests/e2e and playwright.config.ts.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gigsaw_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gigsaw_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # A throwaway database, only for this run. The tests add their own acts, leads and weddings to the seed.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gigsaw_e2e
+      APP_URL: http://localhost:3154
+      # Never start the background scheduler or reach a real provider from CI.
+      DISABLE_SCHEDULER: "1"
+      # Not a real secret: set only so the server doesn't warn that it's missing.
+      CRON_SECRET: e2e-only-not-a-secret
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Load the demo data
+        run: npx tsx prisma/seed.ts
+
+      - name: Build
+        env:
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Start the app
+        run: |
+          nohup npx next start -p 3154 > next.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3154/api/health > /dev/null; then echo "The app is up."; exit 0; fi
+            sleep 2
+          done
+          echo "The app didn't start within two minutes:"
+          cat next.log
+          exit 1
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload traces, screenshots and the server log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            test-results/
+            next.log
+          retention-days: 14
