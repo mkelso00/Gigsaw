@@ -45,12 +45,12 @@ const TIMEOUT_MS = 15_000;
 /**
  * Where each provider's calendar API lives. OAUTH_TEST_BASE (never in production: env() drops it
  * there) points both at a stand-in, under the same base sign-in uses: <base>/google/calendar/v3
- * and <base>/microsoft/graph/v1.0.
+ * and <base>/graph/v1.0.
  */
 export function apiBase(provider: Provider, env: Pick<ServerEnv, "oauthTestBase"> = serverEnv()) {
   const test = env.oauthTestBase;
   if (provider === "GOOGLE") return test ? `${test}/google/calendar/v3` : "https://www.googleapis.com/calendar/v3";
-  return test ? `${test}/microsoft/graph/v1.0` : "https://graph.microsoft.com/v1.0";
+  return test ? `${test}/graph/v1.0` : "https://graph.microsoft.com/v1.0";
 }
 
 /** The stored connection, as much of it as the client needs. */
@@ -124,7 +124,7 @@ export class CalendarClient {
   }
 
   /** A usable access token: the stored one while it lasts, otherwise a fresh one. */
-  private async accessToken(): Promise<string> {
+  async accessToken(): Promise<string> {
     if (this.access && this.accessExpires - EXPIRY_MARGIN_MS > this.now()) return this.access;
     if (
       !this.access &&

@@ -67,11 +67,14 @@ that leaves the feed (cancelled, archived, deleted, act changed to someone else)
   again and calls `resyncConnection`, which clears `lastError` and sets `lastSyncedAt` when everything matches.
 - **Scheduler** (`calendar-sync` job, every minute, time-boxed to 20 seconds): retries connections with a
   `lastError` every 15 minutes, and resyncs each connection about once a day (`lastSyncedAt`).
+- **`getAccessToken(connection)`** (`src/lib/calendar-sync`): the engine's token refresh for anyone else who needs
+  a token (listing calendars, say). Saves the new token and a rotated refresh token; withdrawn access sets
+  `NEEDS_RECONNECT`. It throws, unlike the entry points.
 - **Logins deleted** (an act, a person, a team member, demo data): `removeCalendarsOfLogins` empties their
   calendars first, since the connection rows go with the login.
 - **Stand-in for tests**: with `OAUTH_TEST_BASE`, tokens go to `<base>/google/token` and
   `<base>/microsoft/common/oauth2/v2.0/token` (as sign-in), events to `<base>/google/calendar/v3/...` and
-  `<base>/microsoft/graph/v1.0/...`.
+  `<base>/graph/v1.0/...`.
 
 ## Providers
 
