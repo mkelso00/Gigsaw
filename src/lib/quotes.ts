@@ -26,7 +26,7 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
 };
 
 /** A soft badge with a coloured light, in the calm style of booking statuses. */
-export const QUOTE_STATUS_STYLES: Record<QuoteStatus | "UPDATED", string> = {
+const QUOTE_STATUS_STYLES: Record<QuoteStatus | "UPDATED", string> = {
   DRAFT: "bg-ink-100 text-ink-700 [--dot:var(--color-ink-400)]",
   SENT: "bg-sky-50 text-sky-800 [--dot:var(--color-sky-500)]",
   VIEWED: "bg-volt-100 text-volt-700 [--dot:var(--color-volt-500)]",
@@ -115,11 +115,11 @@ export function nextQuoteNumber(highest: number | null) {
 // ---------- The customer's link ----------
 
 /** Links are 24 random bytes, base64url: 32 characters. Anything else is turned away before the database. */
-export const QUOTE_TOKEN = /^[A-Za-z0-9_-]{32}$/;
+const QUOTE_TOKEN = /^[A-Za-z0-9_-]{32}$/;
 export const looksLikeQuoteToken = (t: unknown): t is string => typeof t === "string" && QUOTE_TOKEN.test(t);
 
 /** How long after the last date on the quote (or its valid-until date, if later) the link still opens. */
-export const TOKEN_DAYS_AFTER = 90;
+const TOKEN_DAYS_AFTER = 90;
 
 /** When a quote's link stops opening at all: well after the event, so the customer can still look back at what they accepted. */
 export function tokenExpiry(lineDates: string[], validUntil: string | null): Date {
@@ -264,7 +264,7 @@ export function parseAmount(raw: unknown, currency: string, label: string): numb
 }
 
 /** A VAT rate as typed: blank is no VAT. */
-export function parseVat(raw: unknown): number {
+function parseVat(raw: unknown): number {
   const s = typeof raw === "string" ? raw.trim().replace(/%$/, "") : "";
   if (!s) return 0;
   const n = Number(s);

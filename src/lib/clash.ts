@@ -33,7 +33,7 @@ const MIN = 60_000;
 /** When we can't measure the distance between two venues, assume this much travel. */
 const UNKNOWN_TRAVEL_MINUTES = 45;
 
-export function gigEnd(g: Pick<GigWindow, "setStart" | "setEnd">) {
+function gigEnd(g: Pick<GigWindow, "setStart" | "setEnd">) {
   return g.setEnd && g.setEnd > g.setStart ? g.setEnd : new Date(g.setStart.getTime() + 3 * 60 * MIN);
 }
 

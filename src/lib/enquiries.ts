@@ -308,7 +308,7 @@ export function enquiryTitle(d: Pick<EnquiryData, "name" | "eventType">) {
 /** At least this long between the form loading and being sent: people take longer, bots don't. */
 export const MIN_FILL_MS = 3_000;
 /** A form left open longer than this has to be reloaded. */
-export const MAX_FORM_AGE_MS = 2 * 86_400_000;
+const MAX_FORM_AGE_MS = 2 * 86_400_000;
 
 function sign(ms: number, secret: string) {
   return createHmac("sha256", secret).update(`enquiry:${ms}`).digest("base64url").slice(0, 22);

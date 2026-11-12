@@ -13,7 +13,7 @@ export type TeamScope = "MINE" | "ALL";
 export const TEAM_FEED_STATUSES: BookingStatus[] = BOOKING_STATUSES.filter((s) => s !== "CANCELLED");
 
 /** How far back the feed goes, so calendars keep recent gigs without the whole history. */
-export const FEED_DAYS_BACK = 90;
+const FEED_DAYS_BACK = 90;
 
 /** The statuses chosen ("CONFIRMED,SETTLED"), or every status when none are. */
 export function feedStatuses(raw: string): BookingStatus[] {

@@ -8,7 +8,7 @@ import { isDateKey } from "./rota";
 export type AwayBlock = { artistId: string; startDate: string; endDate: string; note: string };
 
 /** The longest stretch that can be blocked out in one go. */
-export const MAX_AWAY_DAYS = 366;
+const MAX_AWAY_DAYS = 366;
 
 export const REPLY_LABELS = { YES: "Free", NO: "Not free" } as const;
 export type ReplyAnswer = keyof typeof REPLY_LABELS;

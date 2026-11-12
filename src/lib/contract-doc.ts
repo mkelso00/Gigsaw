@@ -325,7 +325,7 @@ export function contractStatusLabel(c: ContractLike | null, timeZone: string): s
 // Checking what the signer sends.
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-export const MAX_SIGNATURE_BYTES = 300_000;
+const MAX_SIGNATURE_BYTES = 300_000;
 
 /** A drawn signature as a PNG data URL, checked. Returns null if it isn't a sensible PNG. */
 export function checkSignature(dataUrl: string): string | null {

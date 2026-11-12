@@ -7,11 +7,11 @@ import { log } from "./log";
 // failed, and why), so a health check can tell when late-arrival alerts or reminders have quietly
 // stopped. Runs from the built-in scheduler and from /api/cron/overdue both count.
 
-export const SCHEDULER_JOBS = ["overdue", "reminders", "event-emails"] as const;
+const SCHEDULER_JOBS = ["overdue", "reminders", "event-emails"] as const;
 export type SchedulerJob = (typeof SCHEDULER_JOBS)[number];
 
 /** The scheduler runs every minute; a job with no success for this long is treated as stuck. */
-export const DEFAULT_MAX_AGE_MS = 5 * 60_000;
+const DEFAULT_MAX_AGE_MS = 5 * 60_000;
 
 /** Note a job's run. Never throws: a heartbeat that can't be saved mustn't stop the job itself. */
 export async function recordRun(job: SchedulerJob, outcome: { ok: true } | { ok: false; error: unknown }, now = new Date()) {

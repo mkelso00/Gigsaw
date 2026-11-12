@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useFormStatus } from "react-dom";
 import { formErrorFromDigest, type FormState } from "@/lib/forms";
 
 export function SubmitButton({
@@ -19,9 +18,8 @@ export function SubmitButton({
   name?: string;
   value?: string;
 }) {
-  const { pending: formPending } = useFormStatus();
-  const actionPending = useContext(PendingContext);
-  const pending = formPending || actionPending;
+  // Busy while the ActionForm or ServerForm around it is saving.
+  const pending = useContext(PendingContext);
   return (
     <button type="submit" name={name} value={value} className={className} disabled={pending}>
       {pending ? pendingText : children}

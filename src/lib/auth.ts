@@ -10,7 +10,7 @@ import { ShownFormError } from "./forms";
 import type { Role } from "./constants";
 import { env } from "@/server/env";
 
-export const SESSION_COOKIE = "gigsaw_session";
+const SESSION_COOKIE = "gigsaw_session";
 const SESSION_DAYS = 30;
 
 export async function hashPassword(password: string) {

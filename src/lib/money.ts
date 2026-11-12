@@ -2,7 +2,7 @@
 
 const ZERO_DECIMAL = new Set(["JPY"]);
 
-export function minorUnitFactor(currency: string): number {
+function minorUnitFactor(currency: string): number {
   return ZERO_DECIMAL.has(currency) ? 1 : 100;
 }
 

@@ -109,7 +109,7 @@ export function yearlySavingLabel(plans: Plan[]) {
 }
 
 /** A plan key from a name: "Pro plus" becomes PRO_PLUS. */
-export function planKeyFrom(name: string) {
+function planKeyFrom(name: string) {
   return name
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "_")
@@ -118,7 +118,7 @@ export function planKeyFrom(name: string) {
 }
 
 /** Keys can't clash with the extra-user price or the other ways a business can pay. */
-export const RESERVED_PLAN_KEYS = ["EXTRA_USER", "FREE", "CUSTOM", "INVOICE", "STRIPE"];
+const RESERVED_PLAN_KEYS = ["EXTRA_USER", "FREE", "CUSTOM", "INVOICE", "STRIPE"];
 
 export class PlanError extends Error {}
 

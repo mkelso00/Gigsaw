@@ -388,7 +388,7 @@ export function SoundWaves({ className = "" }: { className?: string }) {
 }
 
 /** A tiny bouncing level meter, used next to "Live". */
-export function LevelMeter({ className = "" }: { className?: string }) {
+function LevelMeter({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 20 14" aria-hidden className={`h-3.5 w-5 ${className}`}>
       {[0, 1, 2, 3].map((i) => (

@@ -71,7 +71,7 @@ function isLive(status: string) {
 export type ClashFinding = { other: OtherBooking; assessment: ClashAssessment };
 
 /** Every other live gig for the same act (or an act sharing a member) within a day, with whether there's time to travel between them. */
-export function assessOtherGigs(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes: number): ClashFinding[] {
+function assessOtherGigs(b: ChecklistBooking, others: OtherBooking[], changeoverMinutes: number): ClashFinding[] {
   const day = 86_400_000;
   // A gig with no act yet can't clash with anything.
   if (!b.artistId) return [];

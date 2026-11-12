@@ -9,7 +9,7 @@
 
 import { addDaysToKey, localDateKey } from "./time";
 
-export const CONFIRMED_STATUSES = ["CONFIRMED", "SETTLED"];
+const CONFIRMED_STATUSES = ["CONFIRMED", "SETTLED"];
 const UNRESOLVED_STATUSES = ["ENQUIRY", "HOLD", "PENDING", "AWAITING"];
 const DAY = 86_400_000;
 

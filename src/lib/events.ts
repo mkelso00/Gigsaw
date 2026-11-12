@@ -110,7 +110,7 @@ export function plannerUrl(token: string) {
 }
 
 /** Make the customer's planner link if the event doesn't have one yet. */
-export async function ensurePlannerToken(eventId: string) {
+async function ensurePlannerToken(eventId: string) {
   const e = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, select: { plannerToken: true } });
   if (e.plannerToken) return e.plannerToken;
   const { randomBytes } = await import("node:crypto");

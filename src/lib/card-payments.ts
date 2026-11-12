@@ -70,7 +70,7 @@ export async function ensurePayLink(agencyId: string, target: { bookingId: strin
 
 const gigInclude = { artist: { select: { name: true } }, payments: true } satisfies Prisma.BookingInclude;
 
-export const payLinkInclude = {
+const payLinkInclude = {
   agency: { include: { settings: true } },
   booking: {
     include: {
@@ -98,7 +98,7 @@ type FullPayLink = Prisma.PayLinkGetPayload<{ include: typeof payLinkInclude }>;
  * Everything a pay link shows the venue or customer, worked out afresh: the invoice lines (what
  * they pay, never what the acts are paid), what's been paid and what's due now.
  */
-export function payTarget(link: FullPayLink) {
+function payTarget(link: FullPayLink) {
   const kind: PayKind = isPayKind(link.kind) ? link.kind : "BALANCE";
   const agency = link.agency;
   const brand = agency.settings?.agencyName || agency.name;
@@ -195,7 +195,7 @@ type CheckoutSession = {
 export type CardPaymentResult = "recorded" | "unmatched" | "duplicate" | "ignored";
 
 /** Why a card payment couldn't be put against a booking, as staff are told. */
-export const UNMATCHED_REASONS = {
+const UNMATCHED_REASONS = {
   NOT_CONNECTED: "It was paid into a Stripe account that's no longer connected to Gigsaw.",
   NO_LINK: "The payment link, or the booking or event it was for, was deleted before the payment came in.",
   NO_BOOKINGS: "There were no bookings left on the link to put it against.",

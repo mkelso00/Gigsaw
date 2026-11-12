@@ -151,16 +151,6 @@ export function DefinitionList({ items }: { items: [string, React.ReactNode][] }
   );
 }
 
-/** A heading row for a section, with an optional link or action on the right. */
-export function SectionHeading({ title, action }: { title: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="section-title">{title}</h2>
-      {action}
-    </div>
-  );
-}
-
 /** A small row of linked options, one of them on, e.g. who to show in a list. Scrolls sideways on a phone. */
 export function Segmented({ label, items }: { label: string; items: { href: string; label: string; on: boolean }[] }) {
   return (

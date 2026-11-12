@@ -13,7 +13,7 @@ let cache: { at: number; catalogue: Catalogue } | null = null;
 type PlanRow = Plan & { createdAt?: Date; updatedAt?: Date };
 
 /** A database row as a Plan (drops the timestamps). */
-export function toPlan(r: PlanRow): Plan {
+function toPlan(r: PlanRow): Plan {
   return {
     key: r.key,
     name: r.name,

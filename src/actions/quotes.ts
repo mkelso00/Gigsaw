@@ -42,13 +42,17 @@ async function quoteForm(fn: () => Promise<FormState | void>): Promise<FormState
   });
 }
 
-/** "Make a quote" on an enquiry or a customer: a draft, filled in from the enquiry, opened in the editor. */
+/**
+ * "Turn into a proposal" on a lead (or "Make a proposal" on a customer): a draft, filled in from the lead,
+ * opened in the editor. The lead counts as dealt with from then on, so it leaves the New tab.
+ */
 export async function makeQuote(from: "enquiry" | "contact", id: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
   let quoteId = "";
   const res = await quoteForm(async () => {
     const q = await createDraftQuote(user, from === "enquiry" ? { enquiryId: id } : { contactId: id });
     await logActivity(user, "QUOTE", q.id, `started proposal ${quoteRef(q)}`, q.title);
+    if (from === "enquiry") await prisma.enquiry.updateMany({ where: { id, agencyId: user.agencyId, status: "NEW" }, data: { status: "DONE", doneAt: new Date() } });
     quoteId = q.id;
   });
   if (res?.error) return res;
@@ -161,7 +165,10 @@ export async function newVersion(quoteId: string, _: FormState): Promise<FormSta
   redirect(`/quotes/${nextId}/edit`);
 }
 
-/** Delete a draft. If it was a new version of a sent quote, the sent one's link works again. */
+/**
+ * Delete a draft. If it was a new version of a sent proposal, the sent one's link works again. If it was the
+ * lead's only proposal, the lead goes back to New, as it was before the proposal was made.
+ */
 export async function deleteDraftQuote(quoteId: string) {
   const user = await requireStaff();
   const q = await prisma.quote.findFirst({
@@ -171,6 +178,8 @@ export async function deleteDraftQuote(quoteId: string) {
   if (!q) return;
   await prisma.quote.deleteMany({ where: { id: q.id, agencyId: user.agencyId, status: "DRAFT" } });
   await logActivity(user, "QUOTE", q.id, `deleted the draft of proposal ${quoteRef(q)}`, q.title);
+  if (q.enquiryId && !(await prisma.quote.count({ where: { enquiryId: q.enquiryId, agencyId: user.agencyId } })))
+    await prisma.enquiry.updateMany({ where: { id: q.enquiryId, agencyId: user.agencyId, status: "DONE" }, data: { status: "NEW", doneAt: null } });
   revalidatePath("/", "layout");
   redirect(
     q.supersedes ? `/quotes/${q.supersedes.id}` : q.enquiryId ? `/enquiries?view=quotes` : q.contactId ? `/contacts/${q.contactId}` : "/enquiries?view=quotes",

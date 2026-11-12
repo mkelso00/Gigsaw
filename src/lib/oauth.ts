@@ -31,10 +31,6 @@ export function parseProvider(s: string | null | undefined): ProviderKey | null 
   return s === "google" || s === "microsoft" ? s : null;
 }
 
-export function providerFromDb(s: string): ProviderKey | null {
-  return PROVIDER_KEYS.find((k) => PROVIDERS[k].db === s) ?? null;
-}
-
 export function providerCredentials(p: ProviderKey, env: Env = serverEnv()) {
   return env.oauth[p];
 }
@@ -93,7 +89,7 @@ export function pkceChallenge(verifier: string) {
 /** What we remember between sending someone to the provider and them coming back. */
 export type OAuthFlow = { provider: ProviderKey; intent: OAuthIntent; state: string; verifier: string; nonce: string; exp: number };
 
-export const FLOW_MINUTES = 10;
+const FLOW_MINUTES = 10;
 
 export function newFlow(provider: ProviderKey, intent: OAuthIntent, now = Date.now()): OAuthFlow {
   return { provider, intent, state: randomToken(), verifier: randomToken(48), nonce: randomToken(), exp: now + FLOW_MINUTES * 60_000 };
@@ -207,7 +203,7 @@ type Jwk = JsonWebKey & { kid?: string; kty?: string; use?: string; alg?: string
 /** Signing keys by JWKS address, kept for an hour. An unknown key id fetches them again. */
 const jwksCache = new Map<string, { keys: Jwk[]; at: number }>();
 
-export async function fetchJwks(url: string, opts: { fresh?: boolean; fetcher?: typeof fetch } = {}): Promise<Jwk[]> {
+async function fetchJwks(url: string, opts: { fresh?: boolean; fetcher?: typeof fetch } = {}): Promise<Jwk[]> {
   const hit = jwksCache.get(url);
   if (hit && !opts.fresh && Date.now() - hit.at < 3_600_000) return hit.keys;
   const res = await (opts.fetcher ?? fetch)(url, { signal: AbortSignal.timeout(10_000) });

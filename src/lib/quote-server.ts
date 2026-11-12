@@ -54,7 +54,7 @@ export const quoteInclude = {
 export type FullQuote = Prisma.QuoteGetPayload<{ include: typeof quoteInclude }>;
 
 /** 24 random bytes: a link nobody can guess. */
-export const newQuoteToken = () => randomBytes(24).toString("base64url");
+const newQuoteToken = () => randomBytes(24).toString("base64url");
 export const quoteUrl = (token: string) => `${appUrl()}/q/${token}`;
 
 const todayIn = (tz: string) => localDateKey(new Date(), tz);

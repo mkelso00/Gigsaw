@@ -12,7 +12,7 @@ import { hashToken } from "./reset";
 const WEEK = 7 * 24 * 3_600_000;
 
 /** A one-time "set your password" link that works for a week. */
-export async function welcomeLink(userId: string) {
+async function welcomeLink(userId: string) {
   const token = randomBytes(32).toString("base64url");
   await prisma.passwordReset.create({ data: { userId, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + WEEK) } });
   return `${appUrl()}/reset-password/${token}?welcome=1`;

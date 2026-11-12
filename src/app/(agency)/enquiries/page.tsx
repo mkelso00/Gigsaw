@@ -99,8 +99,8 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
         title={view === "quotes" ? "Proposals" : "Inbound leads"}
         subtitle={
           view === "quotes"
-            ? "Every proposal you've sent, newest first. To make one, open a lead or a customer and press Make a proposal. The customer signs and approves it online, and it becomes a booked wedding or event."
-            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Make a proposal from any of them."
+            ? "Every proposal, newest first. The customer signs and approves it online, and it becomes a booked wedding or event."
+            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Turn a lead into a proposal and it moves to Dealt with."
         }
         actions={
           <>
@@ -144,6 +144,13 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
 
       {view === "quotes" && (
         <>
+          <p className="mb-4 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-700">
+            Proposals are made from leads: open a lead in{" "}
+            <Link href="/enquiries" className="link">
+              New leads
+            </Link>{" "}
+            and press <span className="font-medium">Turn into a proposal</span>. For a repeat customer, use Make a proposal on their customer page.
+          </p>
           <FilterPanel active={[sp.q, sp.status].filter(Boolean).length}>
             <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
               <input type="hidden" name="view" value="quotes" />
@@ -166,7 +173,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
             </form>
           </FilterPanel>
           {sortedQuotes.length === 0 ? (
-            <Empty>{sp.q || quoteStatus ? "No proposals match." : "No proposals yet. Press Make a proposal on a lead to start one."}</Empty>
+            <Empty>{sp.q || quoteStatus ? "No proposals match." : "No proposals yet. Press Turn into a proposal on a lead to start one."}</Empty>
           ) : (
             <QuoteList quotes={sortedQuotes} today={today} />
           )}
@@ -285,7 +292,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                     e.contact && (
                       <ActionForm action={makeQuote.bind(null, "enquiry", e.id)}>
                         <SubmitButton className="btn btn-sm btn-volt" pendingText="Starting…">
-                          Make a proposal
+                          Turn into a proposal
                         </SubmitButton>
                       </ActionForm>
                     )

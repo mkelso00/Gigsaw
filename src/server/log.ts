@@ -14,7 +14,7 @@ import { env, LOG_LEVELS, type LogLevel } from "./env";
 export type LogContext = Record<string, unknown>;
 
 /** An error as plain fields, following `cause` a few levels down. */
-export function serialiseError(e: unknown, depth = 0): unknown {
+function serialiseError(e: unknown, depth = 0): unknown {
   if (!(e instanceof Error)) return e;
   const x = e as Error & { digest?: unknown; code?: unknown; cause?: unknown };
   return {

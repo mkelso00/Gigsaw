@@ -11,11 +11,6 @@ export function Eyebrow({ children, className = "" }: { children: React.ReactNod
   return <p className={`font-mono text-xs font-medium tracking-[0.14em] text-ink-500 uppercase ${className}`}>{children}</p>;
 }
 
-/** A volt marker stroke behind a few words of a headline. */
-export function Marker({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-md bg-volt-400 box-decoration-clone px-1.5 whitespace-nowrap">{children}</span>;
-}
-
 export function ArrowRight({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
@@ -221,33 +216,6 @@ export function OfferSketch() {
         <div className="mt-5 grid grid-cols-2 gap-2">
           <span className="flex h-10 items-center justify-center rounded-xl bg-ink-950 text-sm font-medium text-white">Accept</span>
           <span className="flex h-10 items-center justify-center rounded-xl border border-ink-200 bg-white text-sm font-medium text-ink-900">Decline</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** The act's side of arrivals: the check-in buttons in the act app, just after arriving. */
-export function CheckInSketch() {
-  return (
-    <div className="mx-auto w-full max-w-[320px] rounded-[2rem] border border-white/10 bg-ink-900 p-3">
-      <div className="rounded-[1.5rem] bg-ink-950 p-5">
-        <p className="text-xs font-medium text-ink-400">Tonight · call time 18:30</p>
-        <p className="mt-2 text-xl leading-tight font-semibold tracking-tight text-white">The Anchor, Leeds</p>
-        <p className="mt-1 text-sm text-ink-400">19:00 to 22:00 · Your fee £150</p>
-        <div className="mt-5 space-y-2">
-          <span className="flex h-11 items-center justify-center rounded-xl border border-white/10 text-sm font-medium text-ink-400">I&apos;m on the way</span>
-          <span className="flex h-11 items-center justify-center rounded-xl bg-volt-400 text-sm font-semibold text-ink-950">I&apos;ve arrived</span>
-          <span className="flex h-11 items-center justify-center rounded-xl border border-white/10 text-sm font-medium text-ink-400">
-            I&apos;ve left the venue
-          </span>
-        </div>
-        <div className="mt-5 flex items-start gap-3 rounded-xl bg-emerald-400/10 px-3.5 py-3">
-          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
-          <span className="text-sm leading-snug text-emerald-200">
-            Arrived 18:18, 12 minutes early.
-            <span className="block text-emerald-300/80">Verified at the venue.</span>
-          </span>
         </div>
       </div>
     </div>

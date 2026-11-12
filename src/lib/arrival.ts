@@ -51,7 +51,7 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
 /** When we stop waiting for an arrival and call it "no check-in". */
-export function gigOverAt(setStart: Date, setEnd: Date | null): Date {
+function gigOverAt(setStart: Date, setEnd: Date | null): Date {
   return setEnd && setEnd > setStart ? setEnd : new Date(setStart.getTime() + 3 * HOUR);
 }
 
@@ -63,7 +63,7 @@ export function checkInWindow(arriveBy: Date, setStart: Date, setEnd: Date | nul
   };
 }
 
-export function locationCheck(c: CheckInLike, venueHasLocation: boolean, geofenceMetres: number): LocationCheck {
+function locationCheck(c: CheckInLike, venueHasLocation: boolean, geofenceMetres: number): LocationCheck {
   if (c.source === "AGENT") return "LOGGED_BY_AGENT";
   if (!venueHasLocation) return "NO_VENUE_LOCATION";
   if (c.distanceM === null) return "NO_LOCATION";
