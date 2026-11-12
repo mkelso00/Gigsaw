@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
+import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { personName } from "@/lib/person-name";
@@ -121,7 +122,8 @@ export async function deletePerson(personId: string) {
   const user = await requireStaff();
   const p = await prisma.person.findFirst({ where: { id: personId, agencyId: user.agencyId } });
   if (p) {
-    // Their app login goes too; their acts and bookings stay.
+    // Their app login goes too; their acts and bookings stay. Its connected calendar is emptied first.
+    await removeCalendarsOfLogins({ personId, role: "ARTIST", agencyId: user.agencyId });
     await prisma.user.deleteMany({ where: { personId, role: "ARTIST", agencyId: user.agencyId } });
     await prisma.person.delete({ where: { id: personId } });
     await logActivity(user, "PERSON", personId, "deleted person", personName(p));

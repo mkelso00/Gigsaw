@@ -1,11 +1,10 @@
-import { BOOKING_STATUS_LABELS, type BookingStatus, actName, ACT_VISIBLE } from "@/lib/constants";
+import { ACT_FEED_SELECT, actFeedEvent, actFeedWhere } from "@/lib/act-calendar";
 import { getSettings, prisma } from "@/lib/db";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { billingState } from "@/lib/subscription";
-import { localTime } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -28,39 +27,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const locked = billingState(owner.agency).locked;
   const bookings = locked
     ? []
-    : await prisma.booking.findMany({
-        where: { agencyId: owner.agencyId, artistId: { in: actIds }, setStart: { gte: new Date(Date.now() - 90 * 86_400_000) }, status: { in: ACT_VISIBLE } },
-        include: { venue: true, artist: { select: { name: true } } },
-        orderBy: { setStart: "asc" },
-      });
+    : await prisma.booking.findMany({ where: actFeedWhere(owner.agencyId, actIds), select: ACT_FEED_SELECT, orderBy: { setStart: "asc" } });
 
+  // The same events a connected Google or Outlook calendar gets (src/lib/calendar-sync), built in one place.
   const { defaultTimezone } = await getSettings(owner.agencyId);
+  const baseUrl = appUrl();
   const ics = buildIcs(
     `${calendarName} · Gigsaw`,
-    bookings.map((b) => {
-      const status = BOOKING_STATUS_LABELS[b.status as BookingStatus] ?? b.status;
-      const where = b.venue ? [b.venue.name, b.venue.address, b.venue.city, b.venue.country].filter(Boolean).join(", ") : "";
-      return {
-        uid: `${b.id}@gigsaw`,
-        start: b.arriveBy,
-        end: b.setEnd ?? new Date(b.setStart.getTime() + 2 * 3_600_000),
-        summary: `${b.status === "HOLD" ? "[HOLD] " : ""}${actName(b)}${b.venue ? ` @ ${b.venue.name}` : ""}`,
-        location: where,
-        description: [
-          `Status: ${status}`,
-          `Arrive by ${localTime(b.arriveBy, b.timezone)}`,
-          b.soundcheckAt ? `Soundcheck ${localTime(b.soundcheckAt, b.timezone)}` : "",
-          `On stage ${localTime(b.setStart, b.timezone)}`,
-          b.dayContact ? `Contact: ${b.dayContact}` : "",
-          `Details: ${appUrl()}/app/gigs/${b.id}`,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        url: `${appUrl()}/app/gigs/${b.id}`,
-        updated: b.updatedAt,
-        cancelled: b.status === "CANCELLED",
-      };
-    }),
+    bookings.map((b) => actFeedEvent(b, { baseUrl })),
     { timezone: defaultTimezone },
   );
   const lastModified = bookings.reduce<Date | undefined>((max, b) => (!max || b.updatedAt > max ? b.updatedAt : max), undefined);

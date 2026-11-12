@@ -790,5 +790,5 @@ export async function removeDemoData(prisma: Db, agencyId: string) {
       },
     }),
   ]);
-  return { bookings: bookingIds.length, artists: artistIds.length };
+  return { bookings: bookingIds.length, artists: artistIds.length, bookingIds };
 }

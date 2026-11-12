@@ -129,6 +129,7 @@ describe("scheduler heartbeat", () => {
     await recordRun("overdue", { ok: true }, t0);
     await recordRun("reminders", { ok: true }, t0);
     await recordRun("event-emails", { ok: true }, t0);
+    await recordRun("calendar-sync", { ok: true }, t0);
     expect((await schedulerHealth({ now: new Date("2026-11-04T10:02:00Z") })).ok).toBe(true);
 
     await recordRun("reminders", { ok: false, error: new Error("Twilio down") }, new Date("2026-11-04T10:06:00Z"));
@@ -145,7 +146,7 @@ describe("scheduler heartbeat", () => {
     rows.clear();
     const h = await schedulerHealth();
     expect(h.ok).toBe(false);
-    expect(h.jobs.map((j) => j.ageMs)).toEqual([null, null, null]);
+    expect(h.jobs.map((j) => j.ageMs)).toEqual([null, null, null, null]);
   });
 
   it("records around a job and passes its result or error on", async () => {

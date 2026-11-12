@@ -1,6 +1,7 @@
 import { log } from "@/server/log";
 import { withHeartbeat } from "@/server/scheduler-health";
 import { runOverdueCheck } from "./alerts";
+import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
 import { runReminders } from "./reminders";
 
@@ -9,7 +10,8 @@ let started = false;
 let running = false;
 
 /**
- * Check for overdue arrivals, due gig reminders and wedding/event emails every minute. Overlapping
+ * Check for overdue arrivals, due gig reminders and wedding/event emails every minute, and catch up
+ * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
 export function startScheduler() {
@@ -35,6 +37,13 @@ export function startScheduler() {
       if (n) log.info("Wedding and event emails sent", { job: "event-emails", sent: n });
     } catch (e) {
       log.error("Event emails failed", { job: "event-emails", err: e });
+    }
+    // Last, and time-boxed inside, so slow calendar providers never delay the jobs above.
+    try {
+      const r = await withHeartbeat("calendar-sync", runCalendarSync);
+      if (r.retried || r.toppedUp) log.info("Connected calendars synced", { job: "calendar-sync", retried: r.retried, toppedUp: r.toppedUp });
+    } catch (e) {
+      log.error("Calendar sync job failed", { job: "calendar-sync", err: e });
     } finally {
       running = false;
     }
