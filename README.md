@@ -298,7 +298,35 @@ npm run lint
 npm run build
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs these on every push and pull request, with the migration check, `prisma validate` and the database tests against a fresh Postgres 16.
+GitHub Actions (`.github/workflows/ci.yml`) runs these on every push and pull request, with the migration check, `prisma validate` and the database tests against a fresh Postgres 16. A second job, `e2e`, runs the end-to-end tests below; if they fail, the HTML report, traces and the server log are attached to the run as artifacts.
+
+### End-to-end tests
+
+`tests/e2e` drives a production build in Chromium with Playwright: staff sign-in, New booking, an act accepting an offer from its link, an act checking in from the act app with their location, a lead turned into a proposal that the customer signs, and ticking a wedding's checklist. Each test makes its own act, venue, lead or wedding with a unique name, so the tests run in parallel and can be run again and again on the same database.
+
+They need their own database with `e2e` or `test` in its name, migrated and loaded with the demo data (the seed wipes the database, so never point it at your working one):
+
+```bash
+docker exec gigsaw-db createdb -U postgres gigsaw_e2e
+```
+
+```bash
+export E2E_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gigsaw_e2e
+DATABASE_URL=$E2E_DATABASE_URL npx prisma migrate deploy
+DATABASE_URL=$E2E_DATABASE_URL npx tsx prisma/seed.ts --force
+```
+
+Install the browser once, then build and run the tests. `npm run test:e2e` starts `next start` on port 3154 with that database (or uses an app already running there), so build first and again after changing the app:
+
+```bash
+npx playwright install chromium
+DATABASE_URL=$E2E_DATABASE_URL npm run build
+npm run test:e2e
+```
+
+`npx playwright show-report` opens the report of the last run, with a trace for any test that failed. If Chromium is already installed somewhere else (for example `/opt/pw-browsers/chromium`) and doesn't match the Playwright version, set `PW_CHROMIUM` to its path. `E2E_PORT` or `E2E_BASE_URL` change where the app is expected.
+
+Next 15.5 sometimes fetches a page but never shows it. The tests wait for what each step should show; where the app has no watchdog for this (links, and the customer's and act's pages), they reload or open the address directly, as a person would, and note it in the report as "stalled navigation" or "stalled redraw".
 
 ### Database tests
 
