@@ -14,6 +14,7 @@ import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { GigHover, type GigCard } from "@/components/gig-hover";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { personName } from "@/lib/person-name";
+import { AddOnDay } from "@/components/calendar-add";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -27,8 +28,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const todayKey = localDateKey(new Date(), tz);
-  // Week view is the default: with dozens of gigs a week, a month grid gets too crowded.
-  const view = sp.view === "month" ? "month" : sp.view === "day" ? "day" : "week";
+  // Month view is the default; busy weeks can switch to Week or Day.
+  const view = sp.view === "week" ? "week" : sp.view === "day" ? "day" : "month";
   const anchor = isDateKey(sp.date) ? sp.date : todayKey;
 
   let gridStart: string;
@@ -350,10 +351,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               return (
                 <div
                   key={key}
-                  className={`min-h-28 border-r border-b border-ink-100 p-1.5 ${inMonth ? "" : "bg-ink-50/70"}`}
+                  className={`relative min-h-28 border-r border-b border-ink-100 p-1.5 hover:bg-ink-50 ${inMonth ? "" : "bg-ink-50/70"}`}
                   style={sp.artist && awayOn(key).length ? AWAY_TINT : undefined}
                 >
-                  <div className="mb-1 flex items-center justify-between">
+                  {/* The whole square adds a booking on this day; the day number, bookings and chips sit above it. */}
+                  <AddOnDay date={key} label={dayLabel(key, { weekday: "long", day: "numeric", month: "long" })} />
+                  <div className="pointer-events-none relative z-10 mb-1 flex items-center justify-between pr-7 [&_a]:pointer-events-auto">
                     <Link
                       href={`/calendar${qs({ view: "week", date: key })}`}
                       className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
@@ -364,7 +367,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     </Link>
                     {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} bookings</span>}
                   </div>
-                  <div className="space-y-1">
+                  <div className="pointer-events-none relative z-10 space-y-1 [&_a]:pointer-events-auto">
                     <AwayChips entries={awayOn(key)} max={2} small />
                     {items.slice(0, 4).map((b) => (
                       <GigHover key={b.id} card={card(b)}>

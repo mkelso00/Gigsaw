@@ -58,6 +58,8 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
   const [actId, setActId] = useState("");
   const [status, setStatus] = useState("PENDING");
   const [date, setDate] = useState(today);
+  // Normally from today on; a past day picked on the calendar is allowed too (logging a gig that happened).
+  const [minDate, setMinDate] = useState(today);
   // Acts away on the chosen date are marked, not hidden: the agent may know better.
   const awayToday = useMemo(() => awayOn(away, date), [away, date]);
   const actOptions = useMemo(
@@ -65,8 +67,16 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
     [acts, awayToday],
   );
   const chosenAway = actId && awayToday.has(actId) ? awayLine(acts.find((a) => a.id === actId)?.name ?? "This act", awayToday.get(actId)!) : null;
-  const open = () => {
+  const open = (e?: Event) => {
     load();
+    // A day square on the calendar sends its date along.
+    const picked = (e as CustomEvent<{ date?: string }> | undefined)?.detail?.date;
+    if (picked && /^\d{4}-\d{2}-\d{2}$/.test(picked)) {
+      const input = formBox.current?.querySelector<HTMLInputElement>('input[name="date"]');
+      setMinDate(picked < today ? picked : today);
+      if (input) input.value = picked;
+      setDate(picked);
+    }
     ref.current?.showModal();
     actRef.current?.focus();
   };
@@ -97,6 +107,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
       setType("GIG");
       setStatus("PENDING");
       setDate(today);
+      setMinDate(today);
       setTimeout(() => actRef.current?.focus(), 0);
     };
     form.addEventListener("reset", onReset);
@@ -111,7 +122,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
     <>
       <button
         type="button"
-        onClick={open}
+        onClick={() => open()}
         onPointerEnter={load}
         onFocus={load}
         className="btn btn-volt hidden h-11 shrink-0 rounded-xl px-4 lg:inline-flex"
@@ -191,7 +202,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
             </div>
             <label>
               <span className={label}>Date</span>
-              <input name="date" type="date" required min={today} defaultValue={today} onChange={(e) => setDate(e.target.value)} className={field} />
+              <input name="date" type="date" required min={minDate} defaultValue={today} onChange={(e) => setDate(e.target.value)} className={field} />
             </label>
             <div>
               <label htmlFor="qb-venue" className={label}>
