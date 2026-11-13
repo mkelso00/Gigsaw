@@ -12,6 +12,7 @@ import { AutoEmailsSection, PlannerSection } from "./_sections/emails";
 import { EventHeader, EventStats, ProposalBanner } from "./_sections/header";
 import { RecordPaymentSection } from "./_sections/payment";
 import { EditEventDetails, PlanSection } from "./_sections/plan";
+import { parseExtraFields } from "@/lib/event-plan";
 
 export const metadata: Metadata = { title: "Wedding or event" };
 
@@ -43,7 +44,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
         <div className="min-w-0 space-y-8">
           <ActsSection event={e} acts={acts} currency={t.currency} defaultCurrency={settings.defaultCurrency} />
-          <PlanSection event={e} />
+          <PlanSection event={e} extras={parseExtraFields(settings.planExtraFields)} />
           <EditEventDetails event={e} options={options} />
         </div>
 

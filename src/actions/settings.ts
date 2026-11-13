@@ -28,6 +28,8 @@ async function syncExtraUsersQuietly(agencyId: string) {
 }
 import { isValidTimeZone } from "@/lib/time";
 import { log } from "@/server/log";
+import { extraFieldsFromText, parseExtraFields } from "@/lib/event-plan";
+import { randomBytes } from "node:crypto";
 
 /**
  * Save one settings page. Each page only sends its own fields, so only the fields present are
@@ -83,6 +85,10 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       data.weeklyReminderDay = day;
     }
     if (has("customerConfirmations")) data.customerConfirmations = oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS");
+    if (has("planExtraFields")) {
+      const current = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { planExtraFields: true } });
+      data.planExtraFields = extraFieldsFromText(str(form, "planExtraFields"), parseExtraFields(current?.planExtraFields), () => randomBytes(5).toString("hex"));
+    }
     if (has("reviewLink")) data.reviewLink = /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "";
     if (has("bookingFee")) {
       const settings = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { defaultCurrency: true } });

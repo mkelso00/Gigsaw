@@ -101,7 +101,7 @@ export function BookingForm({
             />
           </Field>
           <Field
-            label="Who pays"
+            label="Who pays (optional)"
             htmlFor="bf-payer"
             hint={
               <>
@@ -142,25 +142,25 @@ export function BookingForm({
         <div>
           <h2 className="section-title">Times</h2>
           <p className="text-sm text-slate-500">
-            Use the venue&apos;s local time. Times after midnight roll into the next day automatically. The <strong>arrive by</strong> time is what arrival
-            tracking measures against.
+            Use the venue&apos;s local time. A finish after midnight rolls into the next day by itself. Leave <strong>arrive by</strong> empty and it&apos;s 30
+            minutes before the start; arrival tracking measures against it.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Date" className="sm:col-span-1 lg:col-span-2">
             <input type="date" name="date" required defaultValue={booking ? localDateKey(booking.arriveBy, tz) : defaults.date} className="input" />
           </Field>
-          <Field label="Arrive by">
-            <input type="time" name="arriveTime" required defaultValue={t(booking?.arriveBy) || defaults.arriveTime || "17:00"} className="input" />
-          </Field>
-          <Field label="Soundcheck">
-            <input type="time" name="soundcheckTime" defaultValue={t(booking?.soundcheckAt)} className="input" />
-          </Field>
-          <Field label="On stage">
+          <Field label="Start">
             <input type="time" name="setStartTime" required defaultValue={t(booking?.setStart) || defaults.setStartTime || "20:00"} className="input" />
           </Field>
-          <Field label="Off stage">
+          <Field label="Finish">
             <input type="time" name="setEndTime" defaultValue={t(booking?.setEnd) || defaults.setEndTime} className="input" />
+          </Field>
+          <Field label="Arrive by (optional)" hint="For an early arrival, e.g. a wedding or an opening">
+            <input type="time" name="arriveTime" defaultValue={booking ? t(booking.arriveBy) : defaults.arriveTime} className="input" />
+          </Field>
+          <Field label="Soundcheck (optional)">
+            <input type="time" name="soundcheckTime" defaultValue={t(booking?.soundcheckAt)} className="input" />
           </Field>
         </div>
         <Field label="Time zone (only used when no venue is chosen)" className="max-w-xs">
@@ -186,7 +186,9 @@ export function BookingForm({
           vatPct={booking?.vatPct ?? 0}
           bookingFee={booking ? minorToInput(booking.bookingFeeMinor || null, cur) : ""}
           feeDefaults={booking ? undefined : { bookingFeeMinor: settings.bookingFeeMinor, bookingFeeFor: settings.bookingFeeFor }}
-        />
+          moreInUse={!!(booking && (booking.depositMinor || booking.dealNotes || booking.radiusKm || booking.radiusDays))}
+          more={
+            <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Deposit">
             <input name="deposit" inputMode="decimal" defaultValue={minorToInput(booking?.depositMinor, cur)} placeholder="0.00" className="input" />
@@ -206,6 +208,9 @@ export function BookingForm({
             <input name="radiusDays" inputMode="numeric" defaultValue={booking?.radiusDays ?? ""} className="input" />
           </Field>
         </div>
+            </>
+          }
+        />
       </section>
 
       <section className="card card-pad space-y-4">

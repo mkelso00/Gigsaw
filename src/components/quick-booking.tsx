@@ -217,20 +217,20 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
               />
             </div>
             <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
-              <label className="col-span-2 sm:col-span-1">
-                <span className={label}>Arrive by</span>
-                <input name="arriveTime" type="time" className={field} aria-describedby="qb-arrive-hint" />
-              </label>
               <label>
-                <span className={label}>On stage</span>
+                <span className={label}>Start</span>
                 <input name="startTime" type="time" required defaultValue="19:00" className={field} />
               </label>
               <label>
                 <span className={label}>Finish</span>
                 <input name="endTime" type="time" required defaultValue="21:00" className={field} />
               </label>
+              <label className="col-span-2 sm:col-span-1">
+                <span className={label}>Arrive by (optional)</span>
+                <input name="arriveTime" type="time" className={field} aria-describedby="qb-arrive-hint" />
+              </label>
               <p id="qb-arrive-hint" className="col-span-2 -mt-2 text-xs text-ink-500 sm:col-span-3">
-                Leave Arrive by empty for 30 minutes before they&apos;re on stage.
+                Only for an early arrival, like a wedding or an opening. Left empty, it&apos;s 30 minutes before the start.
               </p>
             </div>
             <label>
@@ -264,17 +264,17 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label>
-                <span className={label}>Sale ({currency})</span>
-                <input name="fee" inputMode="decimal" placeholder="0.00" className={field} />
+                <span className={label}>Cost ({currency})</span>
+                <input name="cost" inputMode="decimal" placeholder="Act's fee" className={field} />
               </label>
               <label>
-                <span className={label}>Cost</span>
-                <input name="cost" inputMode="decimal" placeholder="Act's fee" className={field} />
+                <span className={label}>Sale ({currency})</span>
+                <input name="fee" inputMode="decimal" placeholder="They pay" className={field} />
               </label>
             </div>
             <div>
               <label htmlFor="qb-payer" className={label}>
-                Who pays
+                Who pays (optional)
               </label>
               <Combobox
                 id="qb-payer"

@@ -2,12 +2,12 @@ import { updateEvent, updateEventPlan } from "@/actions/events";
 import { EventForm } from "@/components/event-form";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
-import { PLAN_FIELDS } from "@/lib/event-plan";
+import { planFieldsFor, type PlanExtraField } from "@/lib/event-plan";
 import { formatDateTime } from "@/lib/time";
 import type { EventPageData, EventView } from "../_data";
 
 /** The running order and details the acts see, which the customer can also fill in from their planner. */
-export function PlanSection({ event: e }: { event: EventView }) {
+export function PlanSection({ event: e, extras }: { event: EventView; extras: PlanExtraField[] }) {
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -23,14 +23,14 @@ export function PlanSection({ event: e }: { event: EventView }) {
           <input name="guestCount" inputMode="numeric" defaultValue={e.guestCount ?? ""} className="input" />
         </Field>
         <div />
-        {PLAN_FIELDS.map(([k, label, hint]) => (
+        {planFieldsFor(e, extras).map((f) => (
           <Field
-            key={k}
-            label={label}
-            hint={hint || undefined}
-            className={k === "timeline" || k === "songRequests" || k === "specialNotes" ? "sm:col-span-2" : ""}
+            key={f.name}
+            label={f.label}
+            hint={f.hint || undefined}
+            className={f.name === "timeline" || f.name === "songRequests" || f.name === "specialNotes" ? "sm:col-span-2" : ""}
           >
-            <textarea name={k} rows={k === "timeline" ? 5 : 2} defaultValue={e[k]} className="input" />
+            <textarea name={f.name} rows={f.name === "timeline" ? 5 : 2} defaultValue={f.value} className="input" />
           </Field>
         ))}
         <div className="sm:col-span-2">

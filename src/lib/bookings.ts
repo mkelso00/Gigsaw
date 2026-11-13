@@ -7,7 +7,7 @@ import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from
 import { toMinor } from "./money";
 import { queueCalendarSync } from "./calendar-sync/queue";
 import { buildSchedule } from "./schedule";
-import { isValidTimeZone, localDateKey, zonedToUtc } from "./time";
+import { isValidTimeZone, localDateKey, minutesBefore, zonedToUtc } from "./time";
 
 export const bookingListInclude = {
   artist: { select: { id: true, name: true, colour: true } },
@@ -123,8 +123,9 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   if (!isValidTimeZone(timezone)) throw new FormError("Unknown time zone");
 
   const date = required(form, "date", "Date");
-  const arriveTime = required(form, "arriveTime", "Arrive by time");
-  const setStartTime = required(form, "setStartTime", "Set start time");
+  const setStartTime = required(form, "setStartTime", "Start time");
+  // Arrive by is optional: left empty, it's 30 minutes before the start (as in the quick booking form).
+  const arriveTime = str(form, "arriveTime") || minutesBefore(setStartTime, 30);
   const soundcheckTime = str(form, "soundcheckTime");
   const setEndTime = str(form, "setEndTime");
 

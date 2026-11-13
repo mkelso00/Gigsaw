@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createAct, createBooking, createVenue, someFutureDay, stamp } from "./support/data";
+import { createAct, createBooking, createVenue, db, someFutureDay, stamp } from "./support/data";
 import { follow, hydrated, pickFromCombobox } from "./support/ui";
 
 test("create a booking with New booking and find it in Venue bookings", async ({ page }) => {
@@ -20,9 +20,9 @@ test("create a booking with New booking and find it in Venue bookings", async ({
   await pickFromCombobox(page, form.getByLabel("Venue", { exact: true }), venue.name);
   await form.getByLabel("Event name").fill(eventName);
   await form.getByLabel("Date", { exact: true }).fill(someFutureDay());
-  await form.getByLabel("Arrive by").fill("18:00");
-  await form.getByLabel("On stage").fill("20:30");
-  await form.getByLabel("Off stage").fill("22:30");
+  // Start and finish only: Arrive by is optional and becomes 30 minutes before the start.
+  await form.getByLabel("Start", { exact: true }).fill("20:30");
+  await form.getByLabel("Finish", { exact: true }).fill("22:30");
   await create.click();
 
   // Saved: the booking's own page.
@@ -31,6 +31,8 @@ test("create a booking with New booking and find it in Venue bookings", async ({
   await expect(heading).toContainText(act.name);
   await expect(heading).toContainText("Pending");
   await expect(page.getByText(eventName)).toBeVisible();
+  const saved = await db().booking.findFirstOrThrow({ where: { eventName }, select: { arriveBy: true, setStart: true } });
+  expect(saved.setStart.getTime() - saved.arriveBy.getTime()).toBe(30 * 60_000);
 
   // And it's in Venue bookings.
   await page.goto("/dashboard");

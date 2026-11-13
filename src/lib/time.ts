@@ -109,3 +109,10 @@ export function addDaysToKey(key: string, days: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d + days));
   return dt.toISOString().slice(0, 10);
 }
+
+/** "19:00" less 30 minutes is "18:30"; wraps past midnight ("00:15" less 30 is "23:45"). */
+export function minutesBefore(time: string, mins: number) {
+  const [h, m] = time.split(":").map(Number);
+  const t = (h * 60 + m - mins + 1440) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}

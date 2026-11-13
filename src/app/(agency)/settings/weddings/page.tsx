@@ -6,6 +6,7 @@ import { SettingsCard, SettingsPage, SettingsSection, SettingsToggle } from "@/c
 import { Field } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
+import { MAX_EXTRA_FIELDS, parseExtraFields } from "@/lib/event-plan";
 
 export const metadata: Metadata = { title: "Weddings and events" };
 
@@ -34,6 +35,25 @@ export default async function WeddingSettings() {
                 </Field>
               </div>
             </SettingsToggle>
+          </SettingsCard>
+        </SettingsSection>
+
+        <SettingsSection
+          title="Your own itinerary fields"
+          description="Extra boxes on every wedding and event plan, e.g. Ceremony time or Wedding schedule. The couple can fill them in from their planner, you can on the wedding page, and the acts see them before the gig."
+        >
+          <SettingsCard pad>
+            <Field label="One field per line" hint={`Up to ${MAX_EXTRA_FIELDS}. Renaming a field starts it afresh; removing one hides what was filled in.`}>
+              <textarea
+                name="planExtraFields"
+                rows={5}
+                defaultValue={parseExtraFields(settings.planExtraFields)
+                  .map((f) => f.label)
+                  .join("\n")}
+                placeholder={"Ceremony time\nWedding schedule\nFirst dance song"}
+                className="input"
+              />
+            </Field>
           </SettingsCard>
         </SettingsSection>
 

@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { daysBetween, eventMessagesDue, PLAN_FIELDS, type EventMessage, type TaskKey } from "./event-plan";
+import { daysBetween, eventMessagesDue, parseExtraFields, planRows, type EventMessage, type TaskKey } from "./event-plan";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type PaymentLike } from "./money";
 import { actName } from "./constants";
@@ -207,7 +207,7 @@ export async function sendActDetails(e: FullEvent) {
   const gigs = withAct(e);
   if (!gigs.length) return 0;
   const recipients = await recipientsForActs(gigs.map((g) => g.artistId));
-  const plan = PLAN_FIELDS.filter(([k]) => e[k]).map(([k, label]) => [label, e[k]] as [string, string]);
+  const plan = planRows(e, parseExtraFields(e.agency.settings?.planExtraFields));
   const where = e.venue ? [e.venue.name, e.venue.address, e.venue.city].filter(Boolean).join(", ") : e.venueText;
   let sent = 0;
   for (const b of gigs) {

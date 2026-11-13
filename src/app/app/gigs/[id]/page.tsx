@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
-import { PLAN_FIELDS } from "@/lib/event-plan";
+import { parseExtraFields, planRows } from "@/lib/event-plan";
 import { actIdsFor } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
@@ -144,7 +144,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           </div>
           {[
             ["Guests", event.guestCount ? String(event.guestCount) : ""],
-            ...PLAN_FIELDS.map(([k, label]) => [label, event[k]]),
+            ...planRows(event, parseExtraFields(settings.planExtraFields)),
             [
               "Also performing",
               event.bookings

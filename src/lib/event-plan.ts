@@ -54,3 +54,69 @@ export const PLAN_FIELDS = [
   ["songRequests", "Song requests", "First dance, must-plays and anything you'd rather not hear"],
   ["specialNotes", "Anything else", "Surprises, guests with special needs, things to avoid"],
 ] as const;
+
+// ---------- The business's own itinerary fields (Settings, Weddings and events) ----------
+
+/** A field the business added to every wedding or event plan, e.g. "Ceremony time". Values live on Event.planExtras by id. */
+export type PlanExtraField = { id: string; label: string };
+
+export const MAX_EXTRA_FIELDS = 15;
+const MAX_LABEL = 60;
+
+/** Settings.planExtraFields, checked: anything malformed is dropped rather than trusted. */
+export function parseExtraFields(json: unknown): PlanExtraField[] {
+  if (!Array.isArray(json)) return [];
+  return json
+    .filter((f): f is PlanExtraField => !!f && typeof f.id === "string" && /^[a-z0-9]{4,16}$/.test(f.id) && typeof f.label === "string" && !!f.label.trim())
+    .slice(0, MAX_EXTRA_FIELDS)
+    .map((f) => ({ id: f.id, label: f.label.trim().slice(0, MAX_LABEL) }));
+}
+
+/**
+ * The settings box (one label per line) back into fields. A label that was there before keeps its id, so
+ * what's been filled in on events stays with it; a new label gets a new id. Duplicates are dropped.
+ */
+export function extraFieldsFromText(text: string, existing: PlanExtraField[], newId: () => string): PlanExtraField[] {
+  const byLabel = new Map(existing.map((f) => [f.label.toLowerCase(), f.id]));
+  const seen = new Set<string>();
+  const out: PlanExtraField[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const label = raw.replace(/\s+/g, " ").trim().slice(0, MAX_LABEL);
+    if (!label || seen.has(label.toLowerCase())) continue;
+    seen.add(label.toLowerCase());
+    out.push({ id: byLabel.get(label.toLowerCase()) ?? newId(), label });
+    if (out.length === MAX_EXTRA_FIELDS) break;
+  }
+  return out;
+}
+
+/** Event.planExtras, checked: only string values, by field id. */
+export function parsePlanExtras(json: unknown): Record<string, string> {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {};
+  return Object.fromEntries(Object.entries(json as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
+
+type PlanColumns = { [K in (typeof PLAN_FIELDS)[number][0]]: string };
+
+/** Every plan field in order, built-in first then the business's own: form name, label, hint and current value. */
+export function planFieldsFor(event: PlanColumns & { planExtras?: unknown }, extras: PlanExtraField[]) {
+  const values = parsePlanExtras(event.planExtras);
+  return [
+    ...PLAN_FIELDS.map(([k, label, hint]) => ({ name: k as string, label: label as string, hint: hint as string, value: event[k] ?? "" })),
+    ...extras.map((f) => ({ name: `extra_${f.id}`, label: f.label, hint: "", value: values[f.id] ?? "" })),
+  ];
+}
+
+/** The filled-in plan as label and value pairs, for the act's page and emails. Never anything about money. */
+export function planRows(event: PlanColumns & { planExtras?: unknown }, extras: PlanExtraField[]): [string, string][] {
+  return planFieldsFor(event, extras)
+    .filter((f) => f.value.trim())
+    .map((f) => [f.label, f.value]);
+}
+
+/** Read a plan form: the built-in columns, and planExtras with the values for the business's own fields. */
+export function readPlanForm(get: (name: string) => string, extras: PlanExtraField[], maxLength = 5000) {
+  const columns = Object.fromEntries(PLAN_FIELDS.map(([k]) => [k, get(k).slice(0, maxLength)])) as PlanColumns;
+  const planExtras = Object.fromEntries(extras.map((f) => [f.id, get(`extra_${f.id}`).slice(0, maxLength)]).filter(([, v]) => v));
+  return { columns, planExtras };
+}

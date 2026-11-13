@@ -112,6 +112,8 @@ model Settings {
   clientArrivalMessages Boolean @default(true)
   // Weddings and events: automatic emails to the customer and the acts, and a review link for the thank-you.
   eventEmails           Boolean @default(true)
+  // The business's own wedding/event plan fields, e.g. [{ id, label: "Ceremony time" }] (src/lib/event-plan.ts).
+  planExtraFields       Json    @default("[]")
   // Tell the customer when an act is confirmed: EVENTS (weddings and private events) | ALL | OFF
   customerConfirmations String  @default("EVENTS")
   reviewLink            String  @default("")
@@ -763,6 +765,8 @@ model Event {
   plannerToken  String?   @unique
   plannerSentAt DateTime?
   plannerDoneAt DateTime?
+  // Values for Settings.planExtraFields, by field id.
+  planExtras    Json      @default("{}")
 
   autoEmails Boolean     @default(true) // automatic emails to the customer for this event
   demo       Boolean     @default(false)

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { submitPlanner } from "@/actions/events";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { prisma } from "@/lib/db";
-import { PLAN_FIELDS } from "@/lib/event-plan";
+import { parseExtraFields, planFieldsFor } from "@/lib/event-plan";
 import { localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
@@ -75,11 +75,11 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
             <span className="label">Number of guests</span>
             <input name="guestCount" inputMode="numeric" defaultValue={e.guestCount ?? ""} className="input" />
           </label>
-          {PLAN_FIELDS.map(([k, label, hint]) => (
-            <label key={k} className="block">
-              <span className="label">{label}</span>
-              <textarea name={k} rows={k === "timeline" || k === "songRequests" ? 5 : 3} defaultValue={e[k]} className="input" />
-              {hint && <span className="hint block">{hint}</span>}
+          {planFieldsFor(e, parseExtraFields(e.agency.settings?.planExtraFields)).map((f) => (
+            <label key={f.name} className="block">
+              <span className="label">{f.label}</span>
+              <textarea name={f.name} rows={f.name === "timeline" || f.name === "songRequests" ? 5 : 3} defaultValue={f.value} className="input" />
+              {f.hint && <span className="hint block">{f.hint}</span>}
             </label>
           ))}
           <SubmitButton className="btn btn-primary w-full sm:w-auto" pendingText="Sending…">

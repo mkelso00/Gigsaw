@@ -17,14 +17,9 @@ import { sendOffers } from "@/lib/offers";
 import { dateInWeek, isDateKey, weekdayOf } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
 import { localDateKey, zonedToUtc } from "@/lib/time";
+import { minutesBefore } from "@/lib/time";
 
 const TIME = /^\d{2}:\d{2}$/;
-
-function minutesBefore(time: string, mins: number) {
-  const [h, m] = time.split(":").map(Number);
-  const t = (h * 60 + m - mins + 1440) % 1440;
-  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-}
 
 /** Read and check the slot form. Contacts and artists must belong to the agency. */
 async function slotFields(form: FormData, user: AgencyUser) {

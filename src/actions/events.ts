@@ -10,7 +10,7 @@ import { findClashes } from "@/lib/clash-check";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { defaultTasks, PLAN_FIELDS } from "@/lib/event-plan";
+import { defaultTasks, parseExtraFields, planRows, readPlanForm } from "@/lib/event-plan";
 import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
@@ -134,8 +134,9 @@ export async function updateEventPlan(eventId: string, _: FormState, form: FormD
   const user = await requireStaff();
   return handleForm(async () => {
     await ownEvent(user, eventId);
-    const data = Object.fromEntries(PLAN_FIELDS.map(([k]) => [k, str(form, k)]));
-    await prisma.event.update({ where: { id: eventId }, data: { ...data, guestCount: int(form, "guestCount") } });
+    const settings = await getSettings(user.agencyId);
+    const { columns, planExtras } = readPlanForm((k) => str(form, k), parseExtraFields(settings.planExtraFields));
+    await prisma.event.update({ where: { id: eventId }, data: { ...columns, planExtras, guestCount: int(form, "guestCount") } });
     await logActivity(user, "EVENT", eventId, "updated the plan");
     revalidatePath(`/events/${eventId}`);
     return { ok: "Plan saved. The acts see it on their booking page." };
@@ -317,12 +318,13 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
     if (!token || token.length < 20) throw new FormError("This link isn't valid");
     const e = await prisma.event.findUnique({ where: { plannerToken: token }, include: { agency: { include: { settings: true } }, customer: true } });
     if (!e || e.status !== "ACTIVE" || e.agency.status !== "ACTIVE") throw new FormError("This link isn't valid any more. Please contact us.");
-    const data = Object.fromEntries(PLAN_FIELDS.map(([k]) => [k, str(form, k).slice(0, 5000)]));
+    const extras = parseExtraFields(e.agency.settings?.planExtraFields);
+    const { columns, planExtras } = readPlanForm((k) => str(form, k), extras);
     const guests = int(form, "guestCount");
     const first = !e.plannerDoneAt;
     await prisma.event.update({
       where: { id: e.id },
-      data: { ...data, guestCount: guests && guests > 0 && guests < 100_000 ? guests : null, plannerDoneAt: new Date() },
+      data: { ...columns, planExtras, guestCount: guests && guests > 0 && guests < 100_000 ? guests : null, plannerDoneAt: new Date() },
     });
     await prisma.activity.create({
       data: { agencyId: e.agencyId, entity: "EVENT", entityId: e.id, action: first ? "customer filled in the planner" : "customer updated the planner" },
@@ -340,7 +342,7 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
           brand: e.agency.settings?.agencyName || e.agency.name,
           title: `${e.customer?.name ?? "The customer"} has ${first ? "filled in" : "updated"} their details`,
           intro: `${e.name}, ${formatDate(new Date(`${e.date}T12:00:00Z`), "UTC")}.`,
-          rows: PLAN_FIELDS.filter(([k]) => data[k]).map(([k, label]) => [label, data[k]] as [string, string]),
+          rows: planRows({ ...columns, planExtras }, extras),
         },
       });
     }
