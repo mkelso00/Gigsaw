@@ -3,13 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { copyBooking, type CopyResult } from "@/actions/bookings";
+import { MAX_COPY_DATES } from "@/lib/constants";
+import { addDaysToKey } from "@/lib/time";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const key = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+const shortDate = (k: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${k}T12:00:00Z`));
 
 /**
  * "Copy" on a booking: pick any number of dates on a mini calendar and the booking is copied to
- * each. With one date you can jump to the new booking; with several you stay where you are.
+ * each, or tick off the same day every week for a number of weeks in one go (a weekly residency
+ * can run to hundreds of dates). With one date you can jump to the new booking; with several you
+ * stay where you are.
  */
 export function CopyBooking({
   bookingId,
@@ -35,6 +41,17 @@ export function CopyBooking({
   const [keepAct, setKeepAct] = useState(true);
   const [result, setResult] = useState<CopyResult | null>(null);
   const [pending, start] = useTransition();
+  const [weeks, setWeeks] = useState("12");
+  // The same day each week after this booking (or from today, for an old one), for that many weeks.
+  const pickWeekly = () => {
+    const n = Math.min(Math.max(Math.floor(Number(weeks)) || 0, 1), MAX_COPY_DATES);
+    let first = addDaysToKey(startDate, 7);
+    while (first < today) first = addDaysToKey(first, 7);
+    const dates = Array.from({ length: n }, (_, i) => addDaysToKey(first, i * 7));
+    setPicked((p) => new Set([...p, ...dates]));
+  };
+  const tooMany = picked.size > MAX_COPY_DATES;
+  const last = picked.size ? [...picked].sort().at(-1)! : null;
 
   const cells = useMemo(() => {
     const first = new Date(Date.UTC(month.y, month.m, 1));
@@ -129,6 +146,32 @@ export function CopyBooking({
                 );
               })}
             </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4 text-sm">
+              <span>Every week for</span>
+              <input
+                type="number"
+                min={1}
+                max={MAX_COPY_DATES}
+                value={weeks}
+                onChange={(e) => setWeeks(e.target.value)}
+                aria-label="Number of weeks"
+                className="input w-20"
+              />
+              <span>weeks</span>
+              <button type="button" className="btn btn-sm" onClick={pickWeekly}>
+                Pick them
+              </button>
+              {picked.size > 0 && (
+                <button type="button" className="btn btn-sm ml-auto" onClick={() => setPicked(new Set())}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className={`mt-2 text-xs ${tooMany ? "font-medium text-rose-700" : "text-ink-500"}`} role="status">
+              {picked.size === 0
+                ? `Tap days on the calendar, or pick every week. Up to ${MAX_COPY_DATES} dates.`
+                : `${picked.size} date${picked.size === 1 ? "" : "s"} picked, the last on ${shortDate(last!)}.${tooMany ? ` That's more than ${MAX_COPY_DATES}: take some off.` : ""}`}
+            </p>
             <div className="mt-4 space-y-3 border-t border-ink-100 pt-4">
               <label className="block">
                 <span className="label">Status of the copies</span>
@@ -159,7 +202,7 @@ export function CopyBooking({
                 </button>
                 <button
                   type="button"
-                  disabled={!picked.size || pending}
+                  disabled={!picked.size || tooMany || pending}
                   className="btn btn-primary ml-auto"
                   onClick={() => start(async () => setResult(await copyBooking(bookingId, [...picked], status, keepAct)))}
                 >
