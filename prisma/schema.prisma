@@ -248,6 +248,12 @@ model Artist {
   bankAccountNumber String  @default("")
   vatRegistered     Boolean @default(false)
   vatNumber         String  @default("")
+  // Postal address, for the self-billing invoices Gigsaw makes for the act. Filled in by the act or the agency.
+  address           String  @default("")
+  // National Insurance number, kept for the agency's records only: never shown to venues, customers or other acts.
+  niNumber          String  @default("")
+  // When the act last finished the details the agency asks for (bank, address, NI), so staff can see who's ready to be paid.
+  detailsCompletedAt DateTime?
 
   login    User?                  @relation("ArtistLogin")
   slots    VenueSlot[]
