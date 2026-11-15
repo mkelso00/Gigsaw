@@ -15,9 +15,9 @@ import { defaultBookingFee, defaultVat, minorToInput, toMinor } from "@/lib/mone
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
-import { WEEKDAYS, dateInWeek, isDateKey, weekdayOf, weeklyDates } from "@/lib/rota";
+import { WEEKDAYS, dateInWeek, isDateKey, nextWeekday, slotRunsOn, weekStartOf, weekdayOf, weeklyDates } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
-import { localDateKey, zonedToUtc } from "@/lib/time";
+import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
 import { minutesBefore } from "@/lib/time";
 
 const TIME = /^\d{2}:\d{2}$/;
@@ -25,6 +25,22 @@ const TIME = /^\d{2}:\d{2}$/;
 /** "6 Feb 2027" for a "YYYY-MM-DD" day. */
 const formatDay = (key: string) =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
+
+/**
+ * A slot's first and last dates, when the form has those boxes (forms without them leave the
+ * slot's dates alone). Empty means from whenever, or until it's stopped.
+ */
+function slotDates(form: FormData): { startsOn?: string | null; endsOn?: string | null } {
+  const out: { startsOn?: string | null; endsOn?: string | null } = {};
+  for (const k of ["startsOn", "endsOn"] as const) {
+    if (!form.has(k)) continue;
+    const v = str(form, k);
+    if (v && !isDateKey(v)) throw new FormError(k === "startsOn" ? "Choose the date it starts" : "Choose the last date, or leave it empty");
+    out[k] = v || null;
+  }
+  if (out.startsOn && out.endsOn && out.endsOn < out.startsOn) throw new FormError("The last date is before the start date");
+  return out;
+}
 
 /** Read and check the slot form. Contacts and artists must belong to the agency. */
 async function slotFields(form: FormData, user: AgencyUser) {
@@ -69,6 +85,7 @@ async function slotFields(form: FormData, user: AgencyUser) {
     throw new FormError("That artist isn't in your agency");
   }
   return {
+    ...slotDates(form),
     label: str(form, "label"),
     arriveTime,
     startTime,
@@ -120,9 +137,14 @@ export async function createSlots(venueId: string, _: FormState, form: FormData)
       })),
     });
     await logActivity(user, "VENUE", venueId, "added schedule slots", `${days.length} × ${fields.startTime}–${fields.endTime}`);
-    revalidatePath(`/venues/${venue.id}`);
-    revalidatePath("/rota");
-    return { ok: `Added ${days.length} slot${days.length === 1 ? "" : "s"}.` };
+    revalidatePath("/", "layout");
+    const names = days
+      .sort()
+      .map((d) => WEEKDAYS[d - 1][1])
+      .join(", ");
+    const from = fields.startsOn ? ` from ${formatDay(fields.startsOn)}` : "";
+    const until = fields.endsOn ? ` to ${formatDay(fields.endsOn)}` : "";
+    return { ok: `Added: every ${names}${from}${until}, ${fields.startTime}–${fields.endTime}.` };
   });
 }
 
@@ -176,17 +198,66 @@ export async function updateSlot(slotId: string, _: FormState, form: FormData): 
   });
 }
 
-export async function deleteSlot(slotId: string) {
+/**
+ * Delete a weekly slot that has nothing booked from it (cancelled gigs don't count), e.g. one added
+ * by mistake. One with bookings is stopped instead (stopSlot), so its history stays with it.
+ */
+export async function deleteSlot(slotId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
-  const slot = await prisma.venueSlot.findFirst({
-    where: { id: slotId, agencyId: user.agencyId },
+  return handleForm(async () => {
+    const slot = await ownSlot(user, slotId);
+    const booked = await prisma.booking.count({ where: { slotId: slot.id, agencyId: user.agencyId, status: { not: "CANCELLED" } } });
+    if (booked) throw new FormError(`It has ${booked} booking${booked === 1 ? "" : "s"} made from it, so stop it from a date instead.`);
+    await prisma.venueSlot.delete({ where: { id: slot.id } });
+    await logActivity(user, "VENUE", slot.venueId, "deleted a weekly slot", `${WEEKDAYS[slot.weekday - 1][2]} ${slot.startTime}–${slot.endTime}`);
+    revalidatePath("/", "layout");
+    return { ok: "Deleted." };
   });
-  if (!slot) return;
-  // Gigs already booked from the slot stay booked; they just lose the link to it.
-  await prisma.venueSlot.delete({ where: { id: slot.id } });
-  await logActivity(user, "VENUE", slot.venueId, "removed a schedule slot");
-  revalidatePath(`/venues/${slot.venueId}`);
-  revalidatePath("/rota");
+}
+
+/**
+ * Stop a weekly slot: it runs up to and including the last date given, then no longer shows on
+ * the rota or asks for an act. Bookings already made after that date are left alone, except that
+ * the empty ones (no act yet, nothing paid) can be archived with it. Clearing the date starts it again.
+ */
+export async function stopSlot(slotId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const slot = await ownSlot(user, slotId);
+    const last = str(form, "endsOn");
+    if (!isDateKey(last)) throw new FormError("Choose the last date it runs");
+    await prisma.venueSlot.update({ where: { id: slot.id }, data: { endsOn: last } });
+    // Bookings after the last date, by their day at the venue.
+    const after = zonedToUtc(addDaysToKey(last, 1), "00:00", slot.venue.timezone);
+    const later = { slotId: slot.id, agencyId: user.agencyId, status: { not: "CANCELLED" }, arriveBy: { gte: after } };
+    let archived = 0;
+    if (str(form, "archiveEmpty") === "on") {
+      const empty = await prisma.booking.findMany({ where: { ...later, artistId: null, payments: { none: {} } }, select: { id: true, reference: true } });
+      if (empty.length) {
+        await prisma.booking.updateMany({ where: { id: { in: empty.map((b) => b.id) } }, data: { archivedAt: new Date() } });
+        queueCalendarSync(empty.map((b) => b.id));
+        await logActivities(
+          user,
+          "BOOKING",
+          empty.map((b) => ({ entityId: b.id, action: "archived (weekly slot stopped)", detail: b.reference })),
+        );
+        archived = empty.length;
+      }
+    }
+    const kept = await prisma.booking.count({ where: later });
+    await logActivity(user, "VENUE", slot.venueId, "stopped a weekly slot", `${WEEKDAYS[slot.weekday - 1][2]} ${slot.startTime}, last ${last}`);
+    revalidatePath("/", "layout");
+    return {
+      ok: [
+        `Stopped: the last one is ${formatDay(last)}.`,
+        archived ? `${archived} empty booking${archived === 1 ? "" : "s"} after that archived.` : "",
+        kept === 1 ? "1 booking after that is still in the calendar: cancel it on its page if it's off too." : "",
+        kept > 1 ? `${kept} bookings after that are still in the calendar: cancel them on their own pages if they're off too.` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    };
+  });
 }
 
 function slotSchedule(slot: Awaited<ReturnType<typeof ownSlot>>, date: string) {
@@ -295,6 +366,7 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
   return handleForm(async () => {
     if (!isDateKey(date)) throw new FormError("Unknown date");
     const slot = await ownSlot(user, slotId);
+    if (!slotRunsOn(slot, date)) throw new FormError("This weekly slot isn't running on that date");
     const artistId = optStr(form, "artistId");
     if (!artistId) throw new FormError("Choose an act");
     // "Offer" asks the act to accept; "Confirm" books them straight in.
@@ -331,8 +403,10 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
 export async function bookRegulars(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
-    const weekStart = str(form, "weekStart");
-    if (!isDateKey(weekStart)) throw new FormError("Unknown week");
+    // From a chosen date (or, as the rota used to send, the start of a week), never before a slot's own start.
+    const from = str(form, "from") || str(form, "weekStart");
+    if (!isDateKey(from)) throw new FormError("Choose the date to start from");
+    const weekStart = weekStartOf(from);
     const weeks = Math.min(Math.max(int(form, "weeks") ?? 1, 1), 26);
     const mode = oneOf(str(form, "mode"), ["pending", "offer", "confirm"] as const, "pending");
     const slots = await prisma.venueSlot.findMany({
@@ -351,7 +425,7 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
       const monday = dateInWeek(weekStart, 1 + w * 7);
       for (const slot of slots) {
         const date = dateInWeek(monday, slot.weekday);
-        if (date < today) continue;
+        if (date < today || date < from || !slotRunsOn(slot, date)) continue;
         if (mode === "pending") {
           const id = await bookSlot(user, slot, date, null, undefined, ctx);
           if (id) created.push(id);
@@ -375,7 +449,7 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
         ok: mode === "pending" ? "No weekly slots yet. Add them on each venue's page." : "No slots have a regular act yet. Set one on each venue's schedule.",
       };
     }
-    const span = `over ${weeks} week${weeks === 1 ? "" : "s"}`;
+    const span = `over ${weeks} week${weeks === 1 ? "" : "s"} from ${formatDay(from < today ? today : from)}`;
     const left = skipped.length
       ? ` ${skipped.length} left without an act because the regular act is busy elsewhere or away then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}.`
       : "";
@@ -417,8 +491,9 @@ const DEFAULT_REPEAT_WEEKS = 12;
  * one-off. The venue can be left out for a one-off, e.g. a wedding.
  *  - "Repeat every week" (weekly=on, the quick booking form): the same booking on the same day
  *    every week from this date, as real bookings, for a number of weeks or until a last date.
- *  - "Every week on this day" (repeat=on, the rota): adds a weekly slot to the venue's schedule
- *    (with this act as the regular) and books this date.
+ *  - "Every week" (repeat=on, the rota): adds weekly slots to the venue's schedule starting on
+ *    this date, on the days ticked (weekday) or this date's day, up to an optional last date
+ *    (endsOn), with this act as the regular, and books the first date of each.
  */
 export async function addRotaGig(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
@@ -455,26 +530,33 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       null;
     const times = { arrive: fields.arriveTime, setStart: fields.startTime, setEnd: fields.endTime };
     const schedule = buildSchedule(date, times, tz);
+    // A weekly slot starts on the chosen date, on each day ticked (or that date's day), and its
+    // first date on each of those days is booked now.
+    const slotDays = weekly ? [...new Set(form.getAll("weekday").map(Number))].filter((d) => d >= 1 && d <= 7).sort() : [];
+    if (weekly && !slotDays.length) slotDays.push(weekdayOf(date));
+    if (weekly && fields.endsOn && fields.endsOn < date) throw new FormError("The last date is before the start date");
+    const firstDates = slotDays.map((d) => nextWeekday(date, d)).filter((d) => !fields.endsOn || d <= fields.endsOn);
+    const checkDates = weekly ? firstDates : dates;
 
-    if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus) && dates.length > 1) {
+    if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus) && checkDates.length > 1) {
       const busy = await clashDates(
         { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz },
         times,
-        dates,
+        checkDates,
         settings.changeoverMinutes,
       );
       if (busy.length) {
         return {
           confirm: {
-            title: `Hold on: ${artist.name} may not be free on ${busy.length} of the ${dates.length} dates`,
+            title: `Hold on: ${artist.name} may not be free on ${busy.length} of the ${checkDates.length} dates`,
             items: [...busy.slice(0, 10), ...(busy.length > 10 ? [`and ${busy.length - 10} more`] : [])],
             button: "Book them all anyway",
           },
         };
       }
-    } else if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus)) {
+    } else if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus) && checkDates.length === 1) {
       const warnings = await findClashes(
-        { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...schedule },
+        { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...buildSchedule(checkDates[0], times, tz) },
         settings.changeoverMinutes,
       );
       if (warnings.length) {
@@ -527,47 +609,65 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       };
     }
 
-    let id: string | null;
     if (weekly && venue) {
-      const created = await prisma.venueSlot.create({
-        data: { ...fields, promoterId, agencyId: user.agencyId, venueId: venue.id, weekday: weekdayOf(date) },
-        include: { venue: true },
-      });
-      await logActivity(user, "VENUE", venue.id, "added a weekly slot", `${fields.startTime}–${fields.endTime}`);
-      id = await bookSlot(user, created, date, artist?.id ?? null, status);
-    } else {
-      const booking = await createBookingWithReference(user.agencyId, {
-        ...schedule,
-        artistId: artist?.id ?? null,
-        venueId: venue?.id ?? null,
-        promoterId,
-        agentId: artist?.agentId ?? user.id,
-        createdById: user.id,
-        demo: !!venue?.demo || !!artist?.demo,
-        status,
-        eventType: fields.eventType,
-        eventName: fields.label,
-        timezone: tz,
-        currency: fields.currency,
-        feeMinor: fields.feeMinor,
-        ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
-        commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
-        bookingFeeMinor: defaultBookingFee(settings, { eventType: fields.eventType }),
-        // The quick form has no VAT box: new bookings get the business's VAT on sales.
-        vatPct: defaultVat(settings),
-      });
-      await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
-      id = booking.id;
+      const ids: string[] = [];
+      for (const weekday of slotDays) {
+        const created = await prisma.venueSlot.create({
+          data: { ...fields, startsOn: date, promoterId, agencyId: user.agencyId, venueId: venue.id, weekday },
+          include: { venue: true },
+        });
+        const first = nextWeekday(date, weekday);
+        if (slotRunsOn(created, first)) {
+          const id = await bookSlot(user, created, first, artist?.id ?? null, status);
+          if (id) ids.push(id);
+        }
+      }
+      const days = slotDays.map((d) => WEEKDAYS[d - 1][2]).join(", ");
+      await logActivity(user, "VENUE", venue.id, "added weekly slots", `${days} ${fields.startTime}–${fields.endTime} from ${date}`);
+      const offered = ids.length && status === "AWAITING" ? await sendOffers(ids) : 0;
+      if (ids.length && status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs(ids);
+      revalidatePath("/", "layout");
+      const until = fields.endsOn ? ` to ${formatDay(fields.endsOn)}` : "";
+      const firstOnes = !ids.length
+        ? ""
+        : !artist
+          ? ` The first ${ids.length === 1 ? "one is" : `${ids.length} are`} in the calendar, Pending: add an act on the Rota.`
+          : status === "AWAITING"
+            ? ` Offered the first ${ids.length === 1 ? "one" : ids.length} to ${artist.name}.${offered ? " They've been sent the offer." : ""}`
+            : ` Booked ${artist.name} for the first ${ids.length === 1 ? "one" : ids.length}.`;
+      return { ok: `Weekly at ${venue.name}: every ${days} from ${formatDay(date)}${until}, ${fields.startTime}–${fields.endTime}.${firstOnes}` };
     }
-    const ref = id ? (await prisma.booking.findUnique({ where: { id }, select: { reference: true } }))?.reference : null;
-    const offered = id && status === "AWAITING" ? await sendOffers([id]) : 0;
-    if (id && status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
+
+    const booking = await createBookingWithReference(user.agencyId, {
+      ...schedule,
+      artistId: artist?.id ?? null,
+      venueId: venue?.id ?? null,
+      promoterId,
+      agentId: artist?.agentId ?? user.id,
+      createdById: user.id,
+      demo: !!venue?.demo || !!artist?.demo,
+      status,
+      eventType: fields.eventType,
+      eventName: fields.label,
+      timezone: tz,
+      currency: fields.currency,
+      feeMinor: fields.feeMinor,
+      ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
+      commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
+      bookingFeeMinor: defaultBookingFee(settings, { eventType: fields.eventType }),
+      // The quick form has no VAT box: new bookings get the business's VAT on sales.
+      vatPct: defaultVat(settings),
+    });
+    await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
+    const ref = booking.reference;
+    const offered = status === "AWAITING" ? await sendOffers([booking.id]) : 0;
+    if (status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs([booking.id]);
     revalidatePath("/", "layout");
     const what = !artist
       ? `Added${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}: Pending, needs an act.`
       : status === "AWAITING"
         ? `Offered to ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.${offered ? " They've been sent the offer." : " They have no email, phone or login on file: send the link from the booking."}`
         : `Booked ${artist.name}${venue ? ` at ${venue.name}` : ""}${ref ? ` (${ref})` : ""}.`;
-    return { ok: `${what}${weekly ? " Added to the venue's weekly schedule too." : ""}` };
+    return { ok: what };
   });
 }

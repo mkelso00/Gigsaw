@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { dateInWeek, weekStartOf } from "./rota";
+import { dateInWeek, slotRunsOn, weekStartOf } from "./rota";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 
 export type UnfilledSlot = {
@@ -28,6 +28,8 @@ export async function unfilledSlots(agencyId: string, timezone: string, days: nu
     select: {
       id: true,
       weekday: true,
+      startsOn: true,
+      endsOn: true,
       label: true,
       startTime: true,
       endTime: true,
@@ -51,7 +53,7 @@ export async function unfilledSlots(agencyId: string, timezone: string, days: nu
   for (let monday = weekStartOf(today); monday < until; monday = addDaysToKey(monday, 7)) {
     for (const s of slots) {
       const date = dateInWeek(monday, s.weekday);
-      if (date < today || date >= until || filled.has(`${s.id}|${date}`)) continue;
+      if (date < today || date >= until || !slotRunsOn(s, date) || filled.has(`${s.id}|${date}`)) continue;
       out.push({ date, slot: s });
     }
   }

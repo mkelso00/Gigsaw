@@ -65,3 +65,13 @@ export function weeklyDates(from: string, o: { weeks?: number | null; until?: st
   }
   return { dates, more: false };
 }
+
+/** Whether a weekly slot runs on this date: on or after its first date and on or before its last (each if it has one). */
+export function slotRunsOn(slot: { startsOn?: string | null; endsOn?: string | null }, date: string) {
+  return (!slot.startsOn || date >= slot.startsOn) && (!slot.endsOn || date <= slot.endsOn);
+}
+
+/** The first date on or after `from` that falls on this weekday (1 = Monday). */
+export function nextWeekday(from: string, weekday: number) {
+  return addDaysToKey(from, (weekday - weekdayOf(from) + 7) % 7);
+}

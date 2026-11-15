@@ -627,6 +627,10 @@ model VenueSlot {
   artistId      String? // the regular performer, if there is one
   artist        Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
   active        Boolean   @default(true)
+  // The first and last dates it runs ("YYYY-MM-DD", the venue's own days). Empty: from whenever,
+  // and until it's stopped; slots made before these existed have neither and run every week.
+  startsOn      String?
+  endsOn        String?
   createdAt     DateTime  @default(now())
   bookings      Booking[]
 
