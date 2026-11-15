@@ -183,7 +183,7 @@ export function BookingForm({
           cost={
             booking ? minorToInput(booking.dealType === "BUY_SELL" ? booking.artistFeeMinor : dealBreakdown(booking).artistMinor, cur) : (defaults.cost ?? "")
           }
-          vatPct={booking?.vatPct ?? 0}
+          vatPct={booking?.vatPct ?? settings.defaultVatPct}
           bookingFee={booking ? minorToInput(booking.bookingFeeMinor || null, cur) : ""}
           feeDefaults={booking ? undefined : { bookingFeeMinor: settings.bookingFeeMinor, bookingFeeFor: settings.bookingFeeFor }}
           moreInUse={!!(booking && (booking.depositMinor || booking.dealNotes || booking.radiusKm || booking.radiusDays))}

@@ -13,11 +13,14 @@ export function ActsSection({
   acts,
   currency,
   defaultCurrency,
+  defaultVatPct = 0,
 }: {
   event: EventView;
   acts: EventPageData["acts"];
   currency: string;
   defaultCurrency: string;
+  /** VAT on sales from Settings, when the event's last act has none to copy. */
+  defaultVatPct?: number;
 }) {
   const m = (x: number) => formatMoney(x, currency);
   const lastBooking = e.bookings.at(-1);
@@ -93,7 +96,7 @@ export function ActsSection({
             </label>
             <label>
               <span className="label">VAT %</span>
-              <input name="vatPct" inputMode="decimal" defaultValue={lastBooking?.vatPct || ""} placeholder="0" className="input" />
+              <input name="vatPct" inputMode="decimal" defaultValue={lastBooking?.vatPct || defaultVatPct || ""} placeholder="0" className="input" />
             </label>
             <label>
               <span className="label">Arrive</span>

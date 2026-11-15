@@ -14,7 +14,7 @@ import { sendOffers } from "@/lib/offers";
 import { findClashes } from "@/lib/clash-check";
 import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
-import { formatMoney, toMinor } from "@/lib/money";
+import { defaultVat, formatMoney, toMinor } from "@/lib/money";
 import { formatDate, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { buildSchedule } from "@/lib/schedule";
 import { log } from "@/server/log";
@@ -344,7 +344,8 @@ export async function copyBooking(bookingId: string, dates: string[], status: st
       feeMinor: b.feeMinor,
       artistFeeMinor: b.artistFeeMinor,
       commissionPct: b.commissionPct,
-      vatPct: b.vatPct,
+      // A booking from before VAT on sales was turned on has none: its copies are new bookings, so they get it.
+      vatPct: b.vatPct || defaultVat(settings),
       bookingFeeMinor: b.bookingFeeMinor,
       depositMinor: b.depositMinor,
       dealNotes: b.dealNotes,

@@ -107,3 +107,12 @@ export function defaultBookingFee(settings: { bookingFeeMinor: number; bookingFe
   if (settings.bookingFeeFor === "ALL") return settings.bookingFeeMinor;
   return gig.eventType !== "GIG" ? settings.bookingFeeMinor : 0;
 }
+
+/**
+ * The VAT % a new booking starts with: the business's "VAT on sales" from Settings, 0 when it's off.
+ * Bookings already made keep their own VAT; this is only for ones being created.
+ */
+export function defaultVat(settings: { defaultVatPct: number }): number {
+  const v = settings.defaultVatPct;
+  return Number.isFinite(v) && v > 0 && v <= 100 ? v : 0;
+}

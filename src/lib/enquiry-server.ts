@@ -21,7 +21,7 @@ import {
 import { defaultTasks } from "./event-plan";
 import { messageFor } from "./message-templates";
 import { appUrl, sendEmail, sendPush } from "./messaging";
-import { defaultBookingFee } from "./money";
+import { defaultBookingFee, defaultVat } from "./money";
 import { wants } from "./notify-prefs";
 import { buildSchedule } from "./schedule";
 
@@ -132,6 +132,7 @@ export async function recordEnquiry(o: {
       currency: settings.defaultCurrency,
       commissionPct: settings.defaultCommission,
       bookingFeeMinor: defaultBookingFee(settings, { eventType }),
+      vatPct: defaultVat(settings),
       promoterId: contact.id,
       agentId: o.agentId,
       createdById: o.addedBy?.id ?? null,

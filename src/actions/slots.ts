@@ -10,7 +10,7 @@ import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, type BookingS
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { findClashes } from "@/lib/clash-check";
-import { defaultBookingFee, minorToInput, toMinor } from "@/lib/money";
+import { defaultBookingFee, defaultVat, minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
@@ -278,6 +278,7 @@ async function bookSlot(
     ...(slot.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: slot.costMinor } : {}),
     commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
     bookingFeeMinor: defaultBookingFee(settings, { eventType: slot.eventType }),
+    vatPct: defaultVat(settings),
   });
   await logActivity(user, "BOOKING", booking.id, "booked from venue schedule", `${slot.venue.name} ${date}`);
   return booking.id;
@@ -465,6 +466,8 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
         commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
         bookingFeeMinor: defaultBookingFee(settings, { eventType: fields.eventType }),
+        // The quick form has no VAT box: new bookings get the business's VAT on sales.
+        vatPct: defaultVat(settings),
       });
       await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
       id = booking.id;

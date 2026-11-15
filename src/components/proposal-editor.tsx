@@ -38,6 +38,7 @@ export function ProposalEditor({
   eventTypes,
   defaultDate,
   defaultFee,
+  defaultVat = "",
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   values: ProposalEditorValues;
@@ -49,6 +50,8 @@ export function ProposalEditor({
   defaultDate: string;
   /** The booking fee from Settings, to put back if it's been changed. */
   defaultFee: string;
+  /** VAT on sales from Settings, for a first line (later lines copy the line above). */
+  defaultVat?: string;
 }) {
   const [lines, setLines] = useState<Line[]>(() => start.map((l) => ({ ...l, key: newKey() })));
   const [fee, setFee] = useState(values.bookingFee);
@@ -84,7 +87,7 @@ export function ProposalEditor({
           place: last?.place ?? "",
           sale: "",
           cost: "",
-          vatPct: last?.vatPct ?? "",
+          vatPct: last?.vatPct ?? defaultVat,
         },
       ];
     });

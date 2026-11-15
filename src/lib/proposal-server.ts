@@ -9,7 +9,7 @@ import { enquiryTitle, firstName, formatDay } from "./enquiries";
 import { defaultTasks } from "./event-plan";
 import { messageFor } from "./message-templates";
 import { appUrl, isEmail, sendEmail, sendPush } from "./messaging";
-import { defaultBookingFee, formatMoney } from "./money";
+import { defaultBookingFee, defaultVat, formatMoney } from "./money";
 import { wants } from "./notify-prefs";
 import {
   answerProblem,
@@ -95,6 +95,7 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
     startTime: enquiry?.startTime || "",
     endTime: enquiry?.endTime || "",
     place: enquiry?.venue || "",
+    vatPct: defaultVat(settings),
   });
   const lines = enquiry?.date ? (acts.length ? acts.map((a, i) => line(a.id, i)) : [line(null, 0)]) : [];
 
