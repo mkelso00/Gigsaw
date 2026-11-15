@@ -3,23 +3,28 @@
 import type { Artist } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
-import { createBookingWithReference } from "@/lib/bookings";
+import { createBookingWithReference, createBookingsWithReferences } from "@/lib/bookings";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { applyBulkChange } from "@/lib/bulk";
-import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
-import { getSettings, logActivity, prisma } from "@/lib/db";
+import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, MAX_COPY_DATES, type BookingStatus } from "@/lib/constants";
+import { clashDates } from "@/lib/copy-booking";
+import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { findClashes } from "@/lib/clash-check";
 import { defaultBookingFee, defaultVat, minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
-import { dateInWeek, isDateKey, weekdayOf } from "@/lib/rota";
+import { WEEKDAYS, dateInWeek, isDateKey, weekdayOf, weeklyDates } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
 import { localDateKey, zonedToUtc } from "@/lib/time";
 import { minutesBefore } from "@/lib/time";
 
 const TIME = /^\d{2}:\d{2}$/;
+
+/** "6 Feb 2027" for a "YYYY-MM-DD" day. */
+const formatDay = (key: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
 
 /** Read and check the slot form. Contacts and artists must belong to the agency. */
 async function slotFields(form: FormData, user: AgencyUser) {
@@ -391,17 +396,37 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
   });
 }
 
+/** The dates for "Repeat every week" (weekly=on): from the first date for so many weeks, or until a last date. */
+function repeatDates(form: FormData, date: string) {
+  if (str(form, "weekly") !== "on") return [date];
+  const until = str(form, "until");
+  if (until && !isDateKey(until)) throw new FormError("Choose the last date, or how many weeks");
+  if (until && until < date) throw new FormError("The last date is before the first one");
+  const weeks = Number(str(form, "weeks") || (until ? 0 : DEFAULT_REPEAT_WEEKS));
+  if (!Number.isInteger(weeks) || weeks < 0) throw new FormError("Enter the number of weeks as a whole number, like 12");
+  const { dates, more } = weeklyDates(date, { weeks, until: until || null, max: MAX_COPY_DATES });
+  if (more || weeks > MAX_COPY_DATES) throw new FormError(`That's more than ${MAX_COPY_DATES} weeks. Pick an earlier last date, or fewer weeks.`);
+  return dates;
+}
+
+/** How many weeks "Repeat every week" makes unless told otherwise: about three months. */
+const DEFAULT_REPEAT_WEEKS = 12;
+
 /**
  * Add a gig on any date: from the rota, or the quick "New booking" button. By default it's a
- * one-off; tick "every week" to also add it to the venue's weekly schedule (with this artist as
- * the regular) and book this date. The venue can be left out for a one-off, e.g. a wedding.
+ * one-off. The venue can be left out for a one-off, e.g. a wedding.
+ *  - "Repeat every week" (weekly=on, the quick booking form): the same booking on the same day
+ *    every week from this date, as real bookings, for a number of weeks or until a last date.
+ *  - "Every week on this day" (repeat=on, the rota): adds a weekly slot to the venue's schedule
+ *    (with this act as the regular) and books this date.
  */
 export async function addRotaGig(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
     const date = str(form, "date");
     if (!isDateKey(date)) throw new FormError("Choose a date");
-    const weekly = str(form, "repeat") === "on";
+    const dates = repeatDates(form, date);
+    const weekly = str(form, "repeat") === "on" && str(form, "weekly") !== "on";
     const venueId = str(form, "venueId");
     if (!venueId && weekly) throw new FormError("Choose a venue to make this a weekly slot");
     const venue = venueId ? await ownVenue(user, venueId) : null;
@@ -428,9 +453,26 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         ? (await prisma.venueSlot.findFirst({ where: { venueId: venue.id, promoterId: { not: null } }, select: { promoterId: true } }))?.promoterId
         : null) ??
       null;
-    const schedule = buildSchedule(date, { arrive: fields.arriveTime, setStart: fields.startTime, setEnd: fields.endTime }, tz);
+    const times = { arrive: fields.arriveTime, setStart: fields.startTime, setEnd: fields.endTime };
+    const schedule = buildSchedule(date, times, tz);
 
-    if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus)) {
+    if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus) && dates.length > 1) {
+      const busy = await clashDates(
+        { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz },
+        times,
+        dates,
+        settings.changeoverMinutes,
+      );
+      if (busy.length) {
+        return {
+          confirm: {
+            title: `Hold on: ${artist.name} may not be free on ${busy.length} of the ${dates.length} dates`,
+            items: [...busy.slice(0, 10), ...(busy.length > 10 ? [`and ${busy.length - 10} more`] : [])],
+            button: "Book them all anyway",
+          },
+        };
+      }
+    } else if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus)) {
       const warnings = await findClashes(
         { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz, ...schedule },
         settings.changeoverMinutes,
@@ -438,6 +480,51 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       if (warnings.length) {
         return { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } };
       }
+    }
+
+    if (dates.length > 1) {
+      // Every week: real bookings on each date, made together like copies (one transaction).
+      const made = await createBookingsWithReferences(
+        user.agencyId,
+        dates.map((d) => ({
+          ...buildSchedule(d, times, tz),
+          artistId: artist?.id ?? null,
+          venueId: venue?.id ?? null,
+          promoterId,
+          agentId: artist?.agentId ?? user.id,
+          createdById: user.id,
+          demo: !!venue?.demo || !!artist?.demo,
+          status,
+          eventType: fields.eventType,
+          eventName: fields.label,
+          timezone: tz,
+          currency: fields.currency,
+          feeMinor: fields.feeMinor,
+          ...(fields.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: fields.costMinor } : {}),
+          commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
+          bookingFeeMinor: defaultBookingFee(settings, { eventType: fields.eventType }),
+          vatPct: defaultVat(settings),
+        })),
+      );
+      const ids = made.map((m) => m.id);
+      await logActivities(
+        user,
+        "BOOKING",
+        made.map((m, i) => ({ entityId: m.id, action: "added (quick booking, every week)", detail: `${venue?.name ?? "no venue"} ${dates[i]}` })),
+      );
+      const offered = status === "AWAITING" ? await sendOffers(ids) : 0;
+      if (status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs(ids);
+      revalidatePath("/", "layout");
+      const span = `every ${WEEKDAYS[weekdayOf(date) - 1][2]} from ${formatDay(date)} to ${formatDay(dates.at(-1)!)} (${made[0].reference} to ${made.at(-1)!.reference})`;
+      const at = venue ? ` at ${venue.name}` : "";
+      const n = `${made.length} bookings`;
+      return {
+        ok: !artist
+          ? `Added ${n}${at}, ${span}: Pending, each needs an act.`
+          : status === "AWAITING"
+            ? `Offered ${n} to ${artist.name}${at}, ${span}.${offered ? " They've been sent the offers." : " They have no email, phone or login on file: send the links from the bookings."}`
+            : `Booked ${artist.name}${at}, ${n}, ${span}.`,
+      };
     }
 
     let id: string | null;

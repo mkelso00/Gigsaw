@@ -51,3 +51,17 @@ export function venueColour(v: { id: string; colour?: string | null }) {
   for (const ch of v.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return VENUE_PALETTE[h % VENUE_PALETTE.length];
 }
+
+/**
+ * The dates of a booking repeated every week: from `from`, for `weeks` weeks, stopping after
+ * `until` when that's given. Never more than `max`; `more` says some were left off for that.
+ */
+export function weeklyDates(from: string, o: { weeks?: number | null; until?: string | null; max: number }) {
+  const weeks = o.weeks && o.weeks > 0 ? Math.floor(o.weeks) : o.until ? Infinity : 1;
+  const dates: string[] = [];
+  for (let d = from; dates.length < weeks && (!o.until || d <= o.until); d = addDaysToKey(d, 7)) {
+    if (dates.length === o.max) return { dates, more: true };
+    dates.push(d);
+  }
+  return { dates, more: false };
+}
