@@ -221,10 +221,14 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                         {slot.venue.city ? `${slot.venue.city} · ` : ""}
                         {slot.label || "Live music"}
                       </span>
+                      <Link
+                        href={slotLink({ id: slot.id, venueId: slot.venue.id })}
+                        className="text-xs whitespace-nowrap text-ink-500 underline hover:text-ink-950"
+                        title="Change this weekly slot, or stop it"
+                      >
+                        Change or stop
+                      </Link>
                     </div>
-                    <Link href={slotLink({ id: slot.id, venueId: slot.venue.id })} className="text-xs text-ink-500 underline hover:text-ink-950">
-                      Change or stop
-                    </Link>
                     <ActionForm action={assignSlot.bind(null, slot.id, date)} className="flex flex-wrap items-start gap-2">
                       <input type="hidden" name="notify" value="on" />
                       <select name="artistId" defaultValue={slot.artistId ?? ""} className="input w-52">
