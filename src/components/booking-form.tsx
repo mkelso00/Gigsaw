@@ -1,4 +1,5 @@
 import type { Booking, Settings } from "@prisma/client";
+import { AlsoChangePanel, type AlsoChange } from "@/components/also-change-panel";
 import { Combobox } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
@@ -19,6 +20,7 @@ export function BookingForm({
   agents,
   settings,
   defaults = {},
+  alsoChange,
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   booking?: Booking;
@@ -39,6 +41,8 @@ export function BookingForm({
     eventType?: string;
     cost?: string;
   };
+  /** Editing a booking at a venue: offer to copy the changes to the venue's other upcoming bookings. */
+  alsoChange?: AlsoChange;
 }) {
   const tz = booking?.timezone ?? settings.defaultTimezone;
   const t = (d: Date | null | undefined) => (d ? localTime(d, tz) : "");
@@ -251,6 +255,8 @@ export function BookingForm({
           </span>
         </label>
       )}
+
+      {booking && alsoChange && <AlsoChangePanel {...alsoChange} />}
 
       <div className="flex justify-end">
         <SubmitButton>{booking ? "Save changes" : "Create booking"}</SubmitButton>

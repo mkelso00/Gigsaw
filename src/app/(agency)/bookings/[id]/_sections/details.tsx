@@ -17,6 +17,20 @@ export function ScheduleSection({ booking, zone }: { booking: BookingView; zone:
           ["Off stage", booking.setEnd ? formatDateTime(booking.setEnd, tz) : ""],
         ]}
       />
+      {/* Weekly residencies change together: point to both ways of doing that from here. */}
+      {booking.venue && (
+        <p className="mt-4 border-t border-ink-100 pt-3 text-sm text-ink-500">
+          Changing more than this gig at {booking.venue.name}?{" "}
+          <Link href={`/bookings/${booking.id}/edit`} className="link">
+            Edit
+          </Link>{" "}
+          and choose which other bookings change too, or{" "}
+          <Link href={`/bookings?venue=${booking.venue.id}`} className="link">
+            change several bookings at once
+          </Link>
+          .
+        </p>
+      )}
     </section>
   );
 }

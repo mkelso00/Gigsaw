@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { bookingFormOptions } from "@/lib/options";
+import { venueScopeCounts } from "@/lib/venue-change";
 
 export const metadata: Metadata = { title: "Edit booking" };
 
@@ -13,7 +14,7 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
   const user = await requireStaff();
   const { id } = await params;
   const [booking, settings, options] = await Promise.all([
-    prisma.booking.findFirst({ where: { id, agencyId: user.agencyId } }),
+    prisma.booking.findFirst({ where: { id, agencyId: user.agencyId }, include: { venue: { select: { id: true, name: true } } } }),
     getSettings(user.agencyId),
     bookingFormOptions(user.agencyId),
   ]);
@@ -24,10 +25,12 @@ export default async function EditBookingPage({ params }: { params: Promise<{ id
       ? await prisma.contact.findFirst({ where: { id: booking.promoterId, agencyId: user.agencyId }, select: { id: true, name: true, company: true } })
       : null;
   if (payer) options.promoters.push(payer);
+  // How many of the venue's other bookings "Also change other bookings" would reach.
+  const alsoChange = booking.venue ? { venueId: booking.venue.id, venueName: booking.venue.name, ...(await venueScopeCounts(booking)) } : undefined;
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader title={`Edit ${booking.reference}`} />
-      <BookingForm action={updateBooking.bind(null, booking.id)} booking={booking} settings={settings} {...options} />
+      <BookingForm action={updateBooking.bind(null, booking.id)} booking={booking} settings={settings} alsoChange={alsoChange} {...options} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Booking, Prisma } from "@prisma/client";
 import type { AgencyUser } from "./auth";
 import { findClashes } from "./clash-check";
 import { queueCalendarSync } from "./calendar-sync/queue";
@@ -37,7 +38,6 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
   const mayClash: string[] = [];
   const changeover = (await getSettings(user.agencyId)).changeoverMinutes;
   for (const b of bookings) {
-    const before = snapshotOf(b);
     const tz = b.timezone;
     let schedule = { arriveBy: b.arriveBy, soundcheckAt: b.soundcheckAt, setStart: b.setStart, setEnd: b.setEnd };
     if (change.shiftMinutes) {
@@ -75,8 +75,7 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       if (artistFeeMinor < 0) throw new FormError("The cost can't be negative");
       cost = { dealType: "BUY_SELL", artistFeeMinor };
     }
-    await prisma.booking.update({ where: { id: b.id }, data: { ...schedule, feeMinor, ...cost } });
-    queueCalendarSync(b.id);
+    const res = await saveAndTell(b, { ...schedule, feeMinor, ...cost }, { agencyId: user.agencyId, notify: change.notifyArtists, changeover, schedule });
     await logActivity(
       user,
       "BOOKING",
@@ -85,15 +84,34 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "sale" : "", change.cost ? "cost" : ""].filter(Boolean).join(" and "),
     );
     updated++;
-    if (change.notifyArtists) {
-      const changes = await notifyArtistIfChanged(before, b.id);
-      if (changes.length) notified++;
-    }
-    const warnings = await findClashes(
-      { agencyId: user.agencyId, artistId: b.artistId, venueId: b.venueId, timezone: tz, excludeId: b.id, ...schedule },
-      changeover,
-    );
-    if (warnings.length) mayClash.push(b.reference);
+    if (res.told) notified++;
+    if (res.mayClash) mayClash.push(b.reference);
   }
   return { updated, notified, mayClash };
+}
+
+type Schedule = { arriveBy: Date; soundcheckAt: Date | null; setStart: Date; setEnd: Date | null };
+
+/**
+ * Save new fields on one booking that's being changed along with others, then bring the act's connected
+ * calendars up to date and, if asked, tell the act what changed. Every way of changing several bookings at
+ * once goes through here, so acts hear about it the same way whichever page it was done from.
+ * Pass `schedule` (the booking's times after the change) to check the act isn't double booked by them.
+ */
+export async function saveAndTell(
+  b: Booking & { venue: { name: string } | null },
+  data: Prisma.BookingUncheckedUpdateInput,
+  opts: { agencyId: string; notify: boolean; changeover: number; schedule?: Schedule },
+) {
+  const before = snapshotOf(b);
+  await prisma.booking.update({ where: { id: b.id }, data });
+  queueCalendarSync(b.id);
+  const told = opts.notify ? (await notifyArtistIfChanged(before, b.id)).length > 0 : false;
+  const warnings = opts.schedule
+    ? await findClashes(
+        { agencyId: opts.agencyId, artistId: b.artistId, venueId: b.venueId, timezone: b.timezone, excludeId: b.id, ...opts.schedule },
+        opts.changeover,
+      )
+    : [];
+  return { told, mayClash: warnings.length > 0 };
 }
