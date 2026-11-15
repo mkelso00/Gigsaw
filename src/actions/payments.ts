@@ -2,6 +2,8 @@
 
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { owedOnInvoice } from "@/lib/act-invoice-rules";
+import { syncActInvoicePaid } from "@/lib/act-invoices";
 import { requireStaff } from "@/lib/auth";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { logActivities, prisma } from "@/lib/db";
@@ -35,12 +37,14 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
       await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ANY(${ids}) AND "agencyId" = ${user.agencyId} ORDER BY id FOR UPDATE`;
       const gigs = await tx.booking.findMany({
         where: { id: { in: ids }, agencyId: user.agencyId, status: { in: ["CONFIRMED", "SETTLED"] } },
-        include: { payments: true },
+        include: { payments: true, actInvoices: { where: { status: { not: "VOID" } } } },
       });
       currency = gigs[0]?.currency ?? "GBP";
       for (const b of gigs) {
         const o = outstanding(b);
-        const amount = direction === "IN" ? o.toCollect : o.toPay;
+        // An act with an invoice is paid what the invoice says (their VAT included), and it's marked paid.
+        const invoice = b.actInvoices[0];
+        const amount = direction === "IN" ? o.toCollect : invoice ? owedOnInvoice(invoice, b.payments) : o.toPay;
         if (amount <= 0) continue;
         const today = localDateKey(now, b.timezone);
         const payment = {
@@ -63,6 +67,7 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
         }
       }
       if (payments.length) await tx.payment.createMany({ data: payments });
+      if (direction === "OUT") await syncActInvoicePaid(gigs.map((b) => b.id), now, tx);
       if (settled.length) await tx.booking.updateMany({ where: { id: { in: settled } }, data: { status: "SETTLED" } });
     });
     queueCalendarSync(settled);

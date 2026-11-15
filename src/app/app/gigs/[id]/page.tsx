@@ -9,7 +9,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { parseExtraFields, planRows } from "@/lib/event-plan";
-import { actIdsFor } from "@/lib/people";
+import { actIdsFor, ownActIds } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
 
@@ -42,6 +42,11 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
     : null;
   // Acts only ever see their own pay (after commission), never what the venue or customer is charged.
   const yourFee = dealBreakdown(b).artistMinor;
+  // The invoice made for this gig, for the act it's for (not a band member's solo login).
+  const invoice = await prisma.actInvoice.findFirst({
+    where: { liveBookingId: b.id, agencyId: user.agencyId, artistId: { in: await ownActIds(user) } },
+    select: { id: true, number: true, status: true },
+  });
   // Part of a wedding or event: show the plan and who else is on. Never any money.
   const event = b.eventId
     ? await prisma.event.findFirst({
@@ -183,6 +188,11 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
         <a href={`/print/bookings/${b.id}/itinerary`} target="_blank" className="block pt-1 text-volt-400 underline underline-offset-4">
           Open printable day sheet
         </a>
+        {invoice && (
+          <a href={`/print/act-invoices/${invoice.id}`} target="_blank" className="block text-volt-400 underline underline-offset-4">
+            Your invoice {invoice.number} ({invoice.status === "PAID" ? "paid" : "not paid yet"})
+          </a>
+        )}
       </section>
     </div>
   );

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { resetCalendarToken, setArtistLogin } from "@/actions/crm";
 import { addActMember, addActPart, removeActMember, removeActPart } from "@/actions/people";
 import { arrivalDetail } from "@/components/arrival-panel";
+import { ActInvoicesCard } from "@/components/act-invoices-card";
 import { AwayCard } from "@/components/away-card";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
@@ -218,6 +219,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               </section>
             );
           })()}
+          <ActInvoicesCard artistId={artist.id} agencyId={user.agencyId} timeZone={settings.defaultTimezone} />
           <AwayCard artistId={artist.id} actName={artist.name} entries={away} today={today} />
           <section className="card card-pad" id="line-up">
             <h2 className="section-title">Members</h2>

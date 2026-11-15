@@ -256,6 +256,19 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
         </span>
       </Link>
 
+      <Link
+        href="/app/invoices"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-ink-900 px-5 py-4 hover:bg-white/[0.03]"
+      >
+        <span className="min-w-0">
+          <span className="block font-medium">Your invoices</span>
+          <span className="block text-sm text-ink-400">Made for your fee after each gig, so you&apos;re paid straight away.</span>
+        </span>
+        <span className="shrink-0 text-ink-400" aria-hidden>
+          →
+        </span>
+      </Link>
+
       <PushSetup publicKey={pushKey} />
 
       {calendarChoices.length || calendars.length ? (

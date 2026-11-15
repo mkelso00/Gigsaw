@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { issueActInvoice } from "@/lib/act-invoices";
 import { checkInWindow, distanceMetres } from "@/lib/arrival";
 import { notifyClientOfArrival } from "@/lib/alerts";
 import { requireUser } from "@/lib/auth";
@@ -77,6 +78,9 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
     // A failed message must never stop the check-in itself.
     await notifyClientOfArrival(bookingId).catch((e) => log.error("Client arrival message failed", { bookingId, err: e }));
   }
+  // Leaving the venue means the gig is over: the act's invoice is made now rather than at the set's end
+  // time (if their details are done). The scheduler catches it later if this fails.
+  if (payload.kind === "DEPARTED") await issueActInvoice(bookingId).catch((e) => log.error("Act invoice on check-out failed", { bookingId, err: e }));
   revalidatePath("/", "layout");
 
   const messages: Record<CheckInKind, string> = {

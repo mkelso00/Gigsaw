@@ -1,6 +1,7 @@
 import { log } from "@/server/log";
 import { withHeartbeat } from "@/server/scheduler-health";
 import { runAsLeader } from "@/server/scheduler-lock";
+import { runActInvoices } from "./act-invoices";
 import { runOverdueCheck } from "./alerts";
 import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
@@ -11,7 +12,7 @@ let started = false;
 let running = false;
 
 /**
- * Check for overdue arrivals, due gig reminders and wedding/event emails every minute, and catch up
+ * Check for overdue arrivals, due gig reminders, wedding/event emails and acts' invoices every minute, and catch up
  * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
@@ -40,6 +41,12 @@ export function startScheduler() {
       if (n) log.info("Wedding and event emails sent", { job: "event-emails", sent: n });
     } catch (e) {
       log.error("Event emails failed", { job: "event-emails", err: e });
+    }
+    try {
+      const r = await withHeartbeat("act-invoices", runActInvoices);
+      if (r.issued || r.paid || r.voided || r.reissued) log.info("Act invoices updated", { job: "act-invoices", ...r });
+    } catch (e) {
+      log.error("Act invoices failed", { job: "act-invoices", err: e });
     }
     // Last, and time-boxed inside, so slow calendar providers never delay the jobs above.
     try {

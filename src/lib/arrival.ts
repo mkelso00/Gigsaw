@@ -50,8 +50,11 @@ export type ArrivalSummary = {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-/** When we stop waiting for an arrival and call it "no check-in". */
-function gigOverAt(setStart: Date, setEnd: Date | null): Date {
+/**
+ * When a gig is over: its end time, or three hours after it starts when no end time was given. Also when
+ * we stop waiting for an arrival and call it "no check-in", and when the act's invoice can be made.
+ */
+export function gigOverAt(setStart: Date, setEnd: Date | null): Date {
   return setEnd && setEnd > setStart ? setEnd : new Date(setStart.getTime() + 3 * HOUR);
 }
 

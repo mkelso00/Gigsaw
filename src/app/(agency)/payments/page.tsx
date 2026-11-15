@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { dismissCardPayment, placeCardPayment } from "@/actions/card-payments";
 import { markPaid } from "@/actions/payments";
 import { ActionForm, ConfirmButton, SubmitButton } from "@/components/forms";
@@ -12,18 +13,16 @@ import { outstanding } from "@/lib/payments";
 import { PERIODS, periodRange, shiftPeriod, type Period } from "@/lib/periods";
 import { venueColour } from "@/lib/rota";
 import { addDaysToKey, formatDate, localDateKey, zonedToUtc } from "@/lib/time";
+import { PaymentsTabs } from "./_tabs";
 
 export const metadata: Metadata = { title: "Payments" };
 
-// Money in from venues and clients, money out to acts: what's still owed each way, grouped so a
-// venue's or an act's gigs can be marked paid in one go, and a log of payments for any period.
+// Money in from venues and clients: what's still owed, grouped so a venue's or a client's gigs can be
+// marked paid in one go, and a log of payments both ways for any period. Paying acts has its own tab,
+// Pay acts (./acts), built around the invoices Gigsaw makes for them.
 
-const TABS = [
-  ["collect", "To collect"],
-  ["pay", "To pay acts"],
-  ["history", "Payments log"],
-] as const;
-type Tab = (typeof TABS)[number][0];
+const TABS = ["collect", "history"] as const;
+type Tab = (typeof TABS)[number];
 
 type Row = { id: string; reference: string; date: string; act: string; amount: number; days: number };
 type Group = { key: string; name: string; colour?: string; href?: string; rows: Row[]; total: number };
@@ -35,12 +34,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const cur = settings.defaultCurrency;
   const m = (x: number) => formatMoney(x, cur);
   const sp = await searchParams;
-  const tab: Tab = TABS.some(([t]) => t === sp.tab) ? (sp.tab as Tab) : "collect";
+  // Old links to the act tab.
+  if (sp.tab === "pay") redirect("/payments/acts");
+  const tab: Tab = TABS.some((t) => t === sp.tab) ? (sp.tab as Tab) : "collect";
   const today = localDateKey(new Date(), tz);
   const upcoming = sp.upcoming === "1";
   const qs = (extra: Record<string, string>) => `/payments?${new URLSearchParams({ tab, ...(upcoming ? { upcoming: "1" } : {}), ...extra })}`;
 
-  // Owed both ways, on gigs that are on. By default only gigs that have happened: that's when money's due.
+  // Still owed by venues and clients, on gigs that are on. By default only gigs that have happened: that's when money's due.
   const gigs =
     tab === "history"
       ? []
@@ -64,13 +65,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const groups = new Map<string, Group>();
   for (const b of gigs) {
     const o = outstanding(b);
-    const amount = tab === "collect" ? o.toCollect : o.toPay;
+    const amount = o.toCollect;
     if (amount <= 0) continue;
     const date = localDateKey(b.arriveBy, b.timezone);
     let g: Omit<Group, "rows" | "total">;
-    if (tab === "pay") {
-      g = b.artist ? { key: b.artist.id, name: b.artist.name, colour: b.artist.colour, href: `/artists/${b.artist.id}` } : { key: "none", name: "No act" };
-    } else if (b.event) {
+    if (b.event) {
       g = { key: `e:${b.event.id}`, name: b.event.name, href: `/events/${b.event.id}` };
     } else if (b.venue && b.promoter?.type !== "CLIENT") {
       // Bar gigs: the venue pays.
@@ -126,7 +125,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title="Payments" subtitle="What venues and clients still owe, what's still to pay the acts, and every payment logged." />
+      <PageHeader title="Payments" subtitle="What venues and clients still owe, paying your acts, and every payment logged." />
 
       {unmatched.length > 0 && (
         <section className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900" aria-label="Card payments to sort out">
@@ -171,17 +170,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       )}
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <div className="inline-flex gap-1 rounded-xl border border-ink-200 bg-white p-1 text-sm" role="tablist" aria-label="Payments">
-          {TABS.map(([t, label]) => (
-            <Link
-              key={t}
-              href={`/payments?tab=${t}`}
-              className={`rounded-lg px-3.5 py-2 font-medium ${tab === t ? "bg-ink-950 text-white" : "text-ink-600 hover:bg-ink-100"}`}
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
+        <PaymentsTabs on={tab} />
         {tab !== "history" ? (
           <Link href={upcoming ? `/payments?tab=${tab}` : `/payments?tab=${tab}&upcoming=1`} className="btn btn-sm">
             {upcoming ? "Bookings that have happened only" : "Include upcoming bookings"}
@@ -265,11 +254,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <Stat
               tone={owedTotal ? "dark" : "default"}
-              label={tab === "collect" ? "Still to collect" : "Still to pay acts"}
+              label="Still to collect"
               value={m(owedTotal)}
               hint={`${sorted.reduce((t, g) => t + g.rows.length, 0)} bookings`}
             />
-            <Stat label={tab === "collect" ? "Venues and clients" : "Acts"} value={sorted.length} />
+            <Stat label="Venues and clients" value={sorted.length} />
             <Stat
               label="Oldest"
               value={oldest > 0 ? `${oldest} day${oldest === 1 ? "" : "s"}` : "-"}
@@ -278,7 +267,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             />
           </div>
           {sorted.length === 0 ? (
-            <Empty>{tab === "collect" ? "Nothing to collect. Everyone has paid." : "Nothing to pay. Every act has been paid."}</Empty>
+            <Empty>Nothing to collect. Everyone has paid.</Empty>
           ) : (
             <div className="space-y-4">
               {sorted.map((g) => (
@@ -299,7 +288,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       <thead>
                         <tr>
                           <th>Booking</th>
-                          <th>{tab === "collect" ? "Act" : "Date"}</th>
+                          <th>Act</th>
                           <th className="text-right">Owed</th>
                           <th className="text-right">Since booking</th>
                         </tr>
@@ -311,9 +300,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                               <Link href={`/bookings/${r.id}`} className="hover:underline">
                                 {r.reference}
                               </Link>
-                              {tab === "collect" && <div className="text-xs text-ink-500">{formatDate(zonedToUtc(r.date, "12:00", tz), tz)}</div>}
+                              <div className="text-xs text-ink-500">{formatDate(zonedToUtc(r.date, "12:00", tz), tz)}</div>
                             </td>
-                            <td>{tab === "collect" ? r.act : formatDate(zonedToUtc(r.date, "12:00", tz), tz)}</td>
+                            <td>{r.act}</td>
                             <td className="text-right tabular-nums">{m(r.amount)}</td>
                             <td className={`text-right tabular-nums ${r.days > 30 ? "font-medium text-rose-500" : ""}`}>
                               {r.days > 0 ? `${r.days} day${r.days === 1 ? "" : "s"}` : r.days === 0 ? "Today" : "Upcoming"}
@@ -323,7 +312,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                       </tbody>
                     </table>
                     <ActionForm action={markPaid} className="mt-3 flex flex-wrap items-center justify-end gap-3">
-                      <input type="hidden" name="direction" value={tab === "collect" ? "IN" : "OUT"} />
+                      <input type="hidden" name="direction" value="IN" />
                       {g.rows.map((r) => (
                         <input key={r.id} type="hidden" name="id" value={r.id} />
                       ))}
@@ -333,7 +322,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                         </Link>
                       )}
                       <SubmitButton pendingText="Saving…">
-                        {tab === "collect" ? `Mark ${m(g.total)} received` : `Mark ${m(g.total)} paid to ${g.name}`}
+                        {`Mark ${m(g.total)} received`}
                       </SubmitButton>
                     </ActionForm>
                   </div>
