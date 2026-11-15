@@ -41,7 +41,9 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
       : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
     : null;
   // Acts only ever see their own pay (after commission), never what the venue or customer is charged.
-  const yourFee = dealBreakdown(b).artistMinor;
+  // A band's gig seen by one of its acts shows no fee: that's the band's fee, not theirs (as in the calendar feed).
+  const ownGig = (await ownActIds(user)).includes(b.artistId);
+  const yourFee = ownGig ? dealBreakdown(b).artistMinor : 0;
   // The invoice made for this gig, for the act it's for (not a band member's solo login).
   const invoice = await prisma.actInvoice.findFirst({
     where: { liveBookingId: b.id, agencyId: user.agencyId, artistId: { in: await ownActIds(user) } },
