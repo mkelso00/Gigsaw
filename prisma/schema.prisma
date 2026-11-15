@@ -65,6 +65,7 @@ model Agency {
   availability AvailabilityRequest[]
   quotes       Quote[]
   calendarConnections CalendarConnection[]
+  actInvoices  ActInvoice[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -266,6 +267,7 @@ model Artist {
   away     ArtistUnavailability[]
   asked    AvailabilityReply[]
   quoted   QuoteLine[]
+  invoices ActInvoice[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -436,6 +438,8 @@ model Booking {
   availabilityReplies  AvailabilityReply[]
   // The quote line this booking was made from, when a customer accepted a quote.
   quoteLines           QuoteLine[]
+  // Self-billing invoices for the act's fee: at most one live (issued or paid), plus any voided.
+  actInvoices          ActInvoice[]
 
   @@unique([agencyId, reference])
   @@index([agencyId, setStart])
@@ -1194,5 +1198,55 @@ model CalendarEventLink {
   syncedAt     DateTime           @default(now())
 
   @@unique([connectionId, bookingId])
+  @@index([bookingId])
+}
+
+// A self-billing invoice: Gigsaw raises it for the act, on their behalf, once their gig is over, so the
+// agency can pay them straight away (src/lib/act-invoices.ts). It's for the act's fee only (what the agency
+// pays them), never the sale price. Who it's from, their address, VAT number and bank details are copied in
+// when it's issued, so later changes to the act never rewrite an invoice that's gone out.
+model ActInvoice {
+  id                String    @id @default(cuid())
+  agencyId          String
+  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // Kept (with the link cleared) if the act or booking is later deleted: the invoice is an accounting record.
+  artistId          String?
+  artist            Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  bookingId         String?
+  booking           Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  // The booking's id while this invoice is live (ISSUED or PAID), cleared when it's voided. Unique, so the
+  // database itself refuses a second live invoice for one booking, however two servers race.
+  liveBookingId     String?   @unique
+  // Numbered per agency, SB-0001 and up, never reused (a voided number stays voided).
+  seq               Int
+  number            String
+  currency          String
+  netMinor          Int // the act's fee
+  vatPct            Float     @default(0) // only when the act is VAT registered
+  vatMinor          Int       @default(0)
+  totalMinor        Int
+  status            String    @default("ISSUED") // ISSUED | PAID | VOID
+  issuedAt          DateTime  @default(now())
+  paidAt            DateTime?
+  voidedAt          DateTime?
+  // Why it was voided, or what it replaces, e.g. "Replaces SB-0003: the fee changed".
+  note              String    @default("")
+  // What it was for, as it read when issued.
+  bookingRef        String
+  description       String
+  gigDate           DateTime // the date of the performance (the tax point)
+  // The act as they were when it was issued.
+  actName           String
+  actAddress        String    @default("")
+  actVatNumber      String    @default("") // blank unless VAT registered
+  bankAccountName   String    @default("")
+  bankSortCode      String    @default("")
+  bankAccountNumber String    @default("")
+  createdAt         DateTime  @default(now())
+
+  @@unique([agencyId, seq])
+  @@unique([agencyId, number])
+  @@index([agencyId, status])
+  @@index([artistId, issuedAt])
   @@index([bookingId])
 }

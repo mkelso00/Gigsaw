@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { syncActInvoicePaid } from "@/lib/act-invoices";
 import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
 import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
@@ -280,6 +281,8 @@ export async function addPayment(bookingId: string, _: FormState, form: FormData
     await prisma.payment.create({
       data: { bookingId, direction, kind, amountMinor, paidAt: zonedToUtc(date, "12:00", booking.timezone), note: str(form, "note") },
     });
+    // Paying the act by hand here counts towards their invoice, so there's one record of what they've had.
+    if (direction === "OUT") await syncActInvoicePaid([bookingId]);
     await logActivity(
       user,
       "BOOKING",
@@ -297,6 +300,8 @@ export async function deletePayment(paymentId: string) {
   const p = await prisma.payment.findFirst({ where: { id: paymentId, booking: { agencyId: user.agencyId } } });
   if (!p) return;
   await prisma.payment.delete({ where: { id: p.id } });
+  // Taking off a payment to the act puts their invoice back to unpaid.
+  if (p.direction === "OUT") await syncActInvoicePaid([p.bookingId]);
   await logActivity(user, "BOOKING", p.bookingId, "payment removed");
   revalidatePath(`/bookings/${p.bookingId}`);
 }
