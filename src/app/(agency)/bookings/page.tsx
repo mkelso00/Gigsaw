@@ -36,6 +36,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   if (sp.artist === "none" || sp.act === "none") where.artistId = null;
   else if (sp.artist) where.artistId = sp.artist;
   if (sp.type && (EVENT_TYPES as readonly string[]).includes(sp.type)) where.eventType = sp.type;
+  // One venue's bookings, from "Change several bookings at once" on a booking: tick some and change them together.
+  const venue = sp.venue ? await prisma.venue.findFirst({ where: { id: sp.venue, agencyId: user.agencyId }, select: { id: true, name: true } }) : null;
+  if (venue) where.venueId = venue.id;
   if (when === "upcoming" && !unresolved) where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
@@ -128,9 +131,20 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           })}
         </div>
       )}
+      {venue && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm">
+          <span>
+            Bookings at <strong>{venue.name}</strong>. Tick the ones you want and press Change selected bookings.
+          </span>
+          <Link href={`/bookings?${new URLSearchParams(Object.entries(sp).filter(([k, v]) => k !== "venue" && !!v) as [string, string][])}`} className="link">
+            Show every venue
+          </Link>
+        </div>
+      )}
       <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           {archived && <input type="hidden" name="view" value="archived" />}
+          {venue && <input type="hidden" name="venue" value={venue.id} />}
           {showAll && !archived && <input type="hidden" name="show" value="all" />}
           <label className="min-w-48 flex-1">
             <span className="label">Search</span>

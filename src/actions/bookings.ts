@@ -17,6 +17,7 @@ import { FormError, confirmed, handleForm, oneOf, required, str, type FormState 
 import { formatMoney, toMinor } from "@/lib/money";
 import { formatDate, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { buildSchedule } from "@/lib/schedule";
+import { applyVenuePlan, planVenueChange, VENUE_SCOPES, venueConfirm, weekdayName } from "@/lib/venue-change";
 import { log } from "@/server/log";
 
 /** A booking that belongs to the user's agency. Anything else is treated as not found. */
@@ -76,12 +77,21 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const settings = await getSettings(user.agencyId);
     const data = await parseBookingForm(form, settings, user.agencyId);
     const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
+    const alsoChange = await venueChangeFor(old, data, form);
+    // Copying to other bookings always asks first. One box covers that and any double booking warning,
+    // because a single "Save anyway" answers both.
+    if (alsoChange && !confirmed(form)) {
+      const ask = venueConfirm(alsoChange.plan, alsoChange.opts);
+      return { confirm: { ...ask, items: [...(hold?.confirm?.items ?? []), ...ask.items] } };
+    }
     if (hold) return hold;
     // A different act or a cancellation ends the old offer link.
     await prisma.booking.update({ where: { id: bookingId }, data: { ...data, ...offerResetFor(old, data) } });
     // Also takes it out of the old act's calendars when the act changed.
     queueCalendarSync(bookingId);
     await logActivity(user, "BOOKING", bookingId, "updated");
+    // The other bookings at the venue. This one isn't among them (it's told below), so each act hears once per booking.
+    if (alsoChange) await applyVenuePlan(user, bookingId, alsoChange.plan, alsoChange.opts);
     if (data.status === "CONFIRMED" && old.status !== "CONFIRMED") await onConfirmed(bookingId);
     // Newly awaiting confirmation, or a different act: send the offer.
     if (data.status === "AWAITING" && (old.status !== "AWAITING" || old.artistId !== data.artistId)) {
@@ -96,6 +106,30 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
   if (result?.error || result?.confirm) return result;
   revalidatePath("/", "layout");
   redirect(`/bookings/${bookingId}`);
+}
+
+/**
+ * "Also change other bookings at <venue>" on the edit form: what copying this save would do, or null for
+ * only this booking. Refuses when there's nothing to copy or no venue to copy within.
+ */
+async function venueChangeFor(old: Awaited<ReturnType<typeof ownBooking>>, data: Awaited<ReturnType<typeof parseBookingForm>>, form: FormData) {
+  const scope = oneOf(str(form, "alsoChange"), VENUE_SCOPES, "ONE");
+  if (scope === "ONE") return null;
+  const venueName = old.venue?.name;
+  if (!old.venueId || !venueName) throw new FormError("This booking has no venue, so there are no other bookings to change. Choose Only this booking.");
+  if (data.venueId !== old.venueId) {
+    throw new FormError(`You've changed the venue, so this can't be copied to bookings at ${venueName}. Choose Only this booking to save it.`);
+  }
+  const plan = await planVenueChange(old, data, scope);
+  if (!plan.change.labels.length) {
+    throw new FormError(
+      plan.change.moneyHeldBack
+        ? "You changed the currency, so the sale and cost can't go to other bookings. Choose Only this booking to save it."
+        : "None of your changes can go to other bookings: only times, itinerary, notes, sale and cost can. Choose Only this booking to save it.",
+    );
+  }
+  if (!plan.rows.length) throw new FormError(`There are no other upcoming bookings at ${venueName} to change. Choose Only this booking to save it.`);
+  return { plan, opts: { scope, venueName, weekday: weekdayName(old), notify: str(form, "notifyArtist") === "on" } };
 }
 
 /** Change a gig's status from its page. Awaiting confirmation sends the act the offer. */
