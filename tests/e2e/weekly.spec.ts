@@ -131,7 +131,12 @@ test("copy a booking to the same day every week", async ({ page }) => {
     setEnd: new Date(day + 3 * 3_600_000),
   });
 
+  // On a phone, where Copy is in the "⋯" menu that closes as soon as it's tapped.
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/bookings/${booking.id}`);
+  const more = page.getByRole("button", { name: "More actions" });
+  await hydrated(more);
+  await more.click();
   const copy = page.getByRole("button", { name: "Copy", exact: true });
   await hydrated(copy);
   await copy.click();

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { copyBooking, type CopyResult } from "@/actions/bookings";
 import { MAX_COPY_DATES } from "@/lib/constants";
 import { addDaysToKey } from "@/lib/time";
@@ -74,145 +75,154 @@ export function CopyBooking({
     setPicked(new Set());
   };
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <>
       <button type="button" className="btn" onClick={() => ref.current?.showModal()}>
         Copy
       </button>
-      <dialog
-        ref={ref}
-        className="m-auto w-[min(440px,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white p-0 shadow-2xl backdrop:bg-black/60"
-        onClick={(e) => e.target === ref.current && close()}
-      >
-        <div className="border-b border-ink-100 px-5 py-4">
-          <h2 className="text-lg font-semibold tracking-tight">Copy this booking</h2>
-          <p className="text-sm text-ink-500">Pick the dates. Same venue, times, money and details; no payments or check-ins.</p>
-        </div>
-        {result ? (
-          <div className="space-y-4 p-5">
-            <p className={`rounded-xl px-4 py-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{result.message}</p>
-            {result.ok && result.ids.length === 1 ? (
-              <div className="grid grid-cols-2 gap-2">
-                <button className="btn btn-primary" onClick={() => router.push(`/bookings/${result.ids[0]}`)}>
-                  Open the new booking
-                </button>
-                <button className="btn" onClick={close}>
-                  Stay here
-                </button>
+      {/* In document.body: on a phone the Copy button sits in the "⋯" menu, which closes (and
+          would hide the pop-up with it) as soon as the button is tapped. */}
+      {mounted &&
+        createPortal(
+          <dialog
+            ref={ref}
+            className="m-auto w-[min(440px,calc(100vw-2rem))] rounded-2xl border border-ink-200 bg-white p-0 shadow-2xl backdrop:bg-black/60"
+            onClick={(e) => e.target === ref.current && close()}
+          >
+            <div className="border-b border-ink-100 px-5 py-4">
+              <h2 className="text-lg font-semibold tracking-tight">Copy this booking</h2>
+              <p className="text-sm text-ink-500">Pick the dates. Same venue, times, money and details; no payments or check-ins.</p>
+            </div>
+            {result ? (
+              <div className="space-y-4 p-5">
+                <p className={`rounded-xl px-4 py-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{result.message}</p>
+                {result.ok && result.ids.length === 1 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button className="btn btn-primary" onClick={() => router.push(`/bookings/${result.ids[0]}`)}>
+                      Open the new booking
+                    </button>
+                    <button className="btn" onClick={close}>
+                      Stay here
+                    </button>
+                  </div>
+                ) : (
+                  <button className="btn w-full" onClick={close}>
+                    Done
+                  </button>
+                )}
               </div>
             ) : (
-              <button className="btn w-full" onClick={close}>
-                Done
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <button type="button" className="btn btn-sm" onClick={() => shift(-1)} aria-label="Previous month">
-                ←
-              </button>
-              <span className="text-sm font-semibold">{title}</span>
-              <button type="button" className="btn btn-sm" onClick={() => shift(1)} aria-label="Next month">
-                →
-              </button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs">
-              {WEEKDAYS.map((d) => (
-                <div key={d} className="py-1 text-ink-500">
-                  {d}
-                </div>
-              ))}
-              {cells.map((d, i) => {
-                if (d === null) return <div key={`b${i}`} />;
-                const k = key(month.y, month.m, d);
-                const on = picked.has(k);
-                const past = k < today;
-                const original = k === startDate;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    disabled={past}
-                    onClick={() => toggle(k)}
-                    aria-pressed={on}
-                    className={`h-9 rounded-lg text-sm tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-                      on ? "bg-volt-400 font-semibold text-black" : original ? "ring-1 ring-ink-400" : "hover:bg-ink-100"
-                    }`}
-                    title={original ? "This booking's date" : undefined}
-                  >
-                    {d}
+              <div className="p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <button type="button" className="btn btn-sm" onClick={() => shift(-1)} aria-label="Previous month">
+                    ←
                   </button>
-                );
-              })}
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4 text-sm">
-              <span>Every week for</span>
-              <input
-                type="number"
-                min={1}
-                max={MAX_COPY_DATES}
-                value={weeks}
-                onChange={(e) => setWeeks(e.target.value)}
-                aria-label="Number of weeks"
-                className="input w-20"
-              />
-              <span>weeks</span>
-              <button type="button" className="btn btn-sm" onClick={pickWeekly}>
-                Pick them
-              </button>
-              {picked.size > 0 && (
-                <button type="button" className="btn btn-sm ml-auto" onClick={() => setPicked(new Set())}>
-                  Clear
-                </button>
-              )}
-            </div>
-            <p className={`mt-2 text-xs ${tooMany ? "font-medium text-rose-700" : "text-ink-500"}`} role="status">
-              {picked.size === 0
-                ? `Tap days on the calendar, or pick every week. Up to ${MAX_COPY_DATES} dates.`
-                : `${picked.size} date${picked.size === 1 ? "" : "s"} picked, the last on ${shortDate(last!)}.${tooMany ? ` That's more than ${MAX_COPY_DATES}: take some off.` : ""}`}
-            </p>
-            <div className="mt-4 space-y-3 border-t border-ink-100 pt-4">
-              <label className="block">
-                <span className="label">Status of the copies</span>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} className="input">
-                  <option value="PENDING">Pending</option>
-                  <option value="AWAITING" disabled={!hasAct || !keepAct}>
-                    Awaiting confirmation (offer to the act)
-                  </option>
-                  <option value="CONFIRMED" disabled={!hasAct || !keepAct}>
-                    Confirmed
-                  </option>
-                </select>
-              </label>
-              {hasAct && (
-                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-sm font-semibold">{title}</span>
+                  <button type="button" className="btn btn-sm" onClick={() => shift(1)} aria-label="Next month">
+                    →
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                  {WEEKDAYS.map((d) => (
+                    <div key={d} className="py-1 text-ink-500">
+                      {d}
+                    </div>
+                  ))}
+                  {cells.map((d, i) => {
+                    if (d === null) return <div key={`b${i}`} />;
+                    const k = key(month.y, month.m, d);
+                    const on = picked.has(k);
+                    const past = k < today;
+                    const original = k === startDate;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        disabled={past}
+                        onClick={() => toggle(k)}
+                        aria-pressed={on}
+                        className={`h-9 rounded-lg text-sm tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                          on ? "bg-volt-400 font-semibold text-black" : original ? "ring-1 ring-ink-400" : "hover:bg-ink-100"
+                        }`}
+                        title={original ? "This booking's date" : undefined}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4 text-sm">
+                  <span>Every week for</span>
                   <input
-                    type="checkbox"
-                    checked={keepAct}
-                    onChange={(e) => (setKeepAct(e.target.checked), !e.target.checked && setStatus("PENDING"))}
-                    className="h-4 w-4"
+                    type="number"
+                    min={1}
+                    max={MAX_COPY_DATES}
+                    value={weeks}
+                    onChange={(e) => setWeeks(e.target.value)}
+                    aria-label="Number of weeks"
+                    className="input w-20"
                   />
-                  Keep the act ({actName})
-                </label>
-              )}
-              <div className="flex items-center gap-2">
-                <button type="button" className="btn" onClick={close}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={!picked.size || tooMany || pending}
-                  className="btn btn-primary ml-auto"
-                  onClick={() => start(async () => setResult(await copyBooking(bookingId, [...picked], status, keepAct)))}
-                >
-                  {pending ? "Copying…" : picked.size ? `Copy to ${picked.size} date${picked.size === 1 ? "" : "s"}` : "Pick dates"}
-                </button>
+                  <span>weeks</span>
+                  <button type="button" className="btn btn-sm" onClick={pickWeekly}>
+                    Pick them
+                  </button>
+                  {picked.size > 0 && (
+                    <button type="button" className="btn btn-sm ml-auto" onClick={() => setPicked(new Set())}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className={`mt-2 text-xs ${tooMany ? "font-medium text-rose-700" : "text-ink-500"}`} role="status">
+                  {picked.size === 0
+                    ? `Tap days on the calendar, or pick every week. Up to ${MAX_COPY_DATES} dates.`
+                    : `${picked.size} date${picked.size === 1 ? "" : "s"} picked, the last on ${shortDate(last!)}.${tooMany ? ` That's more than ${MAX_COPY_DATES}: take some off.` : ""}`}
+                </p>
+                <div className="mt-4 space-y-3 border-t border-ink-100 pt-4">
+                  <label className="block">
+                    <span className="label">Status of the copies</span>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} className="input">
+                      <option value="PENDING">Pending</option>
+                      <option value="AWAITING" disabled={!hasAct || !keepAct}>
+                        Awaiting confirmation (offer to the act)
+                      </option>
+                      <option value="CONFIRMED" disabled={!hasAct || !keepAct}>
+                        Confirmed
+                      </option>
+                    </select>
+                  </label>
+                  {hasAct && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={keepAct}
+                        onChange={(e) => (setKeepAct(e.target.checked), !e.target.checked && setStatus("PENDING"))}
+                        className="h-4 w-4"
+                      />
+                      Keep the act ({actName})
+                    </label>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="btn" onClick={close}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!picked.size || tooMany || pending}
+                      className="btn btn-primary ml-auto"
+                      onClick={() => start(async () => setResult(await copyBooking(bookingId, [...picked], status, keepAct)))}
+                    >
+                      {pending ? "Copying…" : picked.size ? `Copy to ${picked.size} date${picked.size === 1 ? "" : "s"}` : "Pick dates"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </dialog>,
+          document.body,
         )}
-      </dialog>
     </>
   );
 }
