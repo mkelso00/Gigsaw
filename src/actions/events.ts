@@ -129,6 +129,11 @@ export async function updateEvent(eventId: string, _: FormState, form: FormData)
   });
 }
 
+/** The plan is in the acts' calendar events (src/lib/act-calendar.ts), so a change to it updates their connected calendars. */
+async function syncEventGigs(eventId: string, agencyId: string) {
+  queueCalendarSync((await prisma.booking.findMany({ where: { eventId, agencyId }, select: { id: true } })).map((b) => b.id));
+}
+
 /** The plan the acts see (running order, contact on the day, parking…). Used by the agency. */
 export async function updateEventPlan(eventId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
@@ -137,6 +142,7 @@ export async function updateEventPlan(eventId: string, _: FormState, form: FormD
     const settings = await getSettings(user.agencyId);
     const { columns, planExtras } = readPlanForm((k) => str(form, k), parseExtraFields(settings.planExtraFields));
     await prisma.event.update({ where: { id: eventId }, data: { ...columns, planExtras, guestCount: int(form, "guestCount") } });
+    await syncEventGigs(eventId, user.agencyId);
     await logActivity(user, "EVENT", eventId, "updated the plan");
     revalidatePath(`/events/${eventId}`);
     return { ok: "Plan saved. The acts see it on their booking page." };
@@ -326,6 +332,7 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
       where: { id: e.id },
       data: { ...columns, planExtras, guestCount: guests && guests > 0 && guests < 100_000 ? guests : null, plannerDoneAt: new Date() },
     });
+    await syncEventGigs(e.id, e.agencyId);
     await prisma.activity.create({
       data: { agencyId: e.agencyId, entity: "EVENT", entityId: e.id, action: first ? "customer filled in the planner" : "customer updated the planner" },
     });

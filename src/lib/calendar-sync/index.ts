@@ -1,9 +1,10 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
-import { ACT_FEED_SELECT } from "@/lib/act-calendar";
-import { prisma } from "@/lib/db";
+import { ACT_FEED_SELECT, type ActFeedOptions } from "@/lib/act-calendar";
+import { getSettings, prisma } from "@/lib/db";
+import { parseExtraFields } from "@/lib/event-plan";
 import { appUrl } from "@/lib/messaging";
-import { actIdsFor, actTree } from "@/lib/people";
+import { actIdsFor, actTree, ownActIds } from "@/lib/people";
 import { billingState } from "@/lib/subscription";
 import { log } from "@/server/log";
 import { ACT_FEED_DAYS_BACK, belongsInCalendar, calendarContent, CALENDAR_STATUSES, contentHash, planSync, type Provider } from "./content";
@@ -116,9 +117,9 @@ async function applyGig(
   gig: Gig | null,
   wanted: boolean,
   link: { id: string; externalId: string; contentHash: string } | null,
-  baseUrl: string,
+  view: ActFeedOptions,
 ) {
-  const content = gig && wanted ? calendarContent(gig, { baseUrl }) : null;
+  const content = gig && wanted ? calendarContent(gig, view) : null;
   const hash = content ? contentHash(content, conn.provider as Provider) : null;
   const plan = planSync(wanted, link, hash);
   if (plan === "skip") return plan;
@@ -146,6 +147,15 @@ function actsOf(conn: Connection) {
 }
 
 /**
+ * How this connection's login sees its events, exactly as in their subscribe feed: their own pay only on gigs
+ * for the acts they're directly in (not a band they're part of), and the business's own wedding plan fields.
+ */
+async function viewOf(conn: Connection): Promise<ActFeedOptions> {
+  const [own, settings] = await Promise.all([ownActIds(conn.user), getSettings(conn.agencyId)]);
+  return { baseUrl: appUrl(), viewer: { ownActIds: own, person: !!conn.user.personId }, planExtras: parseExtraFields(settings.planExtraFields) };
+}
+
+/**
  * Connections that could show this act's gigs: logins for this act or any act inside it (a solo act
  * in a band sees the band's gigs), directly or as a person in one of those acts.
  */
@@ -168,7 +178,6 @@ export async function syncBookingToCalendars(bookingId: string): Promise<void> {
     const candidates = new Set(linked.map((l) => l.connectionId));
     if (gig?.artistId) for (const id of await connectionsForAct(gig.agencyId, gig.artistId)) candidates.add(id);
     if (!candidates.size) return;
-    const baseUrl = appUrl();
     for (const connectionId of candidates) {
       await oneAtATime(connectionId, async () => {
         const conn = await prisma.calendarConnection.findUnique({ where: { id: connectionId }, include: connectionInclude });
@@ -180,7 +189,7 @@ export async function syncBookingToCalendars(bookingId: string): Promise<void> {
           const wanted = sameAgency && belongsInCalendar(gig!, await actsOf(conn), { ignoreAge: !!link });
           // A locked business leaves events as they are, but still takes out gigs that went.
           if (wanted && !agencyOpen(gig!.agency)) return;
-          await applyGig(clientFor(conn), conn, bookingId, sameAgency ? gig : null, wanted, link, baseUrl);
+          await applyGig(clientFor(conn), conn, bookingId, sameAgency ? gig : null, wanted, link, await viewOf(conn));
         } catch (e) {
           await recordFailure(conn, e, { bookingId });
         }
@@ -234,14 +243,14 @@ async function resync(connectionId: string, opts: ResyncOptions) {
     });
     const linkFor = new Map(links.map((l) => [l.bookingId, l]));
     const client = clientFor(conn);
-    const baseUrl = appUrl();
+    const view = await viewOf(conn);
     const outOfTime = () => opts.deadline !== undefined && Date.now() > opts.deadline;
     let failed = 0;
     let firstError: unknown = null;
     let finished = true;
     const attempt = async (bookingId: string, gig: Gig | null, wanted: boolean) => {
       try {
-        await applyGig(client, conn, bookingId, gig, wanted, linkFor.get(bookingId) ?? null, baseUrl);
+        await applyGig(client, conn, bookingId, gig, wanted, linkFor.get(bookingId) ?? null, view);
       } catch (e) {
         // Withdrawn access or missing setup stops the lot: every other call would fail the same way.
         if (e instanceof CalendarAccessError || e instanceof CalendarSetupError) throw e;

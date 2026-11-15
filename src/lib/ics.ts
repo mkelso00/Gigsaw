@@ -26,13 +26,25 @@ function localStamp(d: Date, timeZone: string) {
   return `${p.year}${pad(p.month)}${pad(p.day)}T${pad(p.hour)}${pad(p.minute)}${pad(p.second)}`;
 }
 
+/** Whether a cut here would split a character: an emoji's surrogate pair, or a backslash escape ("\\n", "\\,"). */
+function splitsChar(s: string, cut: number) {
+  const code = s.charCodeAt(cut - 1);
+  if (code >= 0xd800 && code <= 0xdbff) return true;
+  // An odd run of backslashes before the cut means the last one starts an escape. Unfolding puts it back
+  // together in theory, but descriptions now carry plenty of escapes and not every calendar app is strict.
+  let n = 0;
+  while (n < cut && s[cut - 1 - n] === "\\") n++;
+  return n % 2 === 1;
+}
+
 /** Lines longer than 75 octets must be folded. */
-function fold(line: string) {
+export function fold(line: string) {
   const out: string[] = [];
   let rest = line;
   while (Buffer.byteLength(rest, "utf8") > 75) {
     let cut = 75;
     while (Buffer.byteLength(rest.slice(0, cut), "utf8") > 75) cut--;
+    while (cut > 2 && splitsChar(rest, cut)) cut--;
     out.push(rest.slice(0, cut));
     rest = " " + rest.slice(cut);
   }

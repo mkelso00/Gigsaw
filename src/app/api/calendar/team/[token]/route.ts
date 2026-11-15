@@ -1,4 +1,5 @@
 import { getSettings, prisma } from "@/lib/db";
+import { parseExtraFields } from "@/lib/event-plan";
 import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { billingState } from "@/lib/subscription";
@@ -7,7 +8,8 @@ import { TEAM_FEED_SELECT, teamFeedEvent, teamFeedWhere } from "@/lib/team-calen
 export const dynamic = "force-dynamic";
 
 // A staff member's private calendar feed of bookings, addressed by the secret token from their
-// Profile. Times in the agency's time zone; never any money.
+// Profile. Times in the agency's time zone. Shows the booking's Money panel figures, which every
+// admin and agent sees in the app (src/lib/team-calendar.ts); no other login can have this feed.
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const token = (await params).token.replace(/\.ics$/, "");
   if (token.length < 20) return new Response("Not found", { status: 404 });
@@ -29,12 +31,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
         orderBy: { arriveBy: "asc" },
         take: 5000,
       });
-  const base = appUrl();
-  const body = buildIcs(
-    `${settings.agencyName} · ${scopeName}`,
-    bookings.map((b) => teamFeedEvent(b, { baseUrl: base, agencyTimezone: tz })),
-    { timezone: tz },
-  );
-  const lastModified = bookings.reduce<Date | undefined>((max, b) => (!max || b.updatedAt > max ? b.updatedAt : max), undefined);
+  const opts = { baseUrl: appUrl(), agencyTimezone: tz, planExtras: parseExtraFields(settings.planExtraFields) };
+  const events = bookings.map((b) => teamFeedEvent(b, opts));
+  const body = buildIcs(`${settings.agencyName} · ${scopeName}`, events, { timezone: tz });
+  const lastModified = events.reduce<Date | undefined>((max, e) => (!max || e.updated > max ? e.updated : max), undefined);
   return icsResponse(req, body, { filename: "gigsaw-bookings.ics", lastModified });
 }

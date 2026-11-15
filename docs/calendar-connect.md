@@ -7,10 +7,41 @@ anyone who prefers it.
 
 ## What the act sees
 
-Each gig is one event in their calendar, with the same content as their subscribe feed (`src/lib/ics.ts`
-and `src/app/api/calendar/[token]`): title, venue and address, on-stage and arrival times, and the notes an
-act is allowed to see. **Never** the sale price, booking fee, deposit, what the venue or customer pays,
-or anything about other acts' fees. Acts only ever see their own pay, and only where the feed already shows it.
+Each gig is one event in their calendar, with the same content as their subscribe feed (both built by
+`actFeedEvent` in `src/lib/act-calendar.ts`, written out by `src/lib/ics.ts` for the feed): the title ("Act @
+Venue"), and a description of what their gig page shows them, in this order, with **only the lines that have
+something in them** (an empty field leaves no label behind):
+
+1. Act, venue and address (or the event's own venue, such as a marquee), status, the event name.
+2. Arrive by, soundcheck, on stage, finish (the venue's time).
+3. Their fee (see below).
+4. Day contact, travel, accommodation, hospitality, venue notes (parking, load-in), promoter, their agent.
+5. The wedding or event plan: the event, guests, then every filled-in plan field, the business's own fields
+   from Settings included (`planRows` in `src/lib/event-plan.ts`). Never the event's agency-only notes.
+6. A link to the gig in the act app.
+
+### The act-fee rule
+
+The only amount of money an act's feed or connected calendar ever shows is **that act's own pay**, worked out
+exactly as on their gig page: `dealBreakdown(b).artistMinor`, which on a sale and cost deal (`BUY_SELL`) is
+`artistFeeMinor`, and otherwise the fee less the agency's commission (`actPayMinor` in `src/lib/act-calendar.ts`).
+It reads "Your fee: £350.00" (or "Fee for <act>: £350.00" on a person's login, who can be in several acts).
+
+- It shows only on gigs for an act the login is **directly** in: the act itself, or the acts a person belongs
+  to (`ownActIds`). A band's gig that appears because the act is part of the band shows no fee: that's the
+  band's fee, not theirs.
+- No fee set (0, or a sale and cost deal with no cost yet) means no fee line, not "£0.00".
+- **Never**: the sale price, the booking fee, VAT, the deposit, what the venue or customer pays (in part or in
+  all), the commission, money notes, payments, or any other act's fee. `ACT_FEED_SELECT` doesn't read the
+  booking fee, VAT, deposit, money notes or internal notes at all; it reads the sale price and commission only
+  because a commission deal's pay is worked out from them, and only `actPayMinor` uses them.
+- Tests: `tests/calendar-feeds.test.ts`, `tests/calendar-sync.test.ts` and `tests/calendar-sync-db.test.ts` check
+  that none of those amounts, written any way, appears in an act's feed event or either provider's event.
+
+The other feeds, for comparison: staff feeds (`/api/calendar/team/[token]`, admins and agents only) show the
+booking page's Money panel (what the venue or client pays, the booking fee, what the act is paid, what the
+business makes, money notes) and the agency's internal notes; venue feeds (`/api/venue-calendar/[token]`) show
+the act, times and the line-up link, and no money at all, as the venue's line-up page shows none.
 
 Which gigs: the same ones the act's subscribe feed contains (live statuses for that act, not archived). A gig
 that leaves the feed (cancelled, archived, deleted, act changed to someone else) is removed from the calendar.
@@ -61,6 +92,11 @@ that leaves the feed (cancelled, archived, deleted, act changed to someone else)
 - **Times**: the venue's wall-clock time with its IANA zone (`Europe/London`) for both providers.
 - **Booking writes** call `queueCalendarSync(ids)` after the write commits. It never waits for the provider: one
   in-process queue, started with Next's `after()` inside a request, worked through one gig at a time.
+- **What changes an event**: each link keeps a hash of what was sent (`contentHash`), so anything in the
+  description (times, their fee, travel, venue notes, the wedding plan) updates the event, and a change the act
+  can't see (the sale price on a sale and cost deal, a payment) costs no calls. Saving an event's plan (by the
+  agency or the customer's planner) queues its gigs; renaming one of the business's own plan fields in Settings
+  is picked up by the daily top-up. Descriptions are cut to 8,000 characters for the providers, keeping the link.
 - **Failures**: `invalid_grant` (or similar), a 401 straight after a refresh, a 403 that isn't a rate limit, a
   calendar that's gone, or a refresh token that won't decrypt set `NEEDS_RECONNECT` with `lastError`. Anything else
   sets `lastError` only. Connections in `NEEDS_RECONNECT` are skipped until the connect flow sets them `ACTIVE`

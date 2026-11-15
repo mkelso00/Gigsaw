@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
-import { actFeedEvent, ACT_FEED_DAYS_BACK, type ActFeedBooking } from "@/lib/act-calendar";
+import { actFeedEvent, ACT_FEED_DAYS_BACK, type ActFeedBooking, type ActFeedOptions } from "@/lib/act-calendar";
 import { ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
+import { detailLine, fitDescription } from "@/lib/gig-details";
 import { isValidTimeZone, zonedParts } from "@/lib/time";
 
 // What goes in a connected calendar, and whether a gig belongs there at all. Pure functions, so
 // the rules can be tested without a database or a provider.
 //
 // The words come from actFeedEvent, the same builder as the act's subscribe feed, so a connected
-// calendar never says more than the feed: no sale price, booking fee, deposit or anything else
-// about money. Times are sent as the venue's wall-clock time with its time zone, so the event
+// calendar never says more than the feed: the act's own pay at most, never the sale price, booking
+// fee, VAT, deposit or another act's fee. Times are sent as the venue's wall-clock time with its time zone, so the event
 // sits at the right moment wherever the act's calendar is set, and shows the venue's zone.
 
 export type Provider = "GOOGLE" | "MICROSOFT";
@@ -29,22 +30,28 @@ export type CalendarEventContent = {
   timeZone: string;
 };
 
+/** Google takes descriptions up to about 8,000 characters; Outlook more. One limit for both keeps them the same. */
+export const MAX_DESCRIPTION = 8000;
+
 /** The event for one gig, from the act's feed. */
-export function calendarContent(b: ActFeedBooking, opts: { baseUrl: string }): CalendarEventContent {
+export function calendarContent(b: ActFeedBooking, opts: ActFeedOptions): CalendarEventContent {
   // Zones are checked when a booking is saved; one that slipped through gives UTC times rather than no event.
   const timeZone = b.timezone && isValidTimeZone(b.timezone) ? b.timezone : "UTC";
   const e = actFeedEvent(timeZone === b.timezone ? b : { ...b, timezone: timeZone }, opts);
   // Both providers refuse an event that ends before it starts, which odd times could give.
   const end = e.end > e.start ? e.end : new Date(e.start.getTime() + 2 * 3_600_000);
-  return { summary: e.summary, location: e.location ?? "", description: e.description ?? "", url: e.url ?? "", start: e.start, end, timeZone };
+  const description = fitDescription(e.description ?? "", MAX_DESCRIPTION, detailLine("Details", e.url ?? ""));
+  return { summary: e.summary, location: e.location ?? "", description, url: e.url ?? "", start: e.start, end, timeZone };
 }
 
 /** Bump to send every event again after changing what's sent (the payloads below or the feed's words). */
-const CONTENT_VERSION = 1;
+const CONTENT_VERSION = 2;
 
 /**
  * A fingerprint of what's sent, so an unchanged gig isn't sent again. Leaves out updatedAt: a save
- * that changes nothing the act sees (a payment, a note for the agency) costs no calls.
+ * that changes nothing the act sees (a payment, a note for the agency, the sale price on a sale and
+ * cost deal) costs no calls, while a change to anything in the description (their fee, the travel,
+ * the wedding plan) changes the hash, so the event is updated.
  */
 export function contentHash(c: CalendarEventContent, provider: Provider) {
   const parts = [CONTENT_VERSION, provider, c.summary, c.location, c.description, c.url, c.start.toISOString(), c.end.toISOString(), c.timeZone];

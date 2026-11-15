@@ -353,8 +353,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           <section className="card card-pad">
             <h2 className="section-title">Calendar feed</h2>
             <p className="mt-1 mb-3 text-sm text-slate-500">
-              Subscribe to this link in Google, Apple or Outlook calendar to see this artist&apos;s shows. Anyone with the link can see the dates, so only share
-              it with the artist&apos;s team.
+              Subscribe to this link in Google, Apple or Outlook calendar to see this artist&apos;s shows. Anyone with the link can see the dates, the gig
+              details and the artist&apos;s own fee (never what the venue or client pays), so only share it with the artist&apos;s team.
             </p>
             <CopyField value={feedUrl} />
             <ServerForm action={resetCalendarToken.bind(null, artist.id)} className="mt-3">
