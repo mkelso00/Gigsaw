@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
-import { defaultBookingFee, minorToInput } from "@/lib/money";
+import { defaultBookingFee, defaultVat, minorToInput } from "@/lib/money";
 import { canEdit, proposalRef } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 
@@ -49,6 +49,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
         currency={cur}
         defaultDate={q.lines[0]?.date || localDateKey(new Date(), q.timezone)}
         defaultFee={fee ? minorToInput(fee, cur) : ""}
+        defaultVat={defaultVat(settings) ? String(defaultVat(settings)) : ""}
         acts={acts.map((a) => ({ id: a.id, name: a.name, detail: a.genre || undefined }))}
         venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city || undefined }))}
         eventTypes={EVENT_TYPES.map((t) => ({ value: t, label: eventTypeLabel(t) }))}

@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/auth";
 import { arrivalFor } from "@/lib/bookings";
 import { eventTypeLabel, actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
-import { WEEKDAYS, dateInWeek, isDateKey, venueColour, weekStartOf } from "@/lib/rota";
+import { WEEKDAYS, dateInWeek, isDateKey, slotRunsOn, venueColour, weekStartOf } from "@/lib/rota";
 import { addDaysToKey, localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { unfilledSlots } from "@/lib/unfilled";
 import { WeekJump } from "@/components/week-jump";
@@ -98,10 +98,13 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
     const k = `${b.venueId}|${localDateKey(b.arriveBy, b.timezone)}`;
     oneOffsByCell.set(k, [...(oneOffsByCell.get(k) ?? []), b]);
   }
-  const rowIds = new Set([...slots.map((s) => s.venueId), ...oneOffs.map((b) => b.venueId!)]);
+  // Only the slots running this week: a slot starts on its own start date and ends after its last.
+  const weekSlots = slots.filter((s) => slotRunsOn(s, dateInWeek(weekStart, s.weekday)));
+  const rowIds = new Set([...weekSlots.map((s) => s.venueId), ...oneOffs.map((b) => b.venueId!)]);
   const venues = allVenues.filter((v) => rowIds.has(v.id));
-  const total = slots.length;
-  const filledCount = slots.filter((s) => filled.get(`${s.id}|${dateInWeek(weekStart, s.weekday)}`)?.artistId).length;
+  const total = weekSlots.length;
+  const filledCount = weekSlots.filter((s) => filled.get(`${s.id}|${dateInWeek(weekStart, s.weekday)}`)?.artistId).length;
+  const slotLink = (s: { id: string; venueId: string }) => `/venues/${s.venueId}?slot=${s.id}#slot-${s.id}`;
   const now = new Date();
 
   return (
@@ -133,14 +136,14 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
             <span>
               <span className="section-title">Add a booking</span>
-              <span className="ml-2 text-sm text-ink-500">Any date, any venue. One-off, or every week.</span>
+              <span className="ml-2 text-sm text-ink-500">Any date, any venue. One-off, or a weekly slot from that date.</span>
             </span>
             <span className="btn btn-sm">+ Add</span>
           </summary>
           <div className="p-5">
             <RotaQuickAdd
               artists={artists}
-              venues={allVenues}
+              venues={allVenues.map((v) => ({ id: v.id, name: v.name }))}
               minDate={today}
               date={weekStart > today ? weekStart : today}
               currency={settings.defaultCurrency}
@@ -149,7 +152,9 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
         </details>
       )}
 
-      {venues.length === 0 ? (
+      {venues.length === 0 && slots.length > 0 ? (
+        <Empty>Nothing on the rota this week. Weekly slots only show from their start date: try the next weeks.</Empty>
+      ) : venues.length === 0 ? (
         <Empty>
           No weekly slots yet. Open a{" "}
           <Link href="/venues" className="link">
@@ -164,18 +169,21 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
               <Stat tone={filledCount === total ? "dark" : "default"} label="Slots with an act this week" value={`${filledCount} / ${total}`} />
               <Stat label="Still to fill" value={total - filledCount} hint={total - filledCount ? "Shown in amber below" : "All done"} />
               <ActionForm action={bookRegulars} className="card col-span-2 flex flex-col justify-between gap-3 p-5 lg:col-span-1">
-                <input type="hidden" name="weekStart" value={weekStart} />
-                <div className="text-[13px] text-ink-500">Fill the calendar from the weekly slots</div>
+                <div className="text-[13px] text-ink-500">Put the weekly slots in the calendar</div>
                 <select name="mode" defaultValue="pending" className="input">
                   <option value="pending">Put every slot in the calendar (Pending, no act yet)</option>
                   <option value="offer">Offer each slot to its regular act</option>
                   <option value="confirm">Book each regular act in as confirmed</option>
                 </select>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select name="weeks" defaultValue="4" className="input w-auto">
-                    {[1, 2, 4, 8, 12].map((n) => (
+                  <label className="flex items-center gap-2 text-sm">
+                    From
+                    <input type="date" name="from" defaultValue={weekStart > today ? weekStart : today} min={today} className="input w-auto" />
+                  </label>
+                  <select name="weeks" defaultValue="4" aria-label="For how long" className="input w-auto">
+                    {[1, 2, 4, 8, 12, 26].map((n) => (
                       <option key={n} value={n}>
-                        {n === 1 ? "This week" : `${n} weeks from this week`}
+                        {n === 1 ? "for 1 week" : `for ${n} weeks`}
                       </option>
                     ))}
                   </select>
@@ -213,6 +221,13 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                         {slot.venue.city ? `${slot.venue.city} · ` : ""}
                         {slot.label || "Live music"}
                       </span>
+                      <Link
+                        href={slotLink({ id: slot.id, venueId: slot.venue.id })}
+                        className="text-xs whitespace-nowrap text-ink-500 underline hover:text-ink-950"
+                        title="Change this weekly slot, or stop it"
+                      >
+                        Change or stop
+                      </Link>
                     </div>
                     <ActionForm action={assignSlot.bind(null, slot.id, date)} className="flex flex-wrap items-start gap-2">
                       <input type="hidden" name="notify" value="on" />
@@ -269,7 +284,7 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                     {WEEKDAYS.map(([d]) => {
                       const date = dateInWeek(weekStart, d);
                       const past = date < today;
-                      const daySlots = slots.filter((s) => s.venueId === v.id && s.weekday === d);
+                      const daySlots = weekSlots.filter((s) => s.venueId === v.id && s.weekday === d);
                       return (
                         <td key={d} className={`border-b border-l border-ink-100 p-2 ${date === today ? "bg-volt-100/30" : ""}`}>
                           <div className="space-y-2">
@@ -306,7 +321,9 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
                                       </Link>
                                     )}
                                   </div>
-                                  <div className="text-xs text-ink-500">{s.label || eventTypeLabel(s.eventType)}</div>
+                                  <Link href={slotLink(s)} className="block text-xs text-ink-500 hover:underline" title="Weekly slot: change or stop it">
+                                    {s.label || eventTypeLabel(s.eventType)} · weekly
+                                  </Link>
                                   {past ? (
                                     <div className="mt-1 text-xs">No act</div>
                                   ) : (
@@ -374,8 +391,8 @@ export default async function RotaPage({ searchParams }: { searchParams: Promise
             </table>
           </div>
           <p className="mt-3 text-xs text-ink-500">
-            Booking a slot or adding a booking tells the artist by email and text. Tick &ldquo;Every …&rdquo; when adding to make it a weekly slot. Change a
-            slot&apos;s times or fee on the venue&apos;s page.
+            Booking a slot or adding a booking tells the artist by email and text. Tick &ldquo;Every …&rdquo; when adding to make it a weekly slot from that
+            date. Click a slot&apos;s &ldquo;weekly&rdquo; label to change its times or fee, or to stop it.
           </p>
         </>
       )}

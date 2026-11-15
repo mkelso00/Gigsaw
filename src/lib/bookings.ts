@@ -86,6 +86,42 @@ export async function createBookingWithReference(agencyId: string, data: Omit<Pr
   throw new Error("Could not allocate a booking reference");
 }
 
+/** Rows saved per insert when making many bookings at once. */
+const INSERT_BATCH = 100;
+
+/**
+ * Many new bookings in one go (copies to many dates, a booking every week). The numbers are taken
+ * together inside one transaction, the rows saved a batch at a time, and the calendars brought up
+ * to date once it has committed. If someone else takes one of the numbers at that moment, the
+ * whole lot rolls back and is tried again, so it's all or nothing. Returned in the order given.
+ */
+export async function createBookingsWithReferences(agencyId: string, rows: Omit<Prisma.BookingCreateManyInput, "reference" | "agencyId">[]) {
+  if (!rows.length) return [];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const made = await prisma.$transaction(
+        async (tx) => {
+          const highest = await highestReference(agencyId, tx);
+          const out: { id: string; reference: string }[] = [];
+          for (let i = 0; i < rows.length; i += INSERT_BATCH) {
+            const data = rows.slice(i, i + INSERT_BATCH).map((r, j) => ({ ...r, agencyId, reference: referenceAfter(highest, i + j + 1) }));
+            out.push(...(await tx.booking.createManyAndReturn({ data, select: { id: true, reference: true } })));
+          }
+          return out;
+        },
+        { timeout: 60_000 },
+      );
+      // Put back in the order given (the numbers were handed out in that order).
+      const order = (ref: string) => Number(ref.replace(/\D/g, ""));
+      made.sort((a, b) => order(a.reference) - order(b.reference));
+      queueCalendarSync(made.map((b) => b.id));
+      return made;
+    } catch (e) {
+      if (attempt >= 4 || !isReferenceClash(e)) throw e;
+    }
+  }
+}
+
 /** Two bookings saved at the same moment took the same reference number. */
 export const isReferenceClash = (e: unknown) => (e as { code?: string }).code === "P2002";
 

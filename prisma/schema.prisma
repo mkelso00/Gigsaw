@@ -122,6 +122,8 @@ model Settings {
   // 0 means no default fee. Added to: EVENTS (weddings and private events, once per event) | ALL
   bookingFeeMinor       Int     @default(0)
   bookingFeeFor         String  @default("EVENTS")
+  // VAT % put on the sale of every new booking, where it can still be changed. 0 means no VAT.
+  defaultVatPct         Float   @default(0)
   // Automatic messages: switched off or reworded, by message, e.g. { "OFFER": { "subject": "…" } }.
   messageTemplates      Json    @default("{}")
   // Secret for the private link new acts use to join (/join/<token>). Null means no link yet.
@@ -635,6 +637,10 @@ model VenueSlot {
   artistId      String? // the regular performer, if there is one
   artist        Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
   active        Boolean   @default(true)
+  // The first and last dates it runs ("YYYY-MM-DD", the venue's own days). Empty: from whenever,
+  // and until it's stopped; slots made before these existed have neither and run every week.
+  startsOn      String?
+  endsOn        String?
   createdAt     DateTime  @default(now())
   bookings      Booking[]
 

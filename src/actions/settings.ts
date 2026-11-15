@@ -102,6 +102,11 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       data.bookingFeeMinor = fee;
     }
     if (has("bookingFeeFor")) data.bookingFeeFor = oneOf(str(form, "bookingFeeFor"), ["EVENTS", "ALL"] as const, "EVENTS");
+    if (has("defaultVatPct")) {
+      const vat = Number(str(form, "defaultVatPct").replace("%", "") || 0);
+      if (!Number.isFinite(vat) || vat < 0 || vat > 100) throw new FormError("VAT must be between 0 and 100%");
+      data.defaultVatPct = vat;
+    }
     if (has("invoiceTerms")) data.invoiceTerms = str(form, "invoiceTerms");
     if (has("contractTerms")) data.contractTerms = str(form, "contractTerms");
     // The agency's signature: a new drawing replaces the old one, an empty box keeps it, and Remove clears it.

@@ -9,10 +9,20 @@ import { Combobox } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Icon } from "@/components/icons";
 import { awayLine, awayOn } from "@/lib/availability";
-import { BOOKING_STATUS_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES } from "@/lib/constants";
+import { BOOKING_STATUS_LABELS, EVENT_TYPE_LABELS, EVENT_TYPES, MAX_COPY_DATES } from "@/lib/constants";
+import { WEEKDAYS, weekdayOf } from "@/lib/rota";
+import { addDaysToKey } from "@/lib/time";
 
 // One empty list for while the real ones load, so the pickers' memos don't rerun on every render.
 const NONE: never[] = [];
+
+// "Repeat every week" starts at about three months.
+const REPEAT_WEEKS = 12;
+const dayName = (key: string) => (/^\d{4}-\d{2}-\d{2}$/.test(key) ? WEEKDAYS[weekdayOf(key) - 1][2] : "week");
+const shortDay = (key: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}T12:00:00Z`));
+/** Weekly dates from `from` up to and including `until`: 1 when they're the same day. */
+const weeksBetween = (from: string, until: string) => Math.floor((Date.parse(`${until}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / (7 * 86_400_000)) + 1;
 
 /**
  * The "New booking" button on every agency page, with a short form in a pop-up. Press "n" to open it.
@@ -58,6 +68,15 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
   const [actId, setActId] = useState("");
   const [status, setStatus] = useState("PENDING");
   const [date, setDate] = useState(today);
+  // Repeat every week: how many weeks and the last date, kept in step with each other and the date.
+  const [weekly, setWeekly] = useState(false);
+  const [weeks, setWeeks] = useState(String(REPEAT_WEEKS));
+  const [until, setUntil] = useState(() => addDaysToKey(today, 7 * (REPEAT_WEEKS - 1)));
+  const repeatCount = Math.floor(Number(weeks)) || 0;
+  const pickDate = (d: string) => {
+    setDate(d);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && repeatCount >= 1) setUntil(addDaysToKey(d, 7 * (repeatCount - 1)));
+  };
   // Normally from today on; a past day picked on the calendar is allowed too (logging a gig that happened).
   const [minDate, setMinDate] = useState(today);
   // Acts away on the chosen date are marked, not hidden: the agent may know better.
@@ -75,7 +94,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
       const input = formBox.current?.querySelector<HTMLInputElement>('input[name="date"]');
       setMinDate(picked < today ? picked : today);
       if (input) input.value = picked;
-      setDate(picked);
+      pickDate(picked);
     }
     ref.current?.showModal();
     actRef.current?.focus();
@@ -108,6 +127,9 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
       setStatus("PENDING");
       setDate(today);
       setMinDate(today);
+      setWeekly(false);
+      setWeeks(String(REPEAT_WEEKS));
+      setUntil(addDaysToKey(today, 7 * (REPEAT_WEEKS - 1)));
       setTimeout(() => actRef.current?.focus(), 0);
     };
     form.addEventListener("reset", onReset);
@@ -202,7 +224,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
             </div>
             <label>
               <span className={label}>Date</span>
-              <input name="date" type="date" required min={minDate} defaultValue={today} onChange={(e) => setDate(e.target.value)} className={field} />
+              <input name="date" type="date" required min={minDate} defaultValue={today} onChange={(e) => pickDate(e.target.value)} className={field} />
             </label>
             <div>
               <label htmlFor="qb-venue" className={label}>
@@ -297,14 +319,68 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
                         ? "On hold: pencilled in while it's agreed."
                         : "Enquiry: someone's asking, nothing agreed yet."}
             </p>
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="weekly"
+                  checked={weekly}
+                  onChange={(e) => setWeekly(e.target.checked)}
+                  className="h-4 w-4 accent-ink-950"
+                  aria-controls="qb-repeat"
+                />
+                Repeat every {dayName(date)}
+              </label>
+              {weekly && (
+                <fieldset id="qb-repeat" className="mt-2 rounded-xl border border-ink-200 bg-ink-50/60 p-3">
+                  <legend className="sr-only">How long to repeat it</legend>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label>
+                      <span className={label}>Until</span>
+                      <input
+                        name="until"
+                        type="date"
+                        min={date}
+                        value={until}
+                        onChange={(e) => {
+                          setUntil(e.target.value);
+                          if (e.target.value >= date) setWeeks(String(weeksBetween(date, e.target.value)));
+                        }}
+                        className={`${field} w-auto`}
+                      />
+                    </label>
+                    <span className="pb-2.5 text-sm text-ink-500">or</span>
+                    <label>
+                      <span className={label}>Number of weeks</span>
+                      <input
+                        name="weeks"
+                        type="number"
+                        min={1}
+                        max={MAX_COPY_DATES}
+                        value={weeks}
+                        onChange={(e) => {
+                          setWeeks(e.target.value);
+                          const n = Math.floor(Number(e.target.value));
+                          if (n >= 1) setUntil(addDaysToKey(date, 7 * (n - 1)));
+                        }}
+                        className={`${field} w-24`}
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs text-ink-600" role="status">
+                    {repeatCount > MAX_COPY_DATES
+                      ? `That's more than ${MAX_COPY_DATES} weeks: pick an earlier date.`
+                      : repeatCount >= 1
+                        ? `${repeatCount} booking${repeatCount === 1 ? "" : "s"}, every ${dayName(date)} from ${shortDay(date)} to ${shortDay(addDaysToKey(date, 7 * (repeatCount - 1)))}. Each is a normal booking you can change or cancel on its own.`
+                        : "Choose the last date or the number of weeks."}
+                  </p>
+                </fieldset>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-ink-100 pt-4 sm:col-span-2">
               <label className={`flex items-center gap-2 text-sm ${noAct ? "text-ink-400" : ""}`} title={noAct ? "Choose an act first" : undefined}>
                 <input type="checkbox" name="notify" defaultChecked disabled={noAct} className="h-4 w-4 accent-ink-950" />
                 Tell the act
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="repeat" className="h-4 w-4 accent-ink-950" />
-                Every week (needs a venue)
               </label>
               <div className="ml-auto flex items-center gap-2">
                 <Link
@@ -329,7 +405,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
                   Full form
                 </Link>
                 <SubmitButton className="btn btn-primary" pendingText="Booking…">
-                  Book it
+                  {weekly && repeatCount > 1 ? `Book ${repeatCount}` : "Book it"}
                 </SubmitButton>
               </div>
               <p className="hidden w-full text-right text-xs text-ink-400 sm:block">

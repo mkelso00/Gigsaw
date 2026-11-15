@@ -12,14 +12,16 @@ import { PageHeader, StatusBadge } from "@/components/ui";
 import { venueColour } from "@/lib/rota";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
-import { formatDate } from "@/lib/time";
+import { formatDate, localDateKey } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Venue" };
 
-export default async function VenuePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VenuePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ slot?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
+  // ?slot=… opens that weekly slot's edit and stop options (linked from the Rota).
+  const { slot: openSlotId } = await searchParams;
   const [venue, settings, artists, contacts, slots] = await Promise.all([
     prisma.venue.findFirst({
       where: { id, agencyId: user.agencyId },
@@ -41,7 +43,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
     }),
     prisma.venueSlot.findMany({
       where: { agencyId: user.agencyId, venueId: id },
-      include: { artist: { select: { id: true, name: true } } },
+      include: { artist: { select: { id: true, name: true } }, _count: { select: { bookings: { where: { status: { not: "CANCELLED" } } } } } },
     }),
   ]);
   if (!venue) notFound();
@@ -74,7 +76,15 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
         }
       />
       <div className="mb-6">
-        <ScheduleEditor venueId={venue.id} slots={slots} artists={artists} contacts={contacts} currency={settings.defaultCurrency} />
+        <ScheduleEditor
+          venueId={venue.id}
+          slots={slots.map((s) => ({ ...s, booked: s._count.bookings }))}
+          artists={artists}
+          contacts={contacts}
+          currency={settings.defaultCurrency}
+          today={localDateKey(new Date(), venue.timezone)}
+          openSlotId={openSlotId}
+        />
       </div>
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">

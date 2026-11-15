@@ -8,7 +8,8 @@ import { defaultBookingFee, formatMoney, minorToInput, toMinor } from "@/lib/mon
  * Cost (what the act is paid) and sale (what the venue or customer pays), with what the agency makes
  * worked out as you type. Booking fee, VAT, currency and anything passed as `more` (deposit, notes)
  * sit under "More money options", which starts open when any of them is already in use. On a new
- * booking the agency's default booking fee fills in to match the booking type, until it's typed over.
+ * booking the agency's default booking fee fills in to match the booking type, until it's typed over,
+ * and `vatPct` is the business's VAT on sales (Settings).
  */
 export function MoneyFields({
   currency,
@@ -41,8 +42,9 @@ export function MoneyFields({
   const [feeIn, setFee] = useState(bookingFee);
   const feeTouched = useRef(false);
   // Decided once, from what the booking already has: a default booking fee filling in on a new booking
-  // doesn't unfold it, and opening or closing it by hand sticks.
-  const [startOpen] = useState(() => moreInUse || !!bookingFee || vatPct > 0);
+  // doesn't unfold it, and opening or closing it by hand sticks. Nor does the default VAT on a new
+  // booking (feeDefaults is only passed for those): it shows in the summary above anyway.
+  const [startOpen] = useState(() => moreInUse || !!bookingFee || (vatPct > 0 && !feeDefaults));
   const box = useRef<HTMLDivElement>(null);
 
   // Follow the booking type chosen elsewhere in the form until the fee is typed over.

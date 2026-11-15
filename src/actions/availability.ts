@@ -10,7 +10,7 @@ import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { EVENT_TYPES, LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, oneOf, optStr, str, type FormState } from "@/lib/forms";
-import { defaultBookingFee, toMinor } from "@/lib/money";
+import { defaultBookingFee, defaultVat, toMinor } from "@/lib/money";
 import { offerResetFor } from "@/lib/offer-links";
 import { actIdsFor, ownActIds } from "@/lib/people";
 import { isDateKey } from "@/lib/rota";
@@ -303,6 +303,7 @@ export async function bookFromReply(replyId: string, _: FormState): Promise<Form
               ...(req.costMinor != null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
               commissionPct: reply.artist.defaultCommission ?? settings.defaultCommission,
               bookingFeeMinor: defaultBookingFee(settings, { eventType: req.eventType }),
+              vatPct: defaultVat(settings),
               notes: req.note,
             },
             tx,

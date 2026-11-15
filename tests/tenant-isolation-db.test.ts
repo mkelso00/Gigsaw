@@ -164,7 +164,8 @@ describeDb("tenant isolation (database)", () => {
     });
     expect(await slots.updateSlot(b.slot, empty, form({ arriveTime: "17:00", startTime: "18:00", endTime: "20:00" }))).toEqual({ error: "Slot not found" });
     expect(await slots.assignSlot(b.slot, "2027-06-11", empty, form({ artistId: a.artist }))).toEqual({ error: "Slot not found" });
-    await slots.deleteSlot(b.slot);
+    expect(await slots.deleteSlot(b.slot, empty)).toEqual({ error: "Slot not found" });
+    expect(await slots.stopSlot(b.slot, empty, form({ endsOn: "2027-06-01", archiveEmpty: "on" }))).toEqual({ error: "Slot not found" });
   });
 
   it("refuses another agency's availability requests", async () => {
@@ -188,7 +189,7 @@ describeDb("tenant isolation (database)", () => {
     expect(await crm.addContactNote(a.contact, empty, form({ body: "Our own note" }))).toEqual({ ok: "Note added." });
     expect(await events.addEventTask(a.event, empty, form({ title: "Our own task" }))).toEqual({ ok: "Added." });
     await availability.setRequestClosed(a.request, true);
-    await slots.deleteSlot(a.slot);
+    expect(await slots.deleteSlot(a.slot, empty)).toEqual({ ok: "Deleted." });
     await bookings.setBookingArchived(a.booking, true);
     expect(await prisma.contactNote.count({ where: { contactId: a.contact } })).toBe(1);
     expect(await prisma.eventTask.count({ where: { eventId: a.event } })).toBe(1);

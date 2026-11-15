@@ -137,6 +137,9 @@ export const TIMEZONES = [
 // Statuses that mean a show is going ahead (used for clash checks and arrival tracking).
 export const LIVE_STATUSES: BookingStatus[] = ["HOLD", "PENDING", "AWAITING", "CONFIRMED", "SETTLED"];
 
+/** The most dates a booking can be copied to at once (and the most weeks "Repeat every week" makes): about six years of weekly gigs. */
+export const MAX_COPY_DATES = 300;
+
 /** The act's name, or "Needs an act" for a gig still being set up. */
 export function actName(b: { artist?: { name: string } | null }) {
   return b.artist?.name ?? "Needs an act";

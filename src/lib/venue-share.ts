@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
-import { dateInWeek, weekStartOf } from "./rota";
+import { dateInWeek, slotRunsOn, weekStartOf } from "./rota";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 
 // The venue's read-only line-up page and calendar feed.
@@ -69,7 +69,7 @@ export async function venueLineup(venue: { id: string; agencyId: string; timezon
     }),
     prisma.venueSlot.findMany({
       where: { venueId: venue.id, agencyId: venue.agencyId, active: true },
-      select: { id: true, weekday: true, startTime: true, endTime: true, label: true },
+      select: { id: true, weekday: true, startTime: true, endTime: true, label: true, startsOn: true, endsOn: true },
     }),
   ]);
 
@@ -96,7 +96,7 @@ export async function venueLineup(venue: { id: string; agencyId: string; timezon
   for (let monday = weekStartOf(today); monday < until; monday = addDaysToKey(monday, 7)) {
     for (const s of slots) {
       const key = dateInWeek(monday, s.weekday);
-      if (key < today || key >= until || filled.has(`${s.id}|${key}`)) continue;
+      if (key < today || key >= until || !slotRunsOn(s, key) || filled.has(`${s.id}|${key}`)) continue;
       const start = zonedToUtc(key, s.startTime, tz);
       let end = zonedToUtc(key, s.endTime, tz);
       if (end <= start) end = zonedToUtc(addDaysToKey(key, 1), s.endTime, tz);
