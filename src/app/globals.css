@@ -189,6 +189,56 @@ h2,
   .eyebrow {
     @apply font-mono text-[11px] font-medium tracking-[0.12em] text-ink-500 uppercase;
   }
+  /*
+   * Gigs on the staff calendar, by where the booking stands (src/lib/calendar-look.ts picks the class).
+   * Not yet booked is dashed, so colour is never the only clue. The fill stops inside the border so the
+   * dashes show against the page. Booked gigs (.gig-on) get the venue's colour and text colour inline.
+   */
+  .gig {
+    border: 2px solid var(--gig-edge);
+    background-color: var(--gig-fill);
+    background-clip: padding-box;
+    color: var(--gig-ink);
+  }
+  .gig-pending {
+    --gig-fill: #fef08a;
+    --gig-edge: #a16207;
+    --gig-ink: #422006;
+    border-style: dashed;
+  }
+  .gig-awaiting {
+    --gig-fill: #855632;
+    --gig-edge: #3f2410;
+    --gig-ink: #ffffff;
+    border-style: dashed;
+  }
+  .gig-quiet {
+    --gig-fill: var(--color-ink-100);
+    --gig-edge: var(--color-ink-500);
+    --gig-ink: var(--color-ink-700);
+    border-style: dashed;
+  }
+  .gig-cancelled {
+    --gig-fill: transparent;
+    --gig-edge: var(--color-ink-300);
+    --gig-ink: var(--color-ink-500);
+    text-decoration: line-through;
+  }
+  .gig-on {
+    --gig-fill: var(--gig);
+    --gig-edge: var(--gig);
+  }
+  /* On the dark page the dashes need light edges, and the yellow stays lemon so it can't pass for a mustard venue colour. */
+  .theme-dark .gig-pending {
+    --gig-fill: #fde047;
+    --gig-edge: #fef08a;
+    --gig-ink: #15181c;
+  }
+  .theme-dark .gig-awaiting {
+    --gig-fill: #6b4423;
+    --gig-edge: #c8935f;
+    --gig-ink: #f6e7d6;
+  }
 }
 
 @media print {

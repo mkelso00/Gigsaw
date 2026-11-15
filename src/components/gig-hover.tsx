@@ -6,6 +6,8 @@ export type GigCard = {
   when: string;
   overnight: string | null;
   status: string;
+  /** The status in the same colours as the gig on the calendar (see lib/calendar-look.ts). */
+  look: { className: string; style?: React.CSSProperties };
   money: [string, string][];
   people: [string, string][];
 };
@@ -38,7 +40,9 @@ export function GigHover({ card, children }: { card: GigCard; children: React.Re
         >
           <div className="flex items-start justify-between gap-3">
             <div className="text-sm font-semibold text-ink-950 tabular-nums">{card.when}</div>
-            <span className="badge shrink-0 bg-ink-100 text-ink-700">{card.status}</span>
+            <span className={`badge shrink-0 ${card.look.className}`} style={card.look.style}>
+              {card.status}
+            </span>
           </div>
           {card.overnight && <div className="mt-1 text-ink-500">☾ {card.overnight}</div>}
           {card.money.length > 0 && (
