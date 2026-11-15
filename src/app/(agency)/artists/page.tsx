@@ -51,7 +51,18 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
     punctualityByArtist(settings, new Date(now.getTime() - 365 * 86_400_000)),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
-  const acts = sp.show === "bands" ? all.filter((a) => a.partActs.length) : sp.show === "solo" ? all.filter((a) => !a.partActs.length) : all;
+  // "Details missing": no bank details, address or NI number yet (see src/lib/act-details.ts).
+  const missing = (a: { detailsCompletedAt: Date | null }) => !a.detailsCompletedAt;
+  const missingCount = all.filter(missing).length;
+  const acts =
+    sp.show === "bands"
+      ? all.filter((a) => a.partActs.length)
+      : sp.show === "solo"
+        ? all.filter((a) => !a.partActs.length)
+        : sp.show === "details"
+          ? all.filter(missing)
+          : all;
+  const missingBadge = <span className="badge bg-amber-50 text-amber-800">Details missing</span>;
   const qs = (extra: Record<string, string | undefined>) =>
     "?" + new URLSearchParams(Object.entries({ view, q: sp.q, show: sp.show, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
 
@@ -110,6 +121,15 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
             className="input pl-10"
           />
         </form>
+        {(missingCount > 0 || sp.show === "details") && (
+          <Link
+            href={`/artists${qs({ show: sp.show === "details" ? "" : "details" })}`}
+            aria-current={sp.show === "details" ? "page" : undefined}
+            className={`badge shrink-0 py-1.5 text-sm ${sp.show === "details" ? "bg-ink-950 text-white" : "bg-amber-50 text-amber-800 hover:bg-amber-100"}`}
+          >
+            Details missing · {missingCount}
+          </Link>
+        )}
         <div className="inline-flex shrink-0 gap-0.5 rounded-lg border border-ink-200 bg-white p-0.5 text-sm" role="tablist" aria-label="View">
           {VIEWS.map(([v, label]) => (
             <Link
@@ -125,7 +145,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       </div>
 
       {acts.length === 0 ? (
-        <Empty>{sp.q || sp.show ? "No acts match." : "No acts yet."}</Empty>
+        <Empty>{sp.show === "details" && !sp.q ? "Every act's details are in." : sp.q || sp.show ? "No acts match." : "No acts yet."}</Empty>
       ) : view === "cards" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {acts.map((a) => (
@@ -144,6 +164,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
                 <span className={`badge ${a.login ? "bg-emerald-50 text-emerald-800" : "bg-ink-100 text-ink-500"}`}>
                   {a.login ? "Has app login" : "No app login"}
                 </span>
+                {missing(a) && missingBadge}
               </div>
             </Link>
           ))}
@@ -212,6 +233,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
                         {a.genre && <span className="block text-xs font-normal text-ink-500">{a.genre}</span>}
                       </span>
                     </Link>
+                    {missing(a) && <div className="mt-1 pl-[42px]">{missingBadge}</div>}
                   </td>
                   <td className="hidden max-w-72 text-sm sm:table-cell">
                     {a.partActs.length > 0 && <div className="truncate">{a.partActs.map((l) => l.child.name).join(", ")}</div>}

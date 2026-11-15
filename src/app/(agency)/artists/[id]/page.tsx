@@ -6,6 +6,7 @@ import { resetCalendarToken, setArtistLogin } from "@/actions/crm";
 import { addActMember, addActPart, removeActMember, removeActPart } from "@/actions/people";
 import { arrivalDetail } from "@/components/arrival-panel";
 import { AwayCard } from "@/components/away-card";
+import { PayDetailsCard } from "@/components/pay-details-card";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { ArrivalBadge, ArtistDot, Empty, Field, PageHeader, Stat, StatusBadge } from "@/components/ui";
@@ -173,7 +174,6 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               ["Instagram", artist.instagram ? link(`https://instagram.com/${artist.instagram}`, `@${artist.instagram}`) : ""],
               ["Website", artist.website ? link(artist.website, artist.website.replace(/^https?:\/\//, "")) : ""],
             ].filter(([, v]) => v !== "") as [string, React.ReactNode][];
-            const bank = [artist.bankAccountName, artist.bankSortCode, artist.bankAccountNumber].filter(Boolean);
             return (
               <section className="card card-pad">
                 <div className="flex items-baseline justify-between gap-2">
@@ -182,8 +182,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                     Edit
                   </Link>
                 </div>
-                {rows.length === 0 && !bank.length && !artist.setList ? (
-                  <p className="mt-2 text-sm text-ink-500">No profile yet. Add links, their usual fee and bank details from Edit.</p>
+                {rows.length === 0 && !artist.setList ? (
+                  <p className="mt-2 text-sm text-ink-500">No profile yet. Add links and their usual fee from Edit.</p>
                 ) : (
                   <dl className="mt-3 grid grid-cols-[6.5rem_1fr] gap-x-3 gap-y-2 text-sm">
                     {rows.map(([k, v]) => (
@@ -192,21 +192,6 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                         <dd>{v}</dd>
                       </div>
                     ))}
-                    {bank.length > 0 && (
-                      <div className="contents">
-                        <dt className="text-ink-500">Bank</dt>
-                        <dd className="tabular-nums">
-                          {bank.map((x) => (
-                            <span key={x} className="block">
-                              {x}
-                            </span>
-                          ))}
-                          {artist.vatRegistered && (
-                            <span className="block text-xs text-ink-500">VAT registered{artist.vatNumber ? `: ${artist.vatNumber}` : ""}</span>
-                          )}
-                        </dd>
-                      </div>
-                    )}
                   </dl>
                 )}
                 {artist.setList && (
@@ -218,6 +203,8 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               </section>
             );
           })()}
+          {/* Bank, address and NI number: only admins see the details, everyone sees whether they're in. */}
+          <PayDetailsCard artistId={artist.id} user={user} />
           <AwayCard artistId={artist.id} actName={artist.name} entries={away} today={today} />
           <section className="card card-pad" id="line-up">
             <h2 className="section-title">Members</h2>

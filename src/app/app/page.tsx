@@ -9,7 +9,7 @@ import { InAppOffer } from "@/components/in-app-offer";
 import { PushSetup } from "@/components/push-setup";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
-import { requireUser } from "@/lib/auth";
+import { requireActApp } from "@/lib/act-details-server";
 import { calendarProviders, canConnectCalendar } from "@/lib/calendar-connect";
 import { canAnswer, formatRange, requestTimes } from "@/lib/availability";
 import { requestPlace } from "@/lib/availability-requests";
@@ -25,7 +25,7 @@ import { actName, ACT_VISIBLE } from "@/lib/constants";
 export const dynamic = "force-dynamic";
 
 export default async function ArtistHome({ searchParams }: { searchParams: Promise<{ calendar?: string; p?: string }> }) {
-  const user = await requireUser(["ARTIST"]);
+  const user = await requireActApp();
   const sp = await searchParams;
   // A person's login sees every act they're in; an act's own login sees that act.
   const actIds = await actIdsFor(user);
@@ -250,6 +250,19 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
           <span className="block text-sm text-ink-400">
             {awayCount ? `${awayCount} coming up. Add or change them here.` : "Going on holiday or busy with other work? Let us know."}
           </span>
+        </span>
+        <span className="shrink-0 text-ink-400" aria-hidden>
+          →
+        </span>
+      </Link>
+
+      <Link
+        href="/app/details"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-ink-900 px-5 py-4 hover:bg-white/[0.03]"
+      >
+        <span className="min-w-0">
+          <span className="block font-medium">Your details</span>
+          <span className="block text-sm text-ink-400">Bank account, address and National Insurance number. How you get paid.</span>
         </span>
         <span className="shrink-0 text-ink-400" aria-hidden>
           →

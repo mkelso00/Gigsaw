@@ -1,6 +1,7 @@
 import type { Artist, Contact, Venue } from "@prisma/client";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { UseMyLocation } from "@/components/client-bits";
+import { StaffPayFields } from "@/components/pay-details";
 import { Field } from "@/components/ui";
 import { ACT_TYPES, ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
@@ -10,7 +11,18 @@ import type { FormState } from "@/lib/forms";
 
 type Action = (state: FormState, form: FormData) => Promise<FormState>;
 
-export function ArtistForm({ action, artist, agents }: { action: Action; artist?: Artist; agents: { id: string; name: string }[] }) {
+export function ArtistForm({
+  action,
+  artist,
+  agents,
+  showPay,
+}: {
+  action: Action;
+  artist?: Artist;
+  agents: { id: string; name: string }[];
+  /** True for admins: the pay details (bank, address, NI number, VAT). */
+  showPay: boolean;
+}) {
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -74,26 +86,12 @@ export function ArtistForm({ action, artist, agents }: { action: Action; artist?
           <textarea name="setList" rows={3} defaultValue={artist?.setList} className="input" />
         </Field>
       </div>
-      <h3 className="pt-2 text-sm font-semibold">Bank details</h3>
-      <p className="-mt-2 text-xs text-ink-500">For paying the act. Only the agency sees these.</p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Name on the account">
-          <input name="bankAccountName" defaultValue={artist?.bankAccountName} className="input" />
-        </Field>
-        <Field label="Sort code">
-          <input name="bankSortCode" defaultValue={artist?.bankSortCode} placeholder="12-34-56" className="input" />
-        </Field>
-        <Field label="Account number">
-          <input name="bankAccountNumber" defaultValue={artist?.bankAccountNumber} className="input" />
-        </Field>
-        <label className="flex items-center gap-3">
-          <input type="checkbox" name="vatRegistered" defaultChecked={artist?.vatRegistered} className="h-4 w-4 accent-ink-950" />
-          <span className="text-sm font-medium">VAT registered</span>
-        </label>
-        <Field label="VAT number">
-          <input name="vatNumber" defaultValue={artist?.vatNumber} className="input" />
-        </Field>
-      </div>
+      {/* Bank, address and NI number: admins only. Left out of the form, they're kept as they are on save. */}
+      {showPay ? (
+        <StaffPayFields artist={artist} />
+      ) : (
+        <p className="pt-2 text-xs text-ink-500">Bank details, address and National Insurance number are only shown to admins.</p>
+      )}
       <Field label="Notes">
         <textarea name="notes" rows={3} defaultValue={artist?.notes} className="input" />
       </Field>

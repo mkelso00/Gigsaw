@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { chooseMyCalendar } from "@/actions/calendar-connect";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { ProviderLogo } from "@/components/oauth-buttons";
-import { requireUser } from "@/lib/auth";
+import { requireActApp } from "@/lib/act-details-server";
 import { CALENDAR_LABELS, calendarProviders, currentChoice, listCalendars, ListNotAllowed, ReconnectNeeded, type CalendarChoice } from "@/lib/calendar-connect";
 import { prisma } from "@/lib/db";
 import { log } from "@/server/log";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /** The act app: choose which of your connected calendars your gigs go in. */
 export default async function ChooseCalendarPage() {
-  const user = await requireUser(["ARTIST"]);
+  const user = await requireActApp();
   const connections = await prisma.calendarConnection.findMany({ where: { userId: user.id, agencyId: user.agencyId }, orderBy: { createdAt: "asc" } });
   if (!connections.length) redirect("/app#calendar");
   const available = calendarProviders();

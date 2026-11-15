@@ -4,7 +4,7 @@ import { arrivalDetail } from "@/components/arrival-panel";
 import { CheckInPanel } from "@/components/check-in-panel";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow } from "@/lib/arrival";
-import { requireUser } from "@/lib/auth";
+import { requireActApp } from "@/lib/act-details-server";
 import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
@@ -16,7 +16,7 @@ import { formatDate, localTime, zoneLabel } from "@/lib/time";
 export const dynamic = "force-dynamic";
 
 export default async function ArtistGigPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireUser(["ARTIST"]);
+  const user = await requireActApp();
   const { id } = await params;
   const [b, settings] = await Promise.all([
     prisma.booking.findFirst({
