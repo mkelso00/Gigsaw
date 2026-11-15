@@ -59,6 +59,19 @@ export async function createActLogin(artistId: string, name: string) {
   const { agencyId } = await seededAgency();
   const email = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}@e2e.gigsaw.invalid`;
   const password = "e2e-password-123";
+  // With their pay details already in, so the act app opens on their bookings, not Your details.
+  // A test that set its own details (e.g. invoices, which check the bank number) keeps them.
+  await db().artist.updateMany({
+    where: { id: artistId, detailsCompletedAt: null },
+    data: {
+      bankAccountName: name,
+      bankSortCode: "10-20-30",
+      bankAccountNumber: "11223344",
+      address: "1 Test Street\nManchester",
+      niNumber: "AB123456C",
+      detailsCompletedAt: new Date(),
+    },
+  });
   await db().user.create({ data: { email, name, role: "ARTIST", agencyId, artistId, passwordHash: await bcrypt.hash(password, 10) } });
   return { email, password };
 }

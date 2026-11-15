@@ -13,8 +13,10 @@ test("an act's invoice is made when they leave the venue, the agency pays it and
     data: {
       address: "1 Test Street\nLeeds LS1 1AA",
       bankAccountName: "E2E Act",
-      bankSortCode: "112233",
+      bankSortCode: "11-22-33",
       bankAccountNumber: "44556677",
+      // Complete details (the act app asks for them first otherwise), as an act who has signed up would have.
+      niNumber: "AB123456C",
       detailsCompletedAt: new Date(),
     },
   });

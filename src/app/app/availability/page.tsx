@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { addOwnAway, removeOwnAway } from "@/actions/availability";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
-import { requireUser } from "@/lib/auth";
+import { requireActApp } from "@/lib/act-details-server";
 import { blockLength, formatRange } from "@/lib/availability";
 import { getSettings, prisma } from "@/lib/db";
 import { ownActIds } from "@/lib/people";
@@ -16,7 +16,7 @@ const field =
 
 /** The act app: block out days you can't play (holiday, other work) so the agency doesn't book you. */
 export default async function AwayPage() {
-  const user = await requireUser(["ARTIST"]);
+  const user = await requireActApp();
   const own = await ownActIds(user);
   const settings = await getSettings(user.agencyId);
   const today = localDateKey(new Date(), settings.defaultTimezone);

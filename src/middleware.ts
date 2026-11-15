@@ -21,6 +21,7 @@ const PUBLIC = [
   "/login",
   "/setup",
   "/forgot-password",
+  "/start",
   "/reset-password",
   "/api/calendar",
   "/api/auth/",

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
+import { bankChanged, completedAt, readPayFields, type PayFields } from "@/lib/act-details";
 import { parseActProfile } from "@/lib/act-profile";
 import { actBookingCounts, actInUseMessage } from "@/lib/archive";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
@@ -24,6 +25,37 @@ async function calendarGigIds(where: { agencyId: string; artistId?: string; venu
 
 // ---------- Artists ----------
 
+const NO_PAY: PayFields & { detailsCompletedAt: Date | null } = {
+  bankAccountName: "",
+  bankSortCode: "",
+  bankAccountNumber: "",
+  address: "",
+  niNumber: "",
+  phone: "",
+  vatRegistered: false,
+  vatNumber: "",
+  detailsCompletedAt: null,
+};
+
+/**
+ * The pay details from the act form. Only admins have these fields (see ArtistForm); for anyone
+ * else nothing is returned, so an agent saving the form never changes or clears them.
+ */
+function payData(form: FormData, user: AgencyUser, before: PayFields & { detailsCompletedAt: Date | null }) {
+  if (user.role !== "ADMIN") return {};
+  const after = readPayFields(form, before, { required: false });
+  return {
+    bankAccountName: after.bankAccountName,
+    bankSortCode: after.bankSortCode,
+    bankAccountNumber: after.bankAccountNumber,
+    vatRegistered: after.vatRegistered,
+    vatNumber: after.vatNumber,
+    address: after.address,
+    niNumber: after.niNumber,
+    detailsCompletedAt: completedAt(after, before.detailsCompletedAt),
+  };
+}
+
 async function artistData(form: FormData, agencyId: string) {
   const colour = str(form, "colour");
   const commission = num(form, "defaultCommission");
@@ -32,6 +64,8 @@ async function artistData(form: FormData, agencyId: string) {
   if (agentId && !(await prisma.user.findFirst({ where: { id: agentId, agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))) {
     throw new FormError("That agent is not part of your agency");
   }
+  // Bank and VAT are left out here: they come from payData, for admins only.
+  const { bankAccountName: _n, bankSortCode: _s, bankAccountNumber: _a, vatRegistered: _r, vatNumber: _v, ...profile } = parseActProfile(form);
   return {
     name: required(form, "name", "Name"),
     genre: str(form, "genre"),
@@ -41,7 +75,7 @@ async function artistData(form: FormData, agencyId: string) {
     notes: str(form, "notes"),
     defaultCommission: commission,
     agentId,
-    ...parseActProfile(form),
+    ...profile,
   };
 }
 
@@ -55,7 +89,8 @@ export async function createArtist(_: FormState, form: FormData): Promise<FormSt
   const user = await requireStaff();
   let id = "";
   const res = await handleForm(async () => {
-    const artist = await prisma.artist.create({ data: { ...(await artistData(form, user.agencyId)), agencyId: user.agencyId } });
+    const data = await artistData(form, user.agencyId);
+    const artist = await prisma.artist.create({ data: { ...data, ...payData(form, user, { ...NO_PAY, phone: data.phone }), agencyId: user.agencyId } });
     await logActivity(user, "ARTIST", artist.id, "added artist", artist.name);
     id = artist.id;
   });
@@ -67,10 +102,12 @@ export async function updateArtist(artistId: string, _: FormState, form: FormDat
   const user = await requireStaff();
   const res = await handleForm(async () => {
     const before = await ownArtist(user, artistId);
-    const saved = await prisma.artist.update({ where: { id: artistId }, data: await artistData(form, user.agencyId) });
+    const saved = await prisma.artist.update({ where: { id: artistId }, data: { ...(await artistData(form, user.agencyId)), ...payData(form, user, before) } });
     // The act's name is in its calendar events.
     if (saved.name !== before.name) queueCalendarSync(await calendarGigIds({ agencyId: user.agencyId, artistId }));
     await logActivity(user, "ARTIST", artistId, "updated artist");
+    // A change of bank account is worth seeing on its own in the log (never with the numbers).
+    if (bankChanged(before, saved)) await logActivity(user, "ARTIST", artistId, "changed bank details");
   });
   if (res?.error) return res;
   revalidatePath("/", "layout");

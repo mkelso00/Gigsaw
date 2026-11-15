@@ -1,6 +1,7 @@
 // An act's profile and bank details: filled in by the act on the join link, or by the agency
 // on the act's edit page. Bank details are only ever shown to the agency.
 
+import { parseAccountNumber } from "./act-details";
 import { FormError, str } from "./forms";
 import { toMinor } from "./money";
 
@@ -33,7 +34,7 @@ export function parseActProfile(form: FormData, currency = "GBP") {
     if (usualFeeMinor < 0) throw new FormError("The fee can't be negative");
   }
   const accountNumber = str(form, "bankAccountNumber").replace(/\s/g, "");
-  if (accountNumber && !/^\d{6,10}$/.test(accountNumber)) throw new FormError("Check the account number: it should be 8 digits");
+  if (accountNumber && !parseAccountNumber(accountNumber)) throw new FormError("Check the account number: it should be 8 digits");
   const sortCode = formatSortCode(str(form, "bankSortCode"));
   if (sortCode && !/^\d{2}-\d{2}-\d{2}$/.test(sortCode)) throw new FormError("Check the sort code: it should be 6 digits, like 12-34-56");
   const vatRegistered = str(form, "vatRegistered") === "on";

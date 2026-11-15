@@ -121,7 +121,8 @@ export default async function ApplicationsPage() {
               ],
               ["Set list", a.setList],
               ["Usual fee", a.usualFeeMinor != null ? formatMoney(a.usualFeeMinor, settings.defaultCurrency) : ""],
-              ["Bank", [a.bankAccountName, a.bankSortCode, a.bankAccountNumber].filter(Boolean).join(" · ")],
+              // Bank details are for admins only, like on the act's page.
+              ["Bank", user.role === "ADMIN" ? [a.bankAccountName, a.bankSortCode, a.bankAccountNumber].filter(Boolean).join(" · ") : ""],
               ["VAT", a.vatRegistered ? `Registered${a.vatNumber ? `: ${a.vatNumber}` : ""}` : ""],
               ["Notes", a.notes],
             ];

@@ -20,7 +20,7 @@ export default async function EditArtistPage({ params }: { params: Promise<{ id:
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title={`Edit ${artist.name}`} />
-      <ArtistForm action={updateArtist.bind(null, artist.id)} artist={artist} agents={agents} />
+      <ArtistForm action={updateArtist.bind(null, artist.id)} artist={artist} agents={agents} showPay={user.role === "ADMIN"} />
       <ActionForm action={deleteArtist.bind(null, artist.id)}>
         <ConfirmButton message={`Delete ${artist.name}?`}>Delete artist</ConfirmButton>
       </ActionForm>

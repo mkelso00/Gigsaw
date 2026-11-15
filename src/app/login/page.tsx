@@ -41,6 +41,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           Sign in
         </SubmitButton>
       </ActionForm>
+      <p className="mt-6 text-sm text-ink-500">
+        First time?{" "}
+        <Link href="/start" className="link">
+          Set up your login
+        </Link>
+      </p>
     </AuthShell>
   );
 }

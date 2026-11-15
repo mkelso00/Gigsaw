@@ -12,6 +12,7 @@ const KIND: Record<string, string> = {
   EVENT: "Wedding or event",
   CONTRACT: "Contract to sign",
   AVAILABILITY: "Act: are you free?",
+  BANK_CHANGE: "Act: bank details changed",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {

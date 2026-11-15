@@ -13,7 +13,7 @@ export default async function NewArtistPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Add an act" subtitle="One profile per act. Their phone, email, app login and calendar link all live here." />
-      <ArtistForm action={createArtist} agents={agents} />
+      <ArtistForm action={createArtist} agents={agents} showPay={user.role === "ADMIN"} />
     </div>
   );
 }
