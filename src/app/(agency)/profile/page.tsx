@@ -98,7 +98,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
       <SettingsSection
         id="calendar"
         title="Calendar sync"
-        description="Your bookings in Google Calendar, Outlook or Apple Calendar, kept up to date by themselves. Times are in the business's time zone, and fees and other money are never included."
+        description="Your bookings in Google Calendar, Outlook or Apple Calendar, kept up to date by themselves. Times are in the business's time zone. Each booking shows what's filled in on it (travel, accommodation, the wedding plan and so on) and its money: what the venue or client pays, what the act is paid and what the business makes. Keep the link to yourself."
       >
         <div className="space-y-4">
           {links && feedUrl && (

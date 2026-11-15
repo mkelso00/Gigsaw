@@ -167,16 +167,19 @@ describeDb("calendar sync (database)", () => {
     await prisma.$disconnect();
   });
 
-  it("adds a gig to the act's calendar with no money in it, and sends nothing when nothing the act sees changed", async () => {
-    const b = await gig(actA);
+  it("adds a gig to the act's calendar with their own fee and no other money, and sends nothing when nothing the act sees changed", async () => {
+    const b = await gig(actA, { travel: "Train at 14:02", hospitality: "", vatPct: 20 });
     await sync.syncBookingToCalendars(b.id);
     expect(fake.apiCalls()).toEqual(["POST google"]);
     const l = await link(connA, b.id);
     expect(l?.externalId).toBeTruthy();
     const sent = JSON.stringify(fake.events.get(l!.externalId)!.body);
-    for (const t of ["987654", "9876.54", "55555", "555.55", "31337", "313.37", "42424", "424.24", "SECRET-DEAL", "PRIVATE-NOTE", "£"])
+    for (const t of ["987654", "9876.54", "31337", "313.37", "42424", "424.24", "VAT", "Booking fee", "SECRET-DEAL", "PRIVATE-NOTE"])
       expect(sent).not.toContain(t);
     expect(sent).toContain("Act A @ The Crown");
+    expect(sent).toContain("Your fee: £555.55");
+    expect(sent).toContain("Travel: Train at 14:02");
+    expect(sent).not.toContain("Hospitality");
     // The token was refreshed and kept, sealed.
     const c = await connection(connA);
     expect(c.accessTokenEnc).toMatch(/^v1\./);
@@ -208,6 +211,29 @@ describeDb("calendar sync (database)", () => {
     await sync.syncBookingToCalendars(b.id);
     expect(fake.apiCalls()).toEqual(["PATCH google", "POST google"]);
     expect((await link(connA, b.id))!.externalId).not.toBe(first.externalId);
+
+    // A change to the act's own fee is a change they see.
+    fake.reset();
+    await prisma.booking.update({ where: { id: b.id }, data: { artistFeeMinor: 40000 } });
+    await sync.syncBookingToCalendars(b.id);
+    expect(fake.apiCalls()).toEqual(["PATCH google"]);
+    expect(JSON.stringify(fake.events.get((await link(connA, b.id))!.externalId)!.body)).toContain("Your fee: £400.00");
+  });
+
+  it("puts the wedding plan, the business's own fields included, in the act's event", async () => {
+    await prisma.settings.upsert({
+      where: { agencyId },
+      update: { planExtraFields: [{ id: "abcd1234", label: "Ceremony spot" }] },
+      create: { agencyId, planExtraFields: [{ id: "abcd1234", label: "Ceremony spot" }] },
+    });
+    const event = await prisma.event.create({
+      data: { agencyId, name: "Hannah & Sam's wedding", date: "2026-12-12", arrivalInfo: "Park in the top field", planExtras: { abcd1234: "Under the oak" } },
+    });
+    const b = await gig(actA, { eventId: event.id, eventType: "WEDDING" });
+    await sync.syncBookingToCalendars(b.id);
+    const sent = String(fake.events.get((await link(connA, b.id))!.externalId)!.body.description);
+    expect(sent).toContain("Wedding: Hannah & Sam's wedding\nArrival, parking and load-in: Park in the top field\nCeremony spot: Under the oak");
+    expect(sent).not.toContain("Dress code");
   });
 
   it("moves the event to the new act's calendar when the act changes", async () => {
@@ -259,6 +285,10 @@ describeDb("calendar sync (database)", () => {
     expect(fake.apiCalls()).toEqual(["POST google"]);
     expect(await link(connA, b.id)).not.toBeNull();
     expect(await link(connB, b.id)).toBeNull();
+    // The band's fee isn't Act A's: their calendar shows the gig without it.
+    const sent = JSON.stringify(fake.events.get((await link(connA, b.id))!.externalId)!.body);
+    expect(sent).toContain("Act: The Band");
+    expect(sent).not.toMatch(/Your fee|£|555\.55/);
 
     fake.reset();
     const pending = await gig(actA, { status: "PENDING" });

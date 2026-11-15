@@ -16,14 +16,30 @@ function booking(over: Partial<TeamFeedBooking> = {}): TeamFeedBooking {
     setStart: new Date("2026-07-04T18:00:00Z"),
     setEnd: new Date("2026-07-04T20:00:00Z"),
     dayContact: "Sam, 07700 900123",
+    eventType: "GIG",
+    travel: "",
+    accommodation: "",
+    hospitality: "",
+    notes: "",
+    currency: "GBP",
+    dealType: "BUY_SELL",
+    feeMinor: 0,
+    artistFeeMinor: null,
+    commissionPct: 15,
+    vatPct: 0,
+    bookingFeeMinor: 0,
+    dealNotes: "",
     updatedAt: new Date("2026-06-01T09:15:00Z"),
     artist: { name: "The Velvet Owls" },
-    venue: { name: "The Crown; Upstairs", address: "1 High St", city: "Leeds", country: "UK" },
+    venue: { name: "The Crown; Upstairs", address: "1 High St", city: "Leeds", country: "UK", notes: "" },
+    promoter: null,
+    agent: null,
+    event: null,
     ...over,
   };
 }
 
-const opts = { baseUrl: "https://app.gigsaw.live/", agencyTimezone: "Europe/London" };
+const opts = { baseUrl: "https://app.gigsaw.live/", agencyTimezone: "Europe/London", planExtras: [] };
 
 describe("iCalendar writer", () => {
   it("escapes text values, semicolons included", () => {
@@ -83,9 +99,7 @@ describe("iCalendar writer", () => {
     const ics = buildIcs(
       "Feed",
       [{ uid: "1@x", start: new Date("2026-07-04T17:00:00Z"), end: new Date("2026-07-04T20:00:00Z"), summary: "x", updated: new Date(0) }],
-      {
-        timezone: "Mars/Olympus",
-      },
+      { timezone: "Mars/Olympus" },
     );
     expect(ics).toContain("DTSTART:20260704T170000Z");
   });
@@ -99,14 +113,21 @@ describe("staff calendar feed", () => {
     expect(e.start.toISOString()).toBe("2026-07-04T17:00:00.000Z");
     expect(e.end.toISOString()).toBe("2026-07-04T20:00:00.000Z");
     expect(e.location).toBe("The Crown; Upstairs, 1 High St, Leeds, UK");
+    // Only what's filled in: no money set yet, so no money lines.
     expect(e.description).toBe(
       [
-        "Booking GS-0042",
+        "Booking: GS-0042",
         "Status: Confirmed",
-        "Arrive by 18:00",
-        "Soundcheck 18:30",
-        "On stage 19:00–21:00",
-        "Contact on the day: Sam, 07700 900123",
+        "Act: The Velvet Owls",
+        "Venue: The Crown; Upstairs, 1 High St, Leeds, UK",
+        "",
+        "Arrive by: 18:00",
+        "Soundcheck: 18:30",
+        "On stage: 19:00",
+        "Finish: 21:00",
+        "",
+        "Day contact: Sam, 07700 900123",
+        "",
         "Open in Gigsaw: https://app.gigsaw.live/bookings/ckbooking1",
       ].join("\n"),
     );
@@ -123,21 +144,78 @@ describe("staff calendar feed", () => {
 
   it("says when the venue's times aren't in the agency's time zone", () => {
     const e = teamFeedEvent(booking({ timezone: "Europe/Paris" }), opts);
-    expect(e.description).toContain("Arrive by 19:00 (Europe/Paris time)");
+    expect(e.description).toContain("Arrive by: 19:00 (Europe/Paris time)");
   });
 
-  it("never includes money, even if a booking with fees is passed in", () => {
+  it("shows the booking page's Money panel figures to staff, and nothing else money-wise (no deposit)", () => {
     const withMoney = {
       ...booking(),
       feeMinor: 123456,
       artistFeeMinor: 98765,
       depositMinor: 55555,
       bookingFeeMinor: 4321,
-      currency: "GBP",
-      dealNotes: "£1,234.56 cash",
+      vatPct: 20,
+      dealNotes: "Cash on the night",
     };
-    const ics = buildIcs("Bookings", [teamFeedEvent(withMoney as TeamFeedBooking, opts)], { timezone: "Europe/London" });
-    for (const s of ["1234", "98765", "55555", "4321", "£", "GBP", "cash", "fee", "Fee"]) expect(unfold(ics)).not.toContain(s);
+    const e = teamFeedEvent(withMoney as TeamFeedBooking, opts);
+    expect(e.description).toContain(
+      ["Venue pays: £1,234.56 + £255.55 VAT", "Booking fee: £43.21", "Act is paid: £987.65", "We make: £290.12", "Money notes: Cash on the night"].join("\n"),
+    );
+    expect(e.description).not.toMatch(/Deposit|555\.55/);
+    // A wedding is paid for by the client; a sale and cost deal with no cost yet has no margin to show.
+    const wedding = teamFeedEvent(booking({ eventType: "WEDDING", feeMinor: 150000, artistFeeMinor: null }), opts);
+    expect(wedding.description).toContain("Client pays: £1,500.00");
+    expect(wedding.description).not.toMatch(/Act is paid|We make/);
+    // A commission deal: the act's pay after commission.
+    const commission = teamFeedEvent(booking({ dealType: "STANDARD_COMMISSION", feeMinor: 100000, commissionPct: 15 }), opts);
+    expect(commission.description).toContain("Venue pays: £1,000.00\nAct is paid: £850.00\nWe make: £150.00");
+  });
+
+  it("shows the itinerary, internal notes and wedding plan, only where filled in", () => {
+    const e = teamFeedEvent(
+      booking({
+        travel: "Train from Kings Cross 14:02",
+        accommodation: "",
+        hospitality: "  ",
+        notes: "Owes us a favour",
+        venue: { name: "The Crown", address: "", city: "Leeds", country: "", notes: "Park behind the pub" },
+        promoter: { name: "Jo Bloggs", phone: "07700 900456" },
+        agent: { name: "Alex" },
+        event: {
+          name: "Hannah & Sam's wedding",
+          type: "WEDDING",
+          venueText: "",
+          guestCount: 120,
+          timeline: "14:00 Ceremony\n19:00 First dance",
+          dayContact: "",
+          arrivalInfo: "Load in by the kitchen",
+          dressCode: "",
+          meals: "",
+          songRequests: "",
+          specialNotes: "",
+          planExtras: { abcd1234: "Under the oak tree", zzzz9999: "" },
+          updatedAt: new Date("2026-06-03T10:00:00Z"),
+        },
+      }),
+      {
+        ...opts,
+        planExtras: [
+          { id: "abcd1234", label: "Ceremony spot" },
+          { id: "zzzz9999", label: "Empty one" },
+        ],
+      },
+    );
+    const d = e.description!;
+    expect(d).toContain("Agent: Alex");
+    expect(d).toContain(
+      "Travel: Train from Kings Cross 14:02\nVenue notes: Park behind the pub\nPromoter: Jo Bloggs, 07700 900456\nInternal notes: Owes us a favour",
+    );
+    expect(d).toContain(
+      "Wedding: Hannah & Sam's wedding\nGuests: 120\nRunning order:\n14:00 Ceremony\n19:00 First dance\nArrival, parking and load-in: Load in by the kitchen\nCeremony spot: Under the oak tree",
+    );
+    for (const empty of ["Accommodation", "Hospitality", "Dress code", "Empty one", "Contact on the day"]) expect(d).not.toContain(empty);
+    // The plan changed after the booking did: the event's revision follows the plan.
+    expect(e.updated.toISOString()).toBe("2026-06-03T10:00:00.000Z");
   });
 
   it("gives the same output for the same bookings, so calendars see no change", () => {

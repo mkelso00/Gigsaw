@@ -1,5 +1,6 @@
 import { ACT_FEED_SELECT, actFeedEvent, actFeedWhere } from "@/lib/act-calendar";
 import { getSettings, prisma } from "@/lib/db";
+import { parseExtraFields } from "@/lib/event-plan";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { buildIcs, icsResponse } from "@/lib/ics";
@@ -9,7 +10,7 @@ import { billingState } from "@/lib/subscription";
 export const dynamic = "force-dynamic";
 
 // Private calendar feed, addressed by a secret token: one act's gigs, or a person's gigs
-// across every act they're in. Never includes money.
+// across every act they're in. The only money in it is the act's own pay (src/lib/act-calendar.ts).
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token: raw } = await params;
   const token = raw.replace(/\.ics$/, "");
@@ -30,13 +31,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     : await prisma.booking.findMany({ where: actFeedWhere(owner.agencyId, actIds), select: ACT_FEED_SELECT, orderBy: { setStart: "asc" } });
 
   // The same events a connected Google or Outlook calendar gets (src/lib/calendar-sync), built in one place.
-  const { defaultTimezone } = await getSettings(owner.agencyId);
-  const baseUrl = appUrl();
-  const ics = buildIcs(
-    `${calendarName} · Gigsaw`,
-    bookings.map((b) => actFeedEvent(b, { baseUrl })),
-    { timezone: defaultTimezone },
-  );
-  const lastModified = bookings.reduce<Date | undefined>((max, b) => (!max || b.updatedAt > max ? b.updatedAt : max), undefined);
+  const settings = await getSettings(owner.agencyId);
+  // The fee shows on the gigs of the acts this link belongs to directly, not on a band's gigs they're part of.
+  const viewer = { ownActIds: act ? [act.id] : person!.acts.map((a) => a.artistId), person: !act };
+  const opts = { baseUrl: appUrl(), viewer, planExtras: parseExtraFields(settings.planExtraFields) };
+  const events = bookings.map((b) => actFeedEvent(b, opts));
+  const ics = buildIcs(`${calendarName} · Gigsaw`, events, { timezone: settings.defaultTimezone });
+  const lastModified = events.reduce<Date | undefined>((max, e) => (!max || e.updated > max ? e.updated : max), undefined);
   return icsResponse(req, ics, { filename: "bookings.ics", lastModified });
 }

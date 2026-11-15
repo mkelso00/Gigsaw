@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ACT_FEED_SELECT, actFeedEvent, type ActFeedBooking } from "@/lib/act-calendar";
+import { ACT_FEED_SELECT, actFeedEvent, type ActFeedBooking, type ActFeedOptions } from "@/lib/act-calendar";
 import { buildIcs } from "@/lib/ics";
 import {
   belongsInCalendar,
@@ -7,6 +7,7 @@ import {
   CALENDAR_STATUSES,
   contentHash,
   googleEventBody,
+  MAX_DESCRIPTION,
   microsoftEventBody,
   planSync,
   wallClock,
@@ -23,109 +24,103 @@ vi.mock("server-only", () => ({}));
 
 const KEY = Buffer.alloc(32, 7);
 const BASE = "https://app.gigsaw.test";
+// The act login whose calendar it is: the gig below is for their own act, so their fee shows.
+const VIEW: ActFeedOptions = { baseUrl: BASE, viewer: { ownActIds: ["actOwls"], person: false }, planExtras: [] };
 
-// A booking with every money field set to a value that's easy to spot if it leaks.
-const MONEY = { feeMinor: 987654, artistFeeMinor: 55555, bookingFeeMinor: 31337, depositMinor: 42424, commissionPct: 17.5, vatPct: 20 };
-const MONEY_TEXT = [
-  "987654",
-  "9876.54",
-  "9,876.54",
-  "55555",
-  "555.55",
-  "31337",
-  "313.37",
-  "42424",
-  "424.24",
-  "17.5",
-  "£",
-  "SECRET-DEAL",
-  "PRIVATE-NOTE",
-  "HOSPITALITY-X",
-];
+// A booking with every money field set to a value that's easy to spot if it leaks. The act's own
+// pay (a sale and cost deal, so artistFeeMinor: £555.55) is the one amount allowed through.
+const MONEY = { dealType: "BUY_SELL", feeMinor: 987654, artistFeeMinor: 55555, bookingFeeMinor: 31337, depositMinor: 42424, commissionPct: 17.5, vatPct: 20 };
+const MONEY_TEXT = ["987654", "9876.54", "9,876.54", "31337", "313.37", "42424", "424.24", "17.5", "VAT", "Booking fee", "SECRET-DEAL", "PRIVATE-NOTE"];
 
 function gig(over: Partial<ActFeedBooking> = {}): ActFeedBooking {
   const b = {
     id: "ckgig1",
+    artistId: "actOwls",
     status: "CONFIRMED",
+    eventName: "",
     timezone: "Europe/London",
     arriveBy: new Date("2026-07-04T17:00:00Z"),
     soundcheckAt: new Date("2026-07-04T17:30:00Z"),
     setStart: new Date("2026-07-04T18:00:00Z"),
     setEnd: new Date("2026-07-04T20:00:00Z"),
     dayContact: "Sam, 07700 900123",
+    travel: "",
+    accommodation: "",
+    hospitality: "",
+    currency: "GBP",
     updatedAt: new Date("2026-06-01T09:15:00Z"),
     artist: { name: "The Velvet Owls" },
-    venue: { name: "The Crown", address: "1 High St", city: "Leeds", country: "UK" },
+    venue: { name: "The Crown", address: "1 High St", city: "Leeds", country: "UK", notes: "" },
+    promoter: null,
+    agent: null,
+    event: null,
     // Not part of the type: a whole booking row, as a careless caller might pass.
     ...MONEY,
     dealNotes: "SECRET-DEAL",
     notes: "PRIVATE-NOTE",
-    hospitality: "HOSPITALITY-X",
-    currency: "GBP",
     ...over,
   };
   return b as ActFeedBooking;
 }
 
 describe("event content", () => {
-  it("reads no money fields from a booking at all", () => {
+  it("reads only the deal fields it needs for the act's own pay: no booking fee, VAT, deposit or notes", () => {
     const keys = Object.keys(ACT_FEED_SELECT);
-    for (const k of [
-      "feeMinor",
-      "artistFeeMinor",
-      "bookingFeeMinor",
-      "depositMinor",
-      "depositDueDate",
-      "commissionPct",
-      "vatPct",
-      "dealNotes",
-      "dealType",
-      "currency",
-      "payments",
-      "notes",
-      "hospitality",
-      "promoter",
-      "promoterId",
-    ])
+    for (const k of ["bookingFeeMinor", "depositMinor", "depositDueDate", "vatPct", "dealNotes", "payments", "notes", "promoterId", "offerToken"])
       expect(keys).not.toContain(k);
+    for (const k of ["dealType", "feeMinor", "artistFeeMinor", "commissionPct", "currency"]) expect(keys).toContain(k);
   });
 
-  it("never puts the sale price, booking fee, deposit, act fee or private notes in either provider's event", () => {
-    const c = calendarContent(gig(), { baseUrl: BASE });
+  it("puts the act's own fee in both providers' events, and never the sale price, booking fee, VAT, deposit or private notes", () => {
+    const c = calendarContent(gig(), VIEW);
     const sent = JSON.stringify([googleEventBody(c, "ckgig1"), microsoftEventBody(c)]);
+    expect(sent).toContain("Your fee: £555.55");
     for (const t of MONEY_TEXT) expect(sent).not.toContain(t);
   });
 
   it("says what the act's subscribe feed says", () => {
-    const c = calendarContent(gig(), { baseUrl: BASE });
-    const feed = actFeedEvent(gig(), { baseUrl: BASE });
+    const c = calendarContent(gig(), VIEW);
+    const feed = actFeedEvent(gig(), VIEW);
     expect(c.summary).toBe(feed.summary);
     expect(c.location).toBe(feed.location);
     expect(c.description).toBe(feed.description);
     expect(c.summary).toBe("The Velvet Owls @ The Crown");
     expect(c.location).toBe("The Crown, 1 High St, Leeds, UK");
     expect(c.description).toBe(
-      ["Status: Confirmed", "Arrive by 18:00", "Soundcheck 18:30", "On stage 19:00", "Contact: Sam, 07700 900123", `Details: ${BASE}/app/gigs/ckgig1`].join(
-        "\n",
-      ),
+      [
+        "Act: The Velvet Owls",
+        "Venue: The Crown, 1 High St, Leeds, UK",
+        "Status: Confirmed",
+        "",
+        "Arrive by: 18:00",
+        "Soundcheck: 18:30",
+        "On stage: 19:00",
+        "Finish: 21:00",
+        "",
+        "Your fee: £555.55",
+        "",
+        "Day contact: Sam, 07700 900123",
+        "",
+        `Details: ${BASE}/app/gigs/ckgig1`,
+      ].join("\n"),
     );
     expect(c.start).toEqual(new Date("2026-07-04T17:00:00Z"));
     expect(c.end).toEqual(new Date("2026-07-04T20:00:00Z"));
   });
 
-  it("keeps the act's subscribe feed exactly as it was before the builder was shared", () => {
-    // Lines captured from /api/calendar/[token] before actFeedEvent was moved out of the route.
+  it("writes the act's subscribe feed event exactly, escaped and folded, with the same UID as before", () => {
+    // Locked on purpose: a change here changes every act's calendar. The UID is the one the feed has always used.
     const b = gig({
       id: "capbooking1",
       artist: { name: "The Owls" },
-      venue: { name: "The Crown; Upstairs", address: "1 High St", city: "Leeds", country: "UK" },
+      venue: { name: "The Crown; Upstairs", address: "1 High St", city: "Leeds", country: "UK", notes: "" },
       arriveBy: new Date("2027-01-04T17:00:00Z"),
       soundcheckAt: new Date("2027-01-04T17:30:00Z"),
       setStart: new Date("2027-01-04T18:00:00Z"),
       setEnd: new Date("2027-01-04T20:00:00Z"),
       dayContact: "Sam, 07700",
     });
-    const ics = buildIcs("The Owls · Gigsaw", [actFeedEvent(b, { baseUrl: "http://localhost:3000" })], { timezone: "Europe/London" });
+    const ics = buildIcs("The Owls · Gigsaw", [actFeedEvent(b, { ...VIEW, baseUrl: "http://localhost:3000" })], { timezone: "Europe/London" });
     const event = ics.slice(ics.indexOf("BEGIN:VEVENT"), ics.indexOf("END:VCALENDAR"));
     expect(event).toBe(
       [
@@ -138,9 +133,11 @@ describe("event content", () => {
         "DTEND;TZID=Europe/London:20270104T200000",
         "SUMMARY:The Owls @ The Crown\\; Upstairs",
         "LOCATION:The Crown\\; Upstairs\\, 1 High St\\, Leeds\\, UK",
-        "DESCRIPTION:Status: Confirmed\\nArrive by 17:00\\nSoundcheck 17:30\\nOn stage ",
-        " 18:00\\nContact: Sam\\, 07700\\nDetails: http://localhost:3000/app/gigs/capbo",
-        " oking1",
+        "DESCRIPTION:Act: The Owls\\nVenue: The Crown\\; Upstairs\\, 1 High St\\, Leeds",
+        // Folded at 75 octets, but never inside an escape such as "\\,".
+        " \\, UK\\nStatus: Confirmed\\n\\nArrive by: 17:00\\nSoundcheck: 17:30\\nOn stage:",
+        "  18:00\\nFinish: 20:00\\n\\nYour fee: £555.55\\n\\nDay contact: Sam\\, 07700\\n",
+        " \\nDetails: http://localhost:3000/app/gigs/capbooking1",
         "URL:http://localhost:3000/app/gigs/capbooking1",
         "STATUS:CONFIRMED",
         "END:VEVENT",
@@ -150,15 +147,17 @@ describe("event content", () => {
   });
 
   it("marks a hold in the title, and copes with no venue or act yet", () => {
-    const c = calendarContent(gig({ status: "HOLD", venue: null, artist: null }), { baseUrl: BASE });
+    const c = calendarContent(gig({ status: "HOLD", venue: null, artist: null, artistId: null }), VIEW);
     expect(c.summary).toBe("[HOLD] Needs an act");
     expect(c.location).toBe("");
+    expect(c.description).not.toContain("fee");
   });
 
   it("sends the venue's wall-clock time with its time zone to both providers", () => {
-    const c = calendarContent(gig({ timezone: "America/New_York", arriveBy: new Date("2026-07-04T23:00:00Z"), setEnd: new Date("2026-07-05T03:30:00Z") }), {
-      baseUrl: BASE,
-    });
+    const c = calendarContent(
+      gig({ timezone: "America/New_York", arriveBy: new Date("2026-07-04T23:00:00Z"), setEnd: new Date("2026-07-05T03:30:00Z") }),
+      VIEW,
+    );
     expect(c.timeZone).toBe("America/New_York");
     const g = googleEventBody(c, "ckgig1");
     expect(g.start).toEqual({ dateTime: "2026-07-04T19:00:00", timeZone: "America/New_York" });
@@ -171,20 +170,31 @@ describe("event content", () => {
   });
 
   it("falls back to UTC for an unknown zone, and never ends before it starts", () => {
-    const c = calendarContent(gig({ timezone: "Mars/Olympus", setEnd: new Date("2026-07-04T16:00:00Z") }), { baseUrl: BASE });
+    const c = calendarContent(gig({ timezone: "Mars/Olympus", setEnd: new Date("2026-07-04T16:00:00Z") }), VIEW);
     expect(c.timeZone).toBe("UTC");
     expect(c.end.getTime()).toBeGreaterThan(c.start.getTime());
+  });
+
+  it("keeps a very long description within the providers' limit, link and all", () => {
+    const c = calendarContent(gig({ travel: "Train. ".repeat(3000) }), VIEW);
+    expect(c.description.length).toBeLessThanOrEqual(MAX_DESCRIPTION);
+    expect(c.description.startsWith("Act: The Velvet Owls")).toBe(true);
+    expect(c.description.endsWith(`Details: ${BASE}/app/gigs/ckgig1`)).toBe(true);
+    // The feed itself has no such limit.
+    expect(actFeedEvent(gig({ travel: "Train. ".repeat(3000) }), VIEW).description!.length).toBeGreaterThan(MAX_DESCRIPTION);
   });
 });
 
 describe("content hash", () => {
-  const hash = (over: Partial<ActFeedBooking> = {}, provider: "GOOGLE" | "MICROSOFT" = "GOOGLE") =>
-    contentHash(calendarContent(gig(over), { baseUrl: BASE }), provider);
+  const hash = (over: Partial<ActFeedBooking> = {}, provider: "GOOGLE" | "MICROSOFT" = "GOOGLE", view: ActFeedOptions = VIEW) =>
+    contentHash(calendarContent(gig(over), view), provider);
 
   it("is the same for the same gig, whatever else changed on the booking", () => {
     expect(hash()).toBe(hash());
     expect(hash({ updatedAt: new Date() })).toBe(hash());
-    expect(hash({ feeMinor: 1 } as Partial<ActFeedBooking>)).toBe(hash());
+    // The sale price on a sale and cost deal, the booking fee and VAT aren't the act's business.
+    expect(hash({ feeMinor: 1 })).toBe(hash());
+    expect(hash({ bookingFeeMinor: 1, vatPct: 0, notes: "x", dealNotes: "y" } as Partial<ActFeedBooking>)).toBe(hash());
   });
 
   it("changes when anything the act sees changes", () => {
@@ -193,9 +203,14 @@ describe("content hash", () => {
     expect(hash({ arriveBy: new Date("2026-07-04T16:30:00Z") })).not.toBe(base);
     expect(hash({ status: "HOLD" })).not.toBe(base);
     expect(hash({ dayContact: "Jo" })).not.toBe(base);
-    expect(hash({ venue: { name: "The Swan", address: "", city: "York", country: "UK" } })).not.toBe(base);
+    expect(hash({ travel: "Train at 14:02" })).not.toBe(base);
+    expect(hash({ artistFeeMinor: 40000 })).not.toBe(base);
+    expect(hash({ venue: { name: "The Swan", address: "", city: "York", country: "UK", notes: "" } })).not.toBe(base);
+    expect(hash({ venue: { name: "The Crown", address: "1 High St", city: "Leeds", country: "UK", notes: "Park round the back" } })).not.toBe(base);
     expect(hash({ timezone: "Europe/Dublin" })).not.toBe(base);
     expect(hash({}, "MICROSOFT")).not.toBe(base);
+    // A commission deal: the act's pay follows the fee.
+    expect(hash({ dealType: "STANDARD_COMMISSION", feeMinor: 50000 })).not.toBe(hash({ dealType: "STANDARD_COMMISSION", feeMinor: 60000 }));
   });
 });
 
@@ -274,7 +289,7 @@ function conn(over: Partial<StoredConnection> = {}): StoredConnection {
 }
 
 const NOW = Date.parse("2026-11-12T12:00:00Z");
-const content = calendarContent(gig(), { baseUrl: BASE });
+const content = calendarContent(gig(), VIEW);
 
 function client(c: StoredConnection, handler: Parameters<typeof fakeFetch>[0], env: typeof testEnv = testEnv) {
   const f = fakeFetch(handler);
