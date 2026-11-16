@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deletePerson, setPersonLogin, updatePerson } from "@/actions/people";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
+import { PersonPayCard } from "@/components/pay-details-card";
 import { PersonForm } from "@/components/person-form";
 import { ArtistDot, Field, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -66,8 +67,19 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <PersonForm
           action={updatePerson.bind(null, p.id)}
+          // Named one by one: the form runs in the browser, and the person's bank details and NI number must never reach it.
           values={{
-            ...p,
+            firstName: p.firstName,
+            surname: p.surname,
+            alias: p.alias,
+            pronouns: p.pronouns,
+            jobTitle: p.jobTitle,
+            email: p.email,
+            phone: p.phone,
+            social: p.social,
+            website: p.website,
+            address: p.address,
+            notes: p.notes,
             company: companyName,
             acts: p.acts.map((a) => ({ name: a.act.name, jobTitle: a.jobTitle })),
           }}
@@ -103,6 +115,9 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               </p>
             )}
           </section>
+
+          {/* Bank, address and NI number for paying them: only admins see the details, everyone sees whether they're in. */}
+          <PersonPayCard personId={p.id} user={user} />
 
           {upcoming.length > 0 && (
             <section className="card card-pad">

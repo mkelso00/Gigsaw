@@ -13,12 +13,13 @@ const darkField =
 const darkLabel = "mb-1.5 block text-[13px] font-medium text-ink-300";
 const darkHint = "mt-1.5 block text-xs leading-relaxed text-ink-400";
 
-type ActPay = PayFields & { id: string; name: string; detailsCompletedAt: Date | null };
+/** Whose details they are: a person's own, or an act's (an act's own login with nobody on file). */
+type Holder = PayFields & { kind: "act" | "person"; id: string; name: string; detailsCompletedAt: Date | null };
 
 const hasBank = (a: PayFields) => !!(a.bankAccountName && a.bankSortCode && a.bankAccountNumber);
 
-/** The act's own form, in the act app. Numbers already on file are masked, with Change. */
-export function ActDetailsForm({ act, showName }: { act: ActPay; showName: boolean }) {
+/** The form in the act app (Your details). Numbers already on file are masked, with Change. */
+export function ActDetailsForm({ holder: act, showName }: { holder: Holder; showName: boolean }) {
   const first = !act.detailsCompletedAt;
   const missing = missingDetails(act);
   const bankInputs = (
@@ -57,7 +58,7 @@ export function ActDetailsForm({ act, showName }: { act: ActPay; showName: boole
     <section className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5">
       {showName && <h2 className="mb-1 text-lg font-semibold">{act.name}</h2>}
       {missing.length > 0 && <p className="mb-4 text-sm text-volt-400">Still needed: {missing.join(", ")}.</p>}
-      <ActionForm action={saveMyDetails.bind(null, act.id)} className="space-y-6">
+      <ActionForm action={saveMyDetails.bind(null, act.kind, act.id)} className="space-y-6">
         <fieldset className="space-y-3">
           <legend className="mb-3 text-sm font-medium text-volt-400">Bank account</legend>
           {hasBank(act) ? (
@@ -133,14 +134,23 @@ export function ActDetailsForm({ act, showName }: { act: ActPay; showName: boole
 }
 
 /** The pay fields on the act's edit page. Admins only: agents don't get these fields at all. */
-export function StaffPayFields({ artist }: { artist?: PayFields }) {
+export function StaffPayFields({
+  artist,
+  intro = "For paying the act and their self-billing invoices. Only admins and the act can see these.",
+  withAddress = true,
+}: {
+  artist?: PayFields;
+  intro?: string;
+  /** False on a person's page, where the address is in the main form. */
+  withAddress?: boolean;
+}) {
   const niInput = (
     <input name="niNumber" autoComplete="off" placeholder="QQ 12 34 56 C" className="input uppercase" defaultValue="" aria-label="National Insurance number" />
   );
   return (
     <>
       <h3 className="pt-2 text-sm font-semibold">Pay details</h3>
-      <p className="-mt-2 text-xs text-ink-500">For paying the act and their self-billing invoices. Only admins and the act can see these.</p>
+      <p className="-mt-2 text-xs text-ink-500">{intro}</p>
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Name on the account">
           <input name="bankAccountName" defaultValue={artist?.bankAccountName} className="input" />
@@ -153,9 +163,11 @@ export function StaffPayFields({ artist }: { artist?: PayFields }) {
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Postal address">
-          <textarea name="address" rows={3} defaultValue={artist?.address} className="input" />
-        </Field>
+        {withAddress && (
+          <Field label="Postal address">
+            <textarea name="address" rows={3} defaultValue={artist?.address} className="input" />
+          </Field>
+        )}
         <div className="space-y-4">
           <div className="block">
             <span className="label">National Insurance number</span>

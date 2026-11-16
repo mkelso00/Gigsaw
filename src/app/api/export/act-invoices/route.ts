@@ -23,14 +23,14 @@ export async function GET(req: NextRequest) {
   const invoices = await prisma.actInvoice.findMany({
     where: { agencyId: user.agencyId, status: "ISSUED", ...(act ? { artistId: act } : {}) },
     include: { booking: { select: { payments: { select: { direction: true, amountMinor: true } } } } },
-    orderBy: [{ actName: "asc" }, { seq: "asc" }],
+    orderBy: [{ actName: "asc" }, { payeeName: "asc" }, { seq: "asc" }],
   });
   const rows = invoices.flatMap((inv) => {
     const owed = owedOnInvoice(inv, inv.booking?.payments ?? []);
     if (owed <= 0) return [];
     return [
       [
-        inv.bankAccountName || inv.actName,
+        inv.bankAccountName || inv.payeeName || inv.actName,
         inv.bankSortCode.replace(/\D/g, ""),
         inv.bankAccountNumber.replace(/\D/g, ""),
         fromMinor(owed, inv.currency).toFixed(2),
@@ -38,9 +38,11 @@ export async function GET(req: NextRequest) {
         inv.actName,
         localDateKey(inv.gigDate, settings.defaultTimezone),
         inv.currency,
+        inv.payeeName || inv.actName,
       ],
     ];
   });
-  const csv = toCsv(["Payee name", "Sort code", "Account number", "Amount", "Reference", "Act", "Gig date", "Currency"], rows);
+  // "Made out to" is who the invoice is from: a band's lead, the one person in a solo act, or the act itself.
+  const csv = toCsv(["Payee name", "Sort code", "Account number", "Amount", "Reference", "Act", "Gig date", "Currency", "Made out to"], rows);
   return csvResponse(`act-payments-${localDateKey(new Date(), settings.defaultTimezone)}.csv`, csv);
 }

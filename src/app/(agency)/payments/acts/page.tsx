@@ -52,14 +52,17 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
   const waiting = notInvoiced.filter((r) => !r.canMake && (!actId || r.booking.artistId === actId));
   const canMake = notInvoiced.filter((r) => r.canMake && (!actId || r.booking.artistId === actId));
 
-  // One group per act. Unpaid invoices always match the act's current details (a change replaces
+  // One group per act and who its invoices are made out to (a band's lead, the one person in a solo act, or
+  // the act: src/lib/payee.ts). Unpaid invoices always match the payee's current details (a change replaces
   // them), so the newest invoice's bank details are the ones to pay into.
   type Row = (typeof invoices)[number] & { owed: number };
-  const groups = new Map<string, { key: string; name: string; colour: string; artistId: string | null; rows: Row[]; total: number }>();
+  type Group = { key: string; name: string; payee: string; colour: string; artistId: string | null; rows: Row[]; total: number };
+  const groups = new Map<string, Group>();
   for (const inv of invoices) {
     const owed = owedOnInvoice(inv, inv.booking?.payments ?? []);
-    const key = inv.artistId ?? `name:${inv.actName}`;
-    const g = groups.get(key) ?? { key, name: inv.actName, colour: inv.artist?.colour ?? "#94a3b8", artistId: inv.artistId, rows: [], total: 0 };
+    const key = `${inv.artistId ?? `name:${inv.actName}`}|${inv.payeePersonId ?? ""}`;
+    const payee = inv.payeeName || inv.actName;
+    const g = groups.get(key) ?? { key, name: inv.actName, payee, colour: inv.artist?.colour ?? "#94a3b8", artistId: inv.artistId, rows: [], total: 0 };
     g.rows.push({ ...inv, owed });
     g.total += show === "open" ? owed : inv.totalMinor;
     groups.set(key, g);
@@ -153,6 +156,12 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
                   </span>
                   <span className="text-lg font-semibold tabular-nums">{m(g.total)}</span>
                 </div>
+                {/* Who it's made out to and paid to, when that isn't the act itself (a band's lead, or a solo act's person). */}
+                {g.payee !== g.name && (
+                  <p className="-mt-2 px-4 pb-3 text-sm text-ink-600" data-testid="payee">
+                    Made out to {g.payee}
+                  </p>
+                )}
                 {show === "open" && (
                   <dl className="grid gap-x-6 gap-y-2 border-t border-ink-100 bg-ink-50/60 px-4 py-3 text-sm sm:grid-cols-3">
                     <div>
@@ -238,7 +247,7 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
                       <input key={r.id} type="hidden" name={`all_${keyOf(g.key)}`} value={r.id} />
                     ))}
                     <SubmitButton name="act" value={keyOf(g.key)} pendingText="Saving…">
-                      Mark all {m(g.total)} paid to {g.name}
+                      Mark all {m(g.total)} paid to {g.payee}
                     </SubmitButton>
                   </div>
                 )}
@@ -252,7 +261,7 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
         <section className="mt-10" aria-label="Not invoiced yet">
           <h2 className="section-title mb-1">Not invoiced yet</h2>
           <p className="mb-3 text-sm text-ink-500">
-            Finished gigs still owed to the act. An invoice is made as soon as the act has given their bank details and address.
+            Finished gigs still owed to the act. An invoice is made as soon as whoever it goes to has given their bank details and address.
           </p>
           <div className="card divide-y divide-ink-100">
             {[...waiting, ...canMake].map((r) => (

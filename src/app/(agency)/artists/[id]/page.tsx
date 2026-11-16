@@ -21,7 +21,9 @@ import { ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { formatMoney } from "@/lib/money";
 import { personName } from "@/lib/person-name";
 import { formatDate, formatMinutes, localDateKey, localTime } from "@/lib/time";
-import { SIGNUP_BADGE, SIGNUP_LABEL, signupStatus } from "@/lib/act-signup";
+import { SIGNUP_BADGE, SIGNUP_LABEL, loginStatus, signupLabel, signupStatus } from "@/lib/act-signup";
+import { leadOf, needsLead } from "@/lib/payee";
+import { loadPayActs } from "@/lib/payee-server";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -85,6 +87,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   const actNames = actRows.map((a) => a.name);
   const people = [...new Set(peopleRows.map(personName))].sort();
   if (!artist) notFound();
+  // Who the act's invoices go to (src/lib/payee.ts), for the people list and the reminder at the top.
+  const pay = (await loadPayActs(user.agencyId, [artist.id])).get(artist.id);
+  const leadId = pay ? (leadOf(pay)?.id ?? null) : null;
+  const chooseLead = !!pay && needsLead(pay);
 
   const now = new Date();
   const today = localDateKey(now, settings.defaultTimezone);
@@ -116,7 +122,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               {artist.name.slice(0, 2).toUpperCase()}
             </span>
             {artist.name}
-            <span className={`badge text-sm font-medium ${SIGNUP_BADGE[signup]}`}>{SIGNUP_LABEL[signup]}</span>
+            <span className={`badge text-sm font-medium ${SIGNUP_BADGE[signup]}`}>{signupLabel(artist)}</span>
           </span>
         }
         subtitle={[artist.genre, artist.agent && `Agent: ${artist.agent.name}`, artist.email, artist.phone].filter(Boolean).join(" · ")}
@@ -131,6 +137,15 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           </>
         }
       />
+
+      {chooseLead && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="choose-lead">
+          Choose who the band&apos;s invoices go to.{" "}
+          <a href="#pay-details" className="font-medium underline">
+            Choose now
+          </a>
+        </p>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat
@@ -277,7 +292,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             </div>
             <p className="mt-1 mb-4 text-sm text-ink-500">
               {artist.members.length
-                ? "Reminders and booking changes go to each person. Anyone in another act too is checked for clashes across both."
+                ? "Reminders and booking changes go to each person, and to the act's own login if it has one. Each person adds their own pay details from their login. Anyone in another act too is checked for clashes across both."
                 : "Optional: the people in this act, with their own phone, email and login. Until you add any, reminders and changes go to the act's own email and phone."}
             </p>
             {artist.members.length > 0 && (
@@ -291,7 +306,16 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                       {m.jobTitle && <span className="text-ink-500"> · {m.jobTitle}</span>}
                       <div className="truncate text-xs text-ink-500">
                         {[m.person.phone, m.person.email].filter(Boolean).join(" · ") || "No phone or email yet"}
-                        {m.person.login ? " · has app login" : ""}
+                      </div>
+                      {/* Each person signs up and adds their own pay details; the lead gets the band's invoices. */}
+                      <div className="mt-1 flex flex-wrap gap-1 text-xs">
+                        {m.person.id === leadId && <span className="badge bg-ink-950 text-white">Invoices go to them</span>}
+                        <span className={`badge ${SIGNUP_BADGE[loginStatus(m.person.login)]}`}>{SIGNUP_LABEL[loginStatus(m.person.login)]}</span>
+                        {m.person.detailsCompletedAt ? (
+                          <span className="badge bg-emerald-50 text-emerald-800">Details in</span>
+                        ) : (
+                          <span className="badge bg-amber-50 text-amber-800">Details missing</span>
+                        )}
                       </div>
                     </div>
                     <ServerForm action={removeActMember.bind(null, m.id)}>

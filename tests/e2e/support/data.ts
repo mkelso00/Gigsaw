@@ -77,6 +77,38 @@ export async function createActLogin(artistId: string, name: string) {
   return { email, password };
 }
 
+/**
+ * A person in an act with their own login for the act app (their calendar already added). `details` puts their
+ * pay details in too, so the app opens on their bookings; without, it asks for them first.
+ */
+export async function createMemberLogin(artistId: string, firstName: string, surname: string, opts: { details?: string } = {}) {
+  const { agencyId } = await seededAgency();
+  const email = `${`${firstName}-${surname}`.toLowerCase().replace(/[^a-z0-9]+/g, "-")}@e2e.gigsaw.invalid`;
+  const password = "e2e-password-123";
+  const details = opts.details
+    ? {
+        bankAccountName: `${firstName} ${surname}`,
+        bankSortCode: "10-20-30",
+        bankAccountNumber: opts.details,
+        address: "1 Band Street\nLeeds",
+        detailsCompletedAt: new Date(),
+      }
+    : {};
+  const person = await db().person.create({ data: { agencyId, firstName, surname, email, ...details, acts: { create: { artistId } } } });
+  await db().user.create({
+    data: {
+      email,
+      name: `${firstName} ${surname}`,
+      role: "ARTIST",
+      agencyId,
+      personId: person.id,
+      passwordHash: await bcrypt.hash(password, 10),
+      calendarAddedAt: new Date(),
+    },
+  });
+  return { person, email, password };
+}
+
 /** A booking made the way the app numbers them (GS-0001 and up), trying again if a parallel test takes the number. */
 export async function createBooking(data: {
   artistId: string;

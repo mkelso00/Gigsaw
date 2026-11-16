@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { AddCalendarStep } from "@/components/add-calendar-step";
 import { CalendarConnect } from "@/components/calendar-connect";
 import { YourCalendar } from "@/components/your-calendar";
-import { needsDetails } from "@/lib/act-details";
-import { payActsFor } from "@/lib/act-details-server";
+import { needsPayDetails } from "@/lib/act-details-server";
 import { needsCalendar } from "@/lib/act-calendar-step";
 import { requireUser } from "@/lib/auth";
 import { calendarProviders, canConnectCalendar } from "@/lib/calendar-connect";
@@ -19,7 +18,7 @@ export const dynamic = "force-dynamic";
 // calendar (requireActApp; what counts is in src/lib/act-calendar-step.ts).
 export default async function AddCalendarPage() {
   const user = await requireUser(["ARTIST"]);
-  if ((await payActsFor(user)).some(needsDetails)) redirect("/app/details");
+  if (await needsPayDetails(user)) redirect("/app/details");
   if (!(await needsCalendar(user.id))) redirect("/app");
 
   const owner = user.personId

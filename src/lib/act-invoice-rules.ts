@@ -3,14 +3,16 @@
 //
 // When an invoice is made: the gig is on (Confirmed or Settled, not demo data), it has an act and the
 // act's fee is more than nothing, and the gig is over: the act tapped "I've left the venue", or the
-// set's end time has passed (three hours after the start when there's no end time). The act must have
-// finished their details (bank, address) first; until then staff see "Waiting for the act's details".
+// set's end time has passed (three hours after the start when there's no end time). The invoice is made
+// out to the act's payee (a band's lead person, the one person in a solo act, or the act itself when it
+// has nobody on file: src/lib/payee.ts), who must have finished their details (bank, address) first;
+// until then staff see "Waiting for details from …".
 // Made automatically for gigs that finished in the last 30 days and the act hasn't already been paid
 // for in full, so turning this on doesn't flood the list with years of old gigs. Older ones can be
 // made by hand from Pay acts.
 //
 // After it's issued: while it's unpaid, it always matches the booking and the act. If the fee, the act,
-// or the act's name, address, VAT or bank details change, it's voided and a new one, with a new number,
+// who it's made out to, or the payee's name, address, VAT or bank details change, it's voided and a new one, with a new number,
 // replaces it (an invoice that's gone out is never edited, and staff never pay into an old account).
 // If the gig is cancelled or loses its act, it's voided. Once paid it's never changed.
 
@@ -32,7 +34,12 @@ export function invoiceNumber(seq: number) {
   return `SB-${String(seq).padStart(4, "0")}`;
 }
 
-export type ActDetails = {
+/**
+ * Who the invoice is made out to and paid to, with their details: the band's lead person, the one person in a
+ * solo act, or the act itself (personId null). See src/lib/payee.ts for who that is.
+ */
+export type PayeeDetails = {
+  personId: string | null;
   name: string;
   address: string;
   vatRegistered: boolean;
@@ -43,26 +50,31 @@ export type ActDetails = {
   detailsCompletedAt: Date | null;
 };
 
-/** Why an act's invoice can't be made yet, or null when their details are ready. */
-export function detailsMissing(a: ActDetails): string | null {
-  if (!a.detailsCompletedAt) return "Waiting for the act's details";
+/** Why nothing can be made for a band with no payee yet (see payeeOf). */
+export const NO_PAYEE = "Choose who the band's invoices go to";
+
+/** Why an invoice can't be made yet, or null when the payee's details are ready. */
+export function detailsMissing(p: PayeeDetails): string | null {
+  if (!p.detailsCompletedAt) return p.personId ? `Waiting for details from ${p.name}` : "Waiting for the act's details";
   // A VAT invoice without the VAT number isn't valid, so wait for it rather than leave the VAT off.
-  if (a.vatRegistered && !a.vatNumber.trim()) return "Waiting for the act's VAT number";
+  if (p.vatRegistered && !p.vatNumber.trim()) return p.personId ? `Waiting for a VAT number from ${p.name}` : "Waiting for the act's VAT number";
   return null;
 }
 
-/** What goes on the invoice from the act, copied in when it's issued. */
-export function actSnapshot(a: ActDetails) {
+/** What goes on the invoice from the act and its payee, copied in when it's issued. */
+export function invoiceSnapshot(actName: string, p: PayeeDetails) {
   return {
-    actName: a.name,
-    actAddress: a.address.trim(),
-    actVatNumber: a.vatRegistered ? a.vatNumber.trim() : "",
-    bankAccountName: a.bankAccountName.trim(),
-    bankSortCode: a.bankSortCode.trim(),
-    bankAccountNumber: a.bankAccountNumber.trim(),
+    actName,
+    payeeName: p.name,
+    payeePersonId: p.personId,
+    actAddress: p.address.trim(),
+    actVatNumber: p.vatRegistered ? p.vatNumber.trim() : "",
+    bankAccountName: p.bankAccountName.trim(),
+    bankSortCode: p.bankSortCode.trim(),
+    bankAccountNumber: p.bankAccountNumber.trim(),
   };
 }
-export type ActSnapshot = ReturnType<typeof actSnapshot>;
+export type InvoiceSnapshot = ReturnType<typeof invoiceSnapshot>;
 
 /** The fee, VAT (only for a VAT-registered act) and total. */
 export function invoiceAmounts(netMinor: number, vatNumber: string) {
@@ -94,7 +106,9 @@ export type InvoiceableBooking = DealInput & {
   setEnd: Date | null;
   checkIns: { kind: string }[];
   payments: { direction: string; amountMinor: number }[];
-  artist: ActDetails | null;
+  artist: { name: string } | null;
+  /** Null for a band with nobody chosen to get its invoices. */
+  payee: PayeeDetails | null;
 };
 
 export type IssueDecision = { issue: true; netMinor: number } | { issue: false; reason: string; waiting?: boolean };
@@ -117,12 +131,13 @@ export function issueDecision(b: InvoiceableBooking, now = new Date(), byHand = 
     }
     if (paidOutMinor(b.payments) >= net) return { issue: false, reason: "The act has been paid already" };
   }
-  const missing = detailsMissing(b.artist);
+  if (!b.payee) return { issue: false, reason: NO_PAYEE, waiting: true };
+  const missing = detailsMissing(b.payee);
   if (missing) return { issue: false, reason: missing, waiting: true };
   return { issue: true, netMinor: net };
 }
 
-export type LiveInvoice = ActSnapshot & { artistId: string | null; currency: string; netMinor: number; vatMinor: number };
+export type LiveInvoice = InvoiceSnapshot & { artistId: string | null; currency: string; netMinor: number; vatMinor: number };
 
 /**
  * Why an unpaid invoice no longer matches its booking and act, or null if it still does. `keep: false`
@@ -130,7 +145,7 @@ export type LiveInvoice = ActSnapshot & { artistId: string | null; currency: str
  */
 export function invoiceChange(
   inv: LiveInvoice,
-  b: (DealInput & { status: string; artistId: string | null; currency: string; artist: ActDetails | null }) | null,
+  b: (DealInput & { status: string; artistId: string | null; currency: string; artist: { name: string } | null; payee: PayeeDetails | null }) | null,
 ): { keep: boolean; reason: string } | null {
   if (!b) return { keep: false, reason: "The booking was deleted" };
   if (b.status === "CANCELLED") return { keep: false, reason: "The gig was cancelled" };
@@ -140,14 +155,18 @@ export function invoiceChange(
   const net = actFeeMinor(b);
   if (net <= 0) return { keep: false, reason: "The act's fee was taken off" };
   if (net !== inv.netMinor || b.currency !== inv.currency) return { keep: true, reason: "The fee changed" };
-  // Details being edited (no completion date for now) keep the invoice as it is until they're done again.
-  if (detailsMissing(b.artist)) return null;
-  const now = actSnapshot(b.artist);
-  if (now.actVatNumber !== inv.actVatNumber) return { keep: true, reason: "The act's VAT registration changed" };
+  // No payee chosen (the band's lead was taken off), or details being edited (no completion date for now): the
+  // invoice stays as it is until they're done again.
+  if (!b.payee || detailsMissing(b.payee)) return null;
+  const now = invoiceSnapshot(b.artist.name, b.payee);
+  if (now.payeePersonId !== inv.payeePersonId) return { keep: true, reason: "Who it's made out to changed" };
+  const whose = now.payeePersonId ? "The payee's" : "The act's";
+  if (now.actVatNumber !== inv.actVatNumber) return { keep: true, reason: `${whose} VAT registration changed` };
   if (now.bankAccountName !== inv.bankAccountName || now.bankSortCode !== inv.bankSortCode || now.bankAccountNumber !== inv.bankAccountNumber) {
-    return { keep: true, reason: "The act's bank details changed" };
+    return { keep: true, reason: `${whose} bank details changed` };
   }
-  if (now.actName !== inv.actName || now.actAddress !== inv.actAddress) return { keep: true, reason: "The act's name or address changed" };
+  if (now.payeeName !== inv.payeeName || now.actAddress !== inv.actAddress) return { keep: true, reason: `${whose} name or address changed` };
+  if (now.actName !== inv.actName) return { keep: true, reason: "The act's name changed" };
   return null;
 }
 

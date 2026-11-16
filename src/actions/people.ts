@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { completedAt } from "@/lib/act-details";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { logActivity, prisma } from "@/lib/db";
@@ -96,13 +97,18 @@ export async function createPerson(_: FormState, form: FormData): Promise<FormSt
 export async function updatePerson(personId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
-    await ownPerson(user, personId);
+    const before = await ownPerson(user, personId);
     const fields = personFields(form);
     const company = await resolveCompany(user, str(form, "company"));
     const acts = await resolveActs(user, form);
+    const kept = acts.rows.map((r) => r.artistId);
+    // Their address is one of their pay details: without one, they're no longer ready to be paid.
+    const detailsCompletedAt = completedAt({ ...before, address: fields.address }, before.detailsCompletedAt);
     await prisma.$transaction([
-      prisma.person.update({ where: { id: personId }, data: { ...fields, venueId: company.venueId, companyId: company.companyId } }),
-      prisma.personAct.deleteMany({ where: { personId, artistId: { notIn: acts.rows.map((r) => r.artistId) } } }),
+      prisma.person.update({ where: { id: personId }, data: { ...fields, venueId: company.venueId, companyId: company.companyId, detailsCompletedAt } }),
+      prisma.personAct.deleteMany({ where: { personId, artistId: { notIn: kept } } }),
+      // Someone who leaves a band no longer gets its invoices.
+      prisma.artist.updateMany({ where: { agencyId: user.agencyId, leadPersonId: personId, id: { notIn: kept } }, data: { leadPersonId: null } }),
       ...acts.rows.map((r) =>
         prisma.personAct.upsert({
           where: { personId_artistId: { personId, artistId: r.artistId } },
@@ -193,7 +199,11 @@ export async function removeActMember(memberId: string) {
   const user = await requireStaff();
   const m = await prisma.personAct.findFirst({ where: { id: memberId, act: { agencyId: user.agencyId } }, include: { person: true } });
   if (!m) return;
-  await prisma.personAct.delete({ where: { id: m.id } });
+  // Someone who leaves a band no longer gets its invoices.
+  await prisma.$transaction([
+    prisma.personAct.delete({ where: { id: m.id } }),
+    prisma.artist.updateMany({ where: { id: m.artistId, leadPersonId: m.personId }, data: { leadPersonId: null } }),
+  ]);
   await logActivity(user, "ARTIST", m.artistId, "removed member", personName(m.person));
   revalidatePath(`/artists/${m.artistId}`);
 }

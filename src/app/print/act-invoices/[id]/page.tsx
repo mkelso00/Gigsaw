@@ -9,9 +9,10 @@ import { formatDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Self-billing invoice" };
 
-// A self-billing invoice: the agency makes it out on the act's behalf, so it's headed with the act's
-// name and address (they're the supplier) and the agency is the customer. Staff and the act it's for
-// can open it. Only admins see the whole bank account number.
+// A self-billing invoice: the agency makes it out on the payee's behalf (a band's lead, the one person in
+// a solo act, or the act), so it's headed with their name and address (they're the supplier) and the
+// agency is the customer. Staff and the login it's made out to can open it (invoiceForViewer: never the
+// rest of a band). Only admins see the whole bank account number.
 export default async function ActInvoicePrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
@@ -20,12 +21,14 @@ export default async function ActInvoicePrint({ params }: { params: Promise<{ id
   const tz = settings.defaultTimezone;
   const hasVat = inv.vatMinor > 0;
   const account = user.role === "ADMIN" ? inv.bankAccountNumber : maskAccount(inv.bankAccountNumber);
+  // Made out to the payee (a band's lead, the one person in a solo act, or the act itself): they're the supplier.
+  const payee = inv.payeeName || inv.actName;
   const bank = [inv.bankAccountName, inv.bankSortCode && `Sort code ${formatSortCode(inv.bankSortCode)}`, account && `Account ${account}`].filter(Boolean);
 
   return (
     <Invoice
       title="Self-billing invoice"
-      letterhead={{ agencyName: inv.actName, agencyAddress: inv.actAddress, agencyEmail: inv.actVatNumber ? `VAT number ${inv.actVatNumber}` : "" }}
+      letterhead={{ agencyName: payee, agencyAddress: inv.actAddress, agencyEmail: inv.actVatNumber ? `VAT number ${inv.actVatNumber}` : "" }}
       billToLabel="Customer"
       date={inv.issuedAt}
       reference={inv.number}
@@ -46,6 +49,11 @@ export default async function ActInvoicePrint({ params }: { params: Promise<{ id
           <div>
             <span className="text-slate-500">Booking</span> {inv.bookingRef}
           </div>
+          {payee !== inv.actName && (
+            <div>
+              <span className="text-slate-500">Act</span> {inv.actName}
+            </div>
+          )}
         </>
       }
       lines={[{ key: inv.id, description: inv.description, amountMinor: inv.netMinor }]}
@@ -72,8 +80,8 @@ export default async function ActInvoicePrint({ params }: { params: Promise<{ id
             </div>
           )}
           <p>
-            Self-billing invoice, made out by {settings.agencyName} on behalf of {inv.actName}.
-            {hasVat ? " The VAT shown is your output tax due to HMRC." : ` No VAT is charged: ${inv.actName} isn't registered for VAT.`}
+            Self-billing invoice, made out by {settings.agencyName} on behalf of {payee}.
+            {hasVat ? " The VAT shown is your output tax due to HMRC." : ` No VAT is charged: ${payee} isn't registered for VAT.`}
           </p>
         </div>
       }

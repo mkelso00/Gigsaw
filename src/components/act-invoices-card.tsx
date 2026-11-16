@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { INVOICE_STATUS_LABELS, detailsMissing, type ActInvoiceStatus } from "@/lib/act-invoice-rules";
+import { INVOICE_STATUS_LABELS, NO_PAYEE, detailsMissing, type ActInvoiceStatus } from "@/lib/act-invoice-rules";
+import { loadPayActs, payeeFor } from "@/lib/payee-server";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/time";
@@ -7,12 +8,14 @@ import { formatDate } from "@/lib/time";
 /** The act's self-billing invoices on their page, newest first, and whether invoices can be made for them yet. */
 export async function ActInvoicesCard({ artistId, agencyId, timeZone }: { artistId: string; agencyId: string; timeZone: string }) {
   const [act, invoices, toPay] = await Promise.all([
-    prisma.artist.findFirst({ where: { id: artistId, agencyId } }),
+    loadPayActs(agencyId, [artistId]).then((m) => m.get(artistId)),
     prisma.actInvoice.findMany({ where: { artistId, agencyId }, orderBy: { seq: "desc" }, take: 6 }),
     prisma.actInvoice.aggregate({ where: { artistId, agencyId, status: "ISSUED" }, _sum: { totalMinor: true }, _count: true }),
   ]);
   if (!act) return null;
-  const missing = detailsMissing(act);
+  // The payee's details: a band's lead, the one person in a solo act, or the act's own (src/lib/payee.ts).
+  const payee = payeeFor(act);
+  const missing = payee ? detailsMissing(payee) : NO_PAYEE;
   return (
     <section className="card card-pad" aria-label="Invoices">
       <div className="flex items-baseline justify-between gap-2">
@@ -22,9 +25,11 @@ export async function ActInvoicesCard({ artistId, agencyId, timeZone }: { artist
         </Link>
       </div>
       {missing ? (
-        <p className="mt-2 text-sm font-medium text-amber-700">{missing}. Invoices are made once they&apos;re in.</p>
+        <p className="mt-2 text-sm font-medium text-amber-700">
+          {missing}. {payee ? "Invoices are made once they're in." : "Invoices are made once you have."}
+        </p>
       ) : (
-        <p className="mt-1 text-sm text-ink-500">Made for their fee once each gig is over.</p>
+        <p className="mt-1 text-sm text-ink-500">Made for their fee once each gig is over{payee?.personId ? `, out to ${payee.name}` : ""}.</p>
       )}
       {toPay._count > 0 && (
         <p className="mt-2 text-sm">
