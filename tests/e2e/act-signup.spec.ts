@@ -79,7 +79,16 @@ test("an act sets up their login by email, fills in their details and reaches th
   await page.getByLabel("National Insurance number").fill("jg 10 37 26 a");
   await save.click();
 
-  // 5. Their bookings.
+  // 5. Then their gigs have to go into a calendar. A calendar app fetching their feed ticks that off.
+  await expect(page).toHaveURL(/\/app\/add-calendar$/, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Add your gigs to your calendar" })).toBeVisible();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/app\/add-calendar$/);
+  const { calendarToken } = await db().artist.findUniqueOrThrow({ where: { id: act.id }, select: { calendarToken: true } });
+  expect((await page.request.get(`/api/calendar/${calendarToken}.ics`)).status()).toBe(200);
+  await page.reload();
+
+  // 6. Their bookings.
   await expect(page).toHaveURL(/\/app$/, { timeout: 20_000 });
   await expect(page.getByText(venue.name)).toBeVisible({ timeout: 15_000 });
   const saved = await db().artist.findUniqueOrThrow({ where: { id: act.id } });

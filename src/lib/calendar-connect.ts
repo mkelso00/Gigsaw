@@ -21,6 +21,7 @@ import { env as serverEnv, type ServerEnv } from "@/server/env";
 import { openToken, sealToken } from "@/server/token-box";
 import { log } from "@/server/log";
 import { apiBase } from "@/lib/calendar-sync/providers";
+import { markCalendarAdded } from "./act-calendar-step";
 
 // Connecting an act's own Google or Outlook calendar (docs/calendar-connect.md): the start of the flow, the
 // callback, storing the connection, choosing which calendar, and disconnecting. It reuses sign-in's OAuth
@@ -195,6 +196,7 @@ export async function saveConnection(
     create: { agencyId: user.agencyId, userId: user.id, provider: db, calendarId: "primary", calendarName: "", ...tokens },
     update: { ...tokens, ...(sameAccount ? {} : { calendarId: "primary", calendarName: "" }) },
   });
+  await markCalendarAdded(user.id);
   await resyncConnection(saved.id);
   return saved.id;
 }

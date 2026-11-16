@@ -6,6 +6,7 @@ import { personName } from "@/lib/person-name";
 import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { billingState } from "@/lib/subscription";
+import { markFeedFetched } from "@/lib/act-calendar-step";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     : await prisma.person.findUnique({ where: { calendarToken: token }, include: { agency: true, acts: { select: { artistId: true } } } });
   const owner = act ?? person;
   if (!owner || owner.agency.status !== "ACTIVE") return new Response("Not found", { status: 404 });
+  // A calendar app fetching the feed means the act has added it: that ticks off the act app's calendar step.
+  await markFeedFetched(act ? { artistId: act.id } : { personId: person!.id });
   // Includes any band the act or person is part of.
   const actIds = await actIdsFor({ artistId: act?.id ?? null, personId: person?.id ?? null, agencyId: owner.agencyId });
   const calendarName = act ? act.name : personName(person!);

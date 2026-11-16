@@ -72,7 +72,8 @@ export async function createActLogin(artistId: string, name: string) {
       detailsCompletedAt: new Date(),
     },
   });
-  await db().user.create({ data: { email, name, role: "ARTIST", agencyId, artistId, passwordHash: await bcrypt.hash(password, 10) } });
+  // Calendar already added, so the act app doesn't stop at that step either.
+  await db().user.create({ data: { email, name, role: "ARTIST", agencyId, artistId, passwordHash: await bcrypt.hash(password, 10), calendarAddedAt: new Date() } });
   return { email, password };
 }
 

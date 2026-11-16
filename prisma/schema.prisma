@@ -168,6 +168,9 @@ model User {
   // Which alerts this internal user wants, by kind and channel, e.g. { "LATE": { "text": false } }.
   // Anything not mentioned is on.
   notifyPrefs      Json     @default("{}")
+  // When this act login first had its gigs in a calendar: its feed was first fetched by a calendar app, it connected
+  // Google or Outlook, or it said it had added it. The act app asks for this before anything else (src/lib/act-calendar-step.ts).
+  calendarAddedAt  DateTime?
   // Calendar sync for staff: a private feed of bookings at /api/calendar/team/<token>. Null means not set up.
   calendarToken    String?  @unique
   calendarScope    String   @default("MINE") // MINE (bookings where they're lead agent) | ALL

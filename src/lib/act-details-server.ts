@@ -5,6 +5,7 @@ import { requireUser, type AgencyUser } from "./auth";
 import { getSettings, prisma } from "./db";
 import { appUrl, sendEmail } from "./messaging";
 import { formatDateTime } from "./time";
+import { needsCalendar } from "./act-calendar-step";
 
 // Which acts a login fills in pay details for, and the gate that sends them to Your details
 // until they have. See src/lib/act-details.ts for what the details are and who sees them.
@@ -79,11 +80,12 @@ export async function notifyBankChange(opts: { agencyId: string; act: { id: stri
 }
 
 /**
- * The signed-in act, for every page of the act app except Your details: until the act's pay
- * details are in, they're sent there first.
+ * The signed-in act, for every page of the act app except Your details and the calendar step: until the
+ * act's pay details are in, they're sent there first, then to add their gigs to a calendar.
  */
 export async function requireActApp(): Promise<AgencyUser> {
   const user = await requireUser(["ARTIST"]);
   if ((await payActsFor(user)).some(needsDetails)) redirect("/app/details");
+  if (await needsCalendar(user.id)) redirect("/app/add-calendar");
   return user;
 }

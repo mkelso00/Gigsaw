@@ -48,6 +48,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           select: {
             email: true,
             passwordHash: true,
+            calendarAddedAt: true,
             pushSubscriptions: { select: { device: true } },
             calendarConnections: { select: { provider: true, accountEmail: true, status: true } },
           },
@@ -323,6 +324,13 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                   ? `Set-up link sent to ${artist.login.email}. They haven't made a password yet. You can set one below.`
                 : "Give the artist a login so they can see their bookings and check in on arrival from their phone."}
             </p>
+            {artist.login?.passwordHash && (
+              <p className="mt-1 text-sm text-ink-500">
+                {artist.login.calendarAddedAt || artist.login.calendarConnections.length
+                  ? `Gigs are in their calendar${artist.login.calendarAddedAt ? ` (since ${formatDate(artist.login.calendarAddedAt, settings.defaultTimezone)})` : ""}.`
+                  : "Hasn't added their gigs to a calendar yet: the act app asks them to next time they open it."}
+              </p>
+            )}
             <p className="mt-1 mb-4 text-sm text-ink-500" data-testid="push-status">
               {!artist.login
                 ? "Booking reminders go by email and text until they have a login."

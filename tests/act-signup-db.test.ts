@@ -277,7 +277,7 @@ describeDb("act sign-up and pay details (database)", () => {
       return { act, user };
     };
 
-    it("sends the act to Your details until bank, address and NI number are in", async () => {
+    it("sends the act to Your details until bank details and address are in, then to add their calendar", async () => {
       const { requireActApp } = await import("@/lib/act-details-server");
       const { saveMyDetails } = await import("@/actions/act-details");
       const { act } = await actLogin();
@@ -291,6 +291,9 @@ describeDb("act sign-up and pay details (database)", () => {
       const saved = await prisma.artist.findUniqueOrThrow({ where: { id: act.id } });
       expect(saved).toMatchObject({ bankSortCode: "11-22-33", bankAccountNumber: "12345678", niNumber: "AB123456C", address: "1 High St\nLeeds" });
       expect(saved.detailsCompletedAt).toBeInstanceOf(Date);
+      // Then their gigs go into a calendar, the last required step.
+      await expect(requireActApp()).rejects.toThrow("REDIRECT /app/add-calendar");
+      await prisma.user.updateMany({ where: { artistId: act.id }, data: { calendarAddedAt: new Date() } });
       expect(await requireActApp()).toMatchObject({ artistId: act.id });
     });
 
