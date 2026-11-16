@@ -21,6 +21,7 @@ import { ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { formatMoney } from "@/lib/money";
 import { personName } from "@/lib/person-name";
 import { formatDate, formatMinutes, localDateKey, localTime } from "@/lib/time";
+import { SIGNUP_BADGE, SIGNUP_LABEL, signupStatus } from "@/lib/act-signup";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -40,12 +41,13 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
-        members: { include: { person: { include: { login: { select: { id: true } } } } }, orderBy: { person: { firstName: "asc" } } },
+        members: { include: { person: { include: { login: { select: { id: true, passwordHash: true } } } } }, orderBy: { person: { firstName: "asc" } } },
         partActs: { include: { child: { select: { id: true, name: true, colour: true, phone: true } } } },
         partOf: { include: { parent: { select: { id: true, name: true, colour: true } } } },
         login: {
           select: {
             email: true,
+            passwordHash: true,
             pushSubscriptions: { select: { device: true } },
             calendarConnections: { select: { provider: true, accountEmail: true, status: true } },
           },
@@ -102,8 +104,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   // Whether the act's login has its own Google or Outlook calendar connected (docs/calendar-connect.md).
   const calendarLine = artist.login ? staffCalendarLine(artist.login.calendarConnections) : null;
 
+  const signup = signupStatus(artist);
   return (
     <div>
+      {/* Signed up to the act app yet (src/lib/act-signup.ts). */}
       <PageHeader
         title={
           <span className="flex items-center gap-3">
@@ -111,6 +115,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
               {artist.name.slice(0, 2).toUpperCase()}
             </span>
             {artist.name}
+            <span className={`badge text-sm font-medium ${SIGNUP_BADGE[signup]}`}>{SIGNUP_LABEL[signup]}</span>
           </span>
         }
         subtitle={[artist.genre, artist.agent && `Agent: ${artist.agent.name}`, artist.email, artist.phone].filter(Boolean).join(" · ")}
@@ -312,8 +317,10 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
           <section className="card card-pad">
             <h2 className="section-title">Artist app login</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {artist.login
+              {artist.login?.passwordHash
                 ? `Signed up as ${artist.login.email}. Set a new password below if they've forgotten it.`
+                : artist.login
+                  ? `Set-up link sent to ${artist.login.email}. They haven't made a password yet. You can set one below.`
                 : "Give the artist a login so they can see their bookings and check in on arrival from their phone."}
             </p>
             <p className="mt-1 mb-4 text-sm text-ink-500" data-testid="push-status">

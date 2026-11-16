@@ -6,6 +6,7 @@ import { ArtistDot, Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { punctualityByArtist } from "@/lib/bookings";
 import { getSettings, prisma } from "@/lib/db";
+import { SIGNUP_BADGE, SIGNUP_LABEL, signupStatus } from "@/lib/act-signup";
 
 export const metadata: Metadata = { title: "Acts" };
 
@@ -42,7 +43,8 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       orderBy: { name: "asc" },
       include: {
         agent: { select: { name: true } },
-        login: { select: { id: true } },
+        login: { select: { id: true, passwordHash: true } },
+        members: { select: { person: { select: { login: { select: { passwordHash: true } } } } } },
         partActs: { include: { child: { select: { id: true, name: true, colour: true } } } },
         partOf: { include: { parent: { select: { id: true, name: true } } } },
         _count: { select: { members: true, bookings: { where: { archivedAt: null, setStart: { gte: now }, status: { not: "CANCELLED" } } } } },
@@ -51,9 +53,12 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
     punctualityByArtist(settings, new Date(now.getTime() - 365 * 86_400_000)),
     prisma.actApplication.count({ where: { agencyId: user.agencyId, status: "NEW" } }),
   ]);
-  // "Details missing": no bank details, address or NI number yet (see src/lib/act-details.ts).
+  // "Details missing": no bank details or address yet (see src/lib/act-details.ts).
   const missing = (a: { detailsCompletedAt: Date | null }) => !a.detailsCompletedAt;
   const missingCount = all.filter(missing).length;
+  // Who has signed up to the act app (src/lib/act-signup.ts), for chasing everyone onto Gigsaw.
+  const signedUp = (a: (typeof all)[number]) => signupStatus(a) === "SIGNED_UP";
+  const signedUpCount = all.filter(signedUp).length;
   const acts =
     sp.show === "bands"
       ? all.filter((a) => a.partActs.length)
@@ -61,7 +66,15 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
         ? all.filter((a) => !a.partActs.length)
         : sp.show === "details"
           ? all.filter(missing)
-          : all;
+          : sp.show === "signedup"
+            ? all.filter(signedUp)
+            : sp.show === "notsigned"
+              ? all.filter((a) => !signedUp(a))
+              : all;
+  const signupBadge = (a: (typeof all)[number]) => {
+    const s = signupStatus(a);
+    return <span className={`badge ${SIGNUP_BADGE[s]}`}>{SIGNUP_LABEL[s]}</span>;
+  };
   const missingBadge = <span className="badge bg-amber-50 text-amber-800">Details missing</span>;
   const qs = (extra: Record<string, string | undefined>) =>
     "?" + new URLSearchParams(Object.entries({ view, q: sp.q, show: sp.show, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
@@ -121,6 +134,22 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
             className="input pl-10"
           />
         </form>
+        {all.length > 0 &&
+          (
+            [
+              ["signedup", `Signed up · ${signedUpCount}`, "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"],
+              ["notsigned", `Not signed up · ${all.length - signedUpCount}`, "bg-ink-100 text-ink-700 hover:bg-ink-200"],
+            ] as const
+          ).map(([show, label, tone]) => (
+            <Link
+              key={show}
+              href={`/artists${qs({ show: sp.show === show ? "" : show })}`}
+              aria-current={sp.show === show ? "page" : undefined}
+              className={`badge shrink-0 py-1.5 text-sm ${sp.show === show ? "bg-ink-950 text-white" : tone}`}
+            >
+              {label}
+            </Link>
+          ))}
         {(missingCount > 0 || sp.show === "details") && (
           <Link
             href={`/artists${qs({ show: sp.show === "details" ? "" : "details" })}`}
@@ -145,7 +174,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
       </div>
 
       {acts.length === 0 ? (
-        <Empty>{sp.show === "details" && !sp.q ? "Every act's details are in." : sp.q || sp.show ? "No acts match." : "No acts yet."}</Empty>
+        <Empty>{sp.show === "details" && !sp.q ? "Every act's details are in." : sp.show === "notsigned" && !sp.q ? "Every act has signed up." : sp.q || sp.show ? "No acts match." : "No acts yet."}</Empty>
       ) : view === "cards" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {acts.map((a) => (
@@ -161,9 +190,7 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
                 <span className="badge bg-ink-100 text-ink-700">{a._count.bookings} upcoming</span>
                 {onTime(a.id)}
-                <span className={`badge ${a.login ? "bg-emerald-50 text-emerald-800" : "bg-ink-100 text-ink-500"}`}>
-                  {a.login ? "Has app login" : "No app login"}
-                </span>
+                {signupBadge(a)}
                 {missing(a) && missingBadge}
               </div>
             </Link>
@@ -233,7 +260,10 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
                         {a.genre && <span className="block text-xs font-normal text-ink-500">{a.genre}</span>}
                       </span>
                     </Link>
-                    {missing(a) && <div className="mt-1 pl-[42px]">{missingBadge}</div>}
+                    <div className="mt-1 flex flex-wrap gap-1 pl-[42px]">
+                      {signupBadge(a)}
+                      {missing(a) && missingBadge}
+                    </div>
                   </td>
                   <td className="hidden max-w-72 text-sm sm:table-cell">
                     {a.partActs.length > 0 && <div className="truncate">{a.partActs.map((l) => l.child.name).join(", ")}</div>}

@@ -102,8 +102,9 @@ it("reads UK VAT numbers", () => {
 });
 
 describe("what's missing", () => {
-  it("lists bank details, address and NI number", () => {
-    expect(missingDetails(EMPTY)).toEqual(["bank details", "address", "National Insurance number"]);
+  it("lists bank details and address (the NI number is optional)", () => {
+    expect(missingDetails(EMPTY)).toEqual(["bank details", "address"]);
+    expect(missingDetails({ ...FULL, niNumber: "" })).toEqual([]);
     expect(missingDetails(FULL)).toEqual([]);
     expect(missingDetails({ ...FULL, bankSortCode: "" })).toEqual(["bank details"]);
   });
@@ -118,7 +119,9 @@ describe("what's missing", () => {
     const then = new Date("2026-01-01");
     expect(completedAt(FULL, then)).toBe(then);
     expect(completedAt(FULL, null, new Date("2026-02-02"))?.toISOString()).toBe("2026-02-02T00:00:00.000Z");
-    expect(completedAt({ ...FULL, niNumber: "" }, then)).toBeNull();
+    expect(completedAt({ ...FULL, address: "" }, then)).toBeNull();
+    // The NI number is optional, so taking it out keeps the details complete.
+    expect(completedAt({ ...FULL, niNumber: "" }, then)).toBe(then);
   });
 });
 
@@ -142,9 +145,10 @@ describe("the act's form", () => {
     });
   });
 
-  it("requires address, NI number and bank details", () => {
+  it("requires address and bank details, but not the NI number", () => {
     expect(() => readPayFields(form({ ...all, address: "" }), EMPTY, { required: true })).toThrow(/postal address/);
-    expect(() => readPayFields(form({ ...all, niNumber: "" }), EMPTY, { required: true })).toThrow(/National Insurance/);
+    expect(readPayFields(form({ ...all, niNumber: "" }), EMPTY, { required: true }).niNumber).toBe("");
+    expect(readPayFields(form({ ...all, niNumber: "" }), FULL, { required: true }).niNumber).toBe(FULL.niNumber);
     expect(() => readPayFields(form({ ...all, bankAccountName: "" }), EMPTY, { required: true })).toThrow(/name on the bank account/);
   });
 

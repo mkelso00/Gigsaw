@@ -262,7 +262,7 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
       >
         <span className="min-w-0">
           <span className="block font-medium">Your details</span>
-          <span className="block text-sm text-ink-400">Bank account, address and National Insurance number. How you get paid.</span>
+          <span className="block text-sm text-ink-400">Bank account and address. How you get paid.</span>
         </span>
         <span className="shrink-0 text-ink-400" aria-hidden>
           →

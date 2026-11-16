@@ -151,7 +151,7 @@ async function linkFor(
       brand: business,
       preheader: `Set your password, then add your bank details. The link works for ${CLAIM_HOURS} hours.`,
       title: "Set your password",
-      intro: `Hi ${user.name.split(" ")[0]}, ${business} uses Gigsaw for your bookings and to pay you. Choose a password, then add your bank details, address and National Insurance number. This is how you'll get paid from now on.`,
+      intro: `Hi ${user.name.split(" ")[0]}, ${business} uses Gigsaw for your bookings and to pay you. Choose a password, then add your bank details and address. This is how you'll get paid from now on.`,
       cta: { label: "Set my password", url: link },
       rows: [
         ["Your login", user.email],

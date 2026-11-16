@@ -75,7 +75,7 @@ export function missingDetails(a: PayDetails): string[] {
   const out: string[] = [];
   if (!a.bankAccountName.trim() || !a.bankSortCode.trim() || !a.bankAccountNumber.trim()) out.push("bank details");
   if (!a.address.trim()) out.push("address");
-  if (!a.niNumber.trim()) out.push("National Insurance number");
+  // The National Insurance number is optional: asked for, but not needed to get started or be paid.
   return out;
 }
 
@@ -118,7 +118,8 @@ export function tidyAddress(s: string) {
  * bank details and the NI number only appear once the person presses Change, so leaving them
  * alone keeps what's on file without the full numbers ever being sent to the page.
  *
- * `required` (the act's own form): address, NI number and bank details must all be there.
+ * `required` (the act's own form): address and bank details must be there. The NI number is optional
+ * on every form, but if one is typed it must be a real one.
  * Otherwise (an admin's edit) a field can be left blank, but whatever is typed must be right.
  */
 export function readPayFields(form: FormData, before: PayFields, { required }: { required: boolean }): PayFields {
@@ -130,14 +131,13 @@ export function readPayFields(form: FormData, before: PayFields, { required }: {
 
   if (has("niNumber")) {
     const raw = str(form, "niNumber");
-    if (!raw && !required) out.niNumber = "";
+    if (!raw) out.niNumber = before.niNumber && required ? before.niNumber : "";
     else {
       const ni = parseNiNumber(raw);
       if (!ni) throw new FormError("Check the National Insurance number: two letters, six numbers and a letter, like QQ 12 34 56 C");
       out.niNumber = ni;
     }
   }
-  if (required && !out.niNumber) throw new FormError("Add your National Insurance number");
 
   if (has("bankAccountNumber") || has("bankSortCode") || has("bankAccountName")) {
     const name = str(form, "bankAccountName").slice(0, 120);

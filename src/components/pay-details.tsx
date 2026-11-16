@@ -41,10 +41,9 @@ export function ActDetailsForm({ act, showName }: { act: ActPay; showName: boole
   );
   const niInput = (
     <label className="block">
-      <span className={darkLabel}>National Insurance number</span>
+      <span className={darkLabel}>National Insurance number (optional)</span>
       <input
         name="niNumber"
-        required
         autoCapitalize="characters"
         autoComplete="off"
         placeholder="QQ 12 34 56 C"
