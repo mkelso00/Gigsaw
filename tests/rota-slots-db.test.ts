@@ -92,6 +92,24 @@ describeDb("weekly slots at venues (database)", () => {
     expect(needs.every((n) => n.date >= start)).toBe(true);
   });
 
+  it("puts a new weekly slot's gigs in the calendar straight away, as Pending, from its start date", async () => {
+    const { createSlots } = await import("@/actions/slots");
+    const start = addDaysToKey(today, 10);
+    const res = await createSlots(venueId, empty, slotForm({ weekday: ["2", "4"], startsOn: start, label: "In the calendar", fillCalendar: "on", fillWeeks: "6" }));
+    expect(res?.ok).toMatch(/12 gigs are in the calendar now/);
+    const made = await slotsOf({ label: "In the calendar" });
+    const gigs = await prisma.booking.findMany({ where: { agencyId, slotId: { in: made.map((s) => s.id) } } });
+    expect(gigs).toHaveLength(12);
+    expect(gigs.every((g) => g.status === "PENDING" && !g.artistId)).toBe(true);
+    const { localDateKey } = await import("@/lib/time");
+    expect(gigs.every((g) => localDateKey(g.setStart, "Europe/London") >= start)).toBe(true);
+    // Without the tick, nothing goes in the calendar.
+    const none = await createSlots(venueId, empty, slotForm({ weekday: ["6"], startsOn: start, label: "Rota only" }));
+    expect(none?.ok).not.toMatch(/in the calendar/);
+    const rotaOnly = await slotsOf({ label: "Rota only" });
+    expect(await prisma.booking.count({ where: { slotId: rotaOnly[0].id } })).toBe(0);
+  });
+
   it("still runs every week for a slot with no dates (made before they existed)", async () => {
     const old = await prisma.venueSlot.create({
       data: { agencyId, venueId, weekday: 2, arriveTime: "18:30", startTime: "19:00", endTime: "21:00", label: "Old" },
@@ -137,15 +155,22 @@ describeDb("weekly slots at venues (database)", () => {
         mode: "confirm",
       }),
     );
-    expect(res?.ok).toBe("Weekly at Rota Bar: every Monday, Thursday from 1 Jan 2027 to 30 Jun 2027, 20:00–22:00. Booked Rota Singer for the first 2.");
+    expect(res?.ok).toBe(
+      "Weekly at Rota Bar: every Monday, Thursday from 1 Jan 2027 to 30 Jun 2027, 20:00–22:00. Booked Rota Singer for the first 2. The next 22 are in the calendar too, Pending (yellow) until an act is booked.",
+    );
     const made = await slotsOf({ label: "New year" });
     expect(made.map((s) => [s.weekday, s.startsOn, s.endsOn, s.artistId])).toEqual([
       [1, "2027-01-01", "2027-06-30", artistId],
       [4, "2027-01-01", "2027-06-30", artistId],
     ]);
     const gigs = await prisma.booking.findMany({ where: { slotId: { in: made.map((s) => s.id) } }, orderBy: { arriveBy: "asc" } });
-    expect(gigs.map((g) => localDateKey(g.arriveBy, g.timezone))).toEqual(["2027-01-04", "2027-01-07"]);
-    expect(gigs.every((g) => g.status === "CONFIRMED" && g.artistId === artistId)).toBe(true);
+    // The first of each day is booked with the act; the next 11 weeks of each are in the calendar as Pending.
+    const firsts = gigs.filter((g) => g.artistId);
+    expect(firsts.map((g) => localDateKey(g.arriveBy, g.timezone))).toEqual(["2027-01-04", "2027-01-07"]);
+    expect(firsts.every((g) => g.status === "CONFIRMED" && g.artistId === artistId)).toBe(true);
+    const later = gigs.filter((g) => !g.artistId);
+    expect(later).toHaveLength(22);
+    expect(later.every((g) => g.status === "PENDING")).toBe(true);
   });
 
   it("stops a slot from a date: empty bookings after it archived, ones with an act kept", async () => {
@@ -182,9 +207,9 @@ describeDb("weekly slots at venues (database)", () => {
     expect(await state(emptyAfter.id)).not.toBeNull();
     expect(await state(emptyLater.id)).not.toBeNull();
 
-    // It can't be deleted (it has bookings), only stopped.
+    // It can't be deleted (a gig with an act was booked from it), only stopped. Empty Pending gigs don't count.
     const { deleteSlot } = await import("@/actions/slots");
-    expect((await deleteSlot(slot.id, empty))?.error).toMatch(/^It has 2 bookings made from it, so stop it from a date instead\.$/);
+    expect((await deleteSlot(slot.id, empty))?.error).toMatch(/^It has 1 booking made from it, so stop it from a date instead\.$/);
   });
 
   it("deletes a slot nothing was booked from, like one the old Every week made by mistake", async () => {
@@ -192,6 +217,15 @@ describeDb("weekly slots at venues (database)", () => {
     const slot = await prisma.venueSlot.create({ data: { agencyId, venueId, weekday: 7, arriveTime: "12:30", startTime: "13:00", endTime: "15:00" } });
     expect(await deleteSlot(slot.id, empty)).toEqual({ ok: "Deleted." });
     expect(await prisma.venueSlot.count({ where: { id: slot.id } })).toBe(0);
+  });
+
+  it("deletes a slot whose only gigs are the empty Pending ones it put in the calendar, and those go too", async () => {
+    const { createSlots, deleteSlot } = await import("@/actions/slots");
+    await createSlots(venueId, empty, slotForm({ weekday: ["7"], label: "Placeholders", fillCalendar: "on", fillWeeks: "4" }));
+    const [slot] = await slotsOf({ label: "Placeholders" });
+    expect(await prisma.booking.count({ where: { slotId: slot.id } })).toBe(4);
+    expect(await deleteSlot(slot.id, empty)).toEqual({ ok: "Deleted." });
+    expect(await prisma.booking.count({ where: { slotId: slot.id } })).toBe(0);
   });
 
   it("keeps a slot's dates when a form without date boxes saves it, and checks them when it has them", async () => {

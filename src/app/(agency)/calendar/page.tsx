@@ -79,10 +79,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   };
   if (sp.artist) where.artistId = sp.artist;
   if (sp.town) where.venue = { city: { equals: sp.town, mode: "insensitive" } };
+  // One venue only, to concentrate on its gigs.
+  if (sp.venue) where.venueId = sp.venue;
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   else where.status = { not: "CANCELLED" };
 
-  const [bookings, artists, towns, awayAll] = await Promise.all([
+  const [bookings, artists, towns, awayAll, venues] = await Promise.all([
     prisma.booking.findMany({
       where,
       include: {
@@ -105,7 +107,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.venue.findMany({ where: { agencyId: user.agencyId, city: { not: "" } }, distinct: ["city"], select: { city: true }, orderBy: { city: "asc" } }),
     awayBetween(user.agencyId, gridStart, addDaysToKey(gridEnd, -1)),
+    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
   ]);
+  const venueName = sp.venue ? venues.find((v) => v.id === sp.venue)?.name : undefined;
   // Days acts have blocked out. For one act, its own and those of acts inside it (a band is away
   // while one of its acts is); for everyone, each block once, on the act that added it.
   const away = sp.artist ? awayAll.filter((e) => e.artistId === sp.artist) : awayAll.filter((e) => e.own);
@@ -125,7 +129,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     byDay.set(key, [...(byDay.get(key) ?? []), b]);
   }
 
-  const keep = { artist: sp.artist, status: sp.status, colour: sp.colour, town: sp.town, view };
+  const keep = { artist: sp.artist, status: sp.status, colour: sp.colour, town: sp.town, venue: sp.venue, view };
   const qs = (extra: Record<string, string>) =>
     "?" + new URLSearchParams(Object.entries({ ...keep, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
   type Gig = (typeof bookings)[number];
@@ -190,7 +194,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
       <PageHeader
         title="Calendar"
-        subtitle={`${bookings.length} booking${bookings.length === 1 ? "" : "s"}${sp.town ? ` in ${sp.town}` : ""} · confirmed gigs in each ${byArtist ? "act" : "venue"}'s colour${away.length ? " · amber is an act away" : ""}`}
+        subtitle={`${bookings.length} booking${bookings.length === 1 ? "" : "s"}${venueName ? ` at ${venueName}` : sp.town ? ` in ${sp.town}` : ""} · confirmed gigs in each ${byArtist ? "act" : "venue"}'s colour${away.length ? " · amber is an act away" : ""}`}
         actions={
           <Link href={`/availability/new?date=${anchor >= todayKey ? anchor : todayKey}${sp.artist ? `&artistId=${sp.artist}` : ""}`} className="btn">
             Ask who&apos;s free
@@ -237,10 +241,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </span>
       </div>
 
-      <FilterPanel always active={[sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
+      <FilterPanel always active={[sp.venue, sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="date" value={anchor} />
+          <label>
+            <span className="label">Venue</span>
+            <select name="venue" defaultValue={sp.venue ?? ""} className="input max-w-56">
+              <option value="">All venues</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.city ? `, ${v.city}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             <span className="label">Town</span>
             <select name="town" defaultValue={sp.town ?? ""} className="input">

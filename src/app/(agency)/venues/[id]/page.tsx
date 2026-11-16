@@ -43,7 +43,11 @@ export default async function VenuePage({ params, searchParams }: { params: Prom
     }),
     prisma.venueSlot.findMany({
       where: { agencyId: user.agencyId, venueId: id },
-      include: { artist: { select: { id: true, name: true } }, _count: { select: { bookings: { where: { status: { not: "CANCELLED" } } } } } },
+      include: {
+        artist: { select: { id: true, name: true } },
+        // Empty Pending gigs (no act yet) don't stop a slot being deleted: they go with it (deleteSlot).
+        _count: { select: { bookings: { where: { status: { not: "CANCELLED" }, NOT: { status: "PENDING", artistId: null } } } } },
+      },
     }),
   ]);
   if (!venue) notFound();

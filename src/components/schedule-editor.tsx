@@ -282,6 +282,13 @@ export function ScheduleEditor({
             <span className="hint block">Tick every day it happens, e.g. Mon to Thu 19:00–21:00. Each day becomes its own slot.</span>
           </div>
           <SlotFields artists={artists} contacts={contacts} currency={currency} today={today} />
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <input type="checkbox" name="fillCalendar" defaultChecked className="h-4 w-4 accent-ink-950" />
+            Put them in the calendar now, for the next
+            <input name="fillWeeks" type="number" min={1} max={52} defaultValue={12} className="input h-8 w-16 px-2 py-1" aria-label="Weeks" />
+            weeks
+            <span className="hint block w-full">They show as Pending (yellow) until an act is booked. You can add more weeks any time from the Rota.</span>
+          </label>
           <SubmitButton>Add weekly slot</SubmitButton>
         </ActionForm>
       </div>

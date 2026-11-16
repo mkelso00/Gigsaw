@@ -13,8 +13,8 @@ export function ScheduleSection({ booking, zone }: { booking: BookingView; zone:
         items={[
           ["Arrive by", formatDateTime(booking.arriveBy, tz)],
           ["Soundcheck", booking.soundcheckAt ? localTime(booking.soundcheckAt, tz) : ""],
-          ["On stage", formatDateTime(booking.setStart, tz)],
-          ["Off stage", booking.setEnd ? formatDateTime(booking.setEnd, tz) : ""],
+          ["Start", formatDateTime(booking.setStart, tz)],
+          ["Finish", booking.setEnd ? formatDateTime(booking.setEnd, tz) : ""],
         ]}
       />
       {/* Weekly residencies change together: point to both ways of doing that from here. */}

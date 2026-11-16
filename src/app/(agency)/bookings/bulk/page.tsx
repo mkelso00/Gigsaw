@@ -49,19 +49,22 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
             ))}
             <section>
               <h2 className="section-title mb-1">New times</h2>
-              <p className="mb-4 text-sm text-ink-500">For example, every Wednesday moving from 18:00–20:00 to 19:00–21:00.</p>
+              <p className="mb-4 text-sm text-ink-500">
+                For example, every Wednesday moving from 18:00–20:00 to 19:00–21:00. Leave a box empty to keep it as it is. Change the start and leave Arrive by
+                empty, and arrival moves to 30 minutes before the new start.
+              </p>
               <div className="grid gap-4 sm:grid-cols-4">
-                <Field label="Arrive by">
-                  <input type="time" name="arriveTime" className="input" />
-                </Field>
-                <Field label="Soundcheck">
-                  <input type="time" name="soundcheckTime" className="input" />
-                </Field>
-                <Field label="On stage">
+                <Field label="Start">
                   <input type="time" name="setStartTime" className="input" />
                 </Field>
-                <Field label="Off stage">
+                <Field label="Finish">
                   <input type="time" name="setEndTime" className="input" />
+                </Field>
+                <Field label="Arrive by (optional)">
+                  <input type="time" name="arriveTime" className="input" />
+                </Field>
+                <Field label="Soundcheck (optional)">
+                  <input type="time" name="soundcheckTime" className="input" />
                 </Field>
               </div>
             </section>

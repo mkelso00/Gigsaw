@@ -13,7 +13,7 @@ export const CALENDAR_COOKIE = "gigsaw_calendar";
 export const CALENDAR_COOKIE_DAYS = 180;
 const DATE_KEPT_MS = 12 * 3600 * 1000;
 
-const KEYS = ["view", "date", "town", "artist", "status", "colour"] as const;
+const KEYS = ["view", "date", "town", "venue", "artist", "status", "colour"] as const;
 type Saved = Partial<Record<(typeof KEYS)[number], string>>;
 
 /** Only well-formed values come back, whatever the cookie says. */
@@ -23,7 +23,7 @@ function clean(input: Record<string, string | undefined>): Saved {
   if (isDateKey(input.date)) out.date = input.date;
   if (input.status && (BOOKING_STATUSES as readonly string[]).includes(input.status)) out.status = input.status;
   if (input.colour === "artist") out.colour = input.colour;
-  for (const k of ["town", "artist"] as const) {
+  for (const k of ["town", "venue", "artist"] as const) {
     const v = input[k]?.trim();
     if (v && v.length <= 120) out[k] = v;
   }

@@ -128,15 +128,31 @@ export async function createSlots(venueId: string, _: FormState, form: FormData)
       .filter((d) => d >= 1 && d <= 7);
     if (!days.length) throw new FormError("Tick at least one day");
     const fields = await slotFields(form, user);
-    await prisma.venueSlot.createMany({
+    const slots = await prisma.venueSlot.createManyAndReturn({
       data: days.map((weekday) => ({
         ...fields,
         weekday,
         venueId,
         agencyId: user.agencyId,
       })),
+      include: { venue: true },
     });
     await logActivity(user, "VENUE", venueId, "added schedule slots", `${days.length} × ${fields.startTime}–${fields.endTime}`);
+    // Straight into the calendar as gigs (Pending, so yellow until an act is booked), so a new weekly slot
+    // shows up where people look for it rather than only on the Rota.
+    const weeks = str(form, "fillCalendar") === "on" ? Math.min(Math.max(int(form, "fillWeeks") ?? 12, 1), 52) : 0;
+    let made = 0;
+    if (weeks) {
+      const settings = await getSettings(user.agencyId);
+      const today = localDateKey(new Date(), settings.defaultTimezone);
+      const from = fields.startsOn && fields.startsOn > today ? fields.startsOn : today;
+      for (const slot of slots) {
+        for (let w = 0, date = nextWeekday(from, slot.weekday); w < weeks; w++, date = addDaysToKey(date, 7)) {
+          if (!slotRunsOn(slot, date)) continue;
+          if (await bookSlot(user, slot, date, null)) made++;
+        }
+      }
+    }
     revalidatePath("/", "layout");
     const names = days
       .sort()
@@ -144,7 +160,8 @@ export async function createSlots(venueId: string, _: FormState, form: FormData)
       .join(", ");
     const from = fields.startsOn ? ` from ${formatDay(fields.startsOn)}` : "";
     const until = fields.endsOn ? ` to ${formatDay(fields.endsOn)}` : "";
-    return { ok: `Added: every ${names}${from}${until}, ${fields.startTime}–${fields.endTime}.` };
+    const inCalendar = made ? ` ${made} gig${made === 1 ? " is" : "s are"} in the calendar now, yellow until an act is booked.` : "";
+    return { ok: `Added: every ${names}${from}${until}, ${fields.startTime}–${fields.endTime}.${inCalendar}` };
   });
 }
 
@@ -199,15 +216,18 @@ export async function updateSlot(slotId: string, _: FormState, form: FormData): 
 }
 
 /**
- * Delete a weekly slot that has nothing booked from it (cancelled gigs don't count), e.g. one added
- * by mistake. One with bookings is stopped instead (stopSlot), so its history stays with it.
+ * Delete a weekly slot that has nothing really booked from it, e.g. one added by mistake. Cancelled gigs don't
+ * count, nor do the empty Pending gigs a new slot puts in the calendar (no act, nothing paid): those go with
+ * it. One with real bookings is stopped instead (stopSlot), so its history stays with it.
  */
 export async function deleteSlot(slotId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
     const slot = await ownSlot(user, slotId);
-    const booked = await prisma.booking.count({ where: { slotId: slot.id, agencyId: user.agencyId, status: { not: "CANCELLED" } } });
+    const placeholder = { status: "PENDING", artistId: null, payments: { none: {} } } as const;
+    const booked = await prisma.booking.count({ where: { slotId: slot.id, agencyId: user.agencyId, status: { not: "CANCELLED" }, NOT: placeholder } });
     if (booked) throw new FormError(`It has ${booked} booking${booked === 1 ? "" : "s"} made from it, so stop it from a date instead.`);
+    await prisma.booking.deleteMany({ where: { slotId: slot.id, agencyId: user.agencyId, ...placeholder } });
     await prisma.venueSlot.delete({ where: { id: slot.id } });
     await logActivity(user, "VENUE", slot.venueId, "deleted a weekly slot", `${WEEKDAYS[slot.weekday - 1][2]} ${slot.startTime}–${slot.endTime}`);
     revalidatePath("/", "layout");
@@ -493,7 +513,8 @@ const DEFAULT_REPEAT_WEEKS = 12;
  *    every week from this date, as real bookings, for a number of weeks or until a last date.
  *  - "Every week" (repeat=on, the rota): adds weekly slots to the venue's schedule starting on
  *    this date, on the days ticked (weekday) or this date's day, up to an optional last date
- *    (endsOn), with this act as the regular, and books the first date of each.
+ *    (endsOn), with this act as the regular, books the first date of each, and puts the next 11 weeks
+ *    in the calendar as Pending.
  */
 export async function addRotaGig(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
@@ -611,6 +632,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
 
     if (weekly && venue) {
       const ids: string[] = [];
+      let pendingAfter = 0;
       for (const weekday of slotDays) {
         const created = await prisma.venueSlot.create({
           data: { ...fields, startsOn: date, promoterId, agencyId: user.agencyId, venueId: venue.id, weekday },
@@ -620,6 +642,11 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         if (slotRunsOn(created, first)) {
           const id = await bookSlot(user, created, first, artist?.id ?? null, status);
           if (id) ids.push(id);
+        }
+        // The weeks after the first go in the calendar too (Pending, yellow), so the slot is visible there
+        // straight away. The regular act can be booked into them from the Rota ("Put the weekly slots in the calendar").
+        for (let w = 1, d = addDaysToKey(first, 7); w < 12; w++, d = addDaysToKey(d, 7)) {
+          if (slotRunsOn(created, d) && (await bookSlot(user, created, d, null))) pendingAfter++;
         }
       }
       const days = slotDays.map((d) => WEEKDAYS[d - 1][2]).join(", ");
@@ -635,7 +662,8 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
           : status === "AWAITING"
             ? ` Offered the first ${ids.length === 1 ? "one" : ids.length} to ${artist.name}.${offered ? " They've been sent the offer." : ""}`
             : ` Booked ${artist.name} for the first ${ids.length === 1 ? "one" : ids.length}.`;
-      return { ok: `Weekly at ${venue.name}: every ${days} from ${formatDay(date)}${until}, ${fields.startTime}–${fields.endTime}.${firstOnes}` };
+      const later = pendingAfter ? ` The next ${pendingAfter} are in the calendar too, Pending (yellow) until an act is booked.` : "";
+      return { ok: `Weekly at ${venue.name}: every ${days} from ${formatDay(date)}${until}, ${fields.startTime}–${fields.endTime}.${firstOnes}${later}` };
     }
 
     const booking = await createBookingWithReference(user.agencyId, {
