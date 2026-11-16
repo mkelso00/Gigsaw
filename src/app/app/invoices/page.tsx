@@ -3,9 +3,13 @@ import Link from "next/link";
 import type { ActInvoiceStatus } from "@/lib/act-invoice-rules";
 import { invoicesForActLogin } from "@/lib/act-invoices";
 import { requireUser } from "@/lib/auth";
-import { getSettings, prisma } from "@/lib/db";
+import { needsPayDetails } from "@/lib/act-details-server";
+import { getSettings } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
+import { leadOf, peopleOf, type PayAct } from "@/lib/payee";
+import { loadPayActs } from "@/lib/payee-server";
 import { ownActIds } from "@/lib/people";
+import { personName } from "@/lib/person-name";
 import { formatDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Your invoices" };
@@ -23,8 +27,18 @@ const STATUS_STYLES: Record<ActInvoiceStatus, string> = {
 // invoice says: never what the venue or customer paid.
 export default async function ActInvoices() {
   const user = await requireUser(["ARTIST"]);
-  const [invoices, settings, actIds] = await Promise.all([invoicesForActLogin(user), getSettings(user.agencyId), ownActIds(user)]);
-  const notReady = actIds.length ? await prisma.artist.count({ where: { id: { in: actIds }, agencyId: user.agencyId, detailsCompletedAt: null } }) : 0;
+  const [invoices, settings, actIds, notReady] = await Promise.all([
+    invoicesForActLogin(user),
+    getSettings(user.agencyId),
+    ownActIds(user),
+    needsPayDetails(user),
+  ]);
+  // A band's invoices go to its lead (src/lib/payee.ts): the others are told who, never shown the band's money.
+  const acts = user.personId ? await loadPayActs(user.agencyId, actIds) : new Map<string, PayAct>();
+  const elsewhere = [...acts.values()].flatMap((a) => {
+    const lead = leadOf(a);
+    return peopleOf(a).length > 1 && lead?.id !== user.personId ? [{ id: a.id, act: a.name, to: lead ? personName(lead) : null }] : [];
+  });
   const tz = settings.defaultTimezone;
   const sum = (status: string) => invoices.filter((i) => i.status === status).reduce((t, i) => t + i.totalMinor, 0);
   const currency = invoices[0]?.currency ?? settings.defaultCurrency;
@@ -42,7 +56,13 @@ export default async function ActInvoices() {
         </p>
       </div>
 
-      {notReady > 0 && (
+      {elsewhere.map((e) => (
+        <p key={e.id} className={`${panel} p-4 text-sm text-ink-300`}>
+          {e.to ? `${e.act}'s invoices are made out to ${e.to}, who gets paid for the band.` : `${settings.agencyName} will choose who gets paid for ${e.act}.`}
+        </p>
+      ))}
+
+      {notReady && (
         <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-200">
           We need your bank details and address before we can make your invoices. Add them, or ask your agent.
         </p>

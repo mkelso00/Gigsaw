@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { hashPassword, requireStaff, type AgencyUser } from "@/lib/auth";
 import { bankChanged, completedAt, readPayFields, type PayFields } from "@/lib/act-details";
 import { parseActProfile } from "@/lib/act-profile";
+import { legalName, peopleOf } from "@/lib/payee";
+import { loadPayActs } from "@/lib/payee-server";
 import { actBookingCounts, actInUseMessage } from "@/lib/archive";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
@@ -79,6 +81,17 @@ async function artistData(form: FormData, agencyId: string) {
   };
 }
 
+/** "Invoices go to" from the act form: someone in the act, or nobody. Nothing when the form doesn't have it. */
+async function leadData(form: FormData, user: AgencyUser, artistId: string): Promise<{ leadPersonId?: string | null; name: string }> {
+  if (!form.has("leadPersonId")) return { name: "" };
+  const id = str(form, "leadPersonId");
+  if (!id) return { leadPersonId: null, name: "" };
+  const act = (await loadPayActs(user.agencyId, [artistId])).get(artistId);
+  const person = act && peopleOf(act).find((p) => p.id === id);
+  if (!person) throw new FormError("Choose someone in the act for its invoices");
+  return { leadPersonId: person.id, name: legalName(person) };
+}
+
 async function ownArtist(user: AgencyUser, artistId: string) {
   const artist = await prisma.artist.findFirst({ where: { id: artistId, agencyId: user.agencyId }, include: { login: true } });
   if (!artist) throw new FormError("Artist not found");
@@ -102,7 +115,19 @@ export async function updateArtist(artistId: string, _: FormState, form: FormDat
   const user = await requireStaff();
   const res = await handleForm(async () => {
     const before = await ownArtist(user, artistId);
-    const saved = await prisma.artist.update({ where: { id: artistId }, data: { ...(await artistData(form, user.agencyId)), ...payData(form, user, before) } });
+    const lead = await leadData(form, user, artistId);
+    const saved = await prisma.artist.update({
+      where: { id: artistId },
+      data: {
+        ...(await artistData(form, user.agencyId)),
+        ...payData(form, user, before),
+        ...(lead.leadPersonId !== undefined ? { leadPersonId: lead.leadPersonId } : {}),
+      },
+    });
+    if (lead.leadPersonId !== undefined && lead.leadPersonId !== before.leadPersonId) {
+      // Who gets paid is worth seeing on its own in the log.
+      await logActivity(user, "ARTIST", artistId, lead.leadPersonId ? "chose who invoices go to" : "cleared who invoices go to", lead.name);
+    }
     // The act's name is in its calendar events.
     if (saved.name !== before.name) queueCalendarSync(await calendarGigIds({ agencyId: user.agencyId, artistId }));
     await logActivity(user, "ARTIST", artistId, "updated artist");

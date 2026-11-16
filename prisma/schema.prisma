@@ -259,7 +259,13 @@ model Artist {
   // National Insurance number, kept for the agency's records only: never shown to venues, customers or other acts.
   niNumber          String  @default("")
   // When the act last finished the details the agency asks for (bank, address, NI), so staff can see who's ready to be paid.
+  // Since people have their own pay details (see Person), these are only used for an act with nobody on file, or one
+  // whose details from before couldn't be moved to a person yet (src/lib/payee.ts).
   detailsCompletedAt DateTime?
+  // The person a band's self-billing invoices are made out to and paid to ("Invoices go to"). Chosen by staff; an act
+  // with only one person doesn't need one (that person is the payee).
+  leadPersonId      String?
+  leadPerson        Person? @relation("ActLead", fields: [leadPersonId], references: [id], onDelete: SetNull)
 
   login    User?                  @relation("ArtistLogin")
   slots    VenueSlot[]
@@ -730,8 +736,19 @@ model Person {
   calendarToken String      @unique @default(cuid())
   demo          Boolean     @default(false)
   createdAt     DateTime    @default(now())
+  // Pay details, for a musician in an act: they fill them in from their own login (Your details), and the act's
+  // invoices go to them when they're the act's payee (src/lib/payee.ts). Bank and NI number: the person themself
+  // and the agency's admins only. `address` above is their postal address, used on the invoices too.
+  bankAccountName    String    @default("")
+  bankSortCode       String    @default("")
+  bankAccountNumber  String    @default("")
+  vatRegistered      Boolean   @default(false)
+  vatNumber          String    @default("")
+  niNumber           String    @default("")
+  detailsCompletedAt DateTime?
   acts          PersonAct[]
   login         User?       @relation("PersonLogin")
+  leadOf        Artist[]    @relation("ActLead")
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -1244,8 +1261,13 @@ model ActInvoice {
   bookingRef        String
   description       String
   gigDate           DateTime // the date of the performance (the tax point)
-  // The act as they were when it was issued.
+  // The act as they were when it was issued. The payee is who it's made out to and paid to: the band's lead person,
+  // the one person in a solo act, or the act itself when it has nobody on file (src/lib/payee.ts).
   actName           String
+  payeeName         String    @default("")
+  // The person it's made out to, or null when the act itself is the payee. No foreign key: the invoice is a record,
+  // and a deleted person's invoice must never fall back to being shown to the act's own login.
+  payeePersonId     String?
   actAddress        String    @default("")
   actVatNumber      String    @default("") // blank unless VAT registered
   bankAccountName   String    @default("")
@@ -1257,5 +1279,6 @@ model ActInvoice {
   @@unique([agencyId, number])
   @@index([agencyId, status])
   @@index([artistId, issuedAt])
+  @@index([payeePersonId])
   @@index([bookingId])
 }

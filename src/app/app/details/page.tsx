@@ -2,20 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ActDetailsForm } from "@/components/pay-details";
 import { needsDetails, PAY_REASON } from "@/lib/act-details";
-import { payActsFor } from "@/lib/act-details-server";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
+import { leadOf } from "@/lib/payee";
+import { loadPayActs, payHoldersFor } from "@/lib/payee-server";
+import { personName } from "@/lib/person-name";
 
 export const metadata: Metadata = { title: "Your details" };
 export const dynamic = "force-dynamic";
 
-// Your details: bank account, address and National Insurance number. Every other page of the act
-// app sends the act here until these are in (requireActApp), and they can come back to change them.
+// Your details: bank account, address and National Insurance number. Every other page of the act app
+// sends the login here until these are in (requireActApp), and they can come back to change them. A
+// person fills in their own, even in a band: the band's invoices go to its lead (src/lib/payee.ts).
 export default async function YourDetailsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const user = await requireUser(["ARTIST"]);
-  const [acts, settings, sp] = await Promise.all([payActsFor(user), getSettings(user.agencyId), searchParams]);
+  const [holders, settings, sp] = await Promise.all([payHoldersFor(user), getSettings(user.agencyId), searchParams]);
   const agency = settings.agencyName || "Your agency";
-  const gate = acts.some(needsDetails);
+  const gate = holders.some(needsDetails);
+  // A band's own login when its lead gives their own details: say who that is.
+  const lead = !holders.length && user.artistId ? leadOf((await loadPayActs(user.agencyId, [user.artistId])).get(user.artistId) ?? noAct) : null;
 
   return (
     <div className="space-y-6">
@@ -36,16 +41,21 @@ export default async function YourDetailsPage({ searchParams }: { searchParams: 
           Saved. Thanks, your details are up to date.
         </p>
       )}
-      {acts.length ? (
-        acts.map((a) => <ActDetailsForm key={a.id} act={a} showName={acts.length > 1} />)
+      {holders.length ? (
+        holders.map((h) => <ActDetailsForm key={h.id} holder={h} showName={holders.length > 1} />)
       ) : (
         <p className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5 text-sm text-ink-400">
-          {agency} looks after the pay details for your acts. Ask them if anything needs changing.
+          {lead
+            ? `${agency} makes the band's invoices out to ${personName(lead)}, who adds their own details from their login.`
+            : `${agency} looks after the pay details for your acts.`}{" "}
+          Ask them if anything needs changing.
         </p>
       )}
       <p className="text-xs leading-relaxed text-ink-500">
-        Only you and {agency}&apos;s admins can see these. They&apos;re never shown to venues or customers.
+        Only you and {agency}&apos;s admins can see these. They&apos;re never shown to venues, customers or anyone else in your act.
       </p>
     </div>
   );
 }
+
+const noAct = { members: [], partPeople: [], leadPersonId: null };

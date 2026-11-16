@@ -16,12 +16,20 @@ export function ArtistForm({
   artist,
   agents,
   showPay,
+  people,
+  leadPersonId,
+  actPay,
 }: {
   action: Action;
   artist?: Artist;
   agents: { id: string; name: string }[];
   /** True for admins: the pay details (bank, address, NI number, VAT). */
   showPay: boolean;
+  /** The people in the act, to choose who its invoices go to. */
+  people?: { id: string; name: string }[];
+  leadPersonId?: string | null;
+  /** True when the act's own pay details are still used or on file, though it has people. */
+  actPay?: boolean;
 }) {
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
@@ -86,8 +94,27 @@ export function ArtistForm({
           <textarea name="setList" rows={3} defaultValue={artist?.setList} className="input" />
         </Field>
       </div>
-      {/* Bank, address and NI number: admins only. Left out of the form, they're kept as they are on save. */}
-      {showPay ? (
+      {/* A band's people: who its invoices go to (src/lib/payee.ts). Any member of staff can choose. */}
+      {people && people.length > 0 && (
+        <Field
+          label="Invoices go to"
+          hint="The invoices are made out to them and paid into their bank account. Everyone in the act still gets the booking messages."
+        >
+          <select name="leadPersonId" defaultValue={people.find((p) => p.id === leadPersonId)?.id ?? ""} className="input">
+            <option value="">{people.length > 1 ? "Choose someone" : `${people[0].name} (the only person)`}</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {/* Bank, address and NI number: admins only. Left out of the form, they're kept as they are on save. An act with
+          people gets them from each person, so the act's own are only shown while some are still on file. */}
+      {people?.length && !actPay ? (
+        <p className="pt-2 text-xs text-ink-500">Pay details are on each person&apos;s page: everyone adds their own from their login.</p>
+      ) : showPay ? (
         <StaffPayFields artist={artist} />
       ) : (
         <p className="pt-2 text-xs text-ink-500">Bank details, address and National Insurance number are only shown to admins.</p>

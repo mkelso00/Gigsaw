@@ -142,6 +142,21 @@ export async function recipientsForActs(actIds: string[]): Promise<Map<string, R
             isMember: true,
           });
         }
+        // The act's own login (a solo act that signed up with the act's email before its person was added, or a
+        // band's shared login) sees these gigs in the app, so it hears about them too: on the phone and at the
+        // login's email, unless a member already has that email. Not the act's phone: the people have theirs.
+        if (act.login) {
+          const taken = new Set([...found.values()].flatMap((r) => r.emails));
+          found.set(`act:${act.id}`, {
+            key: `act:${act.id}`,
+            name: act.name,
+            firstName: act.name,
+            emails: cleanEmails(act.login.email).filter((e) => !taken.has(e)),
+            phone: "",
+            userId: act.login.id,
+            isMember: actId !== id,
+          });
+        }
       } else if (!hasParts || actId === id) {
         // A solo act inside a band, or an act with nobody on file: use the act's own details.
         // (A band with parts but no direct members is reached through its parts.)

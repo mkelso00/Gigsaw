@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  actSnapshot,
+  invoiceSnapshot,
   detailsMissing,
   formatSortCode,
   gigFinished,
@@ -10,7 +10,8 @@ import {
   issueDecision,
   maskAccount,
   owedOnInvoice,
-  type ActDetails,
+  NO_PAYEE,
+  type PayeeDetails,
   type InvoiceableBooking,
 } from "@/lib/act-invoice-rules";
 
@@ -20,7 +21,8 @@ import {
 const HOUR = 3_600_000;
 const now = new Date("2026-12-12T23:00:00Z");
 
-const act = (over: Partial<ActDetails> = {}): ActDetails => ({
+const act = (over: Partial<PayeeDetails> = {}): PayeeDetails => ({
+  personId: null,
   name: "Ellie Rose",
   address: "1 High Street\nLeeds LS1 1AA",
   vatRegistered: false,
@@ -46,7 +48,8 @@ const gig = (over: Partial<InvoiceableBooking> = {}): InvoiceableBooking => ({
   setEnd: new Date(now.getTime() - 2 * HOUR),
   checkIns: [],
   payments: [],
-  artist: act(),
+  artist: { name: "Ellie Rose" },
+  payee: act(),
   ...over,
 });
 
@@ -84,12 +87,12 @@ describe("whether to make an invoice", () => {
     expect(issueDecision(gig({ artistFeeMinor: 0 }), now).issue).toBe(false);
   });
   it("waits for the act's details, and for a VAT number from a VAT-registered act", () => {
-    expect(issueDecision(gig({ artist: act({ detailsCompletedAt: null }) }), now)).toEqual({
+    expect(issueDecision(gig({ payee: act({ detailsCompletedAt: null }) }), now)).toEqual({
       issue: false,
       reason: "Waiting for the act's details",
       waiting: true,
     });
-    expect(issueDecision(gig({ artist: act({ vatRegistered: true }) }), now)).toMatchObject({ waiting: true, reason: "Waiting for the act's VAT number" });
+    expect(issueDecision(gig({ payee: act({ vatRegistered: true }) }), now)).toMatchObject({ waiting: true, reason: "Waiting for the act's VAT number" });
   });
   it("by itself only for the last 30 days and acts not paid already; staff can make older ones", () => {
     const old = gig({ setStart: new Date(now.getTime() - 40 * 24 * HOUR), setEnd: new Date(now.getTime() - 40 * 24 * HOUR + HOUR) });
@@ -108,8 +111,8 @@ describe("amounts and numbers", () => {
     expect(invoiceAmounts(60_050, "GB123456789")).toEqual({ netMinor: 60_050, vatPct: 20, vatMinor: 12_010, totalMinor: 72_060 });
   });
   it("only carries the VAT number when the act is registered", () => {
-    expect(actSnapshot(act({ vatNumber: "GB1" })).actVatNumber).toBe("");
-    expect(actSnapshot(act({ vatRegistered: true, vatNumber: " GB1 " })).actVatNumber).toBe("GB1");
+    expect(invoiceSnapshot("Ellie Rose", act({ vatNumber: "GB1" })).actVatNumber).toBe("");
+    expect(invoiceSnapshot("Ellie Rose", act({ vatRegistered: true, vatNumber: " GB1 " })).actVatNumber).toBe("GB1");
     expect(detailsMissing(act())).toBeNull();
   });
   it("numbers SB-0001 and up", () => {
@@ -134,7 +137,7 @@ describe("amounts and numbers", () => {
 });
 
 describe("changes after an invoice is issued", () => {
-  const inv = { artistId: "act1", currency: "GBP", netMinor: 60_000, vatMinor: 0, ...actSnapshot(act()) };
+  const inv = { artistId: "act1", currency: "GBP", netMinor: 60_000, vatMinor: 0, ...invoiceSnapshot("Ellie Rose", act()) };
   const b = (over: Partial<InvoiceableBooking> & { currency?: string } = {}) => ({ currency: "GBP", ...gig(), ...over });
   it("leaves it alone when nothing that's on it has changed", () => {
     expect(invoiceChange(inv, b())).toBeNull();
@@ -143,9 +146,9 @@ describe("changes after an invoice is issued", () => {
   });
   it("replaces it when the fee or the act's details change", () => {
     expect(invoiceChange(inv, b({ artistFeeMinor: 65_000 }))).toEqual({ keep: true, reason: "The fee changed" });
-    expect(invoiceChange(inv, b({ artist: act({ bankAccountNumber: "87654321" }) }))?.reason).toBe("The act's bank details changed");
-    expect(invoiceChange(inv, b({ artist: act({ vatRegistered: true, vatNumber: "GB9" }) }))?.reason).toBe("The act's VAT registration changed");
-    expect(invoiceChange(inv, b({ artist: act({ address: "2 Low Road" }) }))?.reason).toBe("The act's name or address changed");
+    expect(invoiceChange(inv, b({ payee: act({ bankAccountNumber: "87654321" }) }))?.reason).toBe("The act's bank details changed");
+    expect(invoiceChange(inv, b({ payee: act({ vatRegistered: true, vatNumber: "GB9" }) }))?.reason).toBe("The act's VAT registration changed");
+    expect(invoiceChange(inv, b({ payee: act({ address: "2 Low Road" }) }))?.reason).toBe("The act's name or address changed");
   });
   it("voids it when the gig no longer needs one", () => {
     expect(invoiceChange(inv, b({ status: "CANCELLED" }))).toEqual({ keep: false, reason: "The gig was cancelled" });
@@ -153,6 +156,39 @@ describe("changes after an invoice is issued", () => {
     expect(invoiceChange(inv, null)?.keep).toBe(false);
   });
   it("waits while the act is part way through changing their details", () => {
-    expect(invoiceChange(inv, b({ artist: act({ detailsCompletedAt: null, bankAccountNumber: "1" }) }))).toBeNull();
+    expect(invoiceChange(inv, b({ payee: act({ detailsCompletedAt: null, bankAccountNumber: "1" }) }))).toBeNull();
+  });
+});
+
+describe("made out to a person (a band's lead, or the one person in a solo act)", () => {
+  const jo = act({ personId: "jo", name: "Jo Bloggs", address: "2 Band Lane", bankAccountName: "J Bloggs", bankAccountNumber: "87654321" });
+  it("carries the person's name, address and bank details, with the act named too", () => {
+    expect(invoiceSnapshot("Wonderlust", jo)).toMatchObject({
+      actName: "Wonderlust",
+      payeeName: "Jo Bloggs",
+      payeePersonId: "jo",
+      actAddress: "2 Band Lane",
+      bankAccountNumber: "87654321",
+    });
+  });
+  it("waits for the person's details, and for a band's lead to be chosen", () => {
+    expect(issueDecision(gig({ payee: { ...jo, detailsCompletedAt: null } }), now)).toMatchObject({
+      waiting: true,
+      reason: "Waiting for details from Jo Bloggs",
+    });
+    expect(issueDecision(gig({ payee: null }), now)).toEqual({ issue: false, reason: NO_PAYEE, waiting: true });
+  });
+  it("is replaced when it's to go to someone else, or their details change", () => {
+    const inv = { artistId: "act1", currency: "GBP", netMinor: 60_000, vatMinor: 0, ...invoiceSnapshot("Wonderlust", jo) };
+    const b = (payee: PayeeDetails | null, name = "Wonderlust") => ({ currency: "GBP", ...gig(), artist: { name }, payee });
+    expect(invoiceChange(inv, b(jo))).toBeNull();
+    expect(invoiceChange(inv, b(act({ personId: "kerry", name: "Kerry Lane" })))?.reason).toBe("Who it's made out to changed");
+    // From the act's own details to the lead's (staff chose one): replaced too.
+    expect(invoiceChange({ ...inv, ...invoiceSnapshot("Wonderlust", act()) }, b(jo))?.reason).toBe("Who it's made out to changed");
+    expect(invoiceChange(inv, b({ ...jo, bankAccountNumber: "11112222" }))?.reason).toBe("The payee's bank details changed");
+    expect(invoiceChange(inv, b({ ...jo, address: "3 New Road" }))?.reason).toBe("The payee's name or address changed");
+    expect(invoiceChange(inv, b(jo, "Wonderlust Live"))?.reason).toBe("The act's name changed");
+    // The band's lead taken off: left as it is until someone's chosen.
+    expect(invoiceChange(inv, b(null))).toBeNull();
   });
 });

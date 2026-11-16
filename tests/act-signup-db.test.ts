@@ -283,11 +283,11 @@ describeDb("act sign-up and pay details (database)", () => {
       const { act } = await actLogin();
       await expect(requireActApp()).rejects.toThrow("REDIRECT /app/details");
       // A wrong NI number is refused and nothing is saved.
-      expect(await saveMyDetails(act.id, empty, form({ ...DETAILS, niNumber: "QQ 12 34 56 C" }))).toEqual({
+      expect(await saveMyDetails("act", act.id, empty, form({ ...DETAILS, niNumber: "QQ 12 34 56 C" }))).toEqual({
         error: expect.stringMatching(/National Insurance/),
       });
       await expect(requireActApp()).rejects.toThrow("REDIRECT /app/details");
-      await expect(saveMyDetails(act.id, empty, form(DETAILS))).rejects.toThrow("REDIRECT /app");
+      await expect(saveMyDetails("act", act.id, empty, form(DETAILS))).rejects.toThrow("REDIRECT /app");
       const saved = await prisma.artist.findUniqueOrThrow({ where: { id: act.id } });
       expect(saved).toMatchObject({ bankSortCode: "11-22-33", bankAccountNumber: "12345678", niNumber: "AB123456C", address: "1 High St\nLeeds" });
       expect(saved.detailsCompletedAt).toBeInstanceOf(Date);
@@ -301,7 +301,7 @@ describeDb("act sign-up and pay details (database)", () => {
       const { saveMyDetails } = await import("@/actions/act-details");
       const other = await newAct();
       await actLogin();
-      expect(await saveMyDetails(other.id, empty, form(DETAILS))).toEqual({ error: expect.stringMatching(/can't change these details/) });
+      expect(await saveMyDetails("act", other.id, empty, form(DETAILS))).toEqual({ error: expect.stringMatching(/can't change these details/) });
       expect((await prisma.artist.findUniqueOrThrow({ where: { id: other.id } })).niNumber).toBe("");
     });
 
@@ -309,10 +309,10 @@ describeDb("act sign-up and pay details (database)", () => {
       const { saveMyDetails } = await import("@/actions/act-details");
       const { act } = await actLogin({ ...DETAILS, bankSortCode: "11-22-33", niNumber: "AB123456C", detailsCompletedAt: new Date() });
       // Saving without pressing Change keeps the bank details and sends nothing.
-      await expect(saveMyDetails(act.id, empty, form({ address: "2 New Rd", vatNumber: "" }))).rejects.toThrow("REDIRECT /app/details?saved=1");
+      await expect(saveMyDetails("act", act.id, empty, form({ address: "2 New Rd", vatNumber: "" }))).rejects.toThrow("REDIRECT /app/details?saved=1");
       expect(state.sent).toHaveLength(0);
       await expect(
-        saveMyDetails(act.id, empty, form({ bankAccountName: "Ellie Hart", bankSortCode: "44-55-66", bankAccountNumber: "87654321", vatNumber: "" })),
+        saveMyDetails("act", act.id, empty, form({ bankAccountName: "Ellie Hart", bankSortCode: "44-55-66", bankAccountNumber: "87654321", vatNumber: "" })),
       ).rejects.toThrow("REDIRECT");
       expect(state.sent).toHaveLength(1);
       expect(state.sent[0]).toMatchObject({ kind: "BANK_CHANGE", to: "office@northern.gigsaw.invalid" });
@@ -323,22 +323,53 @@ describeDb("act sign-up and pay details (database)", () => {
       expect(await prisma.activity.count({ where: { entityId: act.id, action: "changed their bank details in the app" } })).toBe(1);
     });
 
-    it("a person's login gives details for the acts they speak for, not every band they play in", async () => {
-      const { payActsFor } = await import("@/lib/act-details-server");
+    it("a person's login gives their own details, on their person, never the band's", async () => {
+      const { payHoldersFor } = await import("@/lib/payee-server");
+      const { requireActApp } = await import("@/lib/act-details-server");
+      const { saveMyDetails } = await import("@/actions/act-details");
       const to = email("person");
-      const person = await prisma.person.create({ data: { agencyId, firstName: "Graham", email: to } });
-      const solo = await newAct({ email: to });
-      const band = await newAct({ email: "band@x.invalid" });
+      const person = await prisma.person.create({ data: { agencyId, firstName: "Graham", surname: "McKee", email: to } });
+      const band = await newAct({ email: to });
       const mate = await prisma.person.create({ data: { agencyId, firstName: "Mate" } });
-      await prisma.personAct.createMany({
-        data: [
-          { personId: person.id, artistId: solo.id },
-          { personId: person.id, artistId: band.id },
-          { personId: mate.id, artistId: band.id },
-        ],
+      await prisma.personAct.createMany({ data: [person, mate].map((p) => ({ personId: p.id, artistId: band.id })) });
+      const user = await prisma.user.create({ data: { email: to, name: "Graham", passwordHash: "x", role: "ARTIST", agencyId, personId: person.id } });
+      state.user = { ...user, agencyId };
+      expect((await payHoldersFor({ ...user, agencyId })).map((h) => [h.kind, h.id])).toEqual([["person", person.id]]);
+      // The gate asks for their own details, even though their mate has none.
+      await expect(requireActApp()).rejects.toThrow("REDIRECT /app/details");
+      expect(await saveMyDetails("act", band.id, empty, form(DETAILS))).toEqual({ error: expect.stringMatching(/can't change these details/) });
+      await expect(saveMyDetails("person", person.id, empty, form(DETAILS))).rejects.toThrow("REDIRECT /app");
+      expect(await prisma.person.findUniqueOrThrow({ where: { id: person.id } })).toMatchObject({
+        bankAccountNumber: "12345678",
+        address: "1 High St\nLeeds",
+        detailsCompletedAt: expect.any(Date),
       });
-      const acts = await payActsFor({ artistId: null, personId: person.id, agencyId, email: to });
-      expect(acts.map((a) => a.id)).toEqual([solo.id]);
+      expect(await prisma.artist.findUniqueOrThrow({ where: { id: band.id } })).toMatchObject({ bankAccountNumber: "", detailsCompletedAt: null });
+      await expect(requireActApp()).rejects.toThrow("REDIRECT /app/add-calendar");
+      // A bank change is told to the agency under the person's name.
+      await expect(
+        saveMyDetails("person", person.id, empty, form({ bankAccountName: "G McKee", bankSortCode: "44-55-66", bankAccountNumber: "87654321", vatNumber: "" })),
+      ).rejects.toThrow("REDIRECT");
+      expect(state.sent.map((m) => m.subject)).toEqual(["Graham McKee changed their bank details"]);
+    });
+
+    it("an act's own login fills in its only person's details, and nobody's for a band whose lead gives theirs", async () => {
+      const { payHoldersFor } = await import("@/lib/payee-server");
+      const solo = await newAct();
+      const ellie = await prisma.person.create({ data: { agencyId, firstName: "Ellie", surname: "Hart" } });
+      await prisma.personAct.create({ data: { personId: ellie.id, artistId: solo.id } });
+      const holders = await payHoldersFor({ artistId: solo.id, personId: null, agencyId });
+      expect(holders.map((h) => [h.kind, h.id])).toEqual([["person", ellie.id]]);
+      // With nobody on file it's the act's own, as before.
+      const alone = await newAct();
+      expect((await payHoldersFor({ artistId: alone.id, personId: null, agencyId })).map((h) => [h.kind, h.id])).toEqual([["act", alone.id]]);
+      // A band's own login: the act's own until a lead is chosen, then nobody's.
+      const band = await newAct();
+      const [a, b] = await Promise.all(["A", "B"].map((firstName) => prisma.person.create({ data: { agencyId, firstName } })));
+      await prisma.personAct.createMany({ data: [a, b].map((p) => ({ personId: p.id, artistId: band.id })) });
+      expect((await payHoldersFor({ artistId: band.id, personId: null, agencyId })).map((h) => h.kind)).toEqual(["act"]);
+      await prisma.artist.update({ where: { id: band.id }, data: { leadPersonId: a.id } });
+      expect(await payHoldersFor({ artistId: band.id, personId: null, agencyId })).toEqual([]);
     });
   });
 
@@ -394,7 +425,7 @@ describeDb("act sign-up and pay details (database)", () => {
       const { revealNiNumber } = await import("@/actions/act-details");
       const act = await filled();
       state.user = admin;
-      expect(await revealNiNumber(act.id, empty)).toEqual({ ok: "JG 10 37 26 A" });
+      expect(await revealNiNumber("act", act.id, empty)).toEqual({ ok: "JG 10 37 26 A" });
       expect(await prisma.activity.count({ where: { entityId: act.id, action: "viewed the National Insurance number" } })).toBe(1);
     });
   });
