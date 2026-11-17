@@ -28,7 +28,10 @@ test("VAT on sales: set once in Settings, filled in on a new booking", async ({ 
     await expect(form.getByText("+ £60.00 VAT")).toBeVisible();
   } finally {
     // Other tests share the demo agency: put it back.
-    await db().settings.update({ where: { agencyId }, data: { defaultVatPct: 0 } });
+    await db().settings.update({
+      where: { agencyId },
+      data: { defaultVatPct: 0 },
+    });
   }
 });
 
@@ -51,7 +54,10 @@ test("quick booking: Repeat every week makes a booking each week from the date",
   await dialog.getByRole("button", { name: "Book 3" }).click();
   await expectAfterSave(page, dialog.getByText(new RegExp(`^Booked ${act.name} at ${venue.name}, 3 bookings, every \\w+ from `)));
 
-  const made = await db().booking.findMany({ where: { artistId: act.id }, orderBy: { arriveBy: "asc" } });
+  const made = await db().booking.findMany({
+    where: { artistId: act.id },
+    orderBy: { arriveBy: "asc" },
+  });
   expect(made).toHaveLength(3);
   expect(made.map((b) => b.arriveBy.toISOString().slice(0, 10))).toEqual([first, dayFromToday(77), dayFromToday(84)]);
   expect(made.every((b) => b.venueId === venue.id && b.slotId === null)).toBe(true);
@@ -83,7 +89,10 @@ test("venue schedule: weekly slots from a start date on several days, then stop 
   await monday.getByLabel("Last date it runs").fill(dayFromToday(60));
   await stop.click();
   await expectAfterSave(page, page.getByText(/^Stopped: the last one is /));
-  const slots = await db().venueSlot.findMany({ where: { venueId: venue.id }, orderBy: { weekday: "asc" } });
+  const slots = await db().venueSlot.findMany({
+    where: { venueId: venue.id },
+    orderBy: { weekday: "asc" },
+  });
   expect(slots[0].endsOn).toBe(dayFromToday(60));
 
   // Delete the Wednesday one: nothing was booked from it.
@@ -96,26 +105,14 @@ test("venue schedule: weekly slots from a start date on several days, then stop 
   await expect.poll(() => db().venueSlot.count({ where: { venueId: venue.id } })).toBe(1);
 });
 
-test("rota: a weekly slot shows from its start date, not from this week", async ({ page }) => {
-  const venue = await createVenue(stamp("E2E Later Bar"));
-  const { agencyId } = await seededAgency();
-  // A Wednesday slot starting four weeks on (the Monday of that week, as the rota's ?week= wants).
-  const start = new Date(Date.now() + 28 * DAY);
-  const monday = new Date(start.getTime() - ((start.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10);
-  await db().venueSlot.create({
-    data: { agencyId, venueId: venue.id, weekday: 3, arriveTime: "18:30", startTime: "19:00", endTime: "21:00", label: "Later", startsOn: monday },
-  });
-
-  await page.goto("/rota");
-  await expect(page.getByRole("heading", { level: 1, name: "Rota" })).toBeVisible();
-  await expect(page.getByRole("link", { name: venue.name })).toHaveCount(0);
-
-  await page.goto(`/rota?week=${monday}`);
-  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: venue.name }) });
-  await expect(row).toBeVisible();
-  // Its "weekly" label opens the slot on the venue's page, to change or stop it.
-  await row.getByRole("link", { name: "Later · weekly" }).click();
-  await expect(page.getByRole("button", { name: "Stop it" })).toBeVisible({ timeout: 15_000 });
+test("the old Rota and Arrivals pages land on the calendar", async ({ page }) => {
+  for (const path of ["/rota", "/arrivals"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/calendar/);
+  }
+  // Neither is in the menu any more.
+  await expect(page.getByRole("link", { name: "Rota", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Arrivals", exact: true })).toHaveCount(0);
 });
 
 test("copy a booking to the same day every week", async ({ page }) => {

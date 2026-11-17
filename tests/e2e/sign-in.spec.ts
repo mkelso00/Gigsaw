@@ -15,7 +15,7 @@ test("staff sign in and the dashboard loads", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
   await expect(page.getByRole("heading", { level: 1, name: `Hello, ${ADMIN.firstName}` })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Coming up" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Next two weeks" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Venue bookings" })).toBeVisible();
 });
 

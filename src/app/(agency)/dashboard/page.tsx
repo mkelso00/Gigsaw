@@ -1,55 +1,63 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { arrivalDetail } from "@/components/arrival-panel";
+import { NewBookingButton } from "@/components/calendar-add";
 import { Icon } from "@/components/icons";
-import { ArrivalBadge, ArtistDot, PageHeader, Stat, StatusBadge } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { arrivalFor, bookingListInclude } from "@/lib/bookings";
-import { LIVE_STATUSES, actName } from "@/lib/constants";
-import { getSettings, prisma } from "@/lib/db";
 import { unresolvedPastWhere } from "@/lib/billing";
+import { daySummary, gigTone } from "@/lib/calendar-look";
+import { getSettings, prisma } from "@/lib/db";
 import { enquiryTypeLabel, formatDay } from "@/lib/enquiries";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
-import { addDaysToKey, formatDate, formatDateTime, localDateKey, localTime, formatMinutes } from "@/lib/time";
+import { venueColour } from "@/lib/rota";
+import { addDaysToKey, formatDate, localDateKey, zonedToUtc } from "@/lib/time";
 import { oneOffsNeedingAct, unfilledSlots } from "@/lib/unfilled";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
+const DAYS_SHOWN = 14;
+const VENUES_SHOWN = 10;
+
 export default async function DashboardPage() {
   const user = await requireStaff();
   const settings = await getSettings(user.agencyId);
   const now = new Date();
-  const DAY = 86_400_000;
   const cur = settings.defaultCurrency;
+  const tz = settings.defaultTimezone;
 
-  const todayKey = localDateKey(now, settings.defaultTimezone);
-  const [upcoming, today, holds, money, activity, unresolved, unfilled, oneOffsNoAct, offers, enquiries, proposalsOut] = await Promise.all([
+  const todayKey = localDateKey(now, tz);
+  const days = Array.from({ length: DAYS_SHOWN }, (_, i) => addDaysToKey(todayKey, i));
+  const monthStart = `${todayKey.slice(0, 7)}-01`;
+  const [my, mm] = todayKey.split("-").map(Number);
+  const nextMonthStart = new Date(Date.UTC(my, mm, 1)).toISOString().slice(0, 10);
+  const monthLabel = new Date(Date.UTC(my, mm - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  // A day either side, then sorted by each gig's own local date, as the calendar does.
+  const windowFrom = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() - 86_400_000);
+  const windowTo = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() + 86_400_000);
+
+  const [upcoming, month, deposits, unresolved, unfilled, oneOffsNoAct, declined, enquiries, proposalsOut] = await Promise.all([
     prisma.booking.findMany({
-      where: { agencyId: user.agencyId, status: { in: LIVE_STATUSES }, setStart: { gte: now, lte: new Date(now.getTime() + 30 * DAY) } },
-      include: { artist: { select: { colour: true, name: true } }, venue: { select: { name: true, city: true } } },
-      orderBy: { setStart: "asc" },
-      take: 10,
+      where: {
+        agencyId: user.agencyId,
+        status: { not: "CANCELLED" },
+        arriveBy: {
+          gte: windowFrom(todayKey),
+          lt: windowTo(addDaysToKey(todayKey, DAYS_SHOWN)),
+        },
+      },
+      select: { status: true, artistId: true, arriveBy: true, timezone: true },
     }),
     prisma.booking.findMany({
       where: {
         agencyId: user.agencyId,
-        status: { in: LIVE_STATUSES },
-        arriveBy: { gte: new Date(now.getTime() - 12 * 3_600_000), lte: new Date(now.getTime() + 24 * 3_600_000) },
+        status: { not: "CANCELLED" },
+        arriveBy: { gte: windowFrom(monthStart), lt: windowTo(nextMonthStart) },
       },
-      include: bookingListInclude,
-      orderBy: { arriveBy: "asc" },
-    }),
-    prisma.booking.count({ where: { agencyId: user.agencyId, status: "HOLD", setStart: { gte: now } } }),
-    // Bookings that still involve money moving: confirmed or settled, in the agency's main currency.
-    // Every one ever, so only the columns the sums and the overdue deposits list need.
-    prisma.booking.findMany({
-      where: { agencyId: user.agencyId, status: { in: ["CONFIRMED", "SETTLED", "PENDING"] }, currency: cur },
       select: {
-        id: true,
-        reference: true,
         status: true,
-        setStart: true,
+        artistId: true,
+        arriveBy: true,
         timezone: true,
         currency: true,
         dealType: true,
@@ -58,23 +66,39 @@ export default async function DashboardPage() {
         commissionPct: true,
         vatPct: true,
         bookingFeeMinor: true,
-        depositMinor: true,
-        depositDueDate: true,
-        payments: { select: { direction: true, kind: true, amountMinor: true } },
-        artist: { select: { name: true } },
-        promoter: { select: { name: true } },
+        venue: { select: { id: true, name: true, colour: true } },
       },
     }),
-    prisma.activity.findMany({ where: { agencyId: user.agencyId }, orderBy: { createdAt: "desc" }, take: 8, include: { user: { select: { name: true } } } }),
-    prisma.booking.count({ where: { agencyId: user.agencyId, ...unresolvedPastWhere(now) } }),
-    unfilledSlots(user.agencyId, settings.defaultTimezone, 14),
-    oneOffsNeedingAct(user.agencyId, 14),
-    // Offers waiting for the act's answer, and ones they've declined, soonest gig first.
+    // Deposits past their due date, to chase.
     prisma.booking.findMany({
-      where: { agencyId: user.agencyId, status: "AWAITING", setStart: { gte: now } },
-      include: { artist: { select: { name: true, colour: true, phone: true } }, venue: { select: { name: true, city: true } } },
-      orderBy: [{ offerResponse: "asc" }, { setStart: "asc" }],
-      take: 30,
+      where: {
+        agencyId: user.agencyId,
+        status: { in: ["CONFIRMED", "SETTLED", "PENDING"] },
+        depositMinor: { gt: 0 },
+        depositDueDate: { lt: now },
+      },
+      select: {
+        id: true,
+        depositMinor: true,
+        payments: {
+          select: { direction: true, kind: true, amountMinor: true },
+        },
+      },
+    }),
+    prisma.booking.count({
+      where: { agencyId: user.agencyId, ...unresolvedPastWhere(now) },
+    }),
+    unfilledSlots(user.agencyId, tz, 14),
+    oneOffsNeedingAct(user.agencyId, 14),
+    prisma.booking.findMany({
+      where: {
+        agencyId: user.agencyId,
+        status: "AWAITING",
+        offerResponse: "DECLINED",
+        setStart: { gte: now },
+      },
+      select: { id: true },
+      orderBy: { setStart: "asc" },
     }),
     // New enquiries from the website form, newest first.
     prisma.enquiry.findMany({
@@ -83,7 +107,7 @@ export default async function DashboardPage() {
       select: { id: true, name: true, eventType: true, date: true },
       take: 50,
     }),
-    // Proposals with the customer, still open, and ones accepted in the last fortnight with no contract sent yet.
+    // Proposals with the customer, still open.
     prisma.quote.count({
       where: {
         agencyId: user.agencyId,
@@ -94,42 +118,74 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  let owedByPromoters = 0;
-  let owedToArtists = 0;
-  let commissionThisYear = 0;
-  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  const overdueDeposits: typeof money = [];
-  for (const b of money) {
-    const d = dealBreakdown(b);
-    const t = paymentTotals(b.payments);
-    if (b.status !== "PENDING") {
-      owedByPromoters += Math.max(0, d.totalDueMinor - t.receivedMinor);
-      owedToArtists += Math.max(0, d.artistMinor - t.paidOutMinor);
-      if (b.setStart >= yearStart) commissionThisYear += d.agencyMinor;
-    }
-    if (b.depositMinor > 0 && b.depositDueDate && b.depositDueDate < now && t.depositReceivedMinor < b.depositMinor) {
-      overdueDeposits.push(b);
-    }
+  const overdueDeposits = deposits.filter((b) => paymentTotals(b.payments).depositReceivedMinor < b.depositMinor);
+  const unfilledSoon = unfilled.filter((u) => u.date <= addDaysToKey(todayKey, 6)).length;
+
+  const byDay = new Map<string, typeof upcoming>();
+  for (const b of upcoming) {
+    const key = localDateKey(b.arriveBy, b.timezone);
+    byDay.set(key, [...(byDay.get(key) ?? []), b]);
   }
 
-  const declined = offers.filter((o) => o.offerResponse === "DECLINED");
-  const waiting = offers.filter((o) => o.offerResponse !== "DECLINED");
-  const unfilledSoon = unfilled.filter((u) => u.date <= addDaysToKey(localDateKey(now, settings.defaultTimezone), 6)).length;
-  const todayRows = today.map((b) => ({ b, a: arrivalFor(b, settings, now) }));
-  const overdue = todayRows.filter((r) => r.a.state === "OVERDUE").length;
+  // Venue numbers for this month. Money only counts bookings in the main currency, and only once
+  // confirmed or settled, so a pencilled-in date doesn't look like money in the bank.
+  const venues = new Map<string, VenueRow>();
+  const totals = { gigs: 0, sale: 0, profit: 0 };
+  for (const b of month) {
+    const key = localDateKey(b.arriveBy, b.timezone);
+    if (key < monthStart || key >= nextMonthStart) continue;
+    const id = b.venue?.id ?? "none";
+    const row =
+      venues.get(id) ??
+      (b.venue
+        ? {
+            id,
+            name: b.venue.name,
+            colour: venueColour(b.venue),
+            href: `/venues/${b.venue.id}`,
+            gigs: 0,
+            confirmed: 0,
+            open: 0,
+            sale: 0,
+            profit: 0,
+          }
+        : {
+            id,
+            name: "No venue",
+            colour: "#a2a199",
+            href: null,
+            gigs: 0,
+            confirmed: 0,
+            open: 0,
+            sale: 0,
+            profit: 0,
+          });
+    venues.set(id, row);
+    const tone = gigTone(b.status, !!b.artistId);
+    row.gigs++;
+    totals.gigs++;
+    if (tone === "on") row.confirmed++;
+    else if (tone === "pending" || tone === "awaiting") row.open++;
+    if (tone === "on" && b.currency === cur) {
+      const d = dealBreakdown(b);
+      row.sale += d.grossMinor;
+      row.profit += d.agencyMinor;
+      totals.sale += d.grossMinor;
+      totals.profit += d.agencyMinor;
+    }
+  }
+  const venueRows = [...venues.values()].sort((x, y) => y.gigs - x.gigs || x.name.localeCompare(y.name));
 
   // Everything that needs someone, as one calm list rather than a stack of coloured banners.
   // urgent: magenta light (this week or already wrong); soon: amber; info: teal.
-  const needs: { key: string; tone: "urgent" | "soon" | "info"; count: number; text: React.ReactNode; href: string; action: string }[] = [];
-  if (overdue > 0)
-    needs.push({
-      key: "late",
-      tone: "urgent",
-      count: overdue,
-      text: `${overdue === 1 ? "act is" : "acts are"} late right now`,
-      href: "/arrivals",
-      action: "Live board",
-    });
+  const needs: {
+    key: string;
+    tone: "urgent" | "soon" | "info";
+    count: number;
+    text: React.ReactNode;
+    href: string;
+    action: string;
+  }[] = [];
   if (declined.length > 0)
     needs.push({
       key: "declined",
@@ -145,7 +201,7 @@ export default async function DashboardPage() {
       tone: unfilledSoon ? "urgent" : "soon",
       count: unfilled.length,
       text: `weekly slot${unfilled.length === 1 ? "" : "s"} in the next 14 days need${unfilled.length === 1 ? "s" : ""} an act${unfilledSoon ? `, ${unfilledSoon} this week` : ""}`,
-      href: "/rota#needs-artist",
+      href: "/calendar",
       action: "Fill",
     });
   if (oneOffsNoAct > 0)
@@ -213,23 +269,14 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-[1180px]">
       <PageHeader
-        eyebrow={formatDate(now, settings.defaultTimezone)}
+        eyebrow={formatDate(now, tz)}
         title={`Hello, ${user.name.split(" ")[0]}`}
-        subtitle={
-          needs.length === 0
-            ? "Nothing needs you right now."
-            : `${needs.length} thing${needs.length === 1 ? "" : "s"} could use you today${todayRows.length ? `, and ${todayRows.length} call time${todayRows.length === 1 ? "" : "s"} in the next 24 hours` : ""}.`
-        }
+        subtitle={needs.length === 0 ? "Nothing needs you right now." : `${needs.length} thing${needs.length === 1 ? "" : "s"} could use you today.`}
       />
 
-      {/* What needs you */}
-      <section className="mb-10">
-        {needs.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-[var(--radius-card)] border border-ink-200 bg-white px-5 py-4 text-sm text-ink-600">
-            <span className="h-2 w-2 rounded-full bg-volt-400 shadow-[0_0_8px_var(--color-volt-400)]" />
-            All clear. Every slot has an act, every offer is answered and nothing is overdue.
-          </div>
-        ) : (
+      {/* Only shows when something needs doing, so a quiet day is a short page. */}
+      {needs.length > 0 && (
+        <section className="mb-10">
           <ul className="overflow-hidden rounded-[var(--radius-card)] border border-ink-200 bg-white">
             {needs.map((n, i) => (
               <li key={n.key} className={i > 0 ? "border-t border-ink-100" : ""}>
@@ -243,180 +290,141 @@ export default async function DashboardPage() {
               </li>
             ))}
           </ul>
-        )}
+        </section>
+      )}
+
+      {/* The next two weeks at a glance: how many gigs each day, and how many still need something. */}
+      <section className="mb-12">
+        <div className="mb-4 flex items-baseline justify-between">
+          <h2 className="section-title">Next two weeks</h2>
+          <Link href="/calendar" className="text-sm text-ink-500 hover:text-ink-950">
+            Full calendar →
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-7">
+          {days.map((key) => {
+            const tones = (byDay.get(key) ?? []).map((b) => gigTone(b.status, !!b.artistId));
+            const [y, m, d] = key.split("-").map(Number);
+            const label = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              timeZone: "UTC",
+            });
+            const isToday = key === todayKey;
+            return (
+              <div key={key} className={`card relative flex min-h-28 flex-col p-3 ${isToday ? "ring-2 ring-volt-400" : ""}`}>
+                <Link href={`/calendar?view=day&date=${key}`} className="flex flex-1 flex-col">
+                  <span className={`font-mono text-[11px] tracking-wider uppercase ${isToday ? "text-ink-950" : "text-ink-500"}`}>
+                    {isToday ? "Today" : label}
+                  </span>
+                  <span className="mt-1 font-mono text-2xl font-semibold tabular-nums">{tones.length}</span>
+                  <span className="text-xs text-ink-500">{tones.length === 1 ? "gig" : "gigs"}</span>
+                  <span className="mt-2 flex flex-wrap gap-1">
+                    {tones.length > 0 && tones.every((t) => t === "on" || t === "cancelled") && (
+                      <span className="text-[11px] font-medium text-emerald-700">All confirmed</span>
+                    )}
+                    {daySummary(tones)
+                      .filter((t) => t.tone !== "on" && t.tone !== "cancelled")
+                      .map((t) => (
+                        <span key={t.tone} className={`gig gig-${t.tone} rounded px-1.5 py-0.5 text-[10.5px] leading-tight`}>
+                          {t.label}
+                        </span>
+                      ))}
+                  </span>
+                </Link>
+                <NewBookingButton
+                  date={key}
+                  className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-sm leading-none text-ink-400 hover:bg-ink-950 hover:text-white"
+                >
+                  <span aria-hidden>+</span>
+                  <span className="sr-only">Add a booking on {label}</span>
+                </NewBookingButton>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
-      <div className="mb-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat
-          tone={overdue > 0 ? "alert" : "dark"}
-          label="Arrived today"
-          value={todayRows.filter((r) => r.a.state === "ARRIVED_ON_TIME" || r.a.state === "ARRIVED_LATE").length + ` / ${todayRows.length}`}
-          hint={overdue > 0 ? `${overdue} overdue` : "checked in"}
-          href="/arrivals"
-        />
-        <Stat label="Next 30 days" value={upcoming.length >= 10 ? "10+" : upcoming.length} hint={`${holds} on hold`} href="/calendar" />
-        <Stat label="Owed to you" value={formatMoney(owedByPromoters, cur)} hint="by venues and clients" href="/reports" />
-        <Stat
-          label={`Made in ${now.getUTCFullYear()}`}
-          value={formatMoney(commissionThisYear, cur)}
-          hint={`${formatMoney(owedToArtists, cur)} owed to acts`}
-          href="/reports"
-        />
-      </div>
-
-      <div className="grid gap-x-12 gap-y-12 xl:grid-cols-[1.6fr_1fr] [&>*]:min-w-0">
-        <div className="space-y-12">
-          {/* Today as a running order: time on the left, who and where on the right. */}
-          <section>
-            <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="section-title">Next 24 hours</h2>
-              <Link href="/arrivals" className="text-sm text-ink-500 hover:text-ink-950">
-                Live board →
-              </Link>
-            </div>
-            {todayRows.length === 0 ? (
-              <p className="text-sm text-ink-500">No call times in the next 24 hours.</p>
-            ) : (
-              <ol className="relative space-y-1 before:absolute before:top-2 before:bottom-2 before:left-[69.5px] before:w-px before:bg-ink-200">
-                {todayRows.map(({ b, a }) => (
-                  <li key={b.id}>
-                    <Link href={`/bookings/${b.id}`} className="group flex items-center gap-4 rounded-lg py-2.5 pr-2 transition-colors hover:bg-white">
-                      <span className="w-12 shrink-0 text-right font-mono text-sm text-ink-500 tabular-nums">{localTime(b.arriveBy, b.timezone)}</span>
-                      <span className="relative z-10 flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-ink-50 group-hover:bg-white">
-                        <ArtistDot colour={b.artist?.colour ?? "#8d949c"} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {actName(b)} <span className="font-normal text-ink-500">· {b.venue?.name ?? "No venue"}</span>
-                        </span>
-                        <span className="block truncate text-xs text-ink-500">{arrivalDetail(a, b.timezone) || "Not checked in yet"}</span>
-                      </span>
-                      <ArrivalBadge state={a.state} />
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-
-          <section>
-            <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="section-title">Coming up</h2>
-              <Link href="/calendar" className="text-sm text-ink-500 hover:text-ink-950">
-                Calendar →
-              </Link>
-            </div>
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-ink-500">No shows in the next 30 days.</p>
-            ) : (
-              <ul className="space-y-1">
-                {upcoming.map((b, i) => {
-                  // The day shows once, on its first gig, so the list reads as a running order.
-                  const day = formatDate(b.arriveBy, b.timezone);
-                  const firstOfDay = i === 0 || formatDate(upcoming[i - 1].arriveBy, upcoming[i - 1].timezone) !== day;
-                  return (
-                    <li key={b.id} className={firstOfDay && i > 0 ? "pt-3" : ""}>
-                      <Link href={`/bookings/${b.id}`} className="flex items-center gap-4 rounded-lg py-2.5 pr-2 transition-colors hover:bg-white">
-                        <span className="w-12 shrink-0 text-right leading-tight">
-                          {firstOfDay && (
-                            <>
-                              <span className="block font-mono text-[10px] tracking-wider text-ink-400 uppercase">{day.split(" ")[0].replace(",", "")}</span>
-                              <span className="block font-mono text-sm text-ink-700 tabular-nums">{day.split(" ")[1]}</span>
-                            </>
-                          )}
-                        </span>
-                        <ArtistDot colour={b.artist?.colour ?? "#8d949c"} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{actName(b)}</span>
-                          <span className="block truncate text-xs text-ink-500">
-                            {b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "No venue"}
-                          </span>
-                        </span>
-                        <StatusBadge status={b.status} />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+      {/* This month by venue: gigs, what's still open, and the money in the main currency. */}
+      <section>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="section-title">Venues this month</h2>
+          <span className="text-sm text-ink-500">
+            {monthLabel} · {totals.gigs} gig{totals.gigs === 1 ? "" : "s"} · {formatMoney(totals.sale, cur)} sale · {formatMoney(totals.profit, cur)} profit
+          </span>
         </div>
-
-        <div className="space-y-12">
-          {waiting.length > 0 && (
-            <section>
-              <div className="mb-4 flex items-baseline justify-between">
-                <h2 className="section-title">Waiting for an answer</h2>
-                <span className="font-mono text-xs text-ink-500">{waiting.length} out</span>
-              </div>
-              <ul className="space-y-1">
-                {waiting.slice(0, 6).map((o) => (
-                  <li key={o.id} className="flex items-center gap-3 rounded-lg py-2 pr-1">
-                    <Link href={`/bookings/${o.id}`} className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium hover:underline">{actName(o)}</span>
-                      <span className="block truncate text-xs text-ink-500">
-                        {o.venue?.name ?? "No venue"}, {formatDate(o.arriveBy, o.timezone)} ·{" "}
-                        {o.offeredAt ? `offered ${formatMinutes(Math.round((now.getTime() - o.offeredAt.getTime()) / 60_000))} ago` : "not sent yet"}
-                      </span>
-                    </Link>
-                    {o.artist?.phone && (
-                      <a href={`tel:${o.artist.phone.replace(/\s/g, "")}`} className="btn btn-sm">
-                        Call
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {waiting.length > 6 && (
-                <Link href="/bookings?status=AWAITING" className="mt-2 inline-block text-sm text-ink-500 hover:text-ink-950">
-                  {waiting.length - 6} more →
-                </Link>
-              )}
-            </section>
-          )}
-
-          <section>
-            <h2 className="section-title mb-4">Recent activity</h2>
-            {activity.length === 0 ? (
-              <p className="text-sm text-ink-500">Nothing yet.</p>
-            ) : (
-              <ol className="relative space-y-4 border-l border-ink-200 pl-5">
-                {activity.map((a) => {
-                  const href =
-                    a.entity === "BOOKING" && a.action !== "deleted"
-                      ? `/bookings/${a.entityId}`
-                      : a.entity === "EVENT" && a.action !== "deleted"
-                        ? `/events/${a.entityId}`
-                        : a.entity === "ENQUIRY" && !a.action.includes("deleted")
-                          ? `/enquiries?view=all#${a.entityId}`
-                          : a.entity === "QUOTE" && !a.action.includes("deleted")
-                            ? `/quotes/${a.entityId}`
-                            : null;
-                  const body = (
-                    <>
-                      <span className="font-medium">{a.user?.name ?? "Someone"}</span> {a.action}
-                      {a.detail && <span className="text-ink-500"> · {a.detail}</span>}
-                    </>
-                  );
-                  return (
-                    <li key={a.id} className="relative text-sm">
-                      <span className="absolute top-1.5 -left-[23.5px] h-2 w-2 rounded-full border-2 border-ink-50 bg-ink-300" />
-                      {href ? (
-                        <Link href={href} className="hover:underline">
-                          {body}
-                        </Link>
-                      ) : (
-                        body
-                      )}
-                      <div className="mt-0.5 font-mono text-[11px] text-ink-400">{formatDateTime(a.createdAt, settings.defaultTimezone)}</div>
-                    </li>
-                  );
-                })}
-              </ol>
+        {venueRows.length === 0 ? (
+          <p className="text-sm text-ink-500">No gigs booked this month yet.</p>
+        ) : (
+          <>
+            <VenueTable rows={venueRows.slice(0, VENUES_SHOWN)} cur={cur} />
+            {venueRows.length > VENUES_SHOWN && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm text-ink-500 hover:text-ink-950">Show the other {venueRows.length - VENUES_SHOWN} venues</summary>
+                <div className="mt-3">
+                  <VenueTable rows={venueRows.slice(VENUES_SHOWN)} cur={cur} />
+                </div>
+              </details>
             )}
-          </section>
-        </div>
-      </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+type VenueRow = {
+  id: string;
+  name: string;
+  colour: string;
+  href: string | null;
+  gigs: number;
+  confirmed: number;
+  open: number;
+  sale: number;
+  profit: number;
+};
+
+function VenueTable({ rows, cur }: { rows: VenueRow[]; cur: string }) {
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-ink-100 text-left font-mono text-[10.5px] tracking-[0.12em] text-ink-500 uppercase">
+            <th className="px-4 py-3 font-medium">Venue</th>
+            <th className="px-3 py-3 text-right font-medium">Gigs</th>
+            <th className="px-3 py-3 text-right font-medium">Confirmed</th>
+            <th className="px-3 py-3 text-right font-medium">To sort</th>
+            <th className="px-3 py-3 text-right font-medium">Sale</th>
+            <th className="px-4 py-3 text-right font-medium">Profit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => (
+            <tr key={v.id} className="border-b border-ink-100 last:border-0 hover:bg-ink-50">
+              <td className="px-4 py-2.5">
+                {v.href ? (
+                  <Link href={v.href} className="flex items-center gap-2 font-medium hover:underline">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: v.colour }} />
+                    <span className="truncate">{v.name}</span>
+                  </Link>
+                ) : (
+                  <span className="flex items-center gap-2 text-ink-500">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: v.colour }} />
+                    {v.name}
+                  </span>
+                )}
+              </td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{v.gigs}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{v.confirmed}</td>
+              <td className={`px-3 py-2.5 text-right font-mono tabular-nums ${v.open > 0 ? "font-semibold text-amber-700" : "text-ink-400"}`}>{v.open}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{formatMoney(v.sale, cur)}</td>
+              <td className="px-4 py-2.5 text-right font-mono tabular-nums">{formatMoney(v.profit, cur)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

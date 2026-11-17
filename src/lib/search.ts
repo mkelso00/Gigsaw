@@ -18,8 +18,6 @@ export type SearchHit = {
 
 const PAGES: [string, string, string][] = [
   ["Dashboard", "/dashboard", "home overview"],
-  ["Arrivals", "/arrivals", "live check-ins late overdue"],
-  ["Rota", "/rota", "weekly slots schedule unfilled"],
   ["Calendar", "/calendar", "diary month week day"],
   ["Bookings", "/bookings", "bookings list"],
   ["New booking", "/bookings/new", "add create booking"],

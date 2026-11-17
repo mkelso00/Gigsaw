@@ -38,7 +38,7 @@ export default async function AgencyLayout({ children }: { children: React.React
   const navProps = {
     isAdmin: user.role === "ADMIN",
     isOwner: user.isOwner,
-    badges: { "/rota": unfilledThisWeek, "/artists": newActs, "/enquiries": newEnquiries },
+    badges: { "/calendar": unfilledThisWeek, "/artists": newActs, "/enquiries": newEnquiries },
     business: { name: settings.agencyName || user.agency?.name || "Your business", email: settings.agencyEmail },
   };
   const initials = user.name

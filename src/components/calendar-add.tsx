@@ -22,3 +22,22 @@ export function AddOnDay({ date, label }: { date: string; label: string }) {
     </button>
   );
 }
+
+/** A plain button that opens the quick New booking panel, optionally on a given date. */
+export function NewBookingButton({ date, className = "btn btn-primary", children }: { date?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() =>
+        window.dispatchEvent(
+          new CustomEvent("gigsaw:new-booking", {
+            detail: date ? { date } : {},
+          }),
+        )
+      }
+    >
+      {children}
+    </button>
+  );
+}

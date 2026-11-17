@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: "Venue" };
 export default async function VenuePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ slot?: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  // ?slot=… opens that weekly slot's edit and stop options (linked from the Rota).
+  // ?slot=… opens that weekly slot's edit and stop options (linked from a booking).
   const { slot: openSlotId } = await searchParams;
   const [venue, settings, artists, contacts, slots] = await Promise.all([
     prisma.venue.findFirst({

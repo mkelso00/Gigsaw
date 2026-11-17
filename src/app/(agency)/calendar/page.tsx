@@ -17,7 +17,8 @@ import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { personName } from "@/lib/person-name";
 import { AddOnDay } from "@/components/calendar-add";
 import { RememberCalendar } from "@/components/calendar-memory";
-import { GIG_KEY, gigLook } from "@/lib/calendar-look";
+import { daySummary, GIG_KEY, gigLook, TONE_ATTENTION } from "@/lib/calendar-look";
+import { BusyDayList } from "@/components/calendar-day-list";
 import { CALENDAR_COOKIE, CALENDAR_COOKIE_DAYS, recallCalendar, rememberCalendar } from "@/lib/calendar-memory";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -49,7 +50,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   if (view === "day") {
     gridStart = anchor;
     cells = 1;
-    title = dayLabel(anchor, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    title = dayLabel(anchor, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
     prev = addDaysToKey(anchor, -1);
     next = addDaysToKey(anchor, 1);
   } else if (view === "week") {
@@ -75,7 +81,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const where: Prisma.BookingWhereInput = {
     agencyId: user.agencyId,
     // Pad by a day either side so gigs in other time zones near the edges are included.
-    arriveBy: { gte: zonedToUtc(addDaysToKey(gridStart, -1), "00:00", tz), lt: zonedToUtc(addDaysToKey(gridEnd, 1), "00:00", tz) },
+    arriveBy: {
+      gte: zonedToUtc(addDaysToKey(gridStart, -1), "00:00", tz),
+      lt: zonedToUtc(addDaysToKey(gridEnd, 1), "00:00", tz),
+    },
   };
   if (sp.artist) where.artistId = sp.artist;
   if (sp.town) where.venue = { city: { equals: sp.town, mode: "insensitive" } };
@@ -93,21 +102,65 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             name: true,
             colour: true,
             phone: true,
-            members: { take: 1, include: { person: { select: { firstName: true, surname: true, alias: true, phone: true } } } },
+            members: {
+              take: 1,
+              include: {
+                person: {
+                  select: {
+                    firstName: true,
+                    surname: true,
+                    alias: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
           },
         },
-        venue: { select: { id: true, name: true, city: true, colour: true, latitude: true, longitude: true } },
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            colour: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
         promoter: { select: { name: true, company: true, type: true } },
         event: { select: { name: true } },
-        payments: { select: { direction: true, kind: true, amountMinor: true } },
-        checkIns: { select: { kind: true, at: true, source: true, distanceM: true, etaMinutes: true } },
+        payments: {
+          select: { direction: true, kind: true, amountMinor: true },
+        },
+        checkIns: {
+          select: {
+            kind: true,
+            at: true,
+            source: true,
+            distanceM: true,
+            etaMinutes: true,
+          },
+        },
       },
       orderBy: { setStart: "asc" },
     }),
-    prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.venue.findMany({ where: { agencyId: user.agencyId, city: { not: "" } }, distinct: ["city"], select: { city: true }, orderBy: { city: "asc" } }),
+    prisma.artist.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.venue.findMany({
+      where: { agencyId: user.agencyId, city: { not: "" } },
+      distinct: ["city"],
+      select: { city: true },
+      orderBy: { city: "asc" },
+    }),
     awayBetween(user.agencyId, gridStart, addDaysToKey(gridEnd, -1)),
-    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
+    prisma.venue.findMany({
+      where: { agencyId: user.agencyId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, city: true },
+    }),
   ]);
   const venueName = sp.venue ? venues.find((v) => v.id === sp.venue)?.name : undefined;
   // Days acts have blocked out. For one act, its own and those of acts inside it (a band is away
@@ -129,7 +182,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     byDay.set(key, [...(byDay.get(key) ?? []), b]);
   }
 
-  const keep = { artist: sp.artist, status: sp.status, colour: sp.colour, town: sp.town, venue: sp.venue, view };
+  const keep = {
+    artist: sp.artist,
+    status: sp.status,
+    colour: sp.colour,
+    town: sp.town,
+    venue: sp.venue,
+    view,
+  };
   const qs = (extra: Record<string, string>) =>
     "?" + new URLSearchParams(Object.entries({ ...keep, ...extra }).filter((e): e is [string, string] => !!e[1])).toString();
   type Gig = (typeof bookings)[number];
@@ -221,7 +281,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <li
               key={k.tone}
               className={`gig gig-${k.tone} rounded px-1.5 py-0.5 font-medium`}
-              style={k.tone === "on" ? { backgroundImage: KEY_ON, borderColor: "transparent", color: "#fff" } : undefined}
+              style={
+                k.tone === "on"
+                  ? {
+                      backgroundImage: KEY_ON,
+                      borderColor: "transparent",
+                      color: "#fff",
+                    }
+                  : undefined
+              }
             >
               {k.tone === "on" ? `Confirmed: ${byArtist ? "act" : "venue"} colour` : k.label}
             </li>
@@ -301,16 +369,29 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </form>
       </FilterPanel>
 
-      {legend.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600">
-          {legend.map(([name, colour]) => (
-            <span key={name} className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colour }} />
-              {name}
-            </span>
-          ))}
-        </div>
-      )}
+      {legend.length > 0 &&
+        (() => {
+          const chips = (
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-600">
+              {legend.map(([name, colour]) => (
+                <span key={name} className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colour }} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          );
+          // A long list of colours pushes the calendar off the screen, so fold it away past a dozen.
+          if (legend.length <= LEGEND_OPEN) return <div className="mb-4">{chips}</div>;
+          return (
+            <details className="mb-4">
+              <summary className="cursor-pointer text-xs text-ink-600 hover:text-ink-950">
+                {byArtist ? "Act" : "Venue"} colours ({legend.length})
+              </summary>
+              <div className="mt-2">{chips}</div>
+            </details>
+          );
+        })()}
 
       {view === "day" && awayOn(anchor).length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
@@ -319,7 +400,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       )}
       {view === "day" ? (
         <DayList
-          items={(byDay.get(anchor) ?? []).map((b) => ({ b, a: arrivalFor(b, settings, new Date()), colour: colourOf(b), look: look(b) }))}
+          items={(byDay.get(anchor) ?? []).map((b) => ({
+            b,
+            a: arrivalFor(b, settings, new Date()),
+            colour: colourOf(b),
+            look: look(b),
+          }))}
           addHref={`/bookings/new?date=${anchor}`}
         />
       ) : view === "week" ? (
@@ -398,6 +484,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const key = addDaysToKey(gridStart, i);
               const inMonth = key.startsWith(month);
               const items = byDay.get(key) ?? [];
+              // A busy day (some venues have 17 gigs a day) shows a count by status, the gigs that still need
+              // something doing, and "All N gigs" for the full list, so the square stays readable.
+              const busy = items.length > BUSY_DAY;
+              const shown = busy ? [...items].sort((a, b) => TONE_ATTENTION[look(a).tone] - TONE_ATTENTION[look(b).tone]).slice(0, 3) : items;
               return (
                 <div
                   key={key}
@@ -405,7 +495,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   style={sp.artist && awayOn(key).length ? AWAY_TINT : undefined}
                 >
                   {/* The whole square adds a booking on this day; the day number, bookings and chips sit above it. */}
-                  <AddOnDay date={key} label={dayLabel(key, { weekday: "long", day: "numeric", month: "long" })} />
+                  <AddOnDay
+                    date={key}
+                    label={dayLabel(key, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })}
+                  />
                   <div className="pointer-events-none relative z-10 mb-1 flex items-center justify-between pr-7 [&_a]:pointer-events-auto">
                     <Link
                       href={`/calendar${qs({ view: "week", date: key })}`}
@@ -415,11 +512,23 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     >
                       {Number(key.slice(8))}
                     </Link>
-                    {items.length > 4 && <span className="text-[10px] text-ink-400">{items.length} bookings</span>}
+                    {busy && <span className="text-[10px] font-medium text-ink-500">{items.length} gigs</span>}
                   </div>
                   <div className="pointer-events-none relative z-10 space-y-1 [&_a]:pointer-events-auto">
                     <AwayChips entries={awayOn(key)} max={2} small />
-                    {items.slice(0, 4).map((b) => (
+                    {busy && (
+                      <div className="flex flex-wrap gap-1 pb-0.5">
+                        {daySummary(items.map((b) => look(b).tone)).map((s) => (
+                          <span
+                            key={s.tone}
+                            className={`rounded px-1 py-px text-[10px] leading-tight font-medium ${s.tone === "on" ? "bg-ink-100 text-ink-700" : `gig gig-${s.tone}`}`}
+                          >
+                            {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {shown.map((b) => (
                       <GigHover key={b.id} card={card(b)}>
                         <Link
                           href={`/bookings/${b.id}`}
@@ -434,10 +543,24 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         </Link>
                       </GigHover>
                     ))}
-                    {items.length > 4 && (
-                      <Link href={`/calendar${qs({ view: "week", date: key })}`} className="block px-1.5 text-[11px] font-medium text-ink-600 hover:underline">
-                        + {items.length - 4} more
-                      </Link>
+                    {busy && (
+                      <BusyDayList
+                        label={dayLabel(key, {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                        })}
+                        addHref={`/calendar${qs({ view: "day", date: key })}`}
+                        gigs={items.map((b) => ({
+                          id: b.id,
+                          time: localTime(b.setStart, b.timezone),
+                          act: b.artistId ? actName(b) : "No act yet",
+                          venue: b.venue?.name ?? "No venue",
+                          status: statusLabel(b),
+                          className: look(b).className,
+                          style: look(b).style,
+                        }))}
+                      />
                     )}
                   </div>
                 </div>
@@ -453,8 +576,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 // The "Confirmed" sample in the key: a few venue colours, since each venue has its own.
 const KEY_ON = "linear-gradient(90deg, #2563eb, #7c3aed, #be185d)";
 
+// More gigs than this in a day and the month view shows a summary and "All N gigs" instead of every chip.
+const BUSY_DAY = 4;
+const LEGEND_OPEN = 12;
+
 // Days an act is away: soft amber stripes behind the day when one act is filtered.
-const AWAY_TINT = { backgroundImage: "repeating-linear-gradient(135deg, rgb(251 191 36 / 0.12) 0 8px, transparent 8px 16px)" };
+const AWAY_TINT = {
+  backgroundImage: "repeating-linear-gradient(135deg, rgb(251 191 36 / 0.12) 0 8px, transparent 8px 16px)",
+};
 
 const awayText = (e: AwayEntry) => `${e.own ? e.actName : `${e.actName} (in the band)`}${e.note ? `, ${e.note}` : ""}`;
 

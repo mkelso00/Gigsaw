@@ -212,7 +212,7 @@ export async function loadDemoData(_: FormState): Promise<FormState> {
   await logActivity(admin, "SETTINGS", admin.agencyId, "loaded demo data", `${res.bookings} bookings`);
   revalidatePath("/", "layout");
   return {
-    ok: `Added ${res.artists.length} artists, ${res.venues} venues and ${res.bookings} bookings. Have a look at Arrivals and the Dashboard.`,
+    ok: `Added ${res.artists.length} artists, ${res.venues} venues and ${res.bookings} bookings. Have a look at the Calendar and the Dashboard.`,
   };
 }
 

@@ -50,7 +50,11 @@ export function textOn(colour: string) {
 export function gigLook(status: string, colour: string, hasAct = true): { tone: GigTone; className: string; style?: CSSProperties } {
   const tone = gigTone(status, hasAct);
   if (tone !== "on") return { tone, className: `gig gig-${tone}` };
-  return { tone, className: "gig gig-on", style: { "--gig": colour, "--gig-ink": textOn(colour) } as CSSProperties };
+  return {
+    tone,
+    className: "gig gig-on",
+    style: { "--gig": colour, "--gig-ink": textOn(colour) } as CSSProperties,
+  };
 }
 
 /** The colour key shown by the view switcher, in the order a booking usually moves through. */
@@ -60,3 +64,33 @@ export const GIG_KEY: { tone: GigTone; label: string }[] = [
   { tone: "awaiting", label: "Awaiting confirmation" },
   { tone: "on", label: "Confirmed" },
 ];
+
+/** Which gigs a busy day shows first in the month view: the ones that still need something doing. */
+export const TONE_ATTENTION: Record<GigTone, number> = {
+  pending: 0,
+  awaiting: 1,
+  quiet: 2,
+  on: 3,
+  cancelled: 4,
+};
+
+const TONE_COUNT_LABEL: Record<GigTone, [string, string]> = {
+  pending: ["pending", "pending"],
+  awaiting: ["waiting", "waiting"],
+  quiet: ["on hold or enquiry", "on hold or enquiries"],
+  on: ["confirmed", "confirmed"],
+  cancelled: ["cancelled", "cancelled"],
+};
+
+/** A busy day's gigs counted by look, most urgent first: e.g. [{ tone: "pending", n: 3, label: "3 pending" }, …]. */
+export function daySummary(tones: GigTone[]) {
+  const counts = new Map<GigTone, number>();
+  for (const t of tones) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts]
+    .sort((a, b) => TONE_ATTENTION[a[0]] - TONE_ATTENTION[b[0]])
+    .map(([tone, n]) => ({
+      tone,
+      n,
+      label: `${n} ${TONE_COUNT_LABEL[tone][n === 1 ? 0 : 1]}`,
+    }));
+}

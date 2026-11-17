@@ -139,7 +139,7 @@ export async function createSlots(venueId: string, _: FormState, form: FormData)
     });
     await logActivity(user, "VENUE", venueId, "added schedule slots", `${days.length} × ${fields.startTime}–${fields.endTime}`);
     // Straight into the calendar as gigs (Pending, so yellow until an act is booked), so a new weekly slot
-    // shows up where people look for it rather than only on the Rota.
+    // shows up where people look for it straight away.
     const weeks = str(form, "fillCalendar") === "on" ? Math.min(Math.max(int(form, "fillWeeks") ?? 12, 1), 52) : 0;
     let made = 0;
     if (weeks) {
@@ -644,7 +644,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
           if (id) ids.push(id);
         }
         // The weeks after the first go in the calendar too (Pending, yellow), so the slot is visible there
-        // straight away. The regular act can be booked into them from the Rota ("Put the weekly slots in the calendar").
+        // straight away. Open each one in the calendar to add an act.
         for (let w = 1, d = addDaysToKey(first, 7); w < 12; w++, d = addDaysToKey(d, 7)) {
           if (slotRunsOn(created, d) && (await bookSlot(user, created, d, null))) pendingAfter++;
         }
@@ -658,7 +658,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       const firstOnes = !ids.length
         ? ""
         : !artist
-          ? ` The first ${ids.length === 1 ? "one is" : `${ids.length} are`} in the calendar, Pending: add an act on the Rota.`
+          ? ` The first ${ids.length === 1 ? "one is" : `${ids.length} are`} in the calendar, Pending: open each one in the calendar to add an act.`
           : status === "AWAITING"
             ? ` Offered the first ${ids.length === 1 ? "one" : ids.length} to ${artist.name}.${offered ? " They've been sent the offer." : ""}`
             : ` Booked ${artist.name} for the first ${ids.length === 1 ? "one" : ids.length}.`;

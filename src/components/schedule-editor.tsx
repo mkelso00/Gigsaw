@@ -122,7 +122,7 @@ function StopOrDelete({ slot, today }: { slot: Slot; today: string }) {
       <p className="mt-1 text-xs text-ink-600">
         {stopped
           ? `It ran until ${day(slot.endsOn!)}. To start it again, clear or change the last date above and save.`
-          : "It stops showing on the Rota and asking for an act after the last date. Bookings already made stay in the calendar."}
+          : "It stops adding gigs after the last date. Bookings already made stay in the calendar."}
       </p>
       {!stopped && (
         <ActionForm action={stopSlot.bind(null, slot.id)} className="mt-3 flex flex-wrap items-end gap-3">
@@ -171,7 +171,7 @@ export function ScheduleEditor({
   currency: string;
   /** Today at the venue, "YYYY-MM-DD". */
   today: string;
-  /** A slot to show opened, e.g. from "Stop or change" on the Rota. */
+  /** A slot to show opened, e.g. from a link to ?slot=… on the venue page. */
   openSlotId?: string;
 }) {
   // Stopped slots stay listed (with their history) but leave the week grid.
@@ -181,8 +181,7 @@ export function ScheduleEditor({
       <div className="mb-5">
         <h2 className="section-title">Weekly music schedule</h2>
         <p className="mt-1 text-sm text-ink-500">
-          The slots that repeat every week at this venue, each from its start date. Fill them week by week on the Rota, or book the regular act for several
-          weeks at once.
+          The slots that repeat every week at this venue, each from its start date. Each one goes into the calendar as a Pending gig, ready for an act.
         </p>
       </div>
 
@@ -287,7 +286,7 @@ export function ScheduleEditor({
             Put them in the calendar now, for the next
             <input name="fillWeeks" type="number" min={1} max={52} defaultValue={12} className="input h-8 w-16 px-2 py-1" aria-label="Weeks" />
             weeks
-            <span className="hint block w-full">They show as Pending (yellow) until an act is booked. You can add more weeks any time from the Rota.</span>
+            <span className="hint block w-full">They show as Pending (yellow) until an act is booked. You can add more weeks any time here.</span>
           </label>
           <SubmitButton>Add weekly slot</SubmitButton>
         </ActionForm>
