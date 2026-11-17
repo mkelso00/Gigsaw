@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { StatusPicker } from "@/components/status-picker";
 import { ArtistDot, Empty, PageHeader, Stat, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { actName } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
+import { readStatuses, statusParams } from "@/lib/count-statuses";
 import { formatMoney } from "@/lib/money";
 import { isDateKey, venueColour } from "@/lib/rota";
 import { formatDate, localDateKey, localTime } from "@/lib/time";
@@ -17,7 +19,7 @@ const valid = (s?: string) => (isDateKey(s) ? s : undefined);
 export default async function VenueStatementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ venue?: string; from?: string; to?: string; customers?: string }>;
+  searchParams: Promise<{ venue?: string; from?: string; to?: string; customers?: string; st?: string | string[] }>;
 }) {
   const user = await requireStaff();
   const sp = await searchParams;
@@ -33,10 +35,15 @@ export default async function VenueStatementPage({
     select: { id: true, name: true, city: true, colour: true },
   });
   const venueId = sp.venue ?? "";
-  const s = venueId ? await venueStatement(user.agencyId, venueId, from, to, sp.customers === "on") : null;
+  const statuses = readStatuses(sp.st);
+  const s = venueId ? await venueStatement(user.agencyId, venueId, from, to, sp.customers === "on", statuses) : null;
   const m = (x: number) => formatMoney(x, s?.currency ?? settings.defaultCurrency);
   const q = (extra: Record<string, string>) =>
-    "?" + new URLSearchParams({ venue: venueId, from, to, ...(sp.customers ? { customers: sp.customers } : {}), ...extra }).toString();
+    "?" +
+    new URLSearchParams([
+      ...Object.entries({ venue: venueId, from, to, ...(sp.customers ? { customers: sp.customers } : {}), ...extra }),
+      ...statusParams(statuses),
+    ]).toString();
 
   return (
     <div>
@@ -88,6 +95,10 @@ export default async function VenueStatementPage({
             <input type="checkbox" name="customers" defaultChecked={sp.customers === "on"} className="h-4 w-4" />
             Include bookings made by private customers (weddings at this venue)
           </label>
+          {/* Keeps the status choice when Show is pressed; it's changed with the drop-down below. */}
+          {statusParams(statuses).map(([k, v]) => (
+            <input key={v} type="hidden" name={k} value={v} />
+          ))}
         </div>
       </form>
 
@@ -105,11 +116,14 @@ export default async function VenueStatementPage({
                 · {formatDate(new Date(`${from}T12:00:00Z`), "UTC")} to {formatDate(new Date(`${to}T12:00:00Z`), "UTC")}
               </span>
             </h2>
-            {s.rows.length > 0 && (
-              <a href={`/print/venues/${s.venue.id}/statement${q({})}`} target="_blank" className="btn btn-primary">
-                Printable invoice
-              </a>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPicker selected={statuses} keep={{ venue: venueId, from, to, ...(sp.customers ? { customers: sp.customers } : {}) }} />
+              {s.rows.length > 0 && (
+                <a href={`/print/venues/${s.venue.id}/statement${q({})}`} target="_blank" className="btn btn-primary">
+                  Printable invoice
+                </a>
+              )}
+            </div>
           </div>
           <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat
@@ -127,8 +141,9 @@ export default async function VenueStatementPage({
           </div>
           {s.totals.unconfirmed > 0 && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {s.totals.unconfirmed} of these booking{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet, so{" "}
-              {s.totals.unconfirmed === 1 ? "it isn't" : "they aren't"} on the printable invoice until confirmed.
+              {s.totals.unconfirmed} of these booking{s.totals.unconfirmed === 1 ? " isn't" : "s aren't"} confirmed yet
+              {s.totals.noAct > 0 ? ` (${s.totals.noAct} still need${s.totals.noAct === 1 ? "s" : ""} an act)` : ""}. They&apos;re counted here and on the
+              invoice. To leave them out, untick their status under Counting.
             </p>
           )}
           {s.rows.length === 0 ? (

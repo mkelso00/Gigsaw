@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { StatusPicker } from "@/components/status-picker";
 import { ArtistDot, Empty, PageHeader, Stat } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { actName } from "@/lib/constants";
+import { readStatuses, statusParams } from "@/lib/count-statuses";
 import { getSettings, prisma } from "@/lib/db";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { PERIODS, periodBuckets, periodRange, shiftPeriod, type Period } from "@/lib/periods";
@@ -12,7 +14,7 @@ import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
 export const metadata: Metadata = { title: "Reports" };
 
 // What the acts earned, what venues and clients paid, and what we made, for a week, month,
-// year or any dates. Only gigs that are on (confirmed or settled) count.
+// year or any dates. Every booking that isn't cancelled counts, unless narrowed with the Counting drop-down.
 
 type Totals = { gigs: number; sale: number; fees: number; cost: number; profit: number; received: number; owed: number; paidOut: number; toPay: number };
 const empty = (): Totals => ({ gigs: 0, sale: 0, fees: 0, cost: 0, profit: 0, received: 0, owed: 0, paidOut: 0, toPay: 0 });
@@ -20,7 +22,11 @@ const empty = (): Totals => ({ gigs: 0, sale: 0, fees: 0, cost: 0, profit: 0, re
 const valid = (s?: string) => (isDateKey(s) ? s : undefined);
 const PERIOD_LABELS: Record<Period | "custom", string> = { week: "Week", month: "Month", year: "Year", custom: "Pick dates" };
 
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ period?: string; date?: string; from?: string; to?: string }> }) {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; date?: string; from?: string; to?: string; st?: string | string[] }>;
+}) {
   const user = await requireStaff();
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
@@ -41,13 +47,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   } else {
     ({ from, to, label } = periodRange(period, date));
   }
+  const statuses = readStatuses(sp.st);
   const href = (p: Period | "custom", d?: string) =>
-    `/reports?${new URLSearchParams(p === "custom" ? { period: p, from, to } : { period: p, date: d ?? date })}`;
+    `/reports?${new URLSearchParams([...Object.entries(p === "custom" ? { period: p, from, to } : { period: p, date: d ?? date }), ...statusParams(statuses)])}`;
+  const keepStatuses = statusParams(statuses).map(([k, v]) => <input key={v} type="hidden" name={k} value={v} />);
 
   const bookings = await prisma.booking.findMany({
     where: {
       agencyId: user.agencyId,
-      status: { in: ["CONFIRMED", "SETTLED"] },
+      status: { in: statuses },
       arriveBy: { gte: zonedToUtc(from, "00:00", tz), lt: zonedToUtc(addDaysToKey(to, 1), "00:00", tz) },
     },
     include: {
@@ -119,10 +127,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <div>
       <PageHeader
         title="Reports"
-        subtitle="What the acts earned, what venues and clients paid, and what we made. Confirmed and settled bookings only."
+        subtitle="What the acts earned, what venues and clients paid, and what we made. Every booking that isn't cancelled counts, unless you narrow it under Counting."
         actions={
           <>
-            <Link href={`/reports/venues?from=${from}&to=${to}`} className="btn">
+            <Link href={`/reports/venues?${new URLSearchParams([["from", from], ["to", to], ...statusParams(statuses)])}`} className="btn">
               Venue statements
             </Link>
             <a href={`/api/export/bookings?from=${from}&to=${to}`} className="btn">
@@ -160,8 +168,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 This {period}
               </Link>
             )}
-            <form className="ml-auto hidden items-center gap-2 sm:flex">
+            <form className="hidden items-center gap-2 sm:flex">
               <input type="hidden" name="period" value={period} />
+              {keepStatuses}
               <label className="sr-only" htmlFor="report-date">
                 Go to date
               </label>
@@ -172,6 +181,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ) : (
           <form className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="period" value="custom" />
+            {keepStatuses}
             <label>
               <span className="label">From</span>
               <input type="date" name="from" defaultValue={from} className="input w-auto" />
@@ -183,6 +193,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <button className="btn">Show</button>
           </form>
         )}
+        <div className="ml-auto">
+          <StatusPicker selected={statuses} keep={period === "custom" ? { period, from, to } : { period, date }} />
+        </div>
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -207,7 +220,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       )}
 
       {inCur.length === 0 ? (
-        <Empty>No confirmed or settled bookings in {period === "custom" ? "these dates" : `this ${period}`}.</Empty>
+        <Empty>No bookings to count in {period === "custom" ? "these dates" : `this ${period}`}.</Empty>
       ) : (
         <div className="space-y-8">
           {buckets.length > 0 && (
@@ -326,7 +339,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                         <td className="text-right">{m(v.t.profit)}</td>
                         <td className="text-right">{v.t.owed ? m(v.t.owed) : "-"}</td>
                         <td className="text-right">
-                          <Link href={`/reports/venues?venue=${v.id}&from=${from}&to=${to}`} className="link text-sm">
+                          <Link
+                            href={`/reports/venues?${new URLSearchParams([["venue", v.id], ["from", from], ["to", to], ...statusParams(statuses)])}`}
+                            className="link text-sm"
+                          >
                             Statement
                           </Link>
                         </td>

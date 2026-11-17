@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { NewBookingButton } from "@/components/calendar-add";
 import { Icon } from "@/components/icons";
+import { StatusPicker } from "@/components/status-picker";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { unresolvedPastWhere } from "@/lib/billing";
 import { daySummary, gigTone } from "@/lib/calendar-look";
 import { eventTypeLabel } from "@/lib/constants";
+import { readStatuses, statusParams } from "@/lib/count-statuses";
 import { getSettings, prisma } from "@/lib/db";
 import { enquiryTypeLabel, formatDay } from "@/lib/enquiries";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
@@ -20,7 +22,7 @@ export const dynamic = "force-dynamic";
 const DAYS_SHOWN = 14;
 const VENUES_SHOWN = 10;
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ month?: string; st?: string | string[] }> }) {
   const sp = await searchParams;
   const user = await requireStaff();
   const settings = await getSettings(user.agencyId);
@@ -38,7 +40,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const nextMonthStart = new Date(Date.UTC(my, mm, 1)).toISOString().slice(0, 10);
   const prevMonth = new Date(Date.UTC(my, mm - 2, 1)).toISOString().slice(0, 7);
   const monthLabel = new Date(Date.UTC(my, mm - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
-  const monthHref = (m: string) => (m === thisMonth ? "/dashboard#month" : `/dashboard?month=${m}#month`);
+  const statuses = readStatuses(sp.st);
+  const monthHref = (m: string) => {
+    const q = new URLSearchParams([...(m === thisMonth ? [] : [["month", m]]), ...statusParams(statuses)]).toString();
+    return `/dashboard${q ? `?${q}` : ""}#month`;
+  };
   // A day either side, then sorted by each gig's own local date, as the calendar does.
   const windowFrom = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() - 86_400_000);
   const windowTo = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() + 86_400_000);
@@ -164,13 +170,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     byDay.set(key, [...(byDay.get(key) ?? []), b]);
   }
 
-  // Venue numbers for this month. Money only counts bookings in the main currency, and only once
-  // confirmed or settled, so a pencilled-in date doesn't look like money in the bank.
+  // Venue numbers for the month: every booking that isn't cancelled, unless narrowed under Counting,
+  // so the bill to each venue isn't short when an act is still to confirm. Money in the main currency only.
   const venues = new Map<string, VenueRow>();
   const totals = { gigs: 0, sale: 0, profit: 0 };
   for (const b of month) {
     const key = localDateKey(b.arriveBy, b.timezone);
     if (key < monthStart || key >= nextMonthStart) continue;
+    if (!statuses.includes(b.status as (typeof statuses)[number])) continue;
     const id = b.venue?.id ?? "none";
     const row =
       venues.get(id) ??
@@ -203,7 +210,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     totals.gigs++;
     if (tone === "on") row.confirmed++;
     else if (tone === "pending" || tone === "awaiting") row.open++;
-    if (tone === "on" && b.currency === cur) {
+    if (b.currency === cur) {
       const d = dealBreakdown(b);
       row.sale += d.grossMinor;
       row.profit += d.agencyMinor;
@@ -487,9 +494,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <section>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="section-title">Venues</h3>
-          <span className="text-sm text-ink-500">
-            {totals.gigs} gig{totals.gigs === 1 ? "" : "s"} · {formatMoney(totals.sale, cur)} sale · {formatMoney(totals.profit, cur)} profit
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-ink-500">
+              {totals.gigs} gig{totals.gigs === 1 ? "" : "s"} · {formatMoney(totals.sale, cur)} sale · {formatMoney(totals.profit, cur)} profit
+            </span>
+            <StatusPicker selected={statuses} keep={shownMonth === thisMonth ? {} : { month: shownMonth }} action="/dashboard#month" />
+          </div>
         </div>
         {venueRows.length === 0 ? (
           <p className="text-sm text-ink-500">No gigs booked in {monthLabel} yet.</p>

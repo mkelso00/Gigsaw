@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DocumentShell } from "@/components/document";
 import { requireStaff } from "@/lib/auth";
-import { actName } from "@/lib/constants";
+import { readStatuses } from "@/lib/count-statuses";
 import { getSettings } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { isDateKey } from "@/lib/rota";
@@ -19,7 +19,7 @@ export default async function VenueInvoicePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string; to?: string; customers?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; customers?: string; st?: string | string[] }>;
 }) {
   const user = await requireStaff();
   const { id } = await params;
@@ -27,7 +27,10 @@ export default async function VenueInvoicePage({
   const from = valid(sp.from);
   const to = valid(sp.to);
   if (!from || !to) notFound();
-  const [s, settings] = await Promise.all([venueStatement(user.agencyId, id, from, to, sp.customers === "on", true), getSettings(user.agencyId)]);
+  const [s, settings] = await Promise.all([
+    venueStatement(user.agencyId, id, from, to, sp.customers === "on", readStatuses(sp.st)),
+    getSettings(user.agencyId),
+  ]);
   if (!s) notFound();
   const m = (x: number) => formatMoney(x, s.currency);
   const period = `${formatDate(new Date(`${from}T12:00:00Z`), "UTC")} to ${formatDate(new Date(`${to}T12:00:00Z`), "UTC")}`;
@@ -76,7 +79,7 @@ export default async function VenueInvoicePage({
             <tr key={b.id} className="border-b border-slate-100">
               <td className="py-2.5 whitespace-nowrap">{formatDate(b.arriveBy, b.timezone)}</td>
               <td className="py-2.5">
-                {actName(b)}, {localTime(b.setStart, b.timezone)}
+                {b.artist?.name ?? "Live music"}, {localTime(b.setStart, b.timezone)}
                 {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
                 <span className="ml-2 text-xs text-slate-500">{b.reference}</span>
               </td>

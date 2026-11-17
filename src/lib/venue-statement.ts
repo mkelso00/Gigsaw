@@ -1,4 +1,5 @@
 import "server-only";
+import { COUNTABLE } from "./count-statuses";
 import { prisma } from "./db";
 import { dealBreakdown, paymentTotals } from "./money";
 import { addDaysToKey, zonedToUtc } from "./time";
@@ -6,9 +7,17 @@ import { addDaysToKey, zonedToUtc } from "./time";
 // A venue's statement for a date range: the gigs played there, what the venue owes for them
 // (the sale, plus VAT), what each act is paid (the cost), and what's been received and paid out.
 // Gigs booked by a private customer (e.g. a wedding at the venue) aren't the venue's to pay, so
-// they're left out unless asked for. Cancelled gigs, enquiries and gigs with no act are left out.
+// they're left out unless asked for. Which statuses count is the caller's choice (by default
+// everything but cancelled, gigs still waiting for an act included); cancelled gigs never count.
 
-export async function venueStatement(agencyId: string, venueId: string, from: string, to: string, includeCustomers = false, invoiceOnly = false) {
+export async function venueStatement(
+  agencyId: string,
+  venueId: string,
+  from: string,
+  to: string,
+  includeCustomers = false,
+  statuses: readonly string[] = COUNTABLE,
+) {
   const venue = await prisma.venue.findFirst({ where: { id: venueId, agencyId } });
   if (!venue) return null;
   const tz = venue.timezone;
@@ -16,14 +25,9 @@ export async function venueStatement(agencyId: string, venueId: string, from: st
     where: {
       agencyId,
       venueId,
-      artistId: { not: null },
-      status: { notIn: ["CANCELLED", "ENQUIRY"] },
+      status: { in: statuses.filter((s) => s !== "CANCELLED") },
       arriveBy: { gte: zonedToUtc(from, "00:00", tz), lt: zonedToUtc(addDaysToKey(to, 1), "00:00", tz) },
-      AND: [
-        ...(includeCustomers ? [] : [{ eventId: null }, { OR: [{ promoterId: null }, { promoter: { type: { not: "CLIENT" } } }] }]),
-        // The invoice only bills gigs that are on (confirmed or settled) or that clearly happened.
-        ...(invoiceOnly ? [{ OR: [{ status: { in: ["CONFIRMED", "SETTLED"] } }, { checkIns: { some: { kind: "ARRIVED" } } }] }] : []),
-      ],
+      AND: [...(includeCustomers ? [] : [{ eventId: null }, { OR: [{ promoterId: null }, { promoter: { type: { not: "CLIENT" } } }] }])],
     },
     include: {
       artist: { select: { name: true, colour: true } },
@@ -60,6 +64,7 @@ export async function venueStatement(agencyId: string, venueId: string, from: st
     owedToActs: Math.max(0, sum("cost") - sum("paidOut")),
     margin: sum("sale") - sum("cost"),
     unconfirmed: rows.filter((r) => r.b.status !== "CONFIRMED" && r.b.status !== "SETTLED").length,
+    noAct: rows.filter((r) => !r.b.artistId).length,
   };
   // Who to bill: the contact named on most of these gigs, if any.
   const counts = new Map<string, { n: number; c: (typeof gigs)[number]["promoter"] }>();
