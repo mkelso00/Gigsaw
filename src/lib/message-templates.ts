@@ -103,12 +103,12 @@ export const TEMPLATES: TemplateDef[] = [
   {
     key: "CONTRACT",
     group: "CUSTOMERS",
-    label: "Contract to sign",
-    hint: "Sent when you press Send contract to sign on a booking or a wedding or event. The link to read and sign it is always added.",
+    label: "Contract to sign and approve",
+    hint: "Sent when you press Send contract to sign on a booking or a wedding or event. The link to read, sign and approve it online is always added.",
     example: {
-      subject: "Your contract to sign: {event}",
+      subject: "Please sign and approve: {event}",
       intro:
-        "Hi {first_name}, here is your contract from {business} for {event} on {date}. Please read it and sign it online. It takes a minute and works on your phone.",
+        "Hi {first_name}, here is your contract from {business} for {event} on {date}. Please read it, sign in the box and press Approve. It's all online, nothing to print, and works on your phone.",
     },
     placeholders: ["first_name", "event", "act", "date", "business"],
     manual: true,

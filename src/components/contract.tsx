@@ -52,7 +52,9 @@ export function ContractBody({
               <img src={signature.image} alt={`Signature of ${signature.name}`} className="max-h-[76px] max-w-full object-contain" />
             </div>
           ) : (
-            <div className="h-16 border-b border-slate-400" />
+            <div className="flex h-20 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 text-slate-400">
+              Signed online by the client
+            </div>
           )}
           <div className="mt-2">For the Client{signature ? `: ${signature.name}` : ""}</div>
           {signature ? (
@@ -60,10 +62,7 @@ export function ContractBody({
               Signed online {formatDateTime(signature.signedAt, timeZone)} {zoneLabel(signature.signedAt, timeZone)}
             </div>
           ) : (
-            <>
-              <div className="mt-6 h-px border-b border-slate-300" />
-              <div className="mt-1 text-slate-500">Date</div>
-            </>
+            <div className="mt-1 text-slate-500">Dated when they sign and approve</div>
           )}
         </div>
         <div className="break-inside-avoid">

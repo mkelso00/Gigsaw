@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { PrintButton } from "@/components/client-bits";
 import { ContractBody } from "@/components/contract";
 import { DocumentShell } from "@/components/document";
 import { agencySignatureOf, bookingContractDoc } from "@/lib/contract-doc";
@@ -18,17 +17,23 @@ export default async function ContractPage({ params }: { params: Promise<{ id: s
       reference={doc.reference}
       settings={settings}
       toolbar={
-        settings.signatureImage ? undefined : (
-          <>
-            <SignatureNudge />
-            <PrintButton />
-          </>
-        )
+        <>
+          <OnlineNote />
+          {!settings.signatureImage && <SignatureNudge />}
+        </>
       }
     >
       <ContractBody doc={doc} timeZone={b.timezone} agencySignature={agencySignatureOf(settings)} />
       <p className="mt-8 text-xs text-slate-400">Issued {formatDateTime(new Date(), settings.defaultTimezone)}</p>
     </DocumentShell>
+  );
+}
+
+function OnlineNote() {
+  return (
+    <span className="mr-auto flex items-center rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+      Preview only. The client signs and approves online: use Send contract to sign in the Contract box on the booking.
+    </span>
   );
 }
 

@@ -107,6 +107,7 @@ export async function contractStatusFor(agencyId: string, target: ContractTarget
       viewedAt: true,
       signedAt: true,
       signedName: true,
+      signature: true,
       cancelledAt: true,
       content: true,
     },
@@ -163,20 +164,20 @@ export async function sendContract(user: { id: string; agencyId: string }, targe
         bookingId: target.kind === "booking" ? target.id : null,
         to: email,
         replyTo: agent?.email || s.settings.agencyEmail,
-        subject: t.subject ?? `Your contract to sign: ${s.what}`,
+        subject: t.subject ?? `Please sign and approve: ${s.what}`,
         email: {
           brand,
-          preheader: "Please read and sign your contract",
-          title: "Your contract is ready to sign",
+          preheader: "Please read, sign and approve your booking online",
+          title: "Your booking is ready to approve",
           intro:
             t.intro ??
-            `Hi ${first}, here is your contract from ${brand} for ${s.what} on ${s.date}. Please read it and sign it online. It takes a minute and works on your phone.`,
+            `Hi ${first}, here is your contract from ${brand} for ${s.what} on ${s.date}. Please read it, sign in the box and press Approve. It's all online, nothing to print, and works on your phone.`,
           rows: [
             ["Booking", s.what],
             ["Date", s.date],
             ["Reference", s.doc.reference],
           ],
-          cta: { label: "Read and sign", url: contractUrl(contract.token) },
+          cta: { label: "Read, sign and approve", url: contractUrl(contract.token) },
           outro: `Questions? Reply to this email to reach ${agent?.name ?? brand}.`,
         },
       });
@@ -198,11 +199,11 @@ export async function afterSigned(contractId: string) {
     await sendEmail({
       ...base,
       to,
-      subject: `Contract signed: ${s.what}`,
+      subject: `Approved and signed: ${s.what}`,
       email: {
         brand,
-        title: `${c.signedName} has signed the contract`,
-        highlight: { label: "Signed", value: when, tone: "good" },
+        title: `${c.signedName} has signed and approved the booking`,
+        highlight: { label: "Approved", value: when, tone: "good" },
         rows: [
           ["Booking", s.what],
           ["Date", s.date],
@@ -216,17 +217,17 @@ export async function afterSigned(contractId: string) {
     ...base,
     to: c.signerEmail,
     replyTo: s.settings.agencyEmail,
-    subject: `Signed: your contract with ${brand}`,
+    subject: `Approved: your booking with ${brand}`,
     email: {
       brand,
-      title: "Thank you, your contract is signed",
-      intro: `Hi ${c.signedName.split(" ")[0]}, thank you for signing. You can see, print or save your signed copy at any time from the link below.`,
+      title: "Thank you, your booking is approved",
+      intro: `Hi ${c.signedName.split(" ")[0]}, thank you for signing and approving. Your signed copy is always at the link below, so there's nothing to download or keep.`,
       rows: [
         ["Booking", s.what],
         ["Date", s.date],
         ["Signed", when],
       ],
-      cta: { label: "Your signed copy", url: contractUrl(c.token) },
+      cta: { label: "See your signed copy", url: contractUrl(c.token) },
     },
   });
 }

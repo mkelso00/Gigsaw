@@ -17,7 +17,16 @@ export default async function EventContractPage({ params }: { params: Promise<{ 
   const [s, settings] = await Promise.all([contractSubject(user.agencyId, { kind: "event", id }), getSettings(user.agencyId)]);
   if (!s) notFound();
   return (
-    <DocumentShell title={s.doc.title} reference={s.doc.reference} settings={s.settings}>
+    <DocumentShell
+      title={s.doc.title}
+      reference={s.doc.reference}
+      settings={s.settings}
+      toolbar={
+        <span className="mr-auto flex items-center rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          Preview only. The customer signs and approves online: use Send contract to sign in the Contract box on the wedding or event.
+        </span>
+      }
+    >
       <ContractBody doc={s.doc} timeZone={s.timeZone} agencySignature={agencySignatureOf(settings)} />
       <p className="mt-8 text-xs text-slate-400">Issued {formatDateTime(new Date(), s.settings.defaultTimezone)}</p>
     </DocumentShell>

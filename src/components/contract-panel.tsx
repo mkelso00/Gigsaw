@@ -4,7 +4,7 @@ import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { contractState, contractStatusLabel } from "@/lib/contract-doc";
 import { contractUrl, type contractStatusFor } from "@/lib/contracts";
-import { formatDate } from "@/lib/time";
+import { formatDate, formatDateTime } from "@/lib/time";
 
 // "Contract" card on a booking or a wedding or event: status, send to sign, resend, cancel, and
 // the signed copy. A booking that's part of a wedding shows the wedding's contract instead.
@@ -68,10 +68,23 @@ export function ContractPanel({
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="section-title">Contract</h2>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${changed ? TONE.VIEWED : TONE[state]}`}>
-          {state === "NONE" ? "Not sent" : state === "SENT" ? "Sent" : state === "VIEWED" ? "Viewed" : changed ? "Signed, now changed" : "Signed"}
+          {state === "NONE" ? "Not sent" : state === "SENT" ? "Sent" : state === "VIEWED" ? "Viewed" : changed ? "Approved, now changed" : "Approved"}
         </span>
       </div>
       <p className="text-sm text-ink-700">{contractStatusLabel(current, timeZone)}</p>
+      {/* The client's own signature, on the booking itself once they've approved. */}
+      {state === "SIGNED" && current?.signature && (
+        <figure className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+          <div className="flex h-16 items-end border-b border-ink-300 pb-1">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a data URL, nothing to optimise */}
+            <img src={current.signature} alt={`Signature of ${current.signedName}`} className="max-h-[60px] max-w-full object-contain" />
+          </div>
+          <figcaption className="mt-1.5 text-xs text-ink-600">
+            Signed and approved online by <span className="font-medium text-ink-950">{current.signedName}</span>
+            {current.signedAt ? `, ${formatDateTime(current.signedAt, timeZone)}` : ""}
+          </figcaption>
+        </figure>
+      )}
       {current && state !== "SIGNED" && (
         <p className="text-xs text-ink-500">
           To {current.signerName} ({current.signerEmail}){current.viewedAt ? `, sent ${formatDate(current.sentAt, timeZone)}` : ""}
@@ -136,7 +149,7 @@ export function ContractPanel({
           )}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <a href={previewHref} target="_blank" className="link">
-              {state === "SIGNED" ? "Print the current version" : "Preview the contract"}
+              {state === "SIGNED" ? "Preview the current version" : "Preview what they will sign"}
             </a>
           </div>
         </>

@@ -12,6 +12,9 @@ import { log } from "@/server/log";
 
 // Contracts signed online: staff send and cancel them; the client signs at /c/<token> with no login.
 
+/** What a booking can be before the client approves it; approving makes it Pending (booked). */
+const APPROVES = ["ENQUIRY", "HOLD"];
+
 const entityOf = (t: { bookingId: string | null; eventId: string | null }) => (t.bookingId ? "BOOKING" : "EVENT");
 const pathOf = (t: { bookingId: string | null; eventId: string | null }) => (t.bookingId ? `/bookings/${t.bookingId}` : `/events/${t.eventId}`);
 
@@ -87,7 +90,19 @@ export async function signContract(token: string, hash: string, _: FormState, fo
     });
     if (!done.count) return { ok: "signed" };
     await prisma.activity.create({
-      data: { agencyId: c.agencyId, entity: entityOf(c), entityId: (c.bookingId ?? c.eventId)!, action: "client signed the contract", detail: name },
+      data: {
+        agencyId: c.agencyId,
+        entity: entityOf(c),
+        entityId: (c.bookingId ?? c.eventId)!,
+        action: "client signed and approved the contract",
+        detail: name,
+      },
+    });
+    // Approved by the client, so an enquiry or a held date is now booked: Pending until the act is
+    // confirmed. Bookings already further on (offered, confirmed, settled) stay as they are.
+    await prisma.booking.updateMany({
+      where: { agencyId: c.agencyId, status: { in: APPROVES }, ...(c.bookingId ? { id: c.bookingId } : { eventId: c.eventId! }) },
+      data: { status: "PENDING" },
     });
     try {
       await afterSigned(c.id);

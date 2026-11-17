@@ -38,9 +38,9 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
         toolbar={
           <>
             <span className="mr-auto self-center rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
-              Signed {formatDateTime(c.signedAt!, tz)}
+              Approved and signed {formatDateTime(c.signedAt!, tz)}
             </span>
-            <PrintButton />
+            <PrintButton label="Save a copy (optional)" />
           </>
         }
       >
@@ -86,15 +86,16 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
       settings={live.settings}
       toolbar={
         <p className="mr-auto text-sm text-ink-700">
-          Hi {c.signerName.split(" ")[0]}, please read your contract from {brand}, then sign at the bottom.
+          Hi {c.signerName.split(" ")[0]}, please read your booking from {brand}, then sign and approve it at the bottom. It&apos;s all done here, nothing to
+          print.
         </p>
       }
       after={
         <div className="no-print mx-auto mt-4 max-w-3xl px-0 sm:mt-6 sm:px-0">
           <ActionForm action={signContract.bind(null, token, hash)} className="bg-white p-5 shadow sm:rounded-xl sm:p-8">
-            <h2 className="text-xl font-semibold tracking-tight">Sign your contract</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Sign and approve</h2>
             <p className="mt-1 text-sm text-ink-600">
-              Signing online is just as binding as signing on paper. You&apos;ll be able to print or save a copy afterwards.
+              Draw your signature in the box with your finger or mouse, then press Approve. Signing here is just as binding as signing on paper.
             </p>
             <label className="mt-5 block">
               <span className="label">Your full name</span>
@@ -118,12 +119,12 @@ export default async function ContractSignPage({ params }: { params: Promise<{ t
             <label className="mt-5 flex items-start gap-3 rounded-xl bg-ink-50 p-4 text-[15px]">
               <input type="checkbox" name="agree" required className="mt-0.5 h-6 w-6 shrink-0" />
               <span>
-                I agree to this contract with {brand}, and I&apos;m signing it as the Client. I understand my typed name and drawn signature count as my
+                I approve this booking and agree to the contract with {brand}, signing as the Client. I understand my typed name and drawn signature count as my
                 signature.
               </span>
             </label>
-            <SubmitButton className="btn btn-primary mt-5 h-12 w-full text-base" pendingText="Signing…">
-              Sign the contract
+            <SubmitButton className="btn btn-primary mt-5 h-12 w-full text-base" pendingText="Approving…">
+              Approve
             </SubmitButton>
             <p className="mt-3 text-center text-xs text-ink-500">
               We record your name, signature, the time, your IP address and device, and a fingerprint of the contract above, so there&apos;s a clear record of

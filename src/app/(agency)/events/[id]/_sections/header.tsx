@@ -19,7 +19,7 @@ export function EventHeader({ event: e, daysLeft }: { event: EventView; daysLeft
         <>
           {e.bookings.length > 0 && (
             <>
-              <Link href={`/print/events/${e.id}/contract`} className="btn" target="_blank">
+              <Link href="#contract" className="btn">
                 Contract
               </Link>
               <Link href={`/print/events/${e.id}/invoice`} className="btn" target="_blank">

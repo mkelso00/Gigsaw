@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export function PrintButton() {
+export function PrintButton({ label, quiet = false }: { label?: string; quiet?: boolean } = {}) {
   return (
-    <button type="button" className="btn btn-primary no-print" onClick={() => window.print()}>
-      Print or save as PDF
+    <button type="button" className={`btn ${quiet || label ? "" : "btn-primary"} no-print`} onClick={() => window.print()}>
+      {label ?? "Print or save as PDF"}
     </button>
   );
 }

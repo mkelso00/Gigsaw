@@ -53,9 +53,6 @@ export function BookingHeader({ booking }: { booking: BookingView }) {
           />
           {/* The printable documents sit in one menu, so the top of the page stays quiet. Archive is at the foot of the page. */}
           <DropMenu label="Print">
-            <a href={`/print/bookings/${booking.id}/contract`} target="_blank">
-              Contract
-            </a>
             <a href={`/print/bookings/${booking.id}/invoice`} target="_blank">
               Invoice
             </a>
