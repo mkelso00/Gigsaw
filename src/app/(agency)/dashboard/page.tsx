@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { unresolvedPastWhere } from "@/lib/billing";
 import { daySummary, gigTone } from "@/lib/calendar-look";
+import { eventTypeLabel } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { enquiryTypeLabel, formatDay } from "@/lib/enquiries";
 import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
@@ -19,7 +20,8 @@ export const dynamic = "force-dynamic";
 const DAYS_SHOWN = 14;
 const VENUES_SHOWN = 10;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const sp = await searchParams;
   const user = await requireStaff();
   const settings = await getSettings(user.agencyId);
   const now = new Date();
@@ -28,15 +30,20 @@ export default async function DashboardPage() {
 
   const todayKey = localDateKey(now, tz);
   const days = Array.from({ length: DAYS_SHOWN }, (_, i) => addDaysToKey(todayKey, i));
-  const monthStart = `${todayKey.slice(0, 7)}-01`;
-  const [my, mm] = todayKey.split("-").map(Number);
+  // The month the lower half of the page shows: this one, or ?month=YYYY-MM.
+  const thisMonth = todayKey.slice(0, 7);
+  const shownMonth = sp.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) ? sp.month : thisMonth;
+  const monthStart = `${shownMonth}-01`;
+  const [my, mm] = shownMonth.split("-").map(Number);
   const nextMonthStart = new Date(Date.UTC(my, mm, 1)).toISOString().slice(0, 10);
+  const prevMonth = new Date(Date.UTC(my, mm - 2, 1)).toISOString().slice(0, 7);
   const monthLabel = new Date(Date.UTC(my, mm - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthHref = (m: string) => (m === thisMonth ? "/dashboard#month" : `/dashboard?month=${m}#month`);
   // A day either side, then sorted by each gig's own local date, as the calendar does.
   const windowFrom = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() - 86_400_000);
   const windowTo = (key: string) => new Date(zonedToUtc(key, "00:00", tz).getTime() + 86_400_000);
 
-  const [upcoming, month, deposits, unresolved, unfilled, oneOffsNoAct, declined, enquiries, proposalsOut] = await Promise.all([
+  const [upcoming, month, deposits, unresolved, unfilled, oneOffsNoAct, declined, enquiries, proposalsOut, events, monthLeads] = await Promise.all([
     prisma.booking.findMany({
       where: {
         agencyId: user.agencyId,
@@ -114,6 +121,36 @@ export default async function DashboardPage() {
         supersededById: null,
         status: { in: ["SENT", "VIEWED"] },
         OR: [{ validUntil: null }, { validUntil: { gte: todayKey } }],
+      },
+    }),
+    // Weddings and other events on a day in the month shown.
+    prisma.event.findMany({
+      where: { agencyId: user.agencyId, status: "ACTIVE", date: { gte: monthStart, lt: nextMonthStart } },
+      orderBy: { date: "asc" },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        date: true,
+        venueText: true,
+        venue: { select: { name: true } },
+        bookings: { where: { status: { not: "CANCELLED" } }, select: { status: true, artistId: true } },
+      },
+    }),
+    // Enquiries for a date in the month shown, open ones first.
+    prisma.enquiry.findMany({
+      where: { agencyId: user.agencyId, date: { gte: monthStart, lt: nextMonthStart } },
+      orderBy: [{ status: "desc" }, { date: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        eventType: true,
+        date: true,
+        venue: true,
+        guests: true,
+        budget: true,
+        status: true,
+        quotes: { select: { status: true } },
       },
     }),
   ]);
@@ -346,16 +383,116 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* This month by venue: gigs, what's still open, and the money in the main currency. */}
+      {/* Everything below follows the month picked here. */}
+      <div id="month" className="mb-6 flex scroll-mt-6 flex-wrap items-center gap-2 border-t border-ink-200 pt-8">
+        <Link href={monthHref(prevMonth)} className="btn btn-sm" aria-label="Previous month">
+          ←
+        </Link>
+        <h2 className="min-w-40 text-center text-lg font-semibold">{monthLabel}</h2>
+        <Link href={monthHref(nextMonthStart.slice(0, 7))} className="btn btn-sm" aria-label="Next month">
+          →
+        </Link>
+        {shownMonth !== thisMonth && (
+          <Link href={monthHref(thisMonth)} className="btn btn-sm">
+            This month
+          </Link>
+        )}
+      </div>
+
+      <div className="mb-12 grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h3 className="section-title">Weddings and events</h3>
+            <Link href="/events" className="text-sm text-ink-500 hover:text-ink-950">
+              All →
+            </Link>
+          </div>
+          {events.length === 0 ? (
+            <p className="card px-4 py-5 text-sm text-ink-500">No weddings or events in {monthLabel}.</p>
+          ) : (
+            <ul className="card divide-y divide-ink-100">
+              {events.map((e) => {
+                const tones = e.bookings.map((b) => gigTone(b.status, !!b.artistId));
+                const open = tones.filter((t) => t === "pending" || t === "awaiting").length;
+                return (
+                  <li key={e.id}>
+                    <Link href={`/events/${e.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50">
+                      <span className="w-14 shrink-0 font-mono text-xs text-ink-500">{formatDay(e.date).split(" ").slice(0, 2).join(" ")}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{e.name}</span>
+                        <span className="block truncate text-xs text-ink-500">
+                          {[e.type !== "WEDDING" ? eventTypeLabel(e.type) : "", e.venue?.name ?? e.venueText].filter(Boolean).join(" · ") || "No venue yet"}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 text-xs ${tones.length === 0 || open > 0 ? "font-medium text-amber-700" : "text-emerald-700"}`}>
+                        {tones.length === 0
+                          ? "No acts yet"
+                          : open > 0
+                            ? `${open} of ${tones.length} acts to sort`
+                            : `${tones.length} act${tones.length === 1 ? "" : "s"} booked`}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-3 flex items-baseline justify-between">
+            <h3 className="section-title">Enquiries</h3>
+            <Link href="/enquiries" className="text-sm text-ink-500 hover:text-ink-950">
+              All leads →
+            </Link>
+          </div>
+          {monthLeads.length === 0 ? (
+            <p className="card px-4 py-5 text-sm text-ink-500">No enquiries for a date in {monthLabel}.</p>
+          ) : (
+            <ul className="card divide-y divide-ink-100">
+              {monthLeads.map((q) => {
+                const quote = q.quotes.find((x) => x.status === "ACCEPTED") ?? q.quotes.find((x) => x.status === "SENT" || x.status === "VIEWED");
+                const state =
+                  q.status !== "NEW"
+                    ? { text: "Dealt with", cls: "text-ink-400" }
+                    : quote?.status === "ACCEPTED"
+                      ? { text: "Proposal accepted", cls: "text-emerald-700" }
+                      : quote
+                        ? { text: "Proposal sent", cls: "text-ink-600" }
+                        : { text: "Needs a reply", cls: "font-medium text-amber-700" };
+                return (
+                  <li key={q.id}>
+                    <Link href={`/enquiries?view=all#${q.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-ink-50">
+                      <span className="w-14 shrink-0 font-mono text-xs text-ink-500">{formatDay(q.date).split(" ").slice(0, 2).join(" ")}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {q.name}
+                          {q.eventType && <span className="font-normal text-ink-500"> · {enquiryTypeLabel(q.eventType)}</span>}
+                        </span>
+                        <span className="block truncate text-xs text-ink-500">
+                          {[q.venue, q.guests ? `${q.guests} guests` : "", q.budget].filter(Boolean).join(" · ") || "No details yet"}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 text-xs ${state.cls}`}>{state.text}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {/* The month by venue: gigs, what's still open, and the money in the main currency. */}
       <section>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="section-title">Venues this month</h2>
+          <h3 className="section-title">Venues</h3>
           <span className="text-sm text-ink-500">
-            {monthLabel} · {totals.gigs} gig{totals.gigs === 1 ? "" : "s"} · {formatMoney(totals.sale, cur)} sale · {formatMoney(totals.profit, cur)} profit
+            {totals.gigs} gig{totals.gigs === 1 ? "" : "s"} · {formatMoney(totals.sale, cur)} sale · {formatMoney(totals.profit, cur)} profit
           </span>
         </div>
         {venueRows.length === 0 ? (
-          <p className="text-sm text-ink-500">No gigs booked this month yet.</p>
+          <p className="text-sm text-ink-500">No gigs booked in {monthLabel} yet.</p>
         ) : (
           <>
             <VenueTable rows={venueRows.slice(0, VENUES_SHOWN)} cur={cur} />

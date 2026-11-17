@@ -16,6 +16,15 @@ test("staff sign in and the dashboard loads", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
   await expect(page.getByRole("heading", { level: 1, name: `Hello, ${ADMIN.firstName}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next two weeks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Weddings and events" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enquiries" })).toBeVisible();
+  // The month switcher moves the lower half of the page on a month, and back.
+  const month = await page.locator("#month h2").innerText();
+  await page.getByRole("link", { name: "Next month" }).click();
+  await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
+  await expect(page.locator("#month h2")).not.toHaveText(month);
+  await page.getByRole("link", { name: "This month" }).click();
+  await expect(page.locator("#month h2")).toHaveText(month);
   await expect(page.getByRole("link", { name: "Venue bookings" })).toBeVisible();
 });
 
