@@ -8,7 +8,6 @@ import { requireAdmin, requireStaff } from "@/lib/auth";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import {
   BY_HAND_CONFIG,
-  checkFormStamp,
   ENQUIRY_CHANNELS,
   ENQUIRY_FIELDS,
   isHttpsUrl,
@@ -19,7 +18,8 @@ import {
   type EnquiryChannel,
   type EnquiryConfig,
 } from "@/lib/enquiries";
-import { clientIp, enquiryAttempts, enquirySecret, ipHash, MAX_PER_IP_PER_HOUR, notifyTeam, recordEnquiry, replyToCustomer } from "@/lib/enquiry-server";
+import { replyToCustomer, recordEnquiry } from "@/lib/enquiry-server";
+import { receiveWebsiteEnquiry } from "@/lib/enquiry-intake";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { localDateKey } from "@/lib/time";
 import { log } from "@/server/log";
@@ -27,72 +27,10 @@ import { log } from "@/server/log";
 // The enquiry form on a business's own website (/enquire/<slug>), enquiries staff add by hand,
 // and dealing with what comes in.
 
-const TOO_MANY = "We've had a few enquiries from you already. Please try again later, or contact us directly.";
-
 /** Someone sends the enquiry form. Spam is dropped quietly; real enquiries make a customer and a booking or wedding. */
 export async function submitEnquiry(slug: string, _: FormState, form: FormData): Promise<FormState> {
-  let sent = false;
-  const res = await handleForm(async () => {
-    const settings = await prisma.settings.findUnique({ where: { enquirySlug: slug }, include: { agency: { select: { name: true, status: true } } } });
-    if (!settings || !settings.enquiryOn || settings.agency.status !== "ACTIVE") {
-      throw new FormError("This form isn't taking enquiries at the moment. Please contact us directly.");
-    }
-    const agencyId = settings.agencyId;
-    const secret = await enquirySecret();
-    const ip = ipHash(clientIp(await headers()), secret);
-    if (!enquiryAttempts.hit(ip)) throw new FormError(TOO_MANY);
-
-    // A hidden box people never see or fill in: bots do. Bots (and forged time stamps) are told it
-    // went, so they don't try again, but nothing is saved.
-    const stamp = checkFormStamp(str(form, "t"), secret, Date.now());
-    if (str(form, "company_site") || stamp === "bad") {
-      sent = true;
-      return;
-    }
-    if (stamp === "fast") throw new FormError("That was quick! Please check your details, then press Send again.");
-    if (stamp === "old") throw new FormError("This page has been open a long time. Please copy your message, reload the page and send it again.");
-
-    const config = readEnquiryConfig(settings.enquiryForm);
-    const acts = config.fields.acts
-      ? await prisma.artist.findMany({ where: { agencyId, demo: false }, select: { id: true, name: true }, orderBy: { name: "asc" } })
-      : [];
-    const tz = settings.defaultTimezone;
-    const d = parseEnquiry(form, config, { today: localDateKey(new Date(), tz), acts });
-
-    const [fromIp, fromEmail] = await Promise.all([
-      prisma.enquiry.count({ where: { ipHash: ip, createdAt: { gt: new Date(Date.now() - 3_600_000) } } }),
-      prisma.enquiry.count({ where: { agencyId, email: d.email, createdAt: { gt: new Date(Date.now() - 10 * 60_000) } } }),
-    ]);
-    if (fromIp >= MAX_PER_IP_PER_HOUR) throw new FormError(TOO_MANY);
-    // Pressed Send twice, or sent the same thing again straight away: we've already got it.
-    if (fromEmail >= 2) {
-      sent = true;
-      return;
-    }
-
-    const source = str(form, "source")
-      .replace(/[^\w.\-/~%]/g, "")
-      .slice(0, 200);
-    // The person looking after enquiries (if one is chosen) looks after what they make.
-    const agentId = config.notify.startsWith("USER:")
-      ? ((await prisma.user.findFirst({ where: { id: config.notify.slice(5), agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))?.id ?? null)
-      : null;
-
-    const enquiry = await recordEnquiry({ settings, d, channel: "WEBSITE", source, ipHash: ip, agentId });
-
-    // Emails and phone notifications go once the customer has seen the thank-you.
-    after(async () => {
-      try {
-        await replyToCustomer(enquiry.id);
-        await notifyTeam(enquiry.id);
-      } catch (e) {
-        log.error("Couldn't send the enquiry emails", { err: e });
-      }
-    });
-    revalidatePath("/", "layout");
-    sent = true;
-  });
-  if (res?.error || !sent) return res;
+  const res = await receiveWebsiteEnquiry(slug, form, await headers());
+  if ("error" in res) return { error: res.error };
   const embed = str(form, "embed") === "1";
   redirect(`/enquire/${slug}?sent=1${embed ? "&embed=1" : ""}`);
 }

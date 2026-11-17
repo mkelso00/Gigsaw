@@ -1,0 +1,165 @@
+<!--
+  Gigsaw connector for your own enquiry form (e.g. the "Check availability" section).
+  Paste this at the very bottom of the section's .liquid file, after the </form>.
+  Then put your Gigsaw form address in GIGSAW_FORM below (Gigsaw: Settings → Enquiry form → Link).
+  It sends the form to Gigsaw instead of Overture. Nothing else about the form needs to change.
+-->
+<script>
+(function () {
+  var GIGSAW_FORM = "https://gigsaw.live/enquire/YOUR-FORM-NAME"; // ← your form address
+  var THANKS = "Thank you. We have your details and will come back to you within 24 hours, usually the same day.";
+
+  var api = GIGSAW_FORM.replace(/\/enquire\//, "/api/enquire/").replace(/[?#].*$/, "");
+  var script = document.currentScript;
+  // The form in this section: the nearest one before this script.
+  var section = script.closest("section, .shopify-section") || document;
+  var form = section.querySelector("form");
+  if (!form) return;
+
+  var stamp = null;
+  function getStamp() {
+    return fetch(api, { credentials: "omit" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { stamp = d && d.t; return stamp; })
+      .catch(function () { return null; });
+  }
+  getStamp();
+
+  // A box people never see; bots fill it in.
+  var trap = document.createElement("input");
+  trap.type = "text"; trap.name = "company_site"; trap.tabIndex = -1; trap.autocomplete = "off";
+  trap.setAttribute("aria-hidden", "true");
+  trap.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;opacity:0";
+  form.appendChild(trap);
+
+  var clean = function (s) { return (s || "").replace(/\s+/g, " ").replace(/\*$/, "").trim(); };
+  // The question a box answers: its group's heading, its label, or its name.
+  function question(el) {
+    var group = el.closest("fieldset");
+    var legend = group && group.querySelector("legend");
+    if ((el.type === "checkbox" || el.type === "radio") && legend) return clean(legend.textContent);
+    if (el.id) { var l = form.querySelector('label[for="' + el.id + '"]'); if (l) return clean(l.textContent); }
+    var wrap = el.closest("label");
+    if (wrap && el.type !== "checkbox" && el.type !== "radio") return clean(wrap.textContent);
+    if (legend) return clean(legend.textContent);
+    var box = el.closest("div");
+    var head = box && box.parentElement && box.parentElement.querySelector("label, .label, h3, h4, p");
+    return clean(el.getAttribute("aria-label") || (head && head.textContent) || el.name);
+  }
+  // What a ticked box or chosen option says, as the customer saw it.
+  function choiceText(el) {
+    var l = el.id && form.querySelector('label[for="' + el.id + '"]');
+    l = l || el.closest("label");
+    return clean((l && l.textContent) || el.value);
+  }
+
+  function collect() {
+    var p = { details: {}, acts: [] };
+    var groups = {};
+    var els = form.querySelectorAll("input, select, textarea");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (!el.name || el.disabled || el === trap || el.type === "submit" || el.type === "button") continue;
+      var q = question(el), ql = q.toLowerCase(), n = el.name.toLowerCase(), v;
+      if (el.type === "checkbox" || el.type === "radio") {
+        // A box on its own (e.g. "Not booked a venue yet", the emails opt-in) or one of a group.
+        var many = form.querySelectorAll('input[name="' + el.name.replace(/"/g, '\\"') + '"]').length > 1;
+        if (!many) {
+          var t = choiceText(el), tl = t.toLowerCase();
+          if (/not booked a venue|no venue/.test(tl)) { if (el.checked) p.noVenue = true; continue; }
+          if (/email|newsletter|marketing|subscribe/.test(tl)) { p.details["Happy to get emails"] = el.checked ? "Yes" : "No"; continue; }
+          if (el.checked) p.details[t] = "Yes";
+          continue;
+        }
+        groups[el.name] = groups[el.name] || { q: q, picked: [] };
+        if (el.checked) groups[el.name].picked.push(choiceText(el));
+        continue;
+      }
+      if (el.tagName === "SELECT") { v = el.value ? clean(el.options[el.selectedIndex].text) : ""; }
+      else v = (el.value || "").trim();
+      if (el.type === "hidden" && !/type|event|kind|tab/.test(n)) continue;
+      if (!v) continue;
+      if (el.type === "email" || /e-?mail/.test(n)) p.email = v;
+      else if (el.type === "tel" || /phone|tel|mobile/.test(n + " " + ql)) p.phone = v;
+      else if (el.type === "date" || /date/.test(n)) p.date = v;
+      else if (/venue/.test(n + " " + ql)) p.venue = v;
+      else if (/budget/.test(n + " " + ql)) p.budget = v;
+      else if (/\bact\b|artist|band you/.test(ql) || /^act|artist/.test(n)) p.acts.push(v);
+      else if (/name/.test(n + " " + ql)) p.name = v;
+      else if (/type|event|kind|tab/.test(n) && el.type === "hidden") p.eventType = v;
+      else if (el.tagName === "TEXTAREA" || /message|anything|notes?/.test(n + " " + ql)) p.message = (p.message ? p.message + "\n" : "") + v;
+      else p.details[q] = v;
+    }
+    for (var g in groups) {
+      var gq = groups[g].q, gl = gq.toLowerCase(), picked = groups[g].picked;
+      if (!picked.length) continue;
+      if (/budget/.test(gl)) p.budget = picked.join(", ");
+      else if (/wedding|venue or event|event type|type of/.test(picked.join(" ").toLowerCase()) && !p.eventType && /type|enquiry|event|kind|tab/.test(g.toLowerCase())) p.eventType = picked[0];
+      else p.details[gq] = picked;
+    }
+    // Wedding or not: from the tabs if they're a field, else from what's on screen.
+    if (!p.eventType) {
+      // The selected tab says it; failing that, the date's label ("Wedding date").
+      var tab = section.querySelector('[role="tab"][aria-selected="true"], [aria-pressed="true"], .is-active, .active');
+      var dateBox = form.querySelector('input[type="date"]');
+      var hint = tab ? tab.textContent : dateBox ? question(dateBox) : "";
+      p.eventType = /wedding/i.test(hint) ? "WEDDING" : "OTHER";
+    } else p.eventType = /wedding/i.test(p.eventType) ? "WEDDING" : p.eventType;
+    if (p.noVenue && !p.venue) p.venue = "Not booked a venue yet";
+    delete p.noVenue;
+    p.company_site = trap.value;
+    p.source = location.href.split("#")[0];
+    return p;
+  }
+
+  var note = document.createElement("p");
+  note.setAttribute("role", "alert");
+  note.style.cssText = "margin:12px 0 0;display:none";
+  var button = form.querySelector('[type="submit"], button:not([type])');
+  (button && button.parentNode ? button.parentNode : form).appendChild(note);
+  function say(msg, bad) { note.textContent = msg; note.style.display = msg ? "block" : "none"; note.style.color = bad ? "#e88d7d" : ""; }
+
+  function send(payload, retried) {
+    return fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "omit" })
+      .then(function (r) { return r.json().catch(function () { return { error: "Something went wrong. Please try again." }; }); })
+      .then(function (d) {
+        // An old page or a very quick send: get a fresh stamp and try once more.
+        if (!retried && d && (d.code === "stale" || d.code === "fast")) {
+          return getStamp().then(function (t) {
+            payload.t = t;
+            return new Promise(function (ok) { setTimeout(ok, 3200); }).then(function () { return send(payload, true); });
+          });
+        }
+        return d;
+      });
+  }
+
+  // Runs before any other handler on the form (e.g. the old Overture one), and stops it.
+  document.addEventListener("submit", function (e) {
+    if (e.target !== form) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    var payload = collect();
+    var label = button ? button.textContent : "";
+    if (button) { button.disabled = true; button.textContent = "Sending…"; }
+    say("");
+    var ready = stamp ? Promise.resolve(stamp) : getStamp().then(function (t) { return new Promise(function (ok) { setTimeout(function () { ok(t); }, 3200); }); });
+    ready
+      .then(function (t) { payload.t = t || ""; return send(payload); })
+      .then(function (d) {
+        if (d && d.ok) {
+          var done = document.createElement("div");
+          done.setAttribute("role", "status");
+          done.style.cssText = "padding:24px 0;font-size:1.15em";
+          done.textContent = THANKS;
+          form.replaceWith(done);
+          done.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        say((d && d.error) || "Something went wrong. Please try again, or call us.", true);
+      })
+      .catch(function () { say("We couldn't send that. Please check your connection and try again, or call us.", true); })
+      .then(function () { if (button && document.body.contains(button)) { button.disabled = false; button.textContent = label; } });
+  }, true);
+})();
+</script>

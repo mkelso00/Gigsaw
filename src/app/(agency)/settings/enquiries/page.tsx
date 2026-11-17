@@ -55,6 +55,14 @@ export default async function EnquiryFormSettings() {
               </p>
               <CopyBlock value={embedSnippet(url)} />
             </div>
+            <details>
+              <summary className="cursor-pointer text-sm font-medium">Using your own form instead (Shopify, WordPress…)?</summary>
+              <p className="hint mt-2 mb-2">
+                Keep your own design and send it to Gigsaw: enquiries arrive here exactly as they do from this form. Your form sends to this address (we&apos;ll
+                give you a ready-made connector for Shopify):
+              </p>
+              <CopyField value={url.replace("/enquire/", "/api/enquire/")} />
+            </details>
           </SettingsCard>
         </SettingsSection>
       )}
