@@ -791,6 +791,8 @@ model Event {
   venueText  String   @default("") // a venue not on file, e.g. a marquee at a farm
   agentId    String?
   status     String   @default("ACTIVE") // ACTIVE | CANCELLED
+  // How the customer pays: FULL (all to the business) | DEPOSIT_CASH | DEPOSIT_TRANSFER (src/lib/pay-plan.ts).
+  payPlan    String   @default("FULL")
   notes      String   @default("") // agency only
 
   // The plan, filled in by the agency or by the customer using their planner link. Acts see it.

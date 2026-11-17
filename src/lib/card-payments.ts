@@ -6,6 +6,7 @@ import { appUrl, sendEmail } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals } from "./money";
 import { wants } from "./notify-prefs";
 import { allocate, amountDue, isPayKind, PAY_KIND_LABELS, type PayGig, type PayKind } from "./pay-links";
+import { directTotals, isDirectPlan } from "./pay-plan";
 import { stripe, stripeConfigured } from "./stripe";
 import { formatDate } from "./time";
 
@@ -165,7 +166,8 @@ function payTarget(link: FullPayLink) {
     vatLabel: vat ? "VAT" : "",
     totalMinor: total,
     paidMinor: paid,
-    dueMinor: amountDue(kind, gigs),
+    // Paying the acts direct: only the deposit is ours to take by card, never an act's fee.
+    dueMinor: isDirectPlan(e.payPlan) ? Math.min(amountDue(kind, gigs), directTotals(e.bookings).usLeft) : amountDue(kind, gigs),
     depositMinor: deposits,
     gigs,
     payer: e.customer ? { name: e.customer.name, email: e.customer.email } : null,

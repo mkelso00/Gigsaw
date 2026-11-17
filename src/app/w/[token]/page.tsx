@@ -7,6 +7,8 @@ import { parseExtraFields, planFieldsFor } from "@/lib/event-plan";
 import { cardPaymentsReady } from "@/lib/card-payments";
 import { eventTotals } from "@/lib/events";
 import { formatMoney } from "@/lib/money";
+import { directSplit, directTotals, isDirectPlan } from "@/lib/pay-plan";
+import { loadPayActs, payeeFor } from "@/lib/payee-server";
 import { formatDate, localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
@@ -27,7 +29,7 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
       venue: { select: { name: true, city: true } },
       bookings: {
         where: { archivedAt: null, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
-        include: { artist: { select: { name: true } }, payments: { select: { direction: true, kind: true, amountMinor: true } } },
+        include: { artist: { select: { name: true } }, payments: { select: { direction: true, kind: true, amountMinor: true, note: true } } },
         orderBy: { setStart: "asc" },
       },
       payLinks: { select: { token: true, kind: true } },
@@ -51,6 +53,21 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
   const ready = await cardPaymentsReady(e.agency);
   const link = (kind: string) => e.payLinks.find((l) => l.kind === kind);
   const payLink = ready ? (depositLeft > 0 && link("DEPOSIT")) || link("BALANCE") || link("DEPOSIT") || null : null;
+
+  // Paying the acts direct (Event.payPlan): the deposit to us, each act's fee straight to them. Bank details
+  // are the ones the act (or its lead) gave for their pay, shown only here and only for a bank transfer.
+  const direct = isDirectPlan(e.payPlan);
+  const split = direct ? directTotals(e.bookings) : null;
+  const depositPayLink = ready ? link("DEPOSIT") : null;
+  const banks = new Map<string, { accountName: string; sortCode: string; accountNumber: string }>();
+  if (e.payPlan === "DEPOSIT_TRANSFER") {
+    const ids = e.bookings.flatMap((b) => (b.artistId ? [b.artistId] : []));
+    for (const [id, act] of await loadPayActs(e.agencyId, ids)) {
+      const p = payeeFor(act);
+      if (p?.bankSortCode && p.bankAccountNumber)
+        banks.set(id, { accountName: p.bankAccountName || p.name, sortCode: p.bankSortCode, accountNumber: p.bankAccountNumber });
+    }
+  }
 
   return (
     <div className="min-h-screen bg-ink-50 px-4 py-10 text-ink-950">
@@ -81,7 +98,7 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
           </section>
         )}
 
-        {money && money.total > 0 && (
+        {money && money.total > 0 && !direct && (
           <section className="card card-pad mb-6">
             <h2 className="section-title mb-3">Your payments</h2>
             <dl className="divide-y divide-ink-100 text-sm">
@@ -108,6 +125,77 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
             {payLink && money.outstanding > 0 && (
               <a href={`/pay/${payLink.token}`} className="btn btn-primary mt-4 w-full sm:w-auto">
                 {payLink.kind === "DEPOSIT" ? "Pay your deposit" : "Pay now"}
+              </a>
+            )}
+          </section>
+        )}
+
+        {money && money.total > 0 && direct && split && (
+          <section className="card card-pad mb-6">
+            <h2 className="section-title mb-1">Your payments</h2>
+            <p className="mb-3 text-sm text-ink-500">
+              Your deposit comes to us. The rest goes straight to {e.bookings.length > 1 ? "each act" : "your act"}
+              {e.payPlan === "DEPOSIT_CASH" ? ", in cash on the day." : ", by bank transfer before the day."}
+            </p>
+            <div className="flex items-center justify-between gap-3 border-y border-ink-100 py-3 text-sm">
+              <span>
+                <span className="font-medium">Deposit to {brand}</span>
+                {depositBy && split.usLeft > 0 && <span className="block text-xs text-ink-500">Due by {depositBy}</span>}
+              </span>
+              <span className="text-right tabular-nums">
+                <span className="block font-medium">{m(split.toUs)}</span>
+                {split.usLeft > 0 ? (
+                  <span className="text-xs text-amber-700">{m(split.usLeft)} to pay</span>
+                ) : (
+                  <span className="text-xs font-medium text-emerald-700">Paid ✓</span>
+                )}
+              </span>
+            </div>
+            <ul className="divide-y divide-ink-100">
+              {e.bookings.map((b) => {
+                const s = directSplit(b);
+                const bank = b.artistId ? banks.get(b.artistId) : null;
+                return (
+                  <li key={b.id} className="py-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium">To {actName(b)}</span>
+                      <span className="text-right tabular-nums">
+                        <span className="block font-medium">{m(s.toAct)}</span>
+                        {s.actLeft > 0 ? (
+                          <span className="text-xs text-ink-500">{e.payPlan === "DEPOSIT_CASH" ? "In cash on the day" : "By bank transfer"}</span>
+                        ) : (
+                          <span className="text-xs font-medium text-emerald-700">Paid ✓</span>
+                        )}
+                      </span>
+                    </div>
+                    {e.payPlan === "DEPOSIT_TRANSFER" &&
+                      s.actLeft > 0 &&
+                      (bank ? (
+                        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg bg-ink-50 px-3 py-2.5 text-[13px]">
+                          <dt className="text-ink-500">Account name</dt>
+                          <dd className="font-medium">{bank.accountName}</dd>
+                          <dt className="text-ink-500">Sort code</dt>
+                          <dd className="font-mono font-medium">{bank.sortCode}</dd>
+                          <dt className="text-ink-500">Account number</dt>
+                          <dd className="font-mono font-medium">{bank.accountNumber}</dd>
+                          <dt className="text-ink-500">Amount</dt>
+                          <dd className="font-medium">{m(s.actLeft)}</dd>
+                          <dt className="text-ink-500">Reference</dt>
+                          <dd className="font-mono font-medium">{b.reference}</dd>
+                        </dl>
+                      ) : (
+                        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+                          We&apos;ll send you {actName(b)}&apos;s bank details. Just reply to any of our emails if you need them sooner.
+                        </p>
+                      ))}
+                  </li>
+                );
+              })}
+            </ul>
+            {split.usLeft === 0 && split.actLeft === 0 && <p className="mt-3 text-sm font-medium text-emerald-700">All paid. Thank you!</p>}
+            {depositPayLink && split.usLeft > 0 && (
+              <a href={`/pay/${depositPayLink.token}`} className="btn btn-primary mt-4 w-full sm:w-auto">
+                Pay your deposit
               </a>
             )}
           </section>

@@ -21,7 +21,14 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
   const [b, settings] = await Promise.all([
     prisma.booking.findFirst({
       where: { id, agencyId: user.agencyId },
-      include: { venue: true, promoter: true, agent: true, artist: { select: { name: true } }, checkIns: { orderBy: { at: "asc" } } },
+      include: {
+        venue: true,
+        promoter: true,
+        agent: true,
+        artist: { select: { name: true } },
+        checkIns: { orderBy: { at: "asc" } },
+        event: { select: { payPlan: true } },
+      },
     }),
     getSettings(user.agencyId),
   ]);
@@ -179,6 +186,15 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? ` · ${b.promoter.phone}` : ""}` : ""],
           ["Your agent", b.agent ? `${b.agent.name} · ${b.agent.email}` : ""],
           [user.personId ? `${actName(b)} fee` : "Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
+          // The couple pays the act their fee themselves (src/lib/pay-plan.ts): say so, and how.
+          [
+            "How you're paid",
+            yourFee > 0 && b.event?.payPlan === "DEPOSIT_CASH"
+              ? "The couple pays you in cash on the day"
+              : yourFee > 0 && b.event?.payPlan === "DEPOSIT_TRANSFER"
+                ? "The couple pays you by bank transfer, to the bank details you gave us"
+                : "",
+          ],
         ]
           .filter(([, val]) => val)
           .map(([k, val]) => (

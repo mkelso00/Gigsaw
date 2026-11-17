@@ -15,6 +15,7 @@ export function PayLinksCard({
   target,
   id,
   gigs,
+  depositOnly = false,
   links,
   currency,
   ready,
@@ -26,6 +27,8 @@ export function PayLinksCard({
   id: string;
   /** The gigs being paid for, soonest first. */
   gigs: PayGig[];
+  /** The customer pays the acts direct (src/lib/pay-plan.ts): only the deposit is paid to the business. */
+  depositOnly?: boolean;
   links: PayLink[];
   currency: string;
   /** The agency has connected Stripe and can take cards. */
@@ -36,7 +39,9 @@ export function PayLinksCard({
   timezone: string;
 }) {
   const payer = target === "booking" ? "the venue or client" : "the customer";
-  const rows = PAY_KINDS.map((kind) => ({ kind, due: amountDue(kind, gigs), link: links.find((l) => l.kind === kind) })).filter((r) => r.due > 0);
+  const rows = PAY_KINDS.filter((k) => !depositOnly || k === "DEPOSIT")
+    .map((kind) => ({ kind, due: amountDue(kind, gigs), link: links.find((l) => l.kind === kind) }))
+    .filter((r) => r.due > 0);
   const noDeposit = target === "event" && gigs.length > 0 && gigs.every((g) => g.depositMinor <= 0);
   return (
     <section className="card card-pad">

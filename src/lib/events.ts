@@ -1,4 +1,6 @@
 import "server-only";
+import { directSplit, directTotals, isDirectPlan } from "./pay-plan";
+import { loadPayActs, payeeFor } from "./payee-server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { daysBetween, eventMessagesDue, parseExtraFields, planRows, type EventMessage, type TaskKey } from "./event-plan";
@@ -173,6 +175,7 @@ export async function sendPlannerEmail(e: FullEvent, chase = false) {
 /** Email the customer what they owe, act by act (sale prices only, never what the acts are paid). */
 async function sendBalanceReminder(e: FullEvent) {
   if (!e.customer?.email) return false;
+  if (isDirectPlan(e.payPlan)) return sendDirectBalanceReminder(e);
   const t = eventTotals(e.bookings);
   if (t.outstanding <= 0) return false;
   const m = (x: number) => formatMoney(x, t.currency);
@@ -197,6 +200,63 @@ async function sendBalanceReminder(e: FullEvent) {
         ["Left to pay", m(t.outstanding)],
       ],
       outro: "Reply to this email if you'd like our bank details again or have any questions.",
+    },
+  });
+  return true;
+}
+
+/**
+ * The balance reminder when the couple pays the acts direct: what each act is owed and how (cash on the day, or
+ * the act's bank details and a reference), plus any deposit still owed to the business.
+ */
+async function sendDirectBalanceReminder(e: FullEvent) {
+  const gigs = live(e);
+  const split = directTotals(gigs);
+  if (split.usLeft <= 0 && split.actLeft <= 0) return false;
+  const currency = gigs[0]?.currency ?? "GBP";
+  const m = (x: number) => formatMoney(x, currency);
+  const first = e.customer!.name.split(" ")[0];
+  const w = tpl(e, "BALANCE", first);
+  const cash = e.payPlan === "DEPOSIT_CASH";
+  const banks = cash
+    ? new Map()
+    : await loadPayActs(
+        e.agencyId,
+        gigs.flatMap((b) => (b.artistId ? [b.artistId] : [])),
+      );
+  const rows: [string, string][] = [];
+  if (split.usLeft > 0) rows.push([`Deposit to ${brandOf(e)}`, `${m(split.usLeft)} still to pay`]);
+  for (const b of gigs) {
+    const left = directSplit(b).actLeft;
+    if (left <= 0) continue;
+    if (cash) {
+      rows.push([actName(b), `${m(left)} in cash on the day`]);
+      continue;
+    }
+    const act = b.artistId ? banks.get(b.artistId) : null;
+    const p = act ? payeeFor(act) : null;
+    rows.push([
+      actName(b),
+      p?.bankSortCode && p.bankAccountNumber
+        ? `${m(left)} by bank transfer\n${p.bankAccountName || p.name}\nSort code ${p.bankSortCode}\nAccount ${p.bankAccountNumber}\nReference ${b.reference}`
+        : `${m(left)} by bank transfer (we'll send you their bank details)`,
+    ]);
+  }
+  await sendEmail({
+    kind: "EVENT",
+    agencyId: e.agencyId,
+    to: e.customer!.email,
+    replyTo: replyOf(e),
+    subject: w.subject ?? `${e.name}: paying ${gigs.length > 1 ? "your acts" : "your act"}`,
+    email: {
+      brand: brandOf(e),
+      title: `Paying for ${eventDay(e)}`,
+      intro:
+        w.intro ??
+        `Hi ${first}, not long now! ${cash ? "The balance is paid in cash on the day, straight to each act." : "The balance goes straight to each act by bank transfer, before the day."} Here's who to pay and how much:`,
+      rows,
+      rowsTitle: "Who to pay",
+      outro: "Reply to this email if you have any questions.",
     },
   });
   return true;

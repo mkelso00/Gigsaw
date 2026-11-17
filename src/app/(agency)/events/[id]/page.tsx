@@ -11,6 +11,9 @@ import { ChecklistSection } from "./_sections/checklist";
 import { AutoEmailsSection, PlannerSection } from "./_sections/emails";
 import { EventHeader, EventStats, ProposalBanner } from "./_sections/header";
 import { RecordPaymentSection } from "./_sections/payment";
+import { PayPlanSection } from "./_sections/pay-plan";
+import { isDirectPlan } from "@/lib/pay-plan";
+import { loadPayActs, payeeFor } from "@/lib/payee-server";
 import { EditEventDetails, PlanSection } from "./_sections/plan";
 import { parseExtraFields } from "@/lib/event-plan";
 import { defaultVat } from "@/lib/money";
@@ -35,6 +38,14 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     contract,
     contractSigned,
   } = await loadEventPage(user.agencyId, id);
+  // Whose bank details the couple would see for each act (the band's lead, or the act), when they pay acts direct.
+  const actIds = e.bookings.flatMap((b) => (b.artistId ? [b.artistId] : []));
+  const payees = new Map(
+    [...(await loadPayActs(user.agencyId, actIds))].map(([id, act]) => {
+      const p = payeeFor(act);
+      return [id, p ? { name: p.bankAccountName || p.name, hasBank: !!(p.bankSortCode && p.bankAccountNumber) } : null] as const;
+    }),
+  );
 
   return (
     <div>
@@ -68,10 +79,12 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <AutoEmailsSection event={e} totals={t} sent={sent} daysLeft={daysLeft} eventEmails={settings.eventEmails} />
 
           <div id="payments" className="scroll-mt-6" />
+          {e.status === "ACTIVE" && <PayPlanSection event={e} payees={payees} />}
           {e.status === "ACTIVE" && (
             <PayLinksCard
               target="event"
               id={e.id}
+              depositOnly={isDirectPlan(e.payPlan)}
               gigs={e.bookings.filter((b) => b.status !== "CANCELLED")}
               links={payLinks}
               currency={t.currency}
