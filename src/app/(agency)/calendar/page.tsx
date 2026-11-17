@@ -531,12 +531,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                       <GigHover key={b.id} card={card(b)}>
                         <Link
                           href={`/bookings/${b.id}`}
-                          className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] leading-tight hover:brightness-95 ${look(b).className}`}
+                          className={`block rounded px-1.5 py-1 text-[11px] leading-snug break-words hover:brightness-95 ${look(b).className}`}
                           style={look(b).style}
                         >
-                          {look(b).tone !== "on" && <ArtistDot colour={colourOf(b)} />}
-                          <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span>
-                          <span className="truncate font-medium">{byArtist ? actName(b) : (b.venue?.name ?? "No venue")}</span>
+                          {/* Time, act and venue, wrapping onto a second line rather than cut short. */}
+                          {look(b).tone !== "on" && <ArtistDot colour={colourOf(b)} />}{" "}
+                          <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span> <span className="font-semibold">{actName(b)}</span>
+                          {b.venue?.name ? `: ${b.venue.name}` : b.event?.name ? `: ${b.event.name}` : ""}
                           <Moon b={b} />
                           <span className="sr-only">, {statusLabel(b)}</span>
                         </Link>
