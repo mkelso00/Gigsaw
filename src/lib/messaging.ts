@@ -1,6 +1,7 @@
 import "server-only";
 import { env } from "@/server/env";
 import { prisma } from "./db";
+import { contactLines, readEmailDesign, type EmailLook } from "./email-design";
 import { fromWithName, normalisePhone, redactLinks, renderEmail, type EmailContent } from "./message-format";
 import { pushTo, type PushPayload } from "./push";
 
@@ -102,11 +103,35 @@ export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 /** Message kinds that come from Gigsaw itself rather than from the business. */
 const PLATFORM_KINDS: MessageKind[] = ["PASSWORD_RESET", "WELCOME"];
 
-/** The business name to send as, or null to keep the configured sender name. */
-async function senderName(agencyId: string | null | undefined, kind: MessageKind) {
+/**
+ * The business behind an email: its name to send as, and its look (Settings → Email design). Null for
+ * Gigsaw's own emails, which keep the configured sender and Gigsaw's look.
+ */
+async function sender(agencyId: string | null | undefined, kind: MessageKind): Promise<{ name: string | null; look: EmailLook } | null> {
   if (!agencyId || PLATFORM_KINDS.includes(kind)) return null;
-  const s = await prisma.settings.findUnique({ where: { agencyId }, select: { agencyName: true, agency: { select: { name: true } } } }).catch(() => null);
-  return s?.agencyName || s?.agency?.name || null;
+  const s = await prisma.settings
+    .findUnique({
+      where: { agencyId },
+      select: { agencyName: true, agencyEmail: true, emailDesign: true, agency: { select: { name: true, brandLogo: { select: { updatedAt: true } } } } },
+    })
+    .catch(() => null);
+  if (!s) return null;
+  const d = readEmailDesign(s.emailDesign);
+  const logo = s.agency?.brandLogo;
+  return {
+    name: s.agencyName || s.agency?.name || null,
+    look: {
+      header: d.header,
+      accent: d.accent,
+      logoUrl: logo ? brandLogoUrl(agencyId, logo.updatedAt) : undefined,
+      contact: contactLines(d, s.agencyEmail),
+    },
+  };
+}
+
+/** Where a business's email logo is served. The time in it changes with each new logo, so old copies aren't reused. */
+export function brandLogoUrl(agencyId: string, updatedAt: Date) {
+  return `${appUrl()}/brand/${agencyId}/logo?v=${updatedAt.getTime().toString(36)}`;
 }
 
 /**
@@ -123,12 +148,14 @@ export async function sendEmail(
 ) {
   const to = m.to.trim();
   if (!isEmail(to)) return "SKIPPED";
-  const { html, text } = renderEmail(m.email);
+  const biz = await sender(m.agencyId, m.kind);
+  // The business's own look, unless the caller set one (e.g. the settings preview).
+  const { html, text } = renderEmail(biz && !m.email.look ? { ...m.email, look: biz.look } : m.email);
   const replyTo = m.replyTo?.trim();
   const provider = env().email;
   // Customers, acts and staff see the business's own name as the sender. Gigsaw's own account
   // emails (password resets, welcomes) keep the name in MAIL_FROM.
-  const from = provider ? fromWithName(provider.from, env().mailFromAddress, await senderName(m.agencyId, m.kind)) : "";
+  const from = provider ? fromWithName(provider.from, env().mailFromAddress, biz?.name) : "";
   const send = provider
     ? () =>
         post("https://api.resend.com/emails", {

@@ -21,3 +21,26 @@ test("a drop-down on a settings page keeps the saved choice after Save, and Disc
   await page.reload();
   await expect(page.locator('select[name="notify"]')).toHaveValue(pick);
 });
+
+test("Settings → Email design: a preset and a logo show in the preview and save", async ({ page }) => {
+  await page.goto("/settings/email-design");
+  const preview = page.frameLocator('iframe[title="Email preview"]');
+  await expect(preview.getByRole("heading", { name: "Thanks for your enquiry" })).toBeVisible();
+  const navy = page.getByRole("button", { name: "Navy" });
+  await hydrated(navy);
+  await navy.click();
+  await expect(page.locator('input[name="header"]')).toHaveValue("#14213d");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  // A 1×1 PNG.
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.locator('input[name="logo"]').setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png });
+  await expect(preview.locator("img").first()).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText(/^Saved/).first()).toBeVisible({ timeout: 15_000 });
+  await page.reload();
+  await expect(page.locator('input[name="header"]')).toHaveValue("#14213d");
+  const src = await page.getByRole("img", { name: "Your logo" }).getAttribute("src");
+  const logo = await page.request.get(src!);
+  expect(logo.status()).toBe(200);
+  expect(logo.headers()["content-type"]).toBe("image/png");
+});

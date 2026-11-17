@@ -41,6 +41,7 @@ const PAGES: [string, string, string][] = [
   ["Booking fee", "/settings/booking-fee", "fee charge"],
   ["Act reminders", "/settings/reminders", "weekly day reminder"],
   ["Arrivals and alerts", "/settings/arrivals", "late overdue grace"],
+  ["Email design", "/settings/email-design", "logo colours brand emails branding"],
   ["Plan", "/settings/plan", "billing bill price"],
   ["Demo data", "/settings/demo", "sample"],
   ["Profile", "/profile", "account password my details notifications dark light"],

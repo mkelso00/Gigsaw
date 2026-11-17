@@ -19,6 +19,7 @@ const PUBLIC = [
   "/api/cron",
   "/api/health",
   "/api/enquire/",
+  "/brand/",
   "/login",
   "/setup",
   "/forgot-password",

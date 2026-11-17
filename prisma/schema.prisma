@@ -45,6 +45,7 @@ model Agency {
   createdAt            DateTime  @default(now())
 
   settings     Settings?
+  brandLogo    BrandLogo?
   users        User[]
   artists      Artist[]
   contacts     Contact[]
@@ -96,6 +97,9 @@ model Settings {
   agencyName            String  @default("My Agency")
   agencyEmail           String  @default("")
   agencyAddress         String  @default("")
+  // How emails from this business look: colours, website, phone and the enquiry reply's "What happens next"
+  // (src/lib/email-design.ts). The logo is kept separately, in BrandLogo.
+  emailDesign           Json    @default("{}")
   defaultTimezone       String  @default("Europe/London")
   defaultCurrency       String  @default("GBP")
   defaultCommission     Float   @default(15)
@@ -1281,4 +1285,16 @@ model ActInvoice {
   @@index([artistId, issuedAt])
   @@index([payeePersonId])
   @@index([bookingId])
+}
+
+// The business's logo for its emails, served at /brand/<agencyId>/logo (email apps need a link, not
+// an embedded image). Kept out of Settings so it isn't loaded with every page.
+model BrandLogo {
+  agencyId  String   @id
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  mime      String
+  data      Bytes
+  width     Int?
+  height    Int?
+  updatedAt DateTime @updatedAt
 }

@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Enquiry, Settings as AgencySettings } from "@prisma/client";
 import { createBookingWithReference } from "./bookings";
 import { env } from "@/server/env";
+import { readEmailDesign } from "./email-design";
 import { prisma } from "./db";
 import {
   enquiryMakes,
@@ -236,6 +237,7 @@ export async function replyToCustomer(enquiryId: string) {
     business,
   });
   if (!t.on) return;
+  const design = readEmailDesign(s.emailDesign);
   // Replies go to the person looking after enquiries, if there's one, else the business.
   const notify = readEnquiryConfig(s.enquiryForm).notify;
   const person = notify.startsWith("USER:")
@@ -256,6 +258,9 @@ export async function replyToCustomer(enquiryId: string) {
         t.intro ??
         `Hi ${firstName(e.name)}, thanks for getting in touch with ${business}. We've got your enquiry and will come back to you soon. Here's what you sent us:`,
       rows: enquiryRows({ ...details(e), name: undefined, email: undefined }),
+      rowsTitle: "Your enquiry",
+      ...(design.steps.length ? { steps: { title: "What happens next", items: design.steps } } : {}),
+      ...(design.website && design.buttonLabel ? { cta: { label: design.buttonLabel, url: design.website } } : {}),
       outro: "If anything's changed, just reply to this email.",
     },
   });
