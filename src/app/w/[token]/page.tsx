@@ -4,11 +4,15 @@ import { submitPlanner } from "@/actions/events";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { prisma } from "@/lib/db";
 import { parseExtraFields, planFieldsFor } from "@/lib/event-plan";
-import { localTime } from "@/lib/time";
+import { cardPaymentsReady } from "@/lib/card-payments";
+import { eventTotals } from "@/lib/events";
+import { formatMoney } from "@/lib/money";
+import { formatDate, localTime } from "@/lib/time";
 import { actName } from "@/lib/constants";
 
 // The customer's planner: a private link (no login) where a couple tells the agency the running
-// order, contacts, parking and song requests. Shows which acts are booked and when, never money.
+// order, contacts, parking and song requests. Shows which acts are booked and when, and what the
+// customer has paid and has left to pay for the whole booking. Never what any act is paid.
 
 export const metadata: Metadata = { title: "Your details", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -23,9 +27,10 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
       venue: { select: { name: true, city: true } },
       bookings: {
         where: { archivedAt: null, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
-        include: { artist: { select: { name: true } } },
+        include: { artist: { select: { name: true } }, payments: { select: { direction: true, kind: true, amountMinor: true } } },
         orderBy: { setStart: "asc" },
       },
+      payLinks: { select: { token: true, kind: true } },
     },
   });
   if (!e || e.status !== "ACTIVE" || e.agency.status !== "ACTIVE") notFound();
@@ -34,6 +39,18 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
     new Date(`${e.date}T12:00:00Z`),
   );
   const wedding = e.type === "WEDDING";
+
+  // The whole booking's money, as one: the total, what's in and what's left (never an act's own fee).
+  const money = e.bookings.length ? eventTotals(e.bookings) : null;
+  const m = (x: number) => formatMoney(x, money?.currency ?? "GBP");
+  const depositDue = e.bookings.reduce((t, b) => t + b.depositMinor, 0);
+  const depositLeft = Math.max(0, depositDue - (money?.deposits ?? 0));
+  const dueDates = e.bookings.map((b) => b.depositDueDate).filter((d): d is Date => !!d);
+  const depositBy = dueDates.length ? formatDate(new Date(Math.min(...dueDates.map((d) => d.getTime()))), e.timezone) : "";
+  // Card payment: the deposit link while the deposit is owed, then the balance link, when they've been made and cards are on.
+  const ready = await cardPaymentsReady(e.agency);
+  const link = (kind: string) => e.payLinks.find((l) => l.kind === kind);
+  const payLink = ready ? (depositLeft > 0 && link("DEPOSIT")) || link("BALANCE") || link("DEPOSIT") || null : null;
 
   return (
     <div className="min-h-screen bg-ink-50 px-4 py-10 text-ink-950">
@@ -61,6 +78,38 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {money && money.total > 0 && (
+          <section className="card card-pad mb-6">
+            <h2 className="section-title mb-3">Your payments</h2>
+            <dl className="divide-y divide-ink-100 text-sm">
+              <div className="flex justify-between gap-3 py-2.5">
+                <dt className="text-ink-600">Total{money.vat ? " (including VAT)" : ""}</dt>
+                <dd className="font-medium tabular-nums">{m(money.total)}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-2.5">
+                <dt className="text-ink-600">Paid so far</dt>
+                <dd className="font-medium text-emerald-700 tabular-nums">{m(money.received)}</dd>
+              </div>
+              <div className="flex justify-between gap-3 py-2.5">
+                <dt className="font-semibold">Left to pay</dt>
+                <dd className="text-lg font-semibold tabular-nums">{m(money.outstanding)}</dd>
+              </div>
+            </dl>
+            {depositLeft > 0 && (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Your deposit of {m(depositDue)} is due{depositBy ? ` by ${depositBy}` : " now"}
+                {money.deposits > 0 ? ` (${m(depositLeft)} still to pay)` : ""}.
+              </p>
+            )}
+            {money.outstanding === 0 && <p className="mt-3 text-sm font-medium text-emerald-700">All paid. Thank you!</p>}
+            {payLink && money.outstanding > 0 && (
+              <a href={`/pay/${payLink.token}`} className="btn btn-primary mt-4 w-full sm:w-auto">
+                {payLink.kind === "DEPOSIT" ? "Pay your deposit" : "Pay now"}
+              </a>
+            )}
           </section>
         )}
 

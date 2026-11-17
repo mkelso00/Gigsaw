@@ -91,6 +91,8 @@ export async function notifyClientOfArrival(bookingId: string) {
     include: { artist: true, venue: true, promoter: true, agency: { include: { settings: true } } },
   });
   if (!b || !b.artist || b.demo || !b.notifyClientOnArrival || !b.promoter || !b.agency.settings?.clientArrivalMessages) return false;
+  // Couples aren't told when an act arrives: not for a wedding, or any booking inside a wedding or event.
+  if (b.eventId || b.eventType === "WEDDING") return false;
   if (!b.promoter.email && !b.promoter.phone) return false;
   const claim = await prisma.booking.updateMany({ where: { id: b.id, clientNotifiedAt: null }, data: { clientNotifiedAt: new Date() } });
   if (claim.count !== 1) return false;

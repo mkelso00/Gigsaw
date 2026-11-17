@@ -85,6 +85,20 @@ describeDb("telling the customer their booking is confirmed (database)", () => {
     expect(toCustomer()).toHaveLength(1);
   });
 
+  it("never tells the couple an act has arrived, even with arrival messages switched on", async () => {
+    await prisma.settings.update({ where: { agencyId }, data: { clientArrivalMessages: true } });
+    const couple = `arrive-${Date.now()}@confirm.gigsaw.invalid`;
+    const customer = await prisma.contact.create({ data: { agencyId, name: "Jo Bloggs", email: couple, type: "CLIENT" } });
+    const event = await prisma.event.create({ data: { agencyId, name: "Jo's wedding", date: "2027-09-04", customerId: customer.id } });
+    const inWedding = await gig({ eventId: event.id, promoterId: customer.id, status: "CONFIRMED", notifyClientOnArrival: true });
+    const weddingType = await gig({ promoterId: customer.id, status: "CONFIRMED", notifyClientOnArrival: true });
+    const { notifyClientOfArrival } = await import("@/lib/alerts");
+    state.sent = [];
+    expect(await notifyClientOfArrival(inWedding.id)).toBe(false);
+    expect(await notifyClientOfArrival(weddingType.id)).toBe(false);
+    expect(state.sent.filter((m) => m.to === couple)).toHaveLength(0);
+  });
+
   it("still tells a customer about a single booking that isn't part of a wedding or event", async () => {
     const solo = `solo-${Date.now()}@confirm.gigsaw.invalid`;
     const customer = await prisma.contact.create({ data: { agencyId, name: "Pat Jones", email: solo, type: "CLIENT" } });
