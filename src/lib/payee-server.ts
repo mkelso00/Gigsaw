@@ -40,15 +40,16 @@ export const ACT_PAY_SELECT = {
   leadPersonId: true,
 } as const;
 
-/** prisma, or the client inside a transaction (only reads are made here). */
-type Db = Pick<typeof prisma, "artist">;
+/** prisma, or the client inside a transaction (only reads are made here). Everything goes through it: a read on
+ * prisma itself in the middle of a transaction needs a second connection, and with a few at once the pool runs out. */
+type Db = Pick<typeof prisma, "artist" | "actLink">;
 
 /** These acts (in one agency) with everyone's pay details, by id. Acts in another agency are left out. */
 export async function loadPayActs(agencyId: string, actIds: string[], db: Db = prisma): Promise<Map<string, PayAct>> {
   const ids = [...new Set(actIds)];
   const out = new Map<string, PayAct>();
   if (!ids.length) return out;
-  const tree = await actTree(agencyId);
+  const tree = await actTree(agencyId, db);
   const parts = new Map(ids.map((id) => [id, [...tree.withParts([id])].filter((x) => x !== id)]));
   const all = [...new Set([...ids, ...[...parts.values()].flat()])];
   const rows = await db.artist.findMany({

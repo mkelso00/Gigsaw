@@ -11,8 +11,8 @@ import { personName } from "./person-name";
  * How acts sit inside each other in an agency (a band built from solo acts), loaded once.
  * Cycles are ignored, so a mistake can't loop forever.
  */
-export async function actTree(agencyId: string) {
-  const links = await prisma.actLink.findMany({ where: { parent: { agencyId } }, select: { parentId: true, childId: true } });
+export async function actTree(agencyId: string, db: Pick<typeof prisma, "actLink"> = prisma) {
+  const links = await db.actLink.findMany({ where: { parent: { agencyId } }, select: { parentId: true, childId: true } });
   const parents = new Map<string, string[]>();
   const children = new Map<string, string[]>();
   for (const l of links) {
