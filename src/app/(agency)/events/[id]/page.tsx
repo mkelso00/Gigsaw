@@ -67,6 +67,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <PlannerSection event={e} />
           <AutoEmailsSection event={e} totals={t} sent={sent} daysLeft={daysLeft} eventEmails={settings.eventEmails} />
 
+          <div id="payments" className="scroll-mt-6" />
           {e.status === "ACTIVE" && (
             <PayLinksCard
               target="event"

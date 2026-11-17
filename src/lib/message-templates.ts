@@ -96,7 +96,7 @@ export const TEMPLATES: TemplateDef[] = [
     key: "CUSTOMER_CONFIRMED",
     group: "CUSTOMERS",
     label: "Booking confirmed",
-    hint: "Tells a wedding or private customer an act is confirmed. Who gets it is set in Weddings and events.",
+    hint: "Tells a wedding or private customer their booking is confirmed. For a wedding or event with several acts it goes once, when every act is confirmed, and {act} lists them all. Who gets it is set in Weddings and events.",
     example: { subject: "Confirmed: {act} for {event}", intro: "Hi {first_name}, great news: {act} is confirmed for {event}." },
     placeholders: ["first_name", "act", "event", "date", "business"],
   },

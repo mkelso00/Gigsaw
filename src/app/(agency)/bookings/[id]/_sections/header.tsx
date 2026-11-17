@@ -53,8 +53,9 @@ export function BookingHeader({ booking }: { booking: BookingView }) {
           />
           {/* The printable documents sit in one menu, so the top of the page stays quiet. Archive is at the foot of the page. */}
           <DropMenu label="Print">
-            <a href={`/print/bookings/${booking.id}/invoice`} target="_blank">
-              Invoice
+            {/* The customer gets one invoice for a whole wedding or event, not one per act. */}
+            <a href={booking.event ? `/print/events/${booking.event.id}/invoice` : `/print/bookings/${booking.id}/invoice`} target="_blank">
+              {booking.event ? `Invoice for ${booking.event.name}` : "Invoice"}
             </a>
             <a href={`/print/bookings/${booking.id}/itinerary`} target="_blank">
               Itinerary for the act

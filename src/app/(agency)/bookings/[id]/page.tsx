@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { PayLinksCard } from "@/components/pay-links-card";
 import { cardPaymentsReady } from "@/lib/card-payments";
@@ -66,7 +67,20 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <ChecklistSection checklist={checklist} />
           <MoneySection booking={booking} deal={deal} totals={totals} />
 
-          {deal.totalDueMinor > 0 && booking.status !== "CANCELLED" && !booking.archivedAt && (
+          {/* Inside a wedding or event the customer pays for the whole booking at once, from the event's page. */}
+          {booking.event && deal.totalDueMinor > 0 && booking.status !== "CANCELLED" && (
+            <section className="card card-pad text-sm">
+              <h2 className="section-title mb-1">Card payments</h2>
+              <p className="text-ink-600">
+                The customer pays for the whole of{" "}
+                <Link href={`/events/${booking.event.id}#payments`} className="link">
+                  {booking.event.name}
+                </Link>{" "}
+                in one go, so payment links are sent from there.
+              </p>
+            </section>
+          )}
+          {!booking.event && deal.totalDueMinor > 0 && booking.status !== "CANCELLED" && !booking.archivedAt && (
             <PayLinksCard
               target="booking"
               id={booking.id}

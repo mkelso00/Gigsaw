@@ -90,7 +90,10 @@ export async function onConfirmed(bookingId: string) {
   // ---- The customer (weddings and private events) ----
   const mode = b.agency.settings?.customerConfirmations ?? "EVENTS";
   const isEvent = !!b.eventId || CUSTOMER_EVENT_TYPES.includes(b.eventType) || b.promoter?.type === "CLIENT";
-  if (mode === "OFF" || (mode === "EVENTS" && !isEvent) || !b.promoter?.email || b.customerToldAt) return;
+  if (mode === "OFF" || (mode === "EVENTS" && !isEvent) || b.customerToldAt) return;
+  // Part of a wedding or event: the customer booked it as one, so they hear once, when every act in it is confirmed.
+  if (b.eventId) return tellCustomerEventConfirmed(b.eventId);
+  if (!b.promoter?.email) return;
   const occasion = b.event?.name ?? (b.eventType === "WEDDING" ? "your wedding" : "your event");
   const c = messageFor(templates, "CUSTOMER_CONFIRMED", { ...gigVars, event: occasion, first_name: b.promoter.name.split(" ")[0] });
   if (!c.on) return;
@@ -114,4 +117,76 @@ export async function onConfirmed(bookingId: string) {
     },
   });
   await prisma.booking.update({ where: { id: b.id }, data: { customerToldAt: new Date() } });
+}
+
+/**
+ * A wedding or event with several acts is one booking to the customer. Once every act in it is confirmed,
+ * they get one email listing them all (never one per act); until then, nothing. Acts already in the
+ * "you're booked" email from their proposal are listed again here, so the email shows the whole booking.
+ */
+async function tellCustomerEventConfirmed(eventId: string) {
+  const e = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      customer: true,
+      venue: { select: { name: true, city: true } },
+      agency: { include: { settings: true } },
+      bookings: {
+        where: { archivedAt: null, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
+        include: { artist: { select: { name: true } }, venue: { select: { name: true } }, promoter: true, agent: { select: { email: true } } },
+        orderBy: { setStart: "asc" },
+      },
+    },
+  });
+  if (!e || e.status !== "ACTIVE" || !e.bookings.length) return;
+  // Still waiting on an act (or a slot with no act yet): wait until they're all in.
+  if (e.bookings.some((x) => !x.artist || (x.status !== "CONFIRMED" && x.status !== "SETTLED"))) return;
+  const untold = e.bookings.filter((x) => !x.customerToldAt).map((x) => x.id);
+  if (!untold.length) return;
+  const to = e.customer?.email || e.bookings.find((x) => x.promoter?.email)?.promoter?.email;
+  if (!to) return;
+  // Claim them first, so two acts confirming at the same moment send one email, not two.
+  const claimed = await prisma.booking.updateMany({ where: { id: { in: untold }, customerToldAt: null }, data: { customerToldAt: new Date() } });
+  if (!claimed.count) return;
+
+  const s = e.agency.settings;
+  const agencyName = s?.agencyName || e.agency.name;
+  const name = e.customer?.name ?? e.bookings.find((x) => x.promoter)?.promoter?.name ?? "";
+  const first = name.split(" ")[0] || "there";
+  const acts = e.bookings.map((x) => x.artist!.name);
+  const actList = acts.length > 1 ? `${acts.slice(0, -1).join(", ")} and ${acts[acts.length - 1]}` : acts[0];
+  const where = e.venue ? `${e.venue.name}${e.venue.city ? `, ${e.venue.city}` : ""}` : e.venueText || "Venue to be confirmed";
+  const first0 = e.bookings[0];
+  const c = messageFor(s?.messageTemplates, "CUSTOMER_CONFIRMED", {
+    act: actList,
+    event: e.name,
+    date: formatDate(first0.arriveBy, first0.timezone),
+    first_name: first,
+    business: agencyName,
+  });
+  if (!c.on) return;
+  await sendEmail({
+    kind: "EVENT",
+    agencyId: e.agencyId,
+    bookingId: null,
+    to,
+    replyTo: first0.agent?.email || s?.agencyEmail,
+    subject: c.subject ?? (acts.length > 1 ? `Everyone's confirmed for ${e.name}` : `Confirmed: ${actList} for ${e.name}`),
+    email: {
+      brand: agencyName,
+      title: acts.length > 1 ? "Everyone's confirmed" : `${actList} is confirmed`,
+      intro:
+        c.intro ??
+        `Hi ${first}, good news: ${acts.length > 1 ? `everyone is confirmed for ${e.name}` : `${actList} is confirmed for ${e.name}`}. Here's your booking with us:`,
+      rows: [
+        ["Date", formatDate(first0.arriveBy, first0.timezone)],
+        ["Where", where],
+        ...e.bookings.map(
+          (x) => [x.artist!.name, `${localTime(x.setStart, x.timezone)}${x.setEnd ? `–${localTime(x.setEnd, x.timezone)}` : ""}`] as [string, string],
+        ),
+      ],
+      rowsTitle: "Your booking",
+      outro: "Any questions, just reply to this email.",
+    },
+  });
 }
