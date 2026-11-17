@@ -17,8 +17,7 @@ import { dealBreakdown, formatMoney, paymentTotals } from "@/lib/money";
 import { personName } from "@/lib/person-name";
 import { AddOnDay } from "@/components/calendar-add";
 import { RememberCalendar } from "@/components/calendar-memory";
-import { daySummary, GIG_KEY, gigLook, TONE_ATTENTION } from "@/lib/calendar-look";
-import { BusyDayList } from "@/components/calendar-day-list";
+import { daySummary, GIG_KEY, gigLook } from "@/lib/calendar-look";
 import { CALENDAR_COOKIE, CALENDAR_COOKIE_DAYS, recallCalendar, rememberCalendar } from "@/lib/calendar-memory";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -163,9 +162,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     }),
   ]);
   const venueName = sp.venue ? venues.find((v) => v.id === sp.venue)?.name : undefined;
-  // Days acts have blocked out. For one act, its own and those of acts inside it (a band is away
-  // while one of its acts is); for everyone, each block once, on the act that added it.
-  const away = sp.artist ? awayAll.filter((e) => e.artistId === sp.artist) : awayAll.filter((e) => e.own);
+  // Days acts have blocked out are their own business: they show only when the calendar is filtered to one
+  // act (its own, and those of acts inside it, since a band is away while one of its acts is).
+  const away = sp.artist ? awayAll.filter((e) => e.artistId === sp.artist) : [];
   const awayOn = (key: string) => away.filter((e) => coversDate(e, key));
 
   const byArtist = sp.colour === "artist";
@@ -484,10 +483,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const key = addDaysToKey(gridStart, i);
               const inMonth = key.startsWith(month);
               const items = byDay.get(key) ?? [];
-              // A busy day (some venues have 17 gigs a day) shows a count by status, the gigs that still need
-              // something doing, and "All N gigs" for the full list, so the square stays readable.
+              // Every gig shows, in time order: the square grows to fit (some days have 17). A busy day also gets a
+              // count by status at the top.
               const busy = items.length > BUSY_DAY;
-              const shown = busy ? [...items].sort((a, b) => TONE_ATTENTION[look(a).tone] - TONE_ATTENTION[look(b).tone]).slice(0, 3) : items;
+              const shown = items;
               return (
                 <div
                   key={key}
@@ -543,25 +542,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                         </Link>
                       </GigHover>
                     ))}
-                    {busy && (
-                      <BusyDayList
-                        label={dayLabel(key, {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "long",
-                        })}
-                        addHref={`/calendar${qs({ view: "day", date: key })}`}
-                        gigs={items.map((b) => ({
-                          id: b.id,
-                          time: localTime(b.setStart, b.timezone),
-                          act: b.artistId ? actName(b) : "No act yet",
-                          venue: b.venue?.name ?? "No venue",
-                          status: statusLabel(b),
-                          className: look(b).className,
-                          style: look(b).style,
-                        }))}
-                      />
-                    )}
                   </div>
                 </div>
               );
