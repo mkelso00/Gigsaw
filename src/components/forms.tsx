@@ -196,6 +196,10 @@ export function ActionForm({
   }, []);
   useEffect(() => {
     if (!state?.ok) return;
+    // A settings form shows what was just saved. When the page refreshes, text boxes and ticks take the
+    // saved values as their defaults, but a drop-down keeps the one it first loaded with, so the reset
+    // below would put the old choice back on screen. Make each drop-down's current choice its default first.
+    if (hasBar && ref.current) for (const s of ref.current.querySelectorAll("select")) for (const o of s.options) o.defaultSelected = o.selected;
     ref.current?.reset();
     if (!hasBar || !ref.current) return;
     baseline.current = snapshot(ref.current);
