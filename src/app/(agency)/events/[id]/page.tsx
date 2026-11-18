@@ -9,7 +9,7 @@ import { loadEventPage } from "./_data";
 import { ActsSection } from "./_sections/acts";
 import { ChecklistSection } from "./_sections/checklist";
 import { AutoEmailsSection, PlannerSection } from "./_sections/emails";
-import { EventHeader, EventStats, ProposalBanner } from "./_sections/header";
+import { CancelledBanner, EventHeader, EventStats, ProposalBanner } from "./_sections/header";
 import { RecordPaymentSection } from "./_sections/payment";
 import { PayPlanSection } from "./_sections/pay-plan";
 import { isDirectPlan } from "@/lib/pay-plan";
@@ -54,6 +54,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   return (
     <div>
       <EventHeader event={e} daysLeft={daysLeft} />
+      {e.status === "CANCELLED" && <CancelledBanner eventId={e.id} agencyId={user.agencyId} />}
       {proposal && <ProposalBanner proposal={proposal} timeZone={e.timezone} />}
       <EventStats totals={t} daysLeft={daysLeft} />
 

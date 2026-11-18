@@ -9,6 +9,7 @@ import { PageHeader, Stat } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatDay } from "@/lib/enquiries";
+import { FREED_ACTION } from "@/lib/lapsed-leads";
 import { formatMoney } from "@/lib/money";
 import { linePlace, proposalInclude, proposalUrl, readyToSend } from "@/lib/proposal-server";
 import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, proposalRef, proposalTotals } from "@/lib/proposals";
@@ -48,6 +49,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const when = (d: Date) => formatDateTime(d, q.timezone);
   const notReady = canSend(q) ? readyToSend(q, today) : null;
   const latest = versions[0];
+  // The lead's Enquiry booking or wedding, cancelled when this lapsed (src/lib/lapsed-leads.ts).
+  const freed = status === "DECLINED" || status === "EXPIRED" ? activity.find((a) => a.action === FREED_ACTION) : undefined;
 
   return (
     <div className="mx-auto max-w-[1180px]">
@@ -133,8 +136,17 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
       )}
       {status === "DECLINED" && (
         <div className="mb-6 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm">
-          <div className="font-semibold">Declined on {when(q.answeredAt!)}</div>
+          <div className="font-semibold">Declined by the customer on {when(q.answeredAt!)}</div>
           <p className="mt-1 text-ink-600">{q.answerNote ? `“${q.answerNote}”` : "No reason given."}</p>
+          {freed && <p className="mt-1 text-ink-600">Cancelled {freed.detail}, so the date isn&apos;t held for them any more.</p>}
+          {canNewVersion(q) && <p className="mt-1 text-ink-600">If they come back, press Duplicate as new version and send it.</p>}
+        </div>
+      )}
+      {status === "EXPIRED" && !q.supersededById && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <div className="font-semibold">Expired with no reply{q.validUntil ? `: it was valid until ${formatDay(q.validUntil)}` : ""}</div>
+          {freed && <p className="mt-1">Cancelled {freed.detail}, so the date isn&apos;t held for them any more.</p>}
+          {canNewVersion(q) && <p className="mt-1">If they come back, press Duplicate as new version and send it.</p>}
         </div>
       )}
 
@@ -322,7 +334,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
               <ol className="space-y-2 text-sm">
                 {activity.map((a) => (
                   <li key={a.id}>
-                    {a.user?.name ?? (a.action.startsWith("customer") ? "" : "Someone")} {a.action}
+                    {/* No one signed in: the customer, or Gigsaw itself (an expiry, a held date freed). */}
+                    {a.user?.name ? `${a.user.name} ${a.action}` : a.action.charAt(0).toUpperCase() + a.action.slice(1)}
                     {a.detail && <span className="text-ink-500"> · {a.detail}</span>}
                     <div className="font-mono text-[11px] text-ink-400">{when(a.createdAt)}</div>
                   </li>

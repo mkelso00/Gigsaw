@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { JOURNEY_LIVE } from "./event-plan";
+import { freeLapsedLeadQuietly } from "./lapsed-leads";
 import { CHASE_DAYS, proposalInclude, sendProposalChase, type ChaseDay } from "./proposal-server";
 import { OPEN_STATUSES, proposalRef } from "./proposals";
 import { claimedReminders, claimReminder } from "./reminders";
@@ -11,7 +12,8 @@ import { addDaysToKey, localDateKey, localTime } from "./time";
 //    table, as QUOTE_CHASE_3 and QUOTE_CHASE_7 for "quote:<id>"), sent between 9am and 8pm in the
 //    business's time zone, like the wedding emails;
 //  - past its valid-until date (14 days by default), it's saved as Expired. The customer's page does the
-//    same when it's opened (markExpired); this makes it happen even if nobody looks.
+//    same when it's opened (markExpired); this makes it happen even if nobody looks. Either way, what its
+//    lead made (the Enquiry booking, or the wedding and its held gigs) is cancelled: src/lib/lapsed-leads.ts.
 // Only proposals still out with the customer: not replaced by a newer version, withdrawn, accepted or
 // declined. Demo customers are never emailed.
 
@@ -61,6 +63,8 @@ async function expireProposals(now: Date) {
     await prisma.activity.create({
       data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `proposal ${proposalRef(q)} expired`, detail: `valid until ${q.validUntil}` },
     });
+    // The lead's Enquiry booking or wedding stops holding the date.
+    await freeLapsedLeadQuietly(q.id);
   }
   return expired;
 }
