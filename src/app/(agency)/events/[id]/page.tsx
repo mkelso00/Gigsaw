@@ -39,6 +39,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     daysLeft,
     contract,
     contractSigned,
+    gateAt,
   } = await loadEventPage(user.agencyId, id);
   // Whose bank details the couple would see for each act (the band's lead, or the act), when they pay acts direct.
   const actIds = e.bookings.flatMap((b) => (b.artistId ? [b.artistId] : []));
@@ -87,6 +88,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             eventEmails={settings.eventEmails}
             reviewLink={settings.reviewLink}
             coordinator={coordinator}
+            gateAt={gateAt}
           />
 
           <div id="payments" className="scroll-mt-6" />

@@ -184,8 +184,13 @@ export async function sendContract(user: { id: string; agencyId: string }, targe
   return { contract, sent: status === "SENT" || status === "NOT_SENT", resent: !!open };
 }
 
-/** After signing: tell the lead agent (or the business email with no agent) and send the signer their copy. */
-export async function afterSigned(contractId: string) {
+/**
+ * After signing: tell the lead agent (or the business email with no agent) and send the signer their copy.
+ * For a wedding, `held` says it isn't booked yet (the deposit secures it), so the copy says signed, not
+ * approved; `coupleTold` says the couple have just had their "you're booked" email, which links to the
+ * signed copy, so this one isn't sent as well.
+ */
+export async function afterSigned(contractId: string, wedding: { held?: boolean; coupleTold?: boolean } = {}) {
   const c = await prisma.contract.findUnique({ where: { id: contractId } });
   if (!c || c.status !== "SIGNED") return;
   const s = await liveContractDoc(c);
@@ -213,15 +218,19 @@ export async function afterSigned(contractId: string) {
       },
     });
   }
+  if (wedding.coupleTold) return;
+  const first = c.signedName.split(" ")[0];
   await sendEmail({
     ...base,
     to: c.signerEmail,
     replyTo: s.settings.agencyEmail,
-    subject: `Approved: your booking with ${brand}`,
+    subject: wedding.held ? `Signed: your contract with ${brand}` : `Approved: your booking with ${brand}`,
     email: {
       brand,
-      title: "Thank you, your booking is approved",
-      intro: `Hi ${c.signedName.split(" ")[0]}, thank you for signing and approving. Your signed copy is always at the link below, so there's nothing to download or keep.`,
+      title: wedding.held ? "Thank you for signing" : "Thank you, your booking is approved",
+      intro: wedding.held
+        ? `Hi ${first}, thank you for signing your contract. Your date is held for you, and your deposit secures it: once it's in, you're booked and we'll confirm everything with you. Your signed copy is always at the link below, so there's nothing to download or keep.`
+        : `Hi ${first}, thank you for signing and approving. Your signed copy is always at the link below, so there's nothing to download or keep.`,
       rows: [
         ["Booking", s.what],
         ["Date", s.date],

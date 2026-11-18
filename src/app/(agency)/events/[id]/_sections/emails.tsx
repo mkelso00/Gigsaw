@@ -2,8 +2,17 @@ import Link from "next/link";
 import { sendEventStepNow, sendPlannerNow, sendPlanToActsNow } from "@/actions/events";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { BALANCE_DUE_DAYS, EVENT_STEPS, isSecured, JOURNEY_STAGES, stepWindow, type EventMessage, type JourneyStage } from "@/lib/event-plan";
-import { missedAtLaunch, owedToUs, plannerUrl } from "@/lib/events";
+import {
+  BALANCE_DUE_DAYS,
+  EVENT_STEPS,
+  JOURNEY_STAGES,
+  journeySecured,
+  missedAtLaunch,
+  stepWindow,
+  type EventMessage,
+  type JourneyStage,
+} from "@/lib/event-plan";
+import { owedToUs, plannerUrl } from "@/lib/events";
 import { addDaysToKey, formatDateTime } from "@/lib/time";
 import type { EventPageData, EventView } from "../_data";
 import { dayLabel } from "./day-label";
@@ -72,6 +81,7 @@ export function AutoEmailsSection({
   eventEmails,
   reviewLink,
   coordinator,
+  gateAt,
 }: {
   event: EventView;
   sent: EventPageData["sent"];
@@ -80,9 +90,12 @@ export function AutoEmailsSection({
   eventEmails: boolean;
   reviewLink: string;
   coordinator: string | null;
+  gateAt: Date | null;
 }) {
   const emailsOn = e.autoEmails && eventEmails;
-  const secured = isSecured(e.bookings);
+  // The same test as the automatic run (src/lib/events.ts): for a wedding, whether it has passed the gate.
+  const facts = { ...e, gateAt };
+  const secured = journeySecured(facts);
   const customer = e.type === "WEDDING" ? "Couple" : "Customer";
   const owed = owedToUs(e);
   /** Whether a step still has something to say, and if not, why not. */
@@ -90,6 +103,7 @@ export function AutoEmailsSection({
     if (to === "CUSTOMER" && !e.customer?.email) return "no email address for them";
     if (to === "TEAM" && !coordinator) return "no lead agent or business email to send it to";
     if (to === "ACTS" && !actGigs(e).length) return "no acts yet";
+    if (to === "ACTS" && secured && actGigs(e).every((b) => b.status === "HOLD")) return "its acts are On hold";
     if ((kind === "PLANNER_REQUEST" || kind === "PLANNER_CHASE" || kind === "PLANNER_FINAL" || kind === "TEAM_PLANNER_LATE") && e.plannerDoneAt)
       return "the planner is filled in";
     if (kind === "BALANCE_REMINDER" && owed <= 0) return "nothing is owed to you";
@@ -105,7 +119,9 @@ export function AutoEmailsSection({
             : "Turned off for this event (edit the details below the plan). You can still send any of them now."
           : secured
             ? "Sent between 9am and 8pm, each only once, and only when still needed. Booked late? Send any of them now."
-            : "Waiting for the booking to be secured: nothing goes to the customer, or about them, until then."}
+            : e.type === "WEDDING"
+              ? "Waiting for the booking to be secured (the contract agreed and the deposit in): nothing goes to the couple, about them or to the acts until then."
+              : "Waiting for the booking to be secured: nothing goes to the customer, or about them, until then."}
       </p>
       <div className="space-y-4">
         {JOURNEY_STAGES.map(({ stage }) => (
@@ -116,7 +132,8 @@ export function AutoEmailsSection({
                 const { from, to } = stepWindow(s.kind);
                 const done = sent.has(s.kind);
                 const why = notNeeded(s.kind, s.to);
-                const waitsForSecure = s.to !== "ACTS" && !secured;
+                // A wedding's acts wait too: they aren't told anything until it's booked.
+                const waitsForSecure = !journeySecured(facts, s.kind);
                 const state = done
                   ? "sent"
                   : why
@@ -130,7 +147,7 @@ export function AutoEmailsSection({
                             ? "due, but automatic emails are off"
                             : waitsForSecure
                               ? "due, waiting for the booking to be secured"
-                              : missedAtLaunch(e, s.kind)
+                              : missedAtLaunch(facts, s.kind)
                                 ? "not sent by itself: it fell due before this email started. Send it now if you'd like"
                                 : "due now, goes out shortly"
                         : checked.has(s.kind)
@@ -154,6 +171,7 @@ export function AutoEmailsSection({
                         </span>
                       )}
                       <ActionForm action={sendEventStepNow.bind(null, e.id, s.kind)} className="mt-1.5">
+                        {done && <input type="hidden" name="again" value="1" />}
                         <SubmitButton className="btn btn-sm" pendingText="Sending…">
                           {done ? "Send again" : "Send now"}
                         </SubmitButton>

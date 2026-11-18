@@ -8,7 +8,7 @@ import { checkSignature, checkSignerName, clientIp, contractHash } from "@/lib/c
 import { afterSigned, ContractError, liveContractDoc, sendContract, type ContractTarget } from "@/lib/contracts";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
-import { secureEventQuietly } from "@/lib/secure-event";
+import { recordHeld, secureEventQuietly } from "@/lib/secure-event";
 import { log } from "@/server/log";
 
 // Contracts signed online: staff send and cancel them; the client signs at /c/<token> with no login.
@@ -102,8 +102,17 @@ export async function signContract(token: string, hash: string, _: FormState, fo
     const wedding = !!c.eventId && (await prisma.event.findUnique({ where: { id: c.eventId }, select: { type: true } }))?.type === "WEDDING";
     if (wedding) {
       // A wedding is booked only once the contract is agreed and the deposit is in (the couple's terms), so
-      // it goes through the gate: an enquiry is now a held date, and the gate books it if the deposit is in.
-      await prisma.booking.updateMany({ where: { agencyId: c.agencyId, eventId: c.eventId!, status: "ENQUIRY" }, data: { status: "HOLD" } });
+      // it goes through the gate: an enquiry or a held date is now held by the journey, and the gate books it
+      // once the deposit is in: Pending until the act is confirmed, as signing does for everything else.
+      await prisma.$transaction(async (tx) => {
+        const gigs = await tx.booking.findMany({ where: { agencyId: c.agencyId, eventId: c.eventId!, status: { in: APPROVES } }, select: { id: true } });
+        await tx.booking.updateMany({ where: { id: { in: gigs.map((g) => g.id) }, status: "ENQUIRY" }, data: { status: "HOLD" } });
+        await recordHeld(
+          tx,
+          gigs.map((g) => g.id),
+          "contract",
+        );
+      });
     } else {
       // Approved by the client, so an enquiry or a held date is now booked: Pending until the act is
       // confirmed. Bookings already further on (offered, confirmed, settled) stay as they are.
@@ -112,13 +121,14 @@ export async function signContract(token: string, hash: string, _: FormState, fo
         data: { status: "PENDING" },
       });
     }
+    // A wedding booked now (the deposit was already in) gets one email: the "you're booked" one, with the signed copy.
+    const gate = wedding ? await secureEventQuietly(c.eventId, { signed: true }) : null;
     try {
-      await afterSigned(c.id);
+      await afterSigned(c.id, gate ? { held: !gate.secured, coupleTold: gate.told } : {});
     } catch (e) {
       // The contract is signed either way; a message that fails is in the Outbox.
       log.error("Contract signed, but the emails after it failed", { err: e });
     }
-    if (wedding) await secureEventQuietly(c.eventId);
     return { ok: "signed" };
   });
   if (result?.ok) {

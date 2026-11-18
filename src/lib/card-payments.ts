@@ -238,7 +238,15 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
   // Only sessions Gigsaw made: the agency may sell other things through the same Stripe account.
   const linkId = s.metadata?.gigsaw_link;
   if (!linkId) return "ignored";
-  if (await prisma.cardPayment.findUnique({ where: { stripeSessionId: s.id }, select: { id: true } })) return "duplicate";
+  const seen = await prisma.cardPayment.findUnique({
+    where: { stripeSessionId: s.id },
+    select: { payLink: { select: { eventId: true, booking: { select: { eventId: true } } } } },
+  });
+  if (seen) {
+    // Stripe trying again: the payment is in, but the run that logged it may have stopped before the gate.
+    await secureEventQuietly(seen.payLink?.eventId ?? seen.payLink?.booking?.eventId);
+    return "duplicate";
+  }
   const agency = await prisma.agency.findUnique({ where: { stripeAccountId: accountId }, select: { id: true } });
   if (!agency) return keepUnmatched(s, accountId, await formerAgency(accountId), "NOT_CONNECTED");
   const raw = await prisma.payLink.findFirst({ where: { id: linkId, agencyId: agency.id }, include: payLinkInclude });
@@ -298,16 +306,21 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
       });
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return "duplicate";
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      // Logged at the same moment by another delivery of the same payment: make sure it books the wedding too.
+      await secureEventQuietly(raw.eventId ?? raw.booking?.eventId);
+      return "duplicate";
+    }
     throw e;
   }
   if (!parts.length) {
     await tellUnmatched(agency.id, t.agentId, { amount, currency, email: s.customer_details?.email ?? "", problem: UNMATCHED_REASONS.NO_BOOKINGS });
     return "unmatched";
   }
-  await tellAgent(t, amount, currency, s.customer_details?.email ?? "");
-  // The deposit that books a wedding (src/lib/secure-event.ts): after the payment has committed.
+  // The deposit that books a wedding (src/lib/secure-event.ts): after the payment has committed, and before
+  // anything else that could fail and stop it (a retry from Stripe is a duplicate, which runs it too).
   await secureEventQuietly(raw.eventId ?? raw.booking?.eventId);
+  await tellAgent(t, amount, currency, s.customer_details?.email ?? "");
   return "recorded";
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./db";
+import { JOURNEY_LIVE } from "./event-plan";
 import { CHASE_DAYS, proposalInclude, sendProposalChase, type ChaseDay } from "./proposal-server";
 import { OPEN_STATUSES, proposalRef } from "./proposals";
 import { claimedReminders, claimReminder } from "./reminders";
@@ -71,7 +72,8 @@ async function chaseProposals(now: Date) {
       status: { in: OPEN_STATUSES },
       supersededById: null,
       token: { not: null },
-      sentAt: { lte: new Date(now.getTime() - CHASE_DAYS[0] * DAY), gte: new Date(now.getTime() - CHASE_WINDOW_DAYS * DAY) },
+      // Only proposals sent since the reminders started, so switching them on doesn't remind everyone at once.
+      sentAt: { lte: new Date(now.getTime() - CHASE_DAYS[0] * DAY), gte: new Date(Math.max(now.getTime() - CHASE_WINDOW_DAYS * DAY, JOURNEY_LIVE.getTime())) },
       agency: { status: "ACTIVE" },
       OR: [{ contactId: null }, { contact: { demo: false } }],
     },

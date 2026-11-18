@@ -8,9 +8,9 @@ import { syncActInvoicePaid } from "@/lib/act-invoices";
 import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
 import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
-import { createBookingWithReference, parseBookingForm } from "@/lib/bookings";
+import { createBookingWithReference, needsAct, parseBookingForm } from "@/lib/bookings";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, NEEDS_ACT, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
 import { onConfirmed } from "@/lib/confirmations";
 import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
@@ -79,7 +79,7 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const old = await ownBooking(user, bookingId);
     const before = snapshotOf(old);
     const settings = await getSettings(user.agencyId);
-    const data = await parseBookingForm(form, settings, user.agencyId);
+    const data = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId });
     const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
     const alsoChange = await venueChangeFor(old, data, form);
     // Copying to other bookings always asks first. One box covers that and any double booking warning,
@@ -143,7 +143,8 @@ export async function setBookingStatus(bookingId: string, _: FormState, form: Fo
     const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING");
     const before = await ownBooking(user, bookingId);
     if (before.status === status) return { ok: "No change." };
-    if (!before.artistId && NEEDS_ACT.includes(status)) throw new FormError(`Add an act first (Edit), then set it to ${BOOKING_STATUS_LABELS[status]}.`);
+    if (!before.artistId && needsAct(status, !!before.eventId))
+      throw new FormError(`Add an act first (Edit), then set it to ${BOOKING_STATUS_LABELS[status]}.`);
     await prisma.booking.update({ where: { id: bookingId }, data: { status, ...offerResetFor(before, { status }) } });
     queueCalendarSync(bookingId);
     await logActivity(

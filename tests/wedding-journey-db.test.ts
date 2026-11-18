@@ -85,7 +85,11 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
   });
 
   /** A wedding `days` from today with one act on it (sale £1,000, the act paid £600), and the couple. */
-  const wedding = async (days: number, opts: { status?: string; agent?: boolean; payPlan?: string; plannerDone?: boolean; plannerSent?: boolean } = {}) => {
+  /** Booked through the gate (src/lib/secure-event.ts), unless `secured` is false: its EV_GATE row. */
+  const wedding = async (
+    days: number,
+    opts: { status?: string; agent?: boolean; payPlan?: string; plannerDone?: boolean; plannerSent?: boolean; secured?: boolean } = {},
+  ) => {
     const i = ++n;
     const coupleEmail = `couple${i}-${stamp}@journey.gigsaw.invalid`;
     const couple = await prisma.contact.create({ data: { agencyId, type: "CLIENT", name: `Sam Couple${i}`, email: coupleEmail } });
@@ -123,11 +127,12 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
         setEnd: new Date(setStart.getTime() + 2 * HOUR),
       },
     });
+    if (opts.secured !== false) await prisma.reminder.create({ data: { kind: "EV_GATE", recipient: `event:${e.id}`, key: "" } });
     return { e, b, coupleEmail };
   };
   const to = (email: string) => state.sent.filter((m) => m.to === email);
   const claims = async (eventId: string) =>
-    (await prisma.reminder.findMany({ where: { recipient: `event:${eventId}` } }))
+    (await prisma.reminder.findMany({ where: { recipient: `event:${eventId}`, kind: { not: "EV_GATE" } } }))
       .map((r) => `${r.kind.replace(/^EV_/, "")}${r.key ? `:${r.key}` : ""}`)
       .sort();
   const run = async () => {
@@ -260,17 +265,80 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
   });
 
   it("sends nothing to or about the couple while the wedding isn't secured (On hold or Enquiry only)", async () => {
-    const held = await wedding(182, { status: "HOLD" });
-    const enquiry = await wedding(91, { status: "ENQUIRY" });
+    const held = await wedding(182, { status: "HOLD", secured: false });
+    const enquiry = await wedding(91, { status: "ENQUIRY", secured: false });
     await run();
     expect(to(held.coupleEmail)).toHaveLength(0);
     expect(to(enquiry.coupleEmail)).toHaveLength(0);
     expect(to(lucyEmail).filter((m) => m.subject.startsWith(held.e.name) || m.subject.startsWith(enquiry.e.name))).toHaveLength(0);
     expect(await claims(held.e.id)).toEqual([]);
-    // Once secured (the other gate confirms it), the stage that's live goes.
-    await prisma.booking.updateMany({ where: { eventId: held.e.id }, data: { status: "CONFIRMED" } });
+    // Once secured (the gate in src/lib/secure-event.ts claims its row), the stage that's live goes.
+    await prisma.reminder.create({ data: { kind: "EV_GATE", recipient: `event:${held.e.id}`, key: "" } });
     await run();
     expect(to(held.coupleEmail)).toHaveLength(1);
+  });
+
+  it("a wedding's gigs being Pending or Confirmed doesn't start the schedule: only the gate does", async () => {
+    // A gig staff added with no act yet (Pending), and one Confirmed by hand, on weddings that haven't passed the gate.
+    const pending = await wedding(150, { status: "PENDING", secured: false });
+    await prisma.booking.update({ where: { id: pending.b.id }, data: { artistId: null } });
+    const confirmed = await wedding(91, { status: "CONFIRMED", secured: false });
+    await run();
+    expect(to(pending.coupleEmail)).toHaveLength(0);
+    expect(to(confirmed.coupleEmail)).toHaveLength(0);
+    expect(to(lucyEmail).filter((m) => m.subject.startsWith(pending.e.name) || m.subject.startsWith(confirmed.e.name))).toHaveLength(0);
+    expect(await claims(pending.e.id)).toEqual([]);
+    expect(await claims(confirmed.e.id)).toEqual([]);
+  });
+
+  it("tells the acts of a held wedding nothing: no final details a week before, and Send now says why", async () => {
+    const { sendEventStepNow, sendPlanToActsNow } = await import("@/actions/events");
+    // Not secured, its gig On hold.
+    const held = await wedding(7, { status: "HOLD", plannerDone: true, secured: false });
+    // Secured, but its only gig is one staff pencilled in On hold.
+    const pencilled = await wedding(6, { status: "HOLD", plannerDone: true });
+    await run();
+    const final = (e: { name: string }) => to(actEmail).filter((m) => m.subject.startsWith(`Final details: ${e.name}`));
+    expect(final(held.e)).toHaveLength(0);
+    expect(final(pencilled.e)).toHaveLength(0);
+    expect(to(held.coupleEmail)).toHaveLength(0);
+    expect(await claims(held.e.id)).toEqual([]);
+    expect(await claims(pencilled.e.id)).toEqual(["WEEK_TO_GO"]);
+    state.sent = [];
+    const why = "The acts are On hold until the booking is secured, so nothing goes to them yet";
+    expect(await sendEventStepNow(held.e.id, "ACT_DETAILS", undefined)).toEqual({ error: why });
+    expect(await sendPlanToActsNow(held.e.id, undefined)).toEqual({ error: why });
+    expect(to(actEmail)).toHaveLength(0);
+    // Send now that had nothing to send leaves the step unsent.
+    expect(await claims(held.e.id)).toEqual([]);
+    // A plan change reaches no one either.
+    await prisma.event.update({ where: { id: held.e.id }, data: { timeline: "Ceremony 2pm", planChangedAt: new Date(Date.now() - HOUR) } });
+    await ev.runPlanUpdates(new Date());
+    expect(to(actEmail)).toHaveLength(0);
+  });
+
+  it("weddings made before the schedule started but secured after it get the stage that's live now", async () => {
+    // Made at enquiry time before the start, booked (through the gate) since: new to the schedule.
+    const late = await wedding(150);
+    await prisma.event.update({ where: { id: late.e.id }, data: { createdAt: new Date("2026-10-01T10:00:00Z") } });
+    // Made and booked before the start (no gate row, a Confirmed gig): it was part-way through this stage then.
+    const old = await wedding(151, { secured: false });
+    await prisma.event.update({ where: { id: old.e.id }, data: { createdAt: new Date("2026-10-01T10:00:00Z") } });
+    await run();
+    expect(to(late.coupleEmail).map((m) => m.subject)).toEqual([`${late.e.name}: a few details from you`]);
+    expect(await claims(late.e.id)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
+    expect(to(old.coupleEmail)).toHaveLength(0);
+    expect(await claims(old.e.id)).toEqual([]);
+  });
+
+  it("a wedding booked before the start with only On hold gigs still gets its thank-you", async () => {
+    const old = await wedding(-2, { status: "HOLD", secured: false });
+    await prisma.event.update({ where: { id: old.e.id }, data: { createdAt: new Date("2026-10-01T10:00:00Z") } });
+    const fresh = await wedding(-2, { status: "HOLD", secured: false });
+    await run();
+    expect(to(old.coupleEmail).map((m) => m.subject)).toEqual(["Congratulations, and thank you!"]);
+    expect(to(old.coupleEmail)[0].email.intro).toContain("thank you for booking Journey Band with us");
+    expect(to(fresh.coupleEmail)).toHaveLength(0);
   });
 
   it("a late booking gets only the stage that's live now: no 6-month emails 2 months out, and the first planner email is a first ask", async () => {
@@ -312,6 +380,43 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
     });
     expect(await sendEventStepNow(e.id, "BALANCE_REMINDER", undefined)).toEqual({ error: "Nothing is left to pay you" });
     expect(await sendEventStepNow(e.id, "NOT_A_STEP", undefined)).toEqual({ error: "Unknown email" });
+    expect(await claims(e.id)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
+  });
+
+  it("Send now doesn't send a step the automatic run has just sent, unless it's Send again", async () => {
+    const { sendEventStepNow } = await import("@/actions/events");
+    const { e, coupleEmail } = await wedding(160);
+    await run();
+    expect(to(coupleEmail)).toHaveLength(1);
+    // The page still showed Send now: it has just gone, so it doesn't go twice.
+    state.sent = [];
+    expect(await sendEventStepNow(e.id, "PLANNER_REQUEST", undefined)).toEqual({ ok: "It has just been sent." });
+    expect(to(coupleEmail)).toHaveLength(0);
+    // Send again (the page knew it was sent) does send it.
+    const again = new FormData();
+    again.append("again", "1");
+    expect(await sendEventStepNow(e.id, "PLANNER_REQUEST", undefined, again)).toEqual({ ok: "Sent." });
+    expect(to(coupleEmail)).toHaveLength(1);
+  });
+
+  // Runs the schedule at a later date, so it comes last: it would send the other weddings' later stages too.
+  it("the 3-month emails go on the balance date for a wedding on 14 August 2027 (due 14 May), not after it", async () => {
+    const { e, coupleEmail } = await wedding(200, { plannerSent: true });
+    await prisma.event.update({ where: { id: e.id }, data: { date: "2027-08-14", timezone: "Europe/London" } });
+    const may = (day: number) => new Date(Date.UTC(2027, 4, day, 11));
+    state.sent = [];
+    // 13 May, 93 days before: still the 6-month stage.
+    await ev.runEventMessages(may(13));
+    expect(to(coupleEmail).map((m) => m.subject)).toEqual([`${e.name}: a few details from you`]);
+    // 14 May, the day the balance is due: the balance reminder, due by that day.
+    state.sent = [];
+    await ev.runEventMessages(may(14));
+    const balance = to(coupleEmail).find((m) => m.subject.includes("balance"))!;
+    const dueDay = time.formatDate(new Date("2027-05-14T12:00:00Z"), "UTC");
+    expect(balance.email.rows).toEqual(expect.arrayContaining([["Due", dueDay]]));
+    expect(balance.email.intro).toContain(`due by ${dueDay}`);
+    const [summary] = to(lucyEmail).filter((m) => m.subject.startsWith(e.name));
+    expect(summary.email.intro).toContain(`the balance is due by ${dueDay}. Still missing:`);
   });
 });
 
