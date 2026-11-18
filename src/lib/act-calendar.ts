@@ -72,7 +72,22 @@ export type ActViewer = {
   person: boolean;
 };
 
-export type ActFeedOptions = { baseUrl: string; viewer: ActViewer; planExtras: PlanExtraField[] };
+export type ActFeedOptions = {
+  baseUrl: string;
+  viewer: ActViewer;
+  planExtras: PlanExtraField[];
+  /** The business's contact for acts (Settings → General), shown instead of the promoter when set. */
+  contact?: { name: string; phone: string };
+};
+
+/** The contact line acts see on a gig: the business's contact for acts if it has one, else the booking's promoter. */
+export function actContactLine(
+  promoter: { name: string; phone: string } | null,
+  contact: { name: string; phone: string } | null | undefined,
+): [string, string] | null {
+  if (contact && (contact.name.trim() || contact.phone.trim())) return ["Contact", [contact.name.trim(), contact.phone.trim()].filter(Boolean).join(", ")];
+  return promoter ? ["Promoter", [promoter.name, promoter.phone].filter(Boolean).join(", ")] : null;
+}
 
 /** The act's pay for a gig, as their gig page shows it: after commission, or the agreed cost on a sale and cost deal. */
 export function actPayMinor(b: Pick<ActFeedBooking, "dealType" | "feeMinor" | "artistFeeMinor" | "commissionPct">) {
@@ -107,7 +122,7 @@ export function actFeedDescription(b: ActFeedBooking, opts: ActFeedOptions) {
       detailLine("Accommodation", b.accommodation),
       detailLine("Hospitality", b.hospitality),
       detailLine("Venue notes", b.venue?.notes),
-      b.promoter ? detailLine("Promoter", [b.promoter.name, b.promoter.phone].filter(Boolean).join(", ")) : "",
+      ((c) => (c ? detailLine(c[0], c[1]) : ""))(actContactLine(b.promoter, opts.contact)),
       b.agent ? detailLine("Your agent", [b.agent.name, b.agent.email].filter(Boolean).join(", ")) : "",
     ],
     eventPlanLines(b.event, opts.planExtras),

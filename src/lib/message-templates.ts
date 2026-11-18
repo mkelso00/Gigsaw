@@ -85,6 +85,14 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: EVENT,
   },
   {
+    key: "EVENT_UPDATED",
+    group: "ACTS",
+    label: "Wedding details updated",
+    hint: "When the couple (or your team) change a wedding or event's plan, each act on it is told what changed, once the changes stop for 15 minutes.",
+    example: { subject: "{event}: details updated", intro: "Hi {first_name}, some details for {event} have changed. Here's what's new." },
+    placeholders: EVENT,
+  },
+  {
     key: "WELCOME",
     group: "ACTS",
     label: "Welcome to a new act",
@@ -140,6 +148,14 @@ export const TEMPLATES: TemplateDef[] = [
     hint: "Reminds a wedding or event customer of what's left to pay.",
     example: { subject: "{event}: balance due", intro: "Hi {first_name}, just a reminder that the balance for {event} is due soon." },
     placeholders: EVENT,
+  },
+  {
+    key: "PAYMENT_RECEIVED",
+    group: "CUSTOMERS",
+    label: "Payment received",
+    hint: "Sent to a wedding or private customer when you record a payment from them, with what's left to pay. Not sent to venues.",
+    example: { subject: "Payment received: {amount}", intro: "Hi {first_name}, thank you: we've received your payment of {amount} for {what}." },
+    placeholders: ["first_name", "amount", "what", "business"],
   },
   {
     key: "PAY_LINK",

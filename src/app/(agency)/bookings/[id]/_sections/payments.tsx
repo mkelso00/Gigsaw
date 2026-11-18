@@ -75,6 +75,10 @@ export function PaymentsSection({ booking, now }: { booking: BookingView; now: D
             <Field label="Note">
               <input name="note" className="input" />
             </Field>
+            <label className="flex items-center gap-2 text-sm text-ink-600">
+              <input type="checkbox" name="receipt" defaultChecked className="h-4 w-4" />
+              Email the customer a receipt (money received from a wedding or private customer only, never venues)
+            </label>
             <SubmitButton>Add payment</SubmitButton>
           </ActionForm>
         </div>

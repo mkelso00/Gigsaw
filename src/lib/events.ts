@@ -3,7 +3,7 @@ import { directSplit, directTotals, isDirectPlan } from "./pay-plan";
 import { loadPayActs, payeeFor } from "./payee-server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { daysBetween, eventMessagesDue, parseExtraFields, planRows, type EventMessage, type TaskKey } from "./event-plan";
+import { daysBetween, eventMessagesDue, parseExtraFields, planChanges, planRows, type EventMessage, type TaskKey } from "./event-plan";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type PaymentLike } from "./money";
 import { actName } from "./constants";
@@ -312,6 +312,73 @@ export async function sendActDetails(e: FullEvent) {
       sent++;
     }
   }
+  // What the acts now have, so a later change sends only what's new (runPlanUpdates).
+  await prisma.event.update({ where: { id: e.id }, data: { planToldActs: plan, planChangedAt: null } });
+  return sent;
+}
+
+/** How long a plan has to stay still before the acts hear about the change, so a couple's run of edits sends one email. */
+export const PLAN_QUIET_MS = 15 * 60_000;
+
+/**
+ * Tell each confirmed act on a wedding or event what's changed in its plan, once the edits have stopped for a
+ * while: one email listing the new values (and anything removed). Runs with the other event emails.
+ */
+export async function runPlanUpdates(now = new Date()) {
+  const due = await prisma.event.findMany({
+    where: {
+      status: "ACTIVE",
+      demo: false,
+      autoEmails: true,
+      planChangedAt: { lte: new Date(now.getTime() - PLAN_QUIET_MS) },
+      date: { gte: localDateKey(new Date(now.getTime() - 86_400_000), "UTC") },
+      agency: { status: "ACTIVE" },
+    },
+    include: eventInclude,
+  });
+  let sent = 0;
+  for (const e of due) {
+    // Claimed by clearing the mark, so two servers never send it twice.
+    const claimed = await prisma.event.updateMany({ where: { id: e.id, planChangedAt: e.planChangedAt }, data: { planChangedAt: null } });
+    if (!claimed.count) continue;
+    const plan = planRows(e, parseExtraFields(e.agency.settings?.planExtraFields));
+    const changes = planChanges(plan, e.planToldActs);
+    const gigs = withAct(e).filter((b) => b.status === "CONFIRMED");
+    const t = tpl(e, "EVENT_UPDATED", "");
+    if (changes.length && gigs.length && t.on) {
+      const recipients = await recipientsForGigs(gigs);
+      const told = new Set<string>();
+      for (const b of gigs) {
+        for (const r of recipients.get(b.id) ?? []) {
+          if (told.has(r.key)) continue;
+          told.add(r.key);
+          const w = tpl(e, "EVENT_UPDATED", r.firstName);
+          const title = `${e.name}: details updated`;
+          const base = { kind: "EVENT" as const, agencyId: e.agencyId, bookingId: b.id };
+          if (r.userId) await sendPush({ ...base, userId: r.userId, payload: { title, body: changes.map(([k]) => k).join(", "), url: `/app/gigs/${b.id}` } });
+          for (const to of r.emails) {
+            await sendEmail({
+              ...base,
+              to,
+              replyTo: replyOf(e),
+              subject: w.subject ?? title,
+              email: {
+                brand: brandOf(e),
+                title: "Some details have changed",
+                intro: w.intro ?? `Hi ${r.firstName}, some details for ${e.name} (${eventDay(e)}) have changed. Here's what's new:`,
+                rows: changes,
+                rowsTitle: "What's changed",
+                cta: r.userId ? { label: "See the full details", url: `${appUrl()}/app/gigs/${b.id}` } : undefined,
+                outro: "Anything unclear? Reply to this email.",
+              },
+            });
+          }
+          sent++;
+        }
+      }
+    }
+    await prisma.event.update({ where: { id: e.id }, data: { planToldActs: plan } });
+  }
   return sent;
 }
 
@@ -372,7 +439,7 @@ export async function runEventMessages(now = new Date()) {
   );
   const isSent = (kind: EventMessage, eventId: string) => claimed.has(`EV_${kind}|event:${eventId}|`);
   const ids = candidates.filter((e) => dueNow(e).some((kind) => !isSent(kind, e.id))).map((e) => e.id);
-  if (!ids.length) return 0;
+  if (!ids.length) return runPlanUpdates(now);
   const events = await prisma.event.findMany({ where: { ...where, id: { in: ids } }, include: eventInclude });
   let sent = 0;
   for (const e of events) {
@@ -392,7 +459,7 @@ export async function runEventMessages(now = new Date()) {
       sent++;
     }
   }
-  return sent;
+  return sent + (await runPlanUpdates(now));
 }
 
 /** Mark an automatic email as sent by hand (e.g. "Send final details now"), so it doesn't go twice. */

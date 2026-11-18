@@ -154,7 +154,12 @@ function actsOf(conn: Connection) {
  */
 async function viewOf(conn: Connection): Promise<ActFeedOptions> {
   const [own, settings] = await Promise.all([ownActIds(conn.user), getSettings(conn.agencyId)]);
-  return { baseUrl: appUrl(), viewer: { ownActIds: own, person: !!conn.user.personId }, planExtras: parseExtraFields(settings.planExtraFields) };
+  return {
+    baseUrl: appUrl(),
+    viewer: { ownActIds: own, person: !!conn.user.personId },
+    planExtras: parseExtraFields(settings.planExtraFields),
+    contact: { name: settings.actContactName, phone: settings.actContactPhone },
+  };
 }
 
 /**

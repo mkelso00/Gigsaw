@@ -97,6 +97,10 @@ model Settings {
   agencyName            String  @default("My Agency")
   agencyEmail           String  @default("")
   agencyAddress         String  @default("")
+  // Who acts call about a gig (e.g. the business's bookings manager), shown on every gig in the act app,
+  // calendar and day sheet in place of the promoter. Empty: the promoter shows as before.
+  actContactName        String  @default("")
+  actContactPhone       String  @default("")
   // How emails from this business look: colours, website, phone and the enquiry reply's "What happens next"
   // (src/lib/email-design.ts). The logo is kept separately, in BrandLogo.
   emailDesign           Json    @default("{}")
@@ -795,6 +799,9 @@ model Event {
   status     String   @default("ACTIVE") // ACTIVE | CANCELLED
   // How the customer pays: FULL (all to the business) | DEPOSIT_CASH | DEPOSIT_TRANSFER (src/lib/pay-plan.ts).
   payPlan    String   @default("FULL")
+  // The plan changed (planner or staff) and the acts haven't been told yet; what they were last sent.
+  planChangedAt DateTime?
+  planToldActs  Json?
   notes      String   @default("") // agency only
 
   // The plan, filled in by the agency or by the customer using their planner link. Acts see it.

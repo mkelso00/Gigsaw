@@ -1,6 +1,7 @@
 "use server";
 
 import type { Prisma } from "@prisma/client";
+import { receiptQuietly } from "@/lib/receipts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
@@ -10,7 +11,7 @@ import { findClashes } from "@/lib/clash-check";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { defaultTasks, parseExtraFields, planRows, readPlanForm } from "@/lib/event-plan";
+import { defaultTasks, parseExtraFields, planChanges, planRows, readPlanForm } from "@/lib/event-plan";
 import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
@@ -140,8 +141,14 @@ export async function updateEventPlan(eventId: string, _: FormState, form: FormD
   return handleForm(async () => {
     await ownEvent(user, eventId);
     const settings = await getSettings(user.agencyId);
-    const { columns, planExtras } = readPlanForm((k) => str(form, k), parseExtraFields(settings.planExtraFields));
-    await prisma.event.update({ where: { id: eventId }, data: { ...columns, planExtras, guestCount: int(form, "guestCount") } });
+    const extras = parseExtraFields(settings.planExtraFields);
+    const { columns, planExtras } = readPlanForm((k) => str(form, k), extras);
+    const before = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+    const changed = planChanges(planRows({ ...before, ...columns, planExtras }, extras), planRows(before, extras)).length > 0;
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { ...columns, planExtras, guestCount: int(form, "guestCount"), ...(changed ? { planChangedAt: new Date() } : {}) },
+    });
     await syncEventGigs(eventId, user.agencyId);
     await logActivity(user, "EVENT", eventId, "updated the plan");
     revalidatePath(`/events/${eventId}`);
@@ -243,6 +250,7 @@ export async function recordEventPayment(eventId: string, _: FormState, form: Fo
     }
     await prisma.payment.createMany({ data: parts });
     await logActivity(user, "EVENT", eventId, "recorded a payment", (total / 100).toFixed(2));
+    if (str(form, "receipt") === "on") await receiptQuietly({ eventId, amountMinor: total });
     revalidatePath("/", "layout");
     return { ok: "Payment recorded and shared across the acts." };
   });
@@ -328,9 +336,17 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
     const { columns, planExtras } = readPlanForm((k) => str(form, k), extras);
     const guests = int(form, "guestCount");
     const first = !e.plannerDoneAt;
+    // A change the acts should hear about (sent once the edits stop: runPlanUpdates).
+    const changed = planChanges(planRows({ ...e, ...columns, planExtras }, extras), planRows(e, extras)).length > 0;
     await prisma.event.update({
       where: { id: e.id },
-      data: { ...columns, planExtras, guestCount: guests && guests > 0 && guests < 100_000 ? guests : null, plannerDoneAt: new Date() },
+      data: {
+        ...columns,
+        planExtras,
+        guestCount: guests && guests > 0 && guests < 100_000 ? guests : null,
+        plannerDoneAt: new Date(),
+        ...(changed ? { planChangedAt: new Date() } : {}),
+      },
     });
     await syncEventGigs(e.id, e.agencyId);
     await prisma.activity.create({

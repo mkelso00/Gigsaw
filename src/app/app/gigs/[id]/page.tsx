@@ -9,6 +9,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { parseExtraFields, planRows } from "@/lib/event-plan";
+import { actContactLine } from "@/lib/act-calendar";
 import { onGig } from "@/lib/lineup";
 import { actIdsFor, ownActIds } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
@@ -192,7 +193,10 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           ["Accommodation", b.accommodation],
           ["Day of show contact", b.dayContact],
           ["Hospitality", b.hospitality],
-          ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? ` · ${b.promoter.phone}` : ""}` : ""],
+          // The business's contact for acts (Settings → General), or the promoter when there isn't one.
+          ...((c) => (c ? [[c[0], c[1].replace(", ", " · ")] as [string, string]] : []))(
+            actContactLine(b.promoter, { name: settings.actContactName, phone: settings.actContactPhone }),
+          ),
           ["Your agent", b.agent ? `${b.agent.name} · ${b.agent.email}` : ""],
           [user.personId ? `${actName(b)} fee` : "Your fee", yourFee > 0 ? formatMoney(yourFee, b.currency) : ""],
           // The couple pays the act their fee themselves (src/lib/pay-plan.ts): say so, and how.

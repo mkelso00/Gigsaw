@@ -1,5 +1,6 @@
 "use server";
 
+import { receiptQuietly } from "@/lib/receipts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { syncActInvoicePaid } from "@/lib/act-invoices";
@@ -284,6 +285,8 @@ export async function addPayment(bookingId: string, _: FormState, form: FormData
     });
     // Paying the act by hand here counts towards their invoice, so there's one record of what they've had.
     if (direction === "OUT") await syncActInvoicePaid([bookingId]);
+    // The customer hears it's arrived (weddings and private customers only; sendPaymentReceipt checks).
+    if (direction === "IN" && str(form, "receipt") === "on") await receiptQuietly({ bookingId, amountMinor });
     await logActivity(
       user,
       "BOOKING",

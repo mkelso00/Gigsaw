@@ -49,6 +49,12 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     }
     if (has("agencyEmail")) data.agencyEmail = str(form, "agencyEmail");
     if (has("agencyAddress")) data.agencyAddress = str(form, "agencyAddress");
+    if (has("actContactName")) data.actContactName = str(form, "actContactName").slice(0, 80);
+    if (has("actContactPhone")) {
+      const phone = str(form, "actContactPhone").slice(0, 40);
+      if (phone && !/^[0-9+()\-. ]{7,}$/.test(phone)) throw new FormError("Check the contact's phone number");
+      data.actContactPhone = phone;
+    }
     if (has("defaultTimezone")) {
       const tz = str(form, "defaultTimezone");
       if (!isValidTimeZone(tz)) throw new FormError("Unknown time zone");
@@ -87,7 +93,9 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     if (has("customerConfirmations")) data.customerConfirmations = oneOf(str(form, "customerConfirmations"), ["EVENTS", "ALL", "OFF"] as const, "EVENTS");
     if (has("planExtraFields")) {
       const current = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { planExtraFields: true } });
-      data.planExtraFields = extraFieldsFromText(str(form, "planExtraFields"), parseExtraFields(current?.planExtraFields), () => randomBytes(5).toString("hex"));
+      data.planExtraFields = extraFieldsFromText(str(form, "planExtraFields"), parseExtraFields(current?.planExtraFields), () =>
+        randomBytes(5).toString("hex"),
+      );
     }
     if (has("reviewLink")) data.reviewLink = /^https?:\/\//.test(str(form, "reviewLink")) ? str(form, "reviewLink") : "";
     if (has("bookingFee")) {

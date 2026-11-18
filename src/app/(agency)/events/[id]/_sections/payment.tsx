@@ -22,6 +22,10 @@ export function RecordPaymentSection({ eventId, currency, today }: { eventId: st
         <Field label="Note">
           <input name="note" className="input" />
         </Field>
+        <label className="col-span-2 flex items-center gap-2 text-sm text-ink-600">
+          <input type="checkbox" name="receipt" defaultChecked className="h-4 w-4" />
+          Email the customer a receipt
+        </label>
         <div className="col-span-2">
           <SubmitButton className="btn btn-primary w-full">Record payment</SubmitButton>
         </div>

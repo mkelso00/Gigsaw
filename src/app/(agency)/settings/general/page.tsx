@@ -30,6 +30,22 @@ export default async function GeneralSettings() {
             </div>
           </SettingsCard>
         </SettingsSection>
+        <SettingsSection
+          title="Contact for acts"
+          description="Who musicians call about a gig. Shown on every gig in their app, calendar and day sheet, instead of the promoter (who stays on your invoices)."
+        >
+          <SettingsCard pad>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Name">
+                <input name="actContactName" defaultValue={settings.actContactName} placeholder="e.g. Lucy" className="input" />
+              </Field>
+              <Field label="Phone">
+                <input name="actContactPhone" type="tel" defaultValue={settings.actContactPhone} placeholder="07700 900123" className="input" />
+              </Field>
+            </div>
+            <p className="hint mt-2">Leave both empty to show each booking&apos;s promoter instead.</p>
+          </SettingsCard>
+        </SettingsSection>
         <SettingsSection title="Time zone and currency" description="Used for new bookings, reports and reminders.">
           <SettingsCard pad>
             <div className="grid gap-4 sm:grid-cols-2">

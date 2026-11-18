@@ -120,3 +120,16 @@ export function readPlanForm(get: (name: string) => string, extras: PlanExtraFie
   const planExtras = Object.fromEntries(extras.map((f) => [f.id, get(`extra_${f.id}`).slice(0, maxLength)]).filter(([, v]) => v));
   return { columns, planExtras };
 }
+
+/**
+ * What changed in a plan since the acts were last sent it: each changed or new field with its new value, and
+ * each emptied one as "(removed)". `told` null means they've never been sent it, so everything counts as new.
+ */
+export function planChanges(rows: [string, string][], told: unknown): [string, string][] {
+  const before = Array.isArray(told) ? new Map((told as [string, string][]).filter((r) => Array.isArray(r) && r.length === 2)) : null;
+  if (!before) return rows;
+  const now = new Map(rows);
+  const out: [string, string][] = rows.filter(([k, v]) => before.get(k) !== v);
+  for (const k of before.keys()) if (!now.has(k)) out.push([k, "(removed)"]);
+  return out;
+}

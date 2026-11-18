@@ -41,7 +41,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const settings = await getSettings(owner.agencyId);
   // The fee shows on the gigs of the acts this link belongs to directly, not on a band's gigs they're part of.
   const viewer = { ownActIds: act ? [act.id] : person!.acts.map((a) => a.artistId), person: !act };
-  const opts = { baseUrl: appUrl(), viewer, planExtras: parseExtraFields(settings.planExtraFields) };
+  const opts = {
+    baseUrl: appUrl(),
+    viewer,
+    planExtras: parseExtraFields(settings.planExtraFields),
+    contact: { name: settings.actContactName, phone: settings.actContactPhone },
+  };
   const events = bookings.map((b) => actFeedEvent(b, opts));
   const ics = buildIcs(`${calendarName} · Gigsaw`, events, { timezone: settings.defaultTimezone });
   const lastModified = events.reduce<Date | undefined>((max, e) => (!max || e.updated > max ? e.updated : max), undefined);

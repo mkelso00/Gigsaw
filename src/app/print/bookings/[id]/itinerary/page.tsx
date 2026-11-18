@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DocTable, DocumentShell } from "@/components/document";
+import { actContactLine } from "@/lib/act-calendar";
 import { loadPrintable } from "@/lib/print";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
 import { actName } from "@/lib/constants";
@@ -43,7 +44,8 @@ export default async function ItineraryPage({ params }: { params: Promise<{ id: 
           ["Accommodation", b.accommodation],
           ["Day of show contact", b.dayContact],
           ["Hospitality", b.hospitality],
-          ["Promoter", b.promoter ? `${b.promoter.name}${b.promoter.phone ? `, ${b.promoter.phone}` : ""}` : ""],
+          // The business's contact for acts (Settings → General), or the promoter when there isn't one.
+          actContactLine(b.promoter, { name: settings.actContactName, phone: settings.actContactPhone }) ?? ["Promoter", ""],
           ["Your agent", b.agent ? `${b.agent.name}, ${b.agent.email}` : ""],
         ]}
       />
