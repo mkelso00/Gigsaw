@@ -12,8 +12,8 @@ import { findClashes } from "@/lib/clash-check";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { defaultTasks, parseExtraFields, planChanges, planRows, readPlanForm } from "@/lib/event-plan";
-import { eventInclude, markEventMessageSent, sendActDetails, sendPlannerEmail } from "@/lib/events";
+import { defaultTasks, EVENT_STEPS, isEventMessage, parseExtraFields, planChanges, planRows, readPlanForm } from "@/lib/event-plan";
+import { eventInclude, markEventMessageSent, sendActDetails, sendEventStep, sendPlannerEmail } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
 import { wants } from "@/lib/notify-prefs";
@@ -301,18 +301,40 @@ export async function sendPlannerNow(eventId: string, _: FormState): Promise<For
   });
 }
 
-/** Send each act their final details now (instead of waiting for a week before). */
-export async function sendActDetailsNow(eventId: string, _: FormState): Promise<FormState> {
+/**
+ * Send one step of the automatic emails now (the wedding page's "Send now"), e.g. for a last-minute booking:
+ * it goes straight away, whatever the date, and is marked as sent so the automatic one doesn't go too.
+ */
+export async function sendEventStepNow(eventId: string, kind: string, _: FormState): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    await ownEvent(user, eventId);
+    if (!isEventMessage(kind)) throw new FormError("Unknown email");
+    const e = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: eventInclude });
+    const r = await sendEventStep(e, kind);
+    if (!r.sent) throw new FormError(r.why ?? "Nothing to send");
+    await markEventMessageSent(eventId, kind);
+    const step = EVENT_STEPS.find((s) => s.kind === kind)!;
+    await logActivity(user, "EVENT", eventId, "sent an email now", step.label);
+    revalidatePath(`/events/${eventId}`);
+    return { ok: kind === "ACT_DETAILS" ? `Sent to the acts (${r.sent} ${r.sent === 1 ? "person" : "people"}).` : "Sent." };
+  });
+}
+
+/**
+ * Send the acts the plan as it stands, before the couple have filled in the planner (the 3-month prompt).
+ * Their usual final details still go a week before, and later changes reach them as updates.
+ */
+export async function sendPlanToActsNow(eventId: string, _: FormState): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
     await ownEvent(user, eventId);
     const e = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: eventInclude });
     const n = await sendActDetails(e);
     if (!n) throw new FormError("No acts to send to yet");
-    await markEventMessageSent(eventId, "ACT_DETAILS");
-    await logActivity(user, "EVENT", eventId, "sent final details to the acts");
+    await logActivity(user, "EVENT", eventId, "sent the plan to the acts");
     revalidatePath(`/events/${eventId}`);
-    return { ok: `Final details sent (${n} ${n === 1 ? "person" : "people"}).` };
+    return { ok: `Plan sent to the acts (${n} ${n === 1 ? "person" : "people"}).` };
   });
 }
 

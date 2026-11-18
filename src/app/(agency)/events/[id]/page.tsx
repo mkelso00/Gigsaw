@@ -30,6 +30,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     acts,
     tasks,
     sent,
+    checked,
+    coordinator,
     payLinks,
     proposal,
     today,
@@ -76,8 +78,16 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             />
           </div>
 
-          <PlannerSection event={e} />
-          <AutoEmailsSection event={e} totals={t} sent={sent} daysLeft={daysLeft} eventEmails={settings.eventEmails} />
+          <PlannerSection event={e} daysLeft={daysLeft} />
+          <AutoEmailsSection
+            event={e}
+            sent={sent}
+            checked={checked}
+            daysLeft={daysLeft}
+            eventEmails={settings.eventEmails}
+            reviewLink={settings.reviewLink}
+            coordinator={coordinator}
+          />
 
           <div id="payments" className="scroll-mt-6" />
           {e.status === "ACTIVE" && <PayPlanSection event={e} payees={payees} />}

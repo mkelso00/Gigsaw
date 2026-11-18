@@ -24,8 +24,10 @@ export default async function WeddingSettings() {
               label="Send automatic wedding and event emails"
               hint={
                 <>
-                  The planner link 8 weeks before (and a reminder at 3 weeks if it isn&apos;t filled in), a balance reminder in the last 2 weeks while money is
-                  owed, final details to the acts a week before, and a thank-you the day after. Can also be turned off for a single event.
+                  Once a booking is secured: the planner link and a payment summary 6 months before; the balance reminder 3 months before while money is owed,
+                  with a planner reminder if it isn&apos;t filled in; a last call for the running order 4 weeks before; a short &ldquo;we can&apos;t wait&rdquo;
+                  and final details to the acts a week before; and a thank-you the day after. The wedding&apos;s lead agent hears at 6 months, 3 months and 4
+                  weeks. Each one can be reworded or switched off in Notifications, and turned off for a single event.
                 </>
               }
             >
