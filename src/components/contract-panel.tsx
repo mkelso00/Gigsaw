@@ -27,6 +27,7 @@ export function ContractPanel({
   previewHref,
   partOf,
   agencySigned = true,
+  noTerms = false,
 }: {
   kind: "booking" | "event";
   id: string;
@@ -39,6 +40,8 @@ export function ContractPanel({
   partOf?: { href: string; name: string };
   /** Whether the business has drawn its own signature (Settings → Contracts and invoices). */
   agencySigned?: boolean;
+  /** The business hasn't added its terms, so the contract is just the booking and the fee. */
+  noTerms?: boolean;
 }) {
   const { current, changes, earlier } = status;
   const state = contractState(current);
@@ -137,6 +140,15 @@ export function ContractPanel({
                 Cancel the contract
               </ConfirmButton>
             </ServerForm>
+          )}
+          {noTerms && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Your contract has no terms yet, only the booking details and the fee.{" "}
+              <a href="/settings/documents" className="font-medium underline">
+                Add your terms
+              </a>{" "}
+              once and they go on every contract.
+            </p>
           )}
           {!agencySigned && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">

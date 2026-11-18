@@ -72,6 +72,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
               previewHref={`/print/events/${e.id}/contract`}
               agencySigned={!!settings.signatureImage}
+              noTerms={!settings.contractTerms.trim()}
             />
           </div>
 

@@ -18,6 +18,7 @@ import { personName } from "@/lib/person-name";
 import { AddOnDay } from "@/components/calendar-add";
 import { RememberCalendar } from "@/components/calendar-memory";
 import { daySummary, GIG_KEY, gigLook } from "@/lib/calendar-look";
+import { CalendarJump } from "@/components/calendar-jump";
 import { CALENDAR_COOKIE, CALENDAR_COOKIE_DAYS, recallCalendar, rememberCalendar } from "@/lib/calendar-memory";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -298,7 +299,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <Link href={`/calendar${qs({ date: prev })}`} className="btn btn-sm" aria-label="Previous">
             ←
           </Link>
-          <span className="min-w-32 px-1 text-center text-sm font-medium">{title}</span>
+          <CalendarJump
+            title={title}
+            anchor={anchor}
+            today={todayKey}
+            base={qs({})
+              .slice(1)
+              .replace(/(^|&)date=[^&]*/g, "")}
+          />
           <Link href={`/calendar${qs({ date: next })}`} className="btn btn-sm" aria-label="Next">
             →
           </Link>
