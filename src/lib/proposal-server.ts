@@ -186,6 +186,20 @@ export async function newProposalVersion(user: { id: string; agencyId: string },
   });
 }
 
+/** The terms the customer agrees to: the proposal's own, or the business's wording from Settings if it has none. */
+export function termsFor(q: Pick<FullProposal, "terms" | "agency">) {
+  return (q.terms.trim() ? q.terms : (q.agency.settings?.contractTerms ?? "")).trim().slice(0, 20000);
+}
+
+/** On sending: a proposal made before the terms were in Settings takes them now, so what's signed includes them. */
+async function fillTerms(q: FullProposal) {
+  if (q.terms.trim()) return;
+  const terms = termsFor(q);
+  if (!terms) return;
+  await prisma.quote.updateMany({ where: { id: q.id, status: "DRAFT" }, data: { terms } });
+  q.terms = terms;
+}
+
 /** Everything a proposal needs before it can go to the customer, or a reason it can't. */
 export function readyToSend(q: FullProposal, today: string): string | null {
   if (!q.lines.length) return "Add at least one line first";
@@ -196,6 +210,9 @@ export function readyToSend(q: FullProposal, today: string): string | null {
     if (!l.startTime) return `Enter the start time${n}`;
   }
   if (q.validUntil && q.validUntil < today) return "The valid-until date has passed. Change it first.";
+  // A wedding proposal is the couple's contract: they agree to the terms when they sign it.
+  if (q.eventType === "WEDDING" && !termsFor(q))
+    return "Add your terms and conditions first, in Settings, Contracts and invoices. The couple agree to them when they sign.";
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
   if (q.depositMinor > t.totalMinor) return "The deposit is more than the total";
   return null;
@@ -215,6 +232,7 @@ export async function publishProposal(user: { agencyId: string }, proposalId: st
   if (!canSend(q)) throw new ProposalError("This proposal already has its link.");
   const problem = readyToSend(q, todayIn(q.timezone));
   if (problem) throw new ProposalError(problem);
+  await fillTerms(q);
   const token = newProposalToken();
   const claimed = await prisma.quote.updateMany({
     where: { id: q.id, status: "DRAFT", supersededById: null },
@@ -243,6 +261,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
   if (!isEmail(email)) throw new ProposalError("Enter the customer's email address");
   const problem = readyToSend(q, today);
   if (problem) throw new ProposalError(problem);
+  if (first) await fillTerms(q);
 
   let token = q.token;
   if (first) {

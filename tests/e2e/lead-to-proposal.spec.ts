@@ -57,6 +57,8 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
   await editor.getByLabel("Arrive, line 1").fill("17:30");
   await editor.getByLabel("Price, line 1").fill("1500");
   await editor.getByLabel("Act's fee, line 1").fill("1100");
+  // A wedding proposal is the couple's contract, so it needs terms.
+  await editor.getByLabel("Terms").fill("1. The deposit secures your date.\n2. The balance is due 3 months before the wedding.");
   await save.click();
 
   // The proposal's page: get a link to send ourselves.
@@ -80,6 +82,7 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
     const sign = c.getByRole("button", { name: "Sign and approve" });
     await hydrated(sign);
     await expect(c.getByLabel("Your full name")).toHaveValue(leadName);
+    await expect(c.getByTestId("proposal-terms")).toContainText("The balance is due 3 months before the wedding.");
     await drawSignature(c);
     await expect(c.getByText("Signature added.")).toBeVisible();
     await c.getByRole("checkbox", { name: /I accept this proposal/ }).check();

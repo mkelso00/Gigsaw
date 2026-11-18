@@ -190,8 +190,8 @@ export default async function CustomerProposalPage({ params }: { params: Promise
         </p>
       )}
 
-      {q.terms && (
-        <details className="card mb-6" open={!problem}>
+      {q.terms && problem && (
+        <details className="card mb-6">
           <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Terms</summary>
           <p className="border-t border-ink-100 px-5 py-4 text-sm whitespace-pre-line text-ink-700">{q.terms}</p>
         </details>
@@ -201,7 +201,28 @@ export default async function CustomerProposalPage({ params }: { params: Promise
         <>
           <ActionForm action={acceptProposalAnswer.bind(null, token)} className="card card-pad">
             <h2 className="text-xl font-semibold tracking-tight">Sign and approve your proposal</h2>
-            <p className="mt-1 text-sm text-ink-600">Signing books everything above with {brand}.</p>
+            <p className="mt-1 text-sm text-ink-600">
+              Signing books everything above with {brand}
+              {q.terms ? ", on the terms and conditions below. Together they make your contract with us." : "."}
+            </p>
+            {q.terms && (
+              <section className="mt-5" aria-labelledby="terms-title">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 id="terms-title" className="text-base font-semibold">
+                    Terms and conditions
+                  </h3>
+                  <PrintButton label="Print or save a copy" />
+                </div>
+                <div
+                  tabIndex={0}
+                  data-testid="proposal-terms"
+                  className="mt-2 max-h-80 overflow-y-auto rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm whitespace-pre-line text-ink-700 print:max-h-none print:overflow-visible"
+                >
+                  {q.terms}
+                </div>
+                <p className="mt-1 text-xs text-ink-500">Scroll to read them all.</p>
+              </section>
+            )}
             <label className="mt-5 block">
               <span className="label">Your full name</span>
               <input name="name" required autoComplete="name" maxLength={120} defaultValue={q.contact?.name ?? ""} className="input h-12 text-base" />
@@ -217,7 +238,7 @@ export default async function CustomerProposalPage({ params }: { params: Promise
             <label className="mt-4 flex items-start gap-3 rounded-xl bg-ink-50 p-4 text-[15px]">
               <input type="checkbox" name="agree" required className="mt-0.5 h-6 w-6 shrink-0" />
               <span>
-                I accept this proposal{q.terms ? " and its terms" : ""}, and I&apos;d like to book it with {brand}
+                I accept this proposal{q.terms ? " and I have read and agree to the terms and conditions" : ""}, and I&apos;d like to book it with {brand}
                 {q.depositMinor > 0 ? `. I'll pay the deposit of ${m(q.depositMinor)}${q.depositDue ? ` by ${formatDay(q.depositDue)}` : ""}` : ""}.
               </span>
             </label>
