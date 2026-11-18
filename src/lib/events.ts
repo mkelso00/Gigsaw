@@ -7,14 +7,15 @@ import {
   daysBetween,
   EVENT_STEPS,
   eventMessagesDue,
-  isSecured,
+  GATE_KIND,
   JOURNEY_LOOKAHEAD_DAYS,
+  journeySecured,
+  missedAtLaunch,
   parseExtraFields,
   planChanges,
   plannerDueDate,
   planRows,
   SECURED_STATUSES,
-  stepWindow,
   timeToGo,
   type EventMessage,
   type TaskKey,
@@ -25,7 +26,9 @@ import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForGigs } from "./people";
 import { claimedReminders, claimReminder } from "./reminders";
-import { addDaysToKey, formatDate, localDateKey, localTime } from "./time";
+import { formatDate, localDateKey, localTime } from "./time";
+
+export { JOURNEY_LIVE, missedAtLaunch } from "./event-plan";
 
 // Weddings and events: one customer booking with several acts. Each act's gig is an ordinary
 // booking linked to the event, so the acts only ever see their own gig and fee, while the
@@ -158,8 +161,18 @@ const replyOf = (e: FullEvent) => e.bookings.find((b) => b.agent?.email)?.agent?
 const isWedding = (e: FullEvent) => e.type === "WEDDING";
 const eventDay = (e: FullEvent) => formatDate(new Date(`${e.date}T12:00:00Z`), "UTC");
 const live = (e: FullEvent) => e.bookings.filter((b) => b.status !== "CANCELLED" && b.status !== "ENQUIRY");
-/** Gigs that have an act, for messages to the acts. */
-const withAct = (e: FullEvent) => live(e).filter((b): b is typeof b & { artistId: string; artist: NonNullable<typeof b.artist> } => !!b.artistId && !!b.artist);
+type ActGig = FullEvent["bookings"][number] & { artistId: string; artist: NonNullable<FullEvent["bookings"][number]["artist"]> };
+const hasAct = (b: FullEvent["bookings"][number]): b is ActGig => !!b.artistId && !!b.artist;
+/** Every live gig with an act, On hold included: for the customer's and staff's emails (names, never fees). */
+const actsOf = (e: FullEvent) => live(e).filter(hasAct);
+/**
+ * Gigs whose act may hear about the event: those that have an act and aren't On hold. An On hold gig is a
+ * date kept for a wedding that isn't booked yet (or pencilled in by staff), so its act isn't told anything.
+ */
+const withAct = (e: FullEvent) => actsOf(e).filter((b) => b.status !== "HOLD");
+/** Why the acts can't be sent anything: no act at all, or only On hold ones. */
+export const noActsWhy = (e: FullEvent) =>
+  actsOf(e).length ? "The acts are On hold until the booking is secured, so nothing goes to them yet" : "No acts to send to yet";
 
 /** The business's wording for an event email, if it has changed it (Settings > Notifications). */
 const tpl = (e: FullEvent, key: string, firstName: string, extra: Record<string, string> = {}) =>
@@ -329,7 +342,7 @@ async function sendBalanceReminder(e: FullEvent) {
   return true;
 }
 
-/** Each act's final details: their own times plus the plan. No money at all. */
+/** Each act's final details: their own times plus the plan. No money at all. On hold gigs are left out (withAct). */
 export async function sendActDetails(e: FullEvent) {
   const gigs = withAct(e);
   if (!gigs.length) return 0;
@@ -454,7 +467,7 @@ async function sendThanks(e: FullEvent) {
   const review = e.agency.settings?.reviewLink?.trim();
   const first = firstOf(e.customer.name);
   const t = tpl(e, "THANKS", first);
-  const acts = [...new Set(withAct(e).map((b) => b.artist.name))];
+  const acts = [...new Set(actsOf(e).map((b) => b.artist.name))];
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
@@ -531,7 +544,7 @@ async function sendTeamNotice(e: FullEvent, kind: TeamStep) {
   const owed = owedToUs(e);
   const direct = isDirectPlan(e.payPlan);
   const total = eventTotals(e.bookings).total;
-  const acts = [...new Set(withAct(e).map((b) => b.artist.name))];
+  const acts = [...new Set(actsOf(e).map((b) => b.artist.name))];
   const planner = e.plannerDoneAt
     ? "Filled in"
     : !e.customer?.email
@@ -571,8 +584,9 @@ async function sendTeamNotice(e: FullEvent, kind: TeamStep) {
     const reminded = ["BALANCE_REMINDER", "PLANNER_CHASE"].some((k) => sent.has(k));
     subject = `${e.name}: ${away} to go, ${missing.length ? "a few things missing" : "all in hand"}`;
     title = missing.length ? "A few things still to sort" : "All in hand";
+    const due = balanceDueDate(e.date);
     intro = missing.length
-      ? `${hi}, ${e.name} is ${away} away and the balance is due now. Still missing: ${missing.join(" and ")}.${reminded ? ` We've sent ${name} a reminder.` : ""}${
+      ? `${hi}, ${e.name} is ${away} away${owed > 0 ? ` and the ${direct ? "deposit" : "balance"} is due ${due > todayOf(e) ? `by ${dayText(due)}` : "now"}` : ""}. Still missing: ${missing.join(" and ")}.${reminded ? ` We've sent ${name} a reminder.` : ""}${
           e.plannerDoneAt
             ? ""
             : " Nothing has gone to the acts yet: if the running order doesn't come in, you can send them what you have from the wedding page."
@@ -623,7 +637,7 @@ export async function sendEventStep(e: FullEvent, kind: EventMessage): Promise<S
       return one(await sendThanks(e), noEmail);
     case "ACT_DETAILS": {
       const n = await sendActDetails(e);
-      return n ? { sent: n } : { sent: 0, why: "No acts to send to yet" };
+      return n ? { sent: n } : { sent: 0, why: noActsWhy(e) };
     }
     default:
       return one(await sendTeamNotice(e, kind), "No one to tell: choose a lead agent, or add your business email in Settings");
@@ -639,21 +653,9 @@ const ABOUT_PLANNER: EventMessage[] = ["PLANNER_REQUEST", "PLANNER_CHASE", "PLAN
  * It runs every minute, so it looks first at just the dates (Event.date is indexed) and a few cheap
  * columns, and loads in full only the events with an email due that hasn't gone. Only the journey
  * stage live today can send (eventMessagesDue: a late booking never gets the earlier stages in a rush),
- * and nothing goes to or about the customer until their booking is secured (isSecured).
+ * and nothing goes to the customer or about them (nor, for a wedding, to the acts) until the booking is
+ * secured (journeySecured): for a wedding, until it has passed the gate in src/lib/secure-event.ts.
  */
-/**
- * When the 6-month, 3-month, 4-week and 1-week emails started. A wedding already in the diary then only
- * gets a stage that opens after it, so switching the schedule on doesn't send everyone the stage they're
- * part-way through all at once; staff can still press Send now. The act details and thank-you, which
- * were sent before, carry on as they were.
- */
-export const JOURNEY_LIVE = new Date("2026-11-18T12:00:00Z");
-
-export function missedAtLaunch(e: { createdAt: Date; date: string }, kind: EventMessage) {
-  if (kind === "ACT_DETAILS" || kind === "THANKS" || e.createdAt >= JOURNEY_LIVE) return false;
-  return addDaysToKey(e.date, -stepWindow(kind).from) < localDateKey(JOURNEY_LIVE, "UTC");
-}
-
 export async function runEventMessages(now = new Date()) {
   const DAY = 86_400_000;
   const where = {
@@ -676,9 +678,10 @@ export async function runEventMessages(now = new Date()) {
         timezone: true,
         plannerDoneAt: true,
         createdAt: true,
+        type: true,
         customer: { select: { email: true } },
-        // Secured: a gig past On hold and Enquiry (isSecured), counted in the same query.
-        _count: { select: { bookings: { where: { archivedAt: null, status: { in: [...SECURED_STATUSES] } } } } },
+        // Which statuses its gigs have (journeySecured), a row per status at most.
+        bookings: { where: { archivedAt: null, status: { in: [...SECURED_STATUSES, "HOLD"] } }, select: { status: true }, distinct: ["status"] },
       },
     })
   ).filter((e) => {
@@ -687,6 +690,8 @@ export async function runEventMessages(now = new Date()) {
     return hour >= "09:00" && hour < "20:00";
   });
   if (!rows.length) return runPlanUpdates(now);
+  // When each wedding passed the gate, if it has: one query.
+  const gates = await securedAtFor(rows.filter((e) => e.type === "WEDDING").map((e) => e.id));
   // Emails a business has switched off in Settings > Notifications don't go: one look per business.
   const templates = new Map(
     (
@@ -697,12 +702,12 @@ export async function runEventMessages(now = new Date()) {
     ).map((s) => [s.agencyId, s.messageTemplates]),
   );
   const dueNow = (e: (typeof rows)[number]) => {
-    const secured = e._count.bookings > 0;
+    const facts = { ...e, gateAt: gates.get(e.id) ?? null };
     return eventMessagesDue(daysBetween(localDateKey(now, e.timezone), e.date)).filter((kind) => {
       if (!messageFor(templates.get(e.agencyId), TEMPLATE_OF[kind], {}).on) return false;
+      if (!journeySecured(facts, kind)) return false;
       if (kind === "ACT_DETAILS") return true;
-      if (!secured) return false;
-      if (missedAtLaunch(e, kind)) return false;
+      if (missedAtLaunch(facts, kind)) return false;
       if (ABOUT_PLANNER.includes(kind) && e.plannerDoneAt) return false;
       return audienceOf(kind) === "TEAM" || !!e.customer?.email;
     });
@@ -738,7 +743,25 @@ export async function runEventMessages(now = new Date()) {
   return sent + (await runPlanUpdates(now));
 }
 
-/** Mark an automatic email as sent by hand (e.g. "Send now"), so it doesn't go twice. */
+/** When each of these weddings passed the gate (its GATE_KIND row), by event id. Those that haven't are missing. */
+export async function securedAtFor(eventIds: string[]) {
+  if (!eventIds.length) return new Map<string, Date>();
+  const rows = await prisma.reminder.findMany({
+    where: { kind: GATE_KIND, recipient: { in: eventIds.map((id) => `event:${id}`) }, key: "" },
+    select: { recipient: true, createdAt: true },
+  });
+  return new Map(rows.map((r) => [r.recipient.replace(/^event:/, ""), r.createdAt]));
+}
+
+/**
+ * Mark an automatic email as sent by hand ("Send now"), before it goes, so an automatic run at the same
+ * moment can't send it too. False if it was already marked (sent before, or being sent right now).
+ */
 export async function markEventMessageSent(eventId: string, kind: EventMessage) {
   return claim(kind, eventId);
+}
+
+/** Take the mark off again: a Send now that turned out to have nothing to send. */
+export async function unmarkEventMessageSent(eventId: string, kind: EventMessage) {
+  await prisma.reminder.deleteMany({ where: { kind: `EV_${kind}`, recipient: `event:${eventId}`, key: "" } });
 }

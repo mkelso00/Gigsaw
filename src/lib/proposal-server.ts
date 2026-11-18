@@ -32,7 +32,7 @@ import {
   tokenOpens,
 } from "./proposals";
 import { buildSchedule } from "./schedule";
-import { secureEvent } from "./secure-event";
+import { recordHeld, secureEvent } from "./secure-event";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 import { log } from "@/server/log";
 
@@ -490,6 +490,12 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
           made.push(b);
         }
         await tx.quote.update({ where: { id: q.id }, data: { eventId: event.id } });
+        // Remembered as held by the journey, so the gate moves these on and not a gig staff put On hold.
+        await recordHeld(
+          tx,
+          made.filter((b) => b.status === "HOLD").map((b) => b.id),
+          "proposal",
+        );
 
         if (q.enquiry) {
           await tx.enquiry.update({ where: { id: q.enquiry.id }, data: { status: "DONE", doneAt: q.enquiry.doneAt ?? now, eventId: event.id } });
@@ -591,16 +597,17 @@ export async function afterAccepted(proposalId: string) {
       log.error("Proposal accepted, but telling an act failed", { err: e });
     }
   }
-  let told = false;
+  // Whether the wedding is booked: if it is (the deposit was already in), the couple are never asked for one.
+  let secured = false;
   if (wedding && q.eventId) {
     try {
-      told = (await secureEvent(q.eventId, { announce: !held })).told;
+      secured = (await secureEvent(q.eventId, { announce: !held })).secured;
     } catch (e) {
       log.error("Proposal accepted, but checking whether the wedding is booked failed", { err: e });
     }
   }
   try {
-    if (held && !told) await tellCustomerHeld(q);
+    if (held && !secured) await tellCustomerHeld(q);
     else if (!wedding) await tellCustomerBooked(q);
   } catch (e) {
     log.error("Proposal accepted, but the customer's confirmation failed", { err: e });

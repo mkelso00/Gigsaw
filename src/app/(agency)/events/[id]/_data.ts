@@ -5,12 +5,12 @@ import { contractStatusFor, contractSubject } from "@/lib/contracts";
 import { getSettings, prisma } from "@/lib/db";
 import { eventFormOptions } from "@/lib/event-options";
 import { daysBetween } from "@/lib/event-plan";
-import { eventInclude, eventMessageLog, eventTotals } from "@/lib/events";
+import { eventInclude, eventMessageLog, eventTotals, securedAtFor } from "@/lib/events";
 import { localDateKey } from "@/lib/time";
 
 /** Everything the wedding or event page shows, loaded in one place so the sections only render. */
 export async function loadEventPage(agencyId: string, id: string) {
-  const [e, settings, options, acts, tasks, log, payLinks, proposal] = await Promise.all([
+  const [e, settings, options, acts, tasks, log, payLinks, proposal, gates] = await Promise.all([
     prisma.event.findFirst({ where: { id, agencyId }, include: eventInclude }),
     getSettings(agencyId),
     eventFormOptions(agencyId),
@@ -24,6 +24,8 @@ export async function loadEventPage(agencyId: string, id: string) {
       orderBy: { answeredAt: "desc" },
       select: { id: true, number: true, version: true, answerName: true, answeredAt: true },
     }),
+    // When a wedding passed its gate (src/lib/secure-event.ts), which the automatic emails go by.
+    securedAtFor([id]),
   ]);
   if (!e) notFound();
   const sent = log.sent.get(id)!;
@@ -42,6 +44,8 @@ export async function loadEventPage(agencyId: string, id: string) {
   // A signed proposal is the agreement: once the customer has signed it the booking is locked in.
   const contractSigned = !!proposal || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
 
+  const gateAt = gates.get(id) ?? null;
+
   return {
     event: e,
     settings,
@@ -59,6 +63,7 @@ export async function loadEventPage(agencyId: string, id: string) {
     contract,
     contractType,
     contractSigned,
+    gateAt,
   };
 }
 

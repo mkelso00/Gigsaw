@@ -6,14 +6,14 @@ import { secureEventQuietly } from "@/lib/secure-event";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
-import { createBookingWithReference } from "@/lib/bookings";
+import { createBookingWithReference, needsAct } from "@/lib/bookings";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { findClashes } from "@/lib/clash-check";
-import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, NEEDS_ACT, type BookingStatus } from "@/lib/constants";
+import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
 import { defaultTasks, EVENT_STEPS, isEventMessage, parseExtraFields, planChanges, planRows, readPlanForm } from "@/lib/event-plan";
-import { eventInclude, markEventMessageSent, sendActDetails, sendEventStep, sendPlannerEmail } from "@/lib/events";
+import { eventInclude, markEventMessageSent, noActsWhy, sendActDetails, sendEventStep, sendPlannerEmail, unmarkEventMessageSent } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
 import { wants } from "@/lib/notify-prefs";
@@ -174,7 +174,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
     const sale = money(form, "sale", currency, "sale") ?? 0;
     const cost = money(form, "cost", currency, "cost");
     const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING") as BookingStatus;
-    if (!artist && NEEDS_ACT.includes(status)) throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}, or leave it Pending.`);
+    if (!artist && needsAct(status, true)) throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}, or leave it Pending or On hold.`);
     const schedule = buildSchedule(e.date, { arrive, setStart: start, setEnd: TIME.test(end) ? end : null }, e.timezone);
     if (artistId && !confirmed(form) && LIVE_STATUSES.includes(status)) {
       const warnings = await findClashes(
@@ -303,17 +303,32 @@ export async function sendPlannerNow(eventId: string, _: FormState): Promise<For
 
 /**
  * Send one step of the automatic emails now (the wedding page's "Send now"), e.g. for a last-minute booking:
- * it goes straight away, whatever the date, and is marked as sent so the automatic one doesn't go too.
+ * it goes straight away, whatever the date. It's marked as sent first, so the automatic run can't send it at
+ * the same moment; if there turns out to be nothing to send, the mark comes off again. "Send again" (the form's
+ * `again`, on a step already sent) sends it whatever; a plain Send now that finds it has just gone doesn't.
  */
-export async function sendEventStepNow(eventId: string, kind: string, _: FormState): Promise<FormState> {
+export async function sendEventStepNow(eventId: string, kind: string, _: FormState, form?: FormData): Promise<FormState> {
   const user = await requireStaff();
   return handleForm(async () => {
     await ownEvent(user, eventId);
     if (!isEventMessage(kind)) throw new FormError("Unknown email");
     const e = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: eventInclude });
-    const r = await sendEventStep(e, kind);
-    if (!r.sent) throw new FormError(r.why ?? "Nothing to send");
-    await markEventMessageSent(eventId, kind);
+    const marked = await markEventMessageSent(eventId, kind);
+    if (!marked && form?.get("again") !== "1") {
+      revalidatePath(`/events/${eventId}`);
+      return { ok: "It has just been sent." };
+    }
+    let r: Awaited<ReturnType<typeof sendEventStep>>;
+    try {
+      r = await sendEventStep(e, kind);
+    } catch (err) {
+      if (marked) await unmarkEventMessageSent(eventId, kind);
+      throw err;
+    }
+    if (!r.sent) {
+      if (marked) await unmarkEventMessageSent(eventId, kind);
+      throw new FormError(r.why ?? "Nothing to send");
+    }
     const step = EVENT_STEPS.find((s) => s.kind === kind)!;
     await logActivity(user, "EVENT", eventId, "sent an email now", step.label);
     revalidatePath(`/events/${eventId}`);
@@ -331,7 +346,7 @@ export async function sendPlanToActsNow(eventId: string, _: FormState): Promise<
     await ownEvent(user, eventId);
     const e = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: eventInclude });
     const n = await sendActDetails(e);
-    if (!n) throw new FormError("No acts to send to yet");
+    if (!n) throw new FormError(noActsWhy(e));
     await logActivity(user, "EVENT", eventId, "sent the plan to the acts");
     revalidatePath(`/events/${eventId}`);
     return { ok: `Plan sent to the acts (${n} ${n === 1 ? "person" : "people"}).` };

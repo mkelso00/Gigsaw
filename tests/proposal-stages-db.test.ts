@@ -318,7 +318,7 @@ describeDb("proposal reminders, answers and the wedding's secure gate (database)
     const b = await prisma.booking.create({
       data: {
         agencyId,
-        reference: `ST-${stamp}`,
+        reference: `ST-${i}`,
         eventId: event.id,
         artistId: act.id,
         promoterId: customer.id,
@@ -346,13 +346,20 @@ describeDb("proposal reminders, answers and the wedding's secure gate (database)
     );
   };
 
-  it("books a wedding when its contract is signed and the deposit is already in", async () => {
+  it("books a wedding when its contract is signed and the deposit is already in: Pending for the act's offer, and one email to the couple", async () => {
     const { customer, act, event, b } = await weddingWithContract({ status: "HOLD", depositMinor: 30_000, paidMinor: 30_000 });
     state.sent = [];
     expect(await sign(event.id, customer.email)).toMatch(/^REDIRECT \/c\//);
-    expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("CONFIRMED");
-    expect(to(act.email)).toHaveLength(1);
-    expect(to(customer.email).filter((m) => m.subject === `You're booked: ${event.name}`)).toHaveLength(1);
+    // Signing books it, as before weddings had a gate: Pending until the act is offered it and confirms.
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("PENDING");
+    expect(to(act.email)).toHaveLength(0);
+    // One email: "you're booked", thanking them for signing, with their signed copy. Not "approved" as well.
+    const mails = to(customer.email).filter((m) => !m.subject.startsWith("Please sign"));
+    expect(mails.map((m) => m.subject)).toEqual([`You're booked: ${event.name}`]);
+    expect(mails[0].email.intro).toContain("thank you for signing your contract. Your deposit is in too, so");
+    expect(mails[0].email.intro).not.toContain("proposal");
+    expect(JSON.stringify(mails[0])).toContain("See your signed copy");
+    expect(await prisma.reminder.count({ where: { kind: "EV_GATE", recipient: `event:${event.id}` } })).toBe(1);
   });
 
   it("holds a wedding whose contract is signed until the deposit is in, then books it", async () => {
@@ -361,13 +368,124 @@ describeDb("proposal reminders, answers and the wedding's secure gate (database)
     await sign(event.id, customer.email);
     expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("HOLD");
     expect(to(act.email)).toHaveLength(0);
-    expect(to(customer.email).filter((m) => m.subject.startsWith("You're booked"))).toHaveLength(0);
+    // Signed, not booked: the deposit secures the date.
+    const signed = to(customer.email).filter((m) => !m.subject.startsWith("Please sign"));
+    expect(signed.map((m) => m.subject)).toEqual(["Signed: your contract with Suave Test Music"]);
+    expect(signed[0].email.title).toBe("Thank you for signing");
+    expect(signed[0].email.intro).toContain("your deposit secures it");
+    expect(JSON.stringify(signed[0])).not.toMatch(/approved|booked with/i);
 
     const { recordEventPayment } = await import("@/actions/events");
     await recordEventPayment(event.id, undefined as never, form({ amount: "300", kind: "DEPOSIT", receipt: "on" }));
-    expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("CONFIRMED");
-    expect(to(act.email)).toHaveLength(1);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("PENDING");
+    expect(to(act.email)).toHaveLength(0);
     expect(to(customer.email).filter((m) => m.subject === `You're booked: ${event.name}`)).toHaveLength(1);
     expect(to(customer.email).filter((m) => m.subject.startsWith("Payment received"))).toHaveLength(0);
+  });
+
+  // ---------- Only what the journey held ----------
+
+  it("books only the gigs the journey held: a gig staff pencilled in later stays On hold, and a later payment sends nothing more", async () => {
+    const { q, contact, act } = await makeProposal({ depositMinor: 50_000 });
+    const done = await accept(q.token!, q.id);
+    const [held] = await prisma.booking.findMany({ where: { eventId: done.eventId } });
+    expect(await prisma.reminder.count({ where: { kind: "EV_HELD", recipient: `booking:${held.id}` } })).toBe(1);
+    // Staff pencil in another act for the evening, On hold while they ask around.
+    const pencil = await prisma.booking.create({
+      data: {
+        agencyId,
+        reference: `PEN-${++n}`,
+        eventId: done.eventId,
+        artistId: act.id,
+        status: "HOLD",
+        arriveBy: held.arriveBy,
+        setStart: held.setStart,
+        setEnd: held.setEnd,
+        feeMinor: 50_000,
+      },
+    });
+    state.sent = [];
+    const { addPayment } = await import("@/actions/bookings");
+    await addPayment(held.id, undefined as never, form({ direction: "IN", kind: "DEPOSIT", amount: "500", receipt: "on" }));
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: held.id } })).status).toBe("CONFIRMED");
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: pencil.id } })).status).toBe("HOLD");
+    expect(to(act.email)).toHaveLength(1);
+    expect(to(contact.email).map((m) => m.subject)).toEqual([`You're booked: ${q.title}`]);
+    // The pencilled act isn't listed as booked.
+    expect(to(contact.email)[0].email.rows!.filter(([k]) => k === act.name)).toHaveLength(1);
+    expect(await prisma.reminder.count({ where: { kind: "EV_HELD", recipient: `booking:${held.id}` } })).toBe(0);
+
+    // A later payment: still nothing for the pencilled gig, and no second "you're booked".
+    state.sent = [];
+    await addPayment(held.id, undefined as never, form({ direction: "IN", kind: "BALANCE", amount: "100", receipt: "on" }));
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: pencil.id } })).status).toBe("HOLD");
+    expect(to(act.email)).toHaveLength(0);
+    expect(to(contact.email).map((m) => m.subject)).toEqual(["Payment received: £100.00"]);
+    expect(await prisma.reminder.count({ where: { kind: "EV_SECURED", recipient: `event:${done.eventId}` } })).toBe(1);
+  });
+
+  it("doesn't count money the couple paid straight to an act as the business's deposit", async () => {
+    const { DIRECT_NOTE } = await import("@/lib/pay-plan");
+    const { secureEvent } = await import("@/lib/secure-event");
+    const { q, contact } = await makeProposal({ depositMinor: 50_000 });
+    const done = await accept(q.token!, q.id);
+    const [b] = await prisma.booking.findMany({ where: { eventId: done.eventId } });
+    await prisma.payment.create({ data: { bookingId: b.id, direction: "IN", kind: "BALANCE", amountMinor: 110_000, paidAt: new Date(), note: DIRECT_NOTE } });
+    state.sent = [];
+    const r = await secureEvent(done.eventId);
+    expect(r.secured).toBe(false);
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("HOLD");
+    expect(to(contact.email)).toHaveLength(0);
+    expect(await prisma.reminder.count({ where: { kind: "EV_GATE", recipient: `event:${done.eventId}` } })).toBe(0);
+    // The deposit itself, paid to the business: booked.
+    await prisma.payment.create({ data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: 50_000, paidAt: new Date() } });
+    expect((await secureEvent(done.eventId)).secured).toBe(true);
+  });
+
+  it("books the wedding when Stripe sends a card payment again after the first delivery stopped short", async () => {
+    const { recordCardPayment } = await import("@/lib/card-payments");
+    const { q, contact, act } = await makeProposal({ depositMinor: 50_000 });
+    const done = await accept(q.token!, q.id);
+    const [b] = await prisma.booking.findMany({ where: { eventId: done.eventId } });
+    const accountId = `acct_test_${Date.now()}`;
+    await prisma.agency.update({ where: { id: agencyId }, data: { stripeAccountId: accountId } });
+    try {
+      const link = await prisma.payLink.create({ data: { agencyId, eventId: done.eventId, kind: "DEPOSIT", token: randomBytes(18).toString("base64url") } });
+      const session = {
+        id: `cs_test_${Date.now()}`,
+        payment_status: "paid",
+        amount_total: 50_000,
+        currency: "gbp",
+        payment_intent: `pi_test_${Date.now()}`,
+        customer_details: { email: contact.email },
+        metadata: { gigsaw_link: link.id, gigsaw_kind: "DEPOSIT" },
+      };
+      // The first delivery logged the payment, then stopped before the gate (as if the server restarted).
+      const card = await prisma.cardPayment.create({
+        data: {
+          agencyId,
+          payLinkId: link.id,
+          stripeSessionId: session.id,
+          stripeAccountId: accountId,
+          kind: "DEPOSIT",
+          amountMinor: 50_000,
+          currency: "GBP",
+          paidAt: new Date(),
+        },
+      });
+      await prisma.payment.create({
+        data: { bookingId: b.id, direction: "IN", kind: "DEPOSIT", amountMinor: 50_000, paidAt: new Date(), note: "Paid by card", cardPaymentId: card.id },
+      });
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("HOLD");
+      state.sent = [];
+      // Stripe tries again: already logged, so nothing is logged twice, but the wedding is booked.
+      expect(await recordCardPayment(session, accountId)).toBe("duplicate");
+      expect(await prisma.payment.count({ where: { bookingId: b.id } })).toBe(1);
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("CONFIRMED");
+      expect(to(act.email)).toHaveLength(1);
+      expect(to(contact.email).map((m) => m.subject)).toEqual([`You're booked: ${q.title}`]);
+    } finally {
+      await prisma.agency.update({ where: { id: agencyId }, data: { stripeAccountId: null } });
+    }
   });
 });

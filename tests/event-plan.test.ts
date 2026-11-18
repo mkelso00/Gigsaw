@@ -7,6 +7,9 @@ import {
   eventMessagesDue,
   extraFieldsFromText,
   isSecured,
+  JOURNEY_LIVE,
+  journeySecured,
+  missedAtLaunch,
   JOURNEY_LOOKAHEAD_DAYS,
   MAX_EXTRA_FIELDS,
   parseExtraFields,
@@ -21,7 +24,7 @@ import {
 } from "@/lib/event-plan";
 
 describe("defaultTasks", () => {
-  it("counts due dates back from the event day: the planner 4 weeks before, the balance 3 months (13 weeks) before", () => {
+  it("counts due dates back from the event day: the planner 4 weeks before, the balance 3 calendar months before", () => {
     const tasks = defaultTasks("WEDDING", "2027-06-12");
     expect(tasks.find((t) => t.key === "PLANNER")?.dueDate).toBe("2027-05-15");
     expect(tasks.find((t) => t.key === "BALANCE")?.dueDate).toBe("2027-03-12");
@@ -40,10 +43,10 @@ describe("eventMessagesDue: the wedding journey", () => {
     expect(eventMessagesDue(190)).toEqual([]);
     expect(eventMessagesDue(183)).toEqual([]);
     expect(eventMessagesDue(182)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
-    expect(eventMessagesDue(92)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
+    expect(eventMessagesDue(93)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
   });
   it("at 3 months: the balance, a planner nudge and the coordinator's summary, and nothing to the acts", () => {
-    expect(eventMessagesDue(91)).toEqual(["BALANCE_REMINDER", "PLANNER_CHASE", "TEAM_THREE_MONTHS"]);
+    expect(eventMessagesDue(92)).toEqual(["BALANCE_REMINDER", "PLANNER_CHASE", "TEAM_THREE_MONTHS"]);
     expect(eventMessagesDue(29)).toEqual(["BALANCE_REMINDER", "PLANNER_CHASE", "TEAM_THREE_MONTHS"]);
     expect(eventMessagesDue(60)).not.toContain("ACT_DETAILS");
   });
@@ -68,7 +71,7 @@ describe("eventMessagesDue: the wedding journey", () => {
     }
     // Booked 2 months out: only the 3-month step is live, never the 6-month one.
     expect(eventMessagesDue(60)).not.toContain("PLANNER_REQUEST");
-    expect(stepWindow("PLANNER_REQUEST")).toEqual({ from: 182, to: 92 });
+    expect(stepWindow("PLANNER_REQUEST")).toEqual({ from: 182, to: 93 });
     expect(stepWindow("THANKS")).toEqual({ from: -1, to: -7 });
     // The run looks far enough ahead for the first stage.
     expect(JOURNEY_LOOKAHEAD_DAYS).toBeGreaterThanOrEqual(stepWindow("PLANNER_REQUEST").from);
@@ -82,6 +85,55 @@ describe("isSecured", () => {
     expect(isSecured([{ status: "HOLD" }, { status: "CONFIRMED" }])).toBe(true);
     expect(isSecured([{ status: "PENDING" }])).toBe(true);
     expect(isSecured([{ status: "SETTLED" }])).toBe(true);
+  });
+});
+
+describe("the 3-month stage and the balance date", () => {
+  it("opens on or before the balance date (3 calendar months before) for every day of the year", () => {
+    for (let d = 0; d < 800; d++) {
+      const date = new Date(Date.UTC(2027, 0, 1) + d * 86_400_000).toISOString().slice(0, 10);
+      const due = daysBetween(balanceDueDate(date), date);
+      expect(due).toBeGreaterThanOrEqual(89);
+      expect(stageOn(due)).toBe("THREE_MONTHS");
+    }
+    // 14 August 2027: the balance is due 14 May, 92 days before, and the 3-month emails go that day.
+    expect(balanceDueDate("2027-08-14")).toBe("2027-05-14");
+    expect(stageOn(daysBetween("2027-05-14", "2027-08-14"))).toBe("THREE_MONTHS");
+    expect(stageOn(daysBetween("2027-05-13", "2027-08-14"))).toBe("SIX_MONTHS");
+  });
+});
+
+describe("journeySecured: whether the schedule may go", () => {
+  const after = new Date(JOURNEY_LIVE.getTime() + 86_400_000);
+  const before = new Date(JOURNEY_LIVE.getTime() - 86_400_000);
+  const wedding = (o: { createdAt: Date; gateAt?: Date | null; statuses: string[] }) => ({
+    type: "WEDDING",
+    createdAt: o.createdAt,
+    gateAt: o.gateAt ?? null,
+    bookings: o.statuses.map((status) => ({ status })),
+  });
+  it("a wedding needs the gate: a Pending or Confirmed gig alone doesn't do", () => {
+    expect(journeySecured(wedding({ createdAt: after, statuses: ["PENDING"] }))).toBe(false);
+    expect(journeySecured(wedding({ createdAt: after, statuses: ["CONFIRMED"] }), "ACT_DETAILS")).toBe(false);
+    expect(journeySecured(wedding({ createdAt: after, statuses: ["HOLD"], gateAt: after }))).toBe(true);
+    expect(journeySecured(wedding({ createdAt: after, statuses: ["HOLD"], gateAt: after }), "ACT_DETAILS")).toBe(true);
+  });
+  it("a wedding from before the journey counts as before, and still gets its thank-you with only On hold gigs", () => {
+    expect(journeySecured(wedding({ createdAt: before, statuses: ["PENDING"] }))).toBe(true);
+    expect(journeySecured(wedding({ createdAt: before, statuses: ["HOLD"] }))).toBe(false);
+    expect(journeySecured(wedding({ createdAt: before, statuses: ["HOLD"] }), "THANKS")).toBe(true);
+    expect(journeySecured(wedding({ createdAt: before, statuses: [] }), "THANKS")).toBe(false);
+  });
+  it("other events keep the status test, and their acts' details don't wait", () => {
+    const party = { type: "PRIVATE", createdAt: after, gateAt: null, bookings: [{ status: "HOLD" }] };
+    expect(journeySecured(party)).toBe(false);
+    expect(journeySecured(party, "ACT_DETAILS")).toBe(true);
+    expect(journeySecured({ ...party, bookings: [{ status: "PENDING" }] })).toBe(true);
+  });
+  it("counts what was missed at the start from when a wedding was secured, if it has been", () => {
+    const old = { createdAt: new Date("2026-10-01T10:00:00Z"), date: "2027-04-07" }; // in the 6-month stage at the start
+    expect(missedAtLaunch(old, "PLANNER_REQUEST")).toBe(true);
+    expect(missedAtLaunch({ ...old, gateAt: after }, "PLANNER_REQUEST")).toBe(false);
   });
 });
 

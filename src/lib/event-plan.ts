@@ -5,9 +5,10 @@ import { addDaysToKey } from "./time";
 
 export type TaskKey = "CONTRACT" | "DEPOSIT" | "PLANNER" | "BALANCE" | "ITINERARY" | "THANKS";
 
-// The business's terms: the balance is due 3 months (13 weeks) before the day, and the running order
-// and songs (the planner) at least 4 weeks before.
-export const BALANCE_DUE_DAYS = 91;
+// The business's terms: the balance is due 3 calendar months before the day (balanceDueDate), and the
+// running order and songs (the planner) at least 4 weeks before. Three calendar months are 89 to 92 days,
+// so the 3-month stage of the journey opens 92 days out: on or before the balance date for every wedding.
+export const BALANCE_DUE_DAYS = 92;
 export const PLANNER_DUE_DAYS = 28;
 
 /** A day key a number of calendar months earlier (31 May less 3 months is 28 Feb). */
@@ -22,7 +23,7 @@ export function monthsBefore(key: string, months: number) {
 
 /**
  * The day the balance is due: 3 calendar months before the event, as the terms say (14 August: 14 May).
- * Booked later than that, it's due on booking. The 3-month emails start 13 weeks out, on or just before it.
+ * Booked later than that, it's due on booking. The 3-month emails start BALANCE_DUE_DAYS out, on the day or a few days before it.
  */
 export const balanceDueDate = (date: string) => monthsBefore(date, 3);
 /** The day the running order and songs are due: 4 weeks before the event. */
@@ -139,6 +140,57 @@ export const SECURED_STATUSES = ["PENDING", "AWAITING", "CONFIRMED", "SETTLED"] 
 /** Whether a wedding or event is secured: at least one of its gigs is past On hold and Enquiry (and not cancelled). */
 export function isSecured(bookings: { status: string }[]) {
   return bookings.some((b) => (SECURED_STATUSES as readonly string[]).includes(b.status));
+}
+
+/**
+ * When the 6-month, 3-month, 4-week and 1-week emails, and the proposal reminders, started. A wedding already
+ * in the diary then only gets a stage that opens after it, so switching the schedule on doesn't send everyone
+ * the stage they're part-way through all at once; staff can still press Send now.
+ */
+export const JOURNEY_LIVE = new Date("2026-11-18T12:00:00Z");
+
+/**
+ * The Reminder row (this kind, recipient "event:<id>", key "") that src/lib/secure-event.ts claims when a
+ * wedding passes its gate: the contract agreed and the deposit in. Its createdAt is when it was secured.
+ */
+export const GATE_KIND = "EV_GATE";
+
+/** What the schedule needs to know to tell whether a wedding or event is secured. */
+export type JourneyFacts = {
+  type: string;
+  createdAt: Date;
+  /** When the wedding passed the gate (its GATE_KIND row), if it has. */
+  gateAt: Date | null;
+  /** Its gigs (archived ones left out). */
+  bookings: { status: string }[];
+};
+
+/**
+ * Whether a step of the schedule may go for this wedding or event (no kind: whether it's secured at all).
+ *  - A wedding is secured once it has passed the gate (GATE_KIND), the same test that books it. A Pending
+ *    gig staff added doesn't count: the couple haven't agreed and paid.
+ *  - A wedding made before the journey started (JOURNEY_LIVE) that has no gate row counts as secured with
+ *    a gig past On hold, as before. Its thank-you also goes when its gigs are only On hold: staff often
+ *    pencilled a whole wedding in that way, and the thank-you always went before.
+ *  - Other events keep the status test, and their acts' final details never waited for it.
+ */
+export function journeySecured(f: JourneyFacts, kind?: EventMessage) {
+  if (f.type !== "WEDDING") return kind === "ACT_DETAILS" || isSecured(f.bookings);
+  if (f.gateAt) return true;
+  if (f.createdAt >= JOURNEY_LIVE) return false;
+  if (kind === "THANKS") return f.bookings.some((b) => b.status === "HOLD") || isSecured(f.bookings);
+  return isSecured(f.bookings);
+}
+
+/**
+ * Whether a step fell due before the schedule started, so it isn't sent by itself (staff can still Send now).
+ * Counted from when the wedding was secured (its gate row) when it has one, as a wedding made at enquiry
+ * time and booked after the start is new to the schedule; otherwise from when it was made. The act details
+ * and thank-you, which were sent before, carry on as they were.
+ */
+export function missedAtLaunch(e: { createdAt: Date; gateAt?: Date | null; date: string }, kind: EventMessage) {
+  if (kind === "ACT_DETAILS" || kind === "THANKS" || (e.gateAt ?? e.createdAt) >= JOURNEY_LIVE) return false;
+  return addDaysToKey(e.date, -stepWindow(kind).from) < JOURNEY_LIVE.toISOString().slice(0, 10);
 }
 
 /** "6 months", "9 weeks", "5 days": how long until the event, for emails to staff. */

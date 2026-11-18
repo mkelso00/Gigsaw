@@ -126,19 +126,28 @@ export async function createBookingsWithReferences(agencyId: string, rows: Omit<
 export const isReferenceClash = (e: unknown) => (e as { code?: string }).code === "P2002";
 
 /**
+ * Whether a gig in this status must have an act. A wedding or event's gig can be On hold without one: a
+ * proposal line with "act to be confirmed" is held until the wedding is booked, and staff must be able to
+ * edit it meanwhile without making it Pending, as if it were booked already.
+ */
+export function needsAct(status: string, inEvent: boolean) {
+  return NEEDS_ACT.includes(status as (typeof NEEDS_ACT)[number]) && !(inEvent && status === "HOLD");
+}
+
+/**
  * Turn the booking form into database fields.
  * Times are entered as wall-clock times in the venue's time zone. The date is the day of the
  * call time. Each later time that is earlier on the clock than the one before it rolls into
  * the next day (e.g. arrive 22:00, on stage 01:00).
  * Every linked record (artist, venue, promoter, agent) must belong to the same agency.
  */
-export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string) {
-  // The act can be left empty while the gig is being set up (Pending).
+export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string, opts: { inEvent?: boolean } = {}) {
+  // The act can be left empty while the gig is being set up (Pending), or kept On hold for a wedding or event.
   const artistId = optStr(form, "artistId");
   const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId } }) : null;
   if (artistId && !artist) throw new FormError("That act no longer exists");
   const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING");
-  if (!artist && NEEDS_ACT.includes(status)) {
+  if (!artist && needsAct(status, !!opts.inEvent)) {
     throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}. Leave it Pending until you've picked one.`);
   }
 
