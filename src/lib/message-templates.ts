@@ -203,12 +203,57 @@ export const TEMPLATES: TemplateDef[] = [
     key: "QUOTE_ACCEPTED",
     group: "CUSTOMERS",
     label: "Proposal accepted: you're booked",
-    hint: "Sent to the customer when they accept a proposal, listing what's booked, the deposit and a link to pay it by card if card payments are set up.",
+    hint: "Sent to the customer when they accept a proposal, listing what's booked, the deposit and a link to pay it by card if card payments are set up. Not for weddings: a couple get “Proposal accepted: deposit to pay” and then “Wedding booked”.",
     example: {
       subject: "You're booked: {event}",
       intro: "Hi {first_name}, thank you for accepting your proposal. {event} on {date} is booked with {business}.",
     },
     placeholders: ["first_name", "event", "date", "total", "business"],
+  },
+  {
+    key: "QUOTE_ACCEPTED_HELD",
+    group: "CUSTOMERS",
+    label: "Proposal accepted: deposit to pay",
+    hint: "Sent to a couple when they accept a wedding proposal that has a deposit. Their date is held for them, and it's booked once the deposit is in. The deposit and a link to pay it by card (if card payments are set up) are always added.",
+    example: {
+      subject: "Thanks for accepting: {event}",
+      intro:
+        "Hi {first_name}, thank you for accepting your proposal for {event} on {date}. Your date is held for you. To book it, please pay your deposit of {deposit}.",
+    },
+    placeholders: ["first_name", "event", "date", "total", "deposit", "business"],
+  },
+  {
+    key: "EVENT_SECURED",
+    group: "CUSTOMERS",
+    label: "Wedding booked",
+    hint: "Sent to a couple once their wedding is booked: the proposal or contract is agreed and the deposit is in (or straight away when there's no deposit). Lists what's booked, what's left to pay and when the balance is due, three months before the wedding. Sent once.",
+    example: {
+      subject: "You're booked: {event}",
+      intro: "Hi {first_name}, thank you: your deposit has arrived, so {event} on {date} is booked with {business}.",
+    },
+    placeholders: EVENT,
+  },
+  {
+    key: "QUOTE_CHASE",
+    group: "CUSTOMERS",
+    label: "Proposal reminder",
+    hint: "A gentle reminder to a customer who hasn't answered their proposal: 3 days after it's sent, and again after 7. Sent between 9am and 8pm. The link to their proposal is always added.",
+    example: {
+      subject: "A quick reminder: your proposal for {event}",
+      intro: "Hi {first_name}, just checking you've seen your proposal for {event} on {date}. You can read it and sign it online in a minute.",
+    },
+    placeholders: ["first_name", "event", "date", "total", "valid_until", "business"],
+  },
+  {
+    key: "QUOTE_DECLINED",
+    group: "CUSTOMERS",
+    label: "Proposal declined: thank you",
+    hint: "Sent to a customer when they decline a proposal, thanking them for their interest.",
+    example: {
+      subject: "Thank you for considering us",
+      intro: "Hi {first_name}, thank you for letting us know, and for considering {business} for {event}. If anything changes, just reply to this email.",
+    },
+    placeholders: ["first_name", "event", "date", "business"],
   },
   {
     key: "NEW_ACT",

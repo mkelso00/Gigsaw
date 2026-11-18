@@ -2,6 +2,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { receiptQuietly } from "@/lib/receipts";
+import { secureEventQuietly } from "@/lib/secure-event";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
@@ -250,7 +251,9 @@ export async function recordEventPayment(eventId: string, _: FormState, form: Fo
     }
     await prisma.payment.createMany({ data: parts });
     await logActivity(user, "EVENT", eventId, "recorded a payment", (total / 100).toFixed(2));
-    if (str(form, "receipt") === "on") await receiptQuietly({ eventId, amountMinor: total });
+    // The deposit that books a wedding: the couple's "you're booked" email covers the receipt (src/lib/secure-event.ts).
+    const secured = await secureEventQuietly(eventId);
+    if (str(form, "receipt") === "on" && !secured.told) await receiptQuietly({ eventId, amountMinor: total });
     revalidatePath("/", "layout");
     return { ok: "Payment recorded and shared across the acts." };
   });

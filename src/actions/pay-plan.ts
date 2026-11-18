@@ -1,6 +1,7 @@
 "use server";
 
 import { receiptQuietly } from "@/lib/receipts";
+import { secureEventQuietly } from "@/lib/secure-event";
 import { revalidatePath } from "next/cache";
 import { syncActInvoicePaid } from "@/lib/act-invoices";
 import { requireStaff } from "@/lib/auth";
@@ -49,7 +50,9 @@ export async function markPaidDirect(bookingId: string, _: FormState): Promise<F
       prisma.payment.create({ data: { bookingId: b.id, direction: "OUT", kind: "SETTLEMENT", amountMinor: left, paidAt, note: DIRECT_NOTE } }),
     ]);
     await syncActInvoicePaid([b.id]);
-    await receiptQuietly({ eventId: b.event.id, amountMinor: left, paidTo: b.artist?.name ?? "the act" });
+    // Money in from the couple: it may be what books the wedding (src/lib/secure-event.ts).
+    const secured = await secureEventQuietly(b.event.id);
+    if (!secured.told) await receiptQuietly({ eventId: b.event.id, amountMinor: left, paidTo: b.artist?.name ?? "the act" });
     await logActivity(user, "BOOKING", b.id, `couple paid ${b.artist?.name ?? "the act"} direct ${how}`, formatMoney(left, b.currency));
     revalidatePath(`/events/${b.event.id}`);
     revalidatePath(`/bookings/${b.id}`);

@@ -17,6 +17,7 @@ import {
   canResend,
   canSend,
   eventKindFor,
+  holdsUntilDeposit,
   lineFee,
   lineTimes,
   lineTitle,
@@ -29,6 +30,7 @@ import {
   tokenOpens,
 } from "./proposals";
 import { buildSchedule } from "./schedule";
+import { secureEvent } from "./secure-event";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 import { log } from "@/server/log";
 
@@ -342,7 +344,8 @@ export type ProposalAnswer = { name: string; note: string; ip: string; agent: st
 /**
  * The customer accepts. In one transaction: claim the proposal (only one still out with them, not
  * past its date, not replaced), then make or reuse the enquiry's wedding or event, one booking per
- * line (Confirmed with an act, Pending for "act to be confirmed"), and mark the enquiry dealt with.
+ * line (Confirmed with an act, Pending for "act to be confirmed"; a wedding with a deposit is on Hold
+ * until the deposit is in, see holdsUntilDeposit), and mark the enquiry dealt with.
  * Returns null when there was nothing to claim (e.g. the second of two taps).
  */
 export async function acceptProposal(token: string, answer: ProposalAnswer) {
@@ -413,11 +416,14 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
           totals.lines.map((d) => d.totalDueMinor),
         );
         const highest = await highestReference(q.agencyId, tx);
+        // A wedding with a deposit is only booked once the deposit is in (the couple's terms): until then its
+        // gigs are on Hold, the date kept for them, and the acts aren't told (src/lib/secure-event.ts).
+        const held = holdsUntilDeposit(q);
         const made: { id: string; reference: string; status: string }[] = [];
         for (const [i, l] of q.lines.entries()) {
           const tz = l.venue?.timezone ?? q.timezone;
           const schedule = buildSchedule(l.date, { arrive: l.arriveTime || l.startTime, setStart: l.startTime, setEnd: l.endTime || null }, tz);
-          const status = l.artistId ? "CONFIRMED" : "PENDING";
+          const status = held ? "HOLD" : l.artistId ? "CONFIRMED" : "PENDING";
           const elsewhere = !l.venueId && l.place && l.place !== where.venueText ? `Where: ${l.place}` : "";
           const b = await tx.booking.create({
             data: {
@@ -482,7 +488,7 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
               entity: "BOOKING",
               entityId: b.id,
               action: `booked from proposal ${ref}`,
-              detail: b.status === "CONFIRMED" ? "confirmed" : "pending: act to be confirmed",
+              detail: b.status === "CONFIRMED" ? "confirmed" : b.status === "HOLD" ? "on hold until the deposit is paid" : "pending: act to be confirmed",
               createdAt: new Date(now.getTime() + 2 + i),
             })),
             ...(q.enquiry?.bookingId
@@ -537,12 +543,18 @@ export async function depositLinkFor(proposalId: string) {
  * After an accept has committed: each act hears they're booked (their own times and fee only,
  * through the usual confirmation), the customer gets their confirmation (with the deposit link if
  * there is one) and the lead agent hears. Each part is tried on its own, so one failure doesn't stop the rest.
+ *
+ * A wedding goes through the gate (src/lib/secure-event.ts). With a deposit, its gigs are on Hold: the
+ * acts aren't told yet, and the couple are thanked and asked for the deposit; the gate books it when the
+ * deposit arrives. With no deposit it's booked now, and the gate sends the couple's "you're booked" email.
  */
 export async function afterAccepted(proposalId: string) {
   const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: proposalInclude });
   if (!q || q.status !== "ACCEPTED") return;
-  // Unticked on the proposal: the bookings are made, but staff tell the acts themselves.
-  for (const l of q.tellActs ? q.lines : []) {
+  const wedding = eventKindFor(q.eventType) === "WEDDING";
+  const held = holdsUntilDeposit(q);
+  // Unticked on the proposal: the bookings are made, but staff tell the acts themselves. Held gigs: the gate tells them.
+  for (const l of q.tellActs && !held ? q.lines : []) {
     if (!l.bookingId || !l.artistId) continue;
     try {
       await onConfirmed(l.bookingId);
@@ -550,8 +562,17 @@ export async function afterAccepted(proposalId: string) {
       log.error("Proposal accepted, but telling an act failed", { err: e });
     }
   }
+  let told = false;
+  if (wedding && q.eventId) {
+    try {
+      told = (await secureEvent(q.eventId, { announce: !held })).told;
+    } catch (e) {
+      log.error("Proposal accepted, but checking whether the wedding is booked failed", { err: e });
+    }
+  }
   try {
-    await tellCustomerBooked(q);
+    if (held && !told) await tellCustomerHeld(q);
+    else if (!wedding) await tellCustomerBooked(q);
   } catch (e) {
     log.error("Proposal accepted, but the customer's confirmation failed", { err: e });
   }
@@ -562,14 +583,163 @@ export async function afterAccepted(proposalId: string) {
   }
 }
 
+/** After a decline has committed: the team hears, and the customer is thanked for considering us. */
 export async function afterDeclined(proposalId: string) {
   const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: proposalInclude });
   if (!q || q.status !== "DECLINED") return;
+  try {
+    await tellCustomerDeclined(q);
+  } catch (e) {
+    log.error("Proposal declined, but thanking the customer failed", { err: e });
+  }
   try {
     await tellTeam(q, "DECLINED");
   } catch (e) {
     log.error("Proposal declined, but telling the team failed", { err: e });
   }
+}
+
+/** Where the customer's emails about a proposal go: the address it was sent to, or the customer's own. */
+const customerEmailOf = (q: FullProposal) => q.sentTo || q.contact?.email || "";
+const agentOf = (q: Pick<FullProposal, "agentId">) =>
+  q.agentId ? prisma.user.findUnique({ where: { id: q.agentId }, select: { email: true, name: true } }) : Promise.resolve(null);
+
+/**
+ * A wedding accepted with a deposit to pay: thank you, your date is held for you, and it's booked once the
+ * deposit is in. With the deposit's "Pay now" link when card payments are set up.
+ */
+async function tellCustomerHeld(q: FullProposal) {
+  const to = customerEmailOf(q);
+  if (!isEmail(to)) return;
+  const brand = brandOf(q);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
+  const m = (x: number) => formatMoney(x, q.currency);
+  const firstDate = q.lines.map((l) => l.date).sort()[0];
+  const name = firstName(q.answerName || q.contact?.name || "");
+  const deposit = m(q.depositMinor);
+  const w = messageFor(q.agency.settings?.messageTemplates, "QUOTE_ACCEPTED_HELD", {
+    first_name: name,
+    event: q.title,
+    date: formatDay(firstDate),
+    total: m(t.totalMinor),
+    deposit,
+    business: brand,
+  });
+  if (!w.on) return;
+  const link = await depositLinkFor(q.id);
+  const agent = await agentOf(q);
+  const by = q.depositDue ? ` by ${formatDay(q.depositDue)}` : "";
+  await sendEmail({
+    kind: "QUOTE",
+    agencyId: q.agencyId,
+    to,
+    replyTo: agent?.email || q.agency.settings?.agencyEmail,
+    subject: w.subject ?? `Thanks for accepting: ${q.title}`,
+    email: {
+      brand,
+      preheader: `Your date is held for you. Pay your deposit of ${deposit} to book it.`,
+      title: "Thanks for accepting",
+      highlight: { label: "Held for you", value: `${q.title}, ${formatDay(firstDate)}` },
+      intro:
+        w.intro ??
+        `Hi ${name}, thank you for accepting your proposal for ${q.title} on ${formatDay(firstDate)}. Your date is held for you. The next step is your deposit of ${deposit}${by}: once it's in, you're booked and we'll confirm everything with you.`,
+      rows: [
+        ...q.lines.map(
+          (l) => [lineTitle(l), `${formatDay(l.date)}, ${lineTimes(l).toLowerCase()}${linePlace(l) ? `\n${linePlace(l)}` : ""}`] as [string, string],
+        ),
+        ["Total", m(t.totalMinor)],
+        ["Deposit to pay", `${deposit}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`],
+      ],
+      cta: link ? { label: `Pay your deposit of ${deposit}`, url: payUrl(link.token) } : undefined,
+      outro: link
+        ? `Any questions, just reply to this email to reach ${agent?.name ?? brand}.`
+        : `We'll send you the details to pay your deposit. Any questions, just reply to this email to reach ${agent?.name ?? brand}.`,
+    },
+  });
+}
+
+/** The customer declined: a warm thank you for considering us, and the door left open. */
+async function tellCustomerDeclined(q: FullProposal) {
+  const to = customerEmailOf(q);
+  if (!isEmail(to)) return;
+  const brand = brandOf(q);
+  const firstDate = q.lines.map((l) => l.date).sort()[0];
+  const name = firstName(q.contact?.name || "");
+  const w = messageFor(q.agency.settings?.messageTemplates, "QUOTE_DECLINED", {
+    first_name: name,
+    event: q.title,
+    date: firstDate ? formatDay(firstDate) : "",
+    business: brand,
+  });
+  if (!w.on) return;
+  const agent = await agentOf(q);
+  await sendEmail({
+    kind: "QUOTE",
+    agencyId: q.agencyId,
+    to,
+    replyTo: agent?.email || q.agency.settings?.agencyEmail,
+    subject: w.subject ?? `Thank you for considering ${brand}`,
+    email: {
+      brand,
+      title: "Thank you for your interest",
+      intro:
+        w.intro ??
+        `Hi${name ? ` ${name}` : ""}, thank you for letting us know about your proposal for ${q.title}, and for considering ${brand}. It was lovely to hear about your plans.`,
+      outro: `If anything changes, or you'd like us to put together something different, just reply to this email to reach ${agent?.name ?? brand}. We wish you a wonderful day.`,
+    },
+  });
+}
+
+/** Days after sending that a customer who hasn't answered gets a reminder. */
+export const CHASE_DAYS = [3, 7] as const;
+export type ChaseDay = (typeof CHASE_DAYS)[number];
+
+/** Remind the customer about a proposal they haven't answered yet (the scheduler's proposal reminders). */
+export async function sendProposalChase(q: FullProposal, day: ChaseDay) {
+  const to = customerEmailOf(q);
+  if (!isEmail(to) || !q.token) return false;
+  const brand = brandOf(q);
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
+  const m = (x: number) => formatMoney(x, q.currency);
+  const firstDate = q.lines.map((l) => l.date).sort()[0];
+  const name = q.contact && (!q.sentTo || q.contact.email.toLowerCase() === q.sentTo.toLowerCase()) ? firstName(q.contact.name) : "";
+  const valid = q.validUntil ? formatDay(q.validUntil) : "";
+  const w = messageFor(q.agency.settings?.messageTemplates, "QUOTE_CHASE", {
+    first_name: name,
+    event: q.title,
+    date: formatDay(firstDate),
+    total: m(t.totalMinor),
+    valid_until: valid,
+    business: brand,
+  });
+  if (!w.on) return false;
+  const agent = await agentOf(q);
+  const hi = `Hi${name ? ` ${name}` : ""}`;
+  await sendEmail({
+    kind: "QUOTE",
+    agencyId: q.agencyId,
+    to,
+    replyTo: agent?.email || q.agency.settings?.agencyEmail,
+    subject: w.subject ?? (day === 3 ? `Your proposal for ${q.title}` : `A gentle reminder: your proposal for ${q.title}`),
+    email: {
+      brand,
+      preheader: valid ? `Your proposal is ready whenever you are. It's valid until ${valid}.` : "Your proposal is ready whenever you are.",
+      title: day === 3 ? "Your proposal is ready for you" : "A gentle reminder about your proposal",
+      intro:
+        w.intro ??
+        (day === 3
+          ? `${hi}, just checking you've seen your proposal for ${q.title} on ${formatDay(firstDate)}. You can read it and sign it online in a minute, and it works on your phone.`
+          : `${hi}, a gentle reminder that your proposal for ${q.title} on ${formatDay(firstDate)} is still waiting for you.${valid ? ` It's valid until ${valid}.` : ""} If you'd like to go ahead, you can sign it online in a minute.`),
+      rows: [
+        ["Total", m(t.totalMinor)],
+        ...(q.depositMinor ? ([["Deposit", m(q.depositMinor)]] as [string, string][]) : []),
+        ...(valid ? ([["Valid until", valid]] as [string, string][]) : []),
+      ],
+      cta: { label: "See your proposal", url: proposalUrl(q.token) },
+      outro: `Want to change something, or have a question? Just reply to this email to reach ${agent?.name ?? brand}. We're happy to help.`,
+    },
+  });
+  return true;
 }
 
 async function tellCustomerBooked(q: FullProposal) {
@@ -633,6 +803,8 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
   const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { id: true, email: true, notifyPrefs: true } }) : null;
   const to = agent ? (wants(agent.notifyPrefs, "QUOTE", "email") ? agent.email : null) : q.agency.settings?.agencyEmail;
   const pending = q.lines.filter((l) => !l.artistId).length;
+  // A wedding with a deposit: made, but on Hold until the deposit is in. The acts hear then.
+  const held = accepted && holdsUntilDeposit(q);
   const base = { kind: "QUOTE" as const, agencyId: q.agencyId, bookingId: q.lines[0]?.bookingId ?? null };
   if (to) {
     await sendEmail({
@@ -643,14 +815,18 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
       email: {
         brand,
         title: subject,
-        highlight: accepted
-          ? { label: "Accepted", value: "The bookings are made", tone: "good" }
-          : { label: "Declined", value: q.answerNote ? "They left a reason" : "No reason given", tone: "bad" },
+        highlight: held
+          ? { label: "Accepted", value: "On hold until the deposit is paid", tone: "good" }
+          : accepted
+            ? { label: "Accepted", value: "The bookings are made", tone: "good" }
+            : { label: "Declined", value: q.answerNote ? "They left a reason" : "No reason given", tone: "bad" },
         intro:
           w.intro ??
-          (accepted
-            ? `${who} has accepted the proposal for ${q.title}. It's signed and locked in: the wedding or event and its bookings are made${q.tellActs ? ", and the acts have been told" : ". The acts haven't been emailed, so tell them yourself"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
-            : `${who} has declined the proposal for ${q.title}.`),
+          (held
+            ? `${who} has accepted the proposal for ${q.title}. It's signed, and the wedding and its bookings are made and on hold until the deposit of ${m(q.depositMinor)} is in. The couple have been asked to pay it. Once it's in, the bookings are confirmed${q.tellActs ? " and the acts are told" : ". The acts won't be emailed, so tell them yourself then"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
+            : accepted
+              ? `${who} has accepted the proposal for ${q.title}. It's signed and locked in: the wedding or event and its bookings are made${q.tellActs ? ", and the acts have been told" : ". The acts haven't been emailed, so tell them yourself"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
+              : `${who} has declined the proposal for ${q.title}.`),
         rows: [
           ["Proposal", proposalRef(q)],
           ["Total", m(t.totalMinor)],
@@ -667,7 +843,7 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
       userId: agent.id,
       payload: {
         title: subject,
-        body: accepted ? "The bookings are made." : q.answerNote.slice(0, 120) || "No reason given.",
+        body: held ? "On hold until the deposit is paid." : accepted ? "The bookings are made." : q.answerNote.slice(0, 120) || "No reason given.",
         url: url.replace(appUrl(), ""),
         tag: `quote-${q.id}`,
       },

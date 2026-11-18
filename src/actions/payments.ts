@@ -10,6 +10,7 @@ import { logActivities, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import { outstanding } from "@/lib/payments";
+import { secureEventsOf } from "@/lib/secure-event";
 import { localDateKey, zonedToUtc } from "@/lib/time";
 
 /**
@@ -67,10 +68,17 @@ export async function markPaid(_: FormState, form: FormData): Promise<FormState>
         }
       }
       if (payments.length) await tx.payment.createMany({ data: payments });
-      if (direction === "OUT") await syncActInvoicePaid(gigs.map((b) => b.id), now, tx);
+      if (direction === "OUT")
+        await syncActInvoicePaid(
+          gigs.map((b) => b.id),
+          now,
+          tx,
+        );
       if (settled.length) await tx.booking.updateMany({ where: { id: { in: settled } }, data: { status: "SETTLED" } });
     });
     queueCalendarSync(settled);
+    // Money in on a wedding's gig may be what books it (src/lib/secure-event.ts).
+    if (direction === "IN") await secureEventsOf(payments.map((p) => p.bookingId));
     await logActivities(user, "BOOKING", log);
     revalidatePath("/", "layout");
     if (!count) return { ok: "Already paid." };

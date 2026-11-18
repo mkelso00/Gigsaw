@@ -11,7 +11,7 @@ import { formatDay, readEnquiryConfig } from "@/lib/enquiries";
 import { formatMoney } from "@/lib/money";
 import { payUrl } from "@/lib/card-payments";
 import { linePlace, markExpired, markViewed, proposalInclude } from "@/lib/proposal-server";
-import { answerProblem, effectiveStatus, lineTimes, looksLikeProposalToken, proposalRef, proposalTotals, tokenOpens } from "@/lib/proposals";
+import { answerProblem, effectiveStatus, holdsUntilDeposit, lineTimes, looksLikeProposalToken, proposalRef, proposalTotals, tokenOpens } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 import { RenderStamp } from "@/components/render-stamp";
 
@@ -103,8 +103,14 @@ export default async function CustomerProposalPage({ params }: { params: Promise
   const m = (x: number) => formatMoney(x, q.currency);
   const problem = answerProblem(q, today);
   const firstName = (q.contact?.name ?? "").split(" ")[0];
+  // A wedding with a deposit is held for the couple until the deposit is in (src/lib/secure-event.ts), then booked.
+  const waitsForDeposit = status === "ACCEPTED" && !!q.eventId && holdsUntilDeposit(q);
+  const held = waitsForDeposit && (await prisma.booking.count({ where: { eventId: q.eventId!, status: "HOLD", archivedAt: null } })) > 0;
   const payLink =
-    status === "ACCEPTED" && q.eventId && q.depositMinor > 0 ? await prisma.payLink.findFirst({ where: { eventId: q.eventId, kind: "DEPOSIT" } }) : null;
+    status === "ACCEPTED" && q.eventId && q.depositMinor > 0 && (held || !waitsForDeposit)
+      ? await prisma.payLink.findFirst({ where: { eventId: q.eventId, kind: "DEPOSIT" } })
+      : null;
+  const depositBy = q.depositDue ? ` by ${formatDay(q.depositDue)}` : "";
 
   return shell(
     <>
@@ -116,9 +122,12 @@ export default async function CustomerProposalPage({ params }: { params: Promise
 
       {status === "ACCEPTED" && (
         <div role="status" className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 text-emerald-950">
-          <div className="text-lg font-semibold">Thank you, you&apos;re booked</div>
+          <div className="text-lg font-semibold">{held ? "Thanks for accepting" : "Thank you, you're booked"}</div>
           <p className="mt-1 text-sm">
-            Signed and approved by {q.answerName} on {formatDateTime(q.answeredAt!, q.timezone)}. We&apos;ve emailed you a confirmation.
+            Signed and approved by {q.answerName} on {formatDateTime(q.answeredAt!, q.timezone)}.{" "}
+            {held
+              ? `Your date is held for you. The next step is your deposit of ${m(q.depositMinor)}${depositBy}: once it's in, you're booked and we'll email you to confirm.${payLink ? "" : " We'll send you the details to pay it."}`
+              : "We've emailed you a confirmation."}
           </p>
           {q.answerSignature && (
             <div className="mt-3 inline-block rounded-lg bg-white px-3 py-2">

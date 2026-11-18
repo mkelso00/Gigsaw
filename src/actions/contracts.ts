@@ -8,6 +8,7 @@ import { checkSignature, checkSignerName, clientIp, contractHash } from "@/lib/c
 import { afterSigned, ContractError, liveContractDoc, sendContract, type ContractTarget } from "@/lib/contracts";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
+import { secureEventQuietly } from "@/lib/secure-event";
 import { log } from "@/server/log";
 
 // Contracts signed online: staff send and cancel them; the client signs at /c/<token> with no login.
@@ -98,18 +99,26 @@ export async function signContract(token: string, hash: string, _: FormState, fo
         detail: name,
       },
     });
-    // Approved by the client, so an enquiry or a held date is now booked: Pending until the act is
-    // confirmed. Bookings already further on (offered, confirmed, settled) stay as they are.
-    await prisma.booking.updateMany({
-      where: { agencyId: c.agencyId, status: { in: APPROVES }, ...(c.bookingId ? { id: c.bookingId } : { eventId: c.eventId! }) },
-      data: { status: "PENDING" },
-    });
+    const wedding = !!c.eventId && (await prisma.event.findUnique({ where: { id: c.eventId }, select: { type: true } }))?.type === "WEDDING";
+    if (wedding) {
+      // A wedding is booked only once the contract is agreed and the deposit is in (the couple's terms), so
+      // it goes through the gate: an enquiry is now a held date, and the gate books it if the deposit is in.
+      await prisma.booking.updateMany({ where: { agencyId: c.agencyId, eventId: c.eventId!, status: "ENQUIRY" }, data: { status: "HOLD" } });
+    } else {
+      // Approved by the client, so an enquiry or a held date is now booked: Pending until the act is
+      // confirmed. Bookings already further on (offered, confirmed, settled) stay as they are.
+      await prisma.booking.updateMany({
+        where: { agencyId: c.agencyId, status: { in: APPROVES }, ...(c.bookingId ? { id: c.bookingId } : { eventId: c.eventId! }) },
+        data: { status: "PENDING" },
+      });
+    }
     try {
       await afterSigned(c.id);
     } catch (e) {
       // The contract is signed either way; a message that fails is in the Outbox.
       log.error("Contract signed, but the emails after it failed", { err: e });
     }
+    if (wedding) await secureEventQuietly(c.eventId);
     return { ok: "signed" };
   });
   if (result?.ok) {

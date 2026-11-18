@@ -10,6 +10,7 @@ import { messageFor } from "@/lib/message-templates";
 import { isEmail, sendEmail } from "@/lib/messaging";
 import { formatMoney } from "@/lib/money";
 import { allocate, checkoutParams, isPayKind, PAY_KIND_LABELS } from "@/lib/pay-links";
+import { secureEventQuietly } from "@/lib/secure-event";
 import { stripe, stripeConfigured, StripeError } from "@/lib/stripe";
 
 // Card payments: an admin connects the agency's own Stripe account (Settings > Card payments),
@@ -168,6 +169,8 @@ export async function placeCardPayment(id: string, _: FormState, form: FormData)
       });
     });
     await logActivity(user, "BOOKING", b.id, "payment received", `${money} by card (put on the booking by hand)`);
+    // The deposit that books a wedding (src/lib/secure-event.ts).
+    await secureEventQuietly(b.eventId);
     revalidatePath("/", "layout");
     return { ok: `${money} is now on ${b.reference}.` };
   });

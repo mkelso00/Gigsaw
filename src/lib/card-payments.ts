@@ -7,6 +7,7 @@ import { dealBreakdown, formatMoney, paymentTotals } from "./money";
 import { wants } from "./notify-prefs";
 import { allocate, amountDue, isPayKind, PAY_KIND_LABELS, type PayGig, type PayKind } from "./pay-links";
 import { directTotals, isDirectPlan } from "./pay-plan";
+import { secureEventQuietly } from "./secure-event";
 import { stripe, stripeConfigured } from "./stripe";
 import { formatDate } from "./time";
 
@@ -305,6 +306,8 @@ export async function recordCardPayment(s: CheckoutSession, accountId: string): 
     return "unmatched";
   }
   await tellAgent(t, amount, currency, s.customer_details?.email ?? "");
+  // The deposit that books a wedding (src/lib/secure-event.ts): after the payment has committed.
+  await secureEventQuietly(raw.eventId ?? raw.booking?.eventId);
   return "recorded";
 }
 

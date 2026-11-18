@@ -5,6 +5,7 @@ import { runActInvoices } from "./act-invoices";
 import { runOverdueCheck } from "./alerts";
 import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
+import { runProposalChasers } from "./proposal-chasers";
 import { runReminders } from "./reminders";
 
 const EVERY_MS = 60_000;
@@ -12,7 +13,7 @@ let started = false;
 let running = false;
 
 /**
- * Check for overdue arrivals, due gig reminders, wedding/event emails and acts' invoices every minute, and catch up
+ * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders and acts' invoices every minute, and catch up
  * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
@@ -41,6 +42,12 @@ export function startScheduler() {
       if (n) log.info("Wedding and event emails sent", { job: "event-emails", sent: n });
     } catch (e) {
       log.error("Event emails failed", { job: "event-emails", err: e });
+    }
+    try {
+      const r = await withHeartbeat("proposal-chasers", runProposalChasers);
+      if (r.chased || r.expired) log.info("Proposal reminders sent", { job: "proposal-chasers", chased: r.chased, expired: r.expired });
+    } catch (e) {
+      log.error("Proposal reminders failed", { job: "proposal-chasers", err: e });
     }
     try {
       const r = await withHeartbeat("act-invoices", runActInvoices);

@@ -1,6 +1,7 @@
 "use server";
 
 import { receiptQuietly } from "@/lib/receipts";
+import { secureEventQuietly } from "@/lib/secure-event";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { syncActInvoicePaid } from "@/lib/act-invoices";
@@ -285,8 +286,11 @@ export async function addPayment(bookingId: string, _: FormState, form: FormData
     });
     // Paying the act by hand here counts towards their invoice, so there's one record of what they've had.
     if (direction === "OUT") await syncActInvoicePaid([bookingId]);
+    // Money in on a wedding's gig may be the deposit that books it (src/lib/secure-event.ts). If so, the
+    // couple's "you're booked" email says it's arrived, so the plain receipt isn't sent as well.
+    const secured = direction === "IN" ? await secureEventQuietly(booking.eventId) : null;
     // The customer hears it's arrived (weddings and private customers only; sendPaymentReceipt checks).
-    if (direction === "IN" && str(form, "receipt") === "on") await receiptQuietly({ bookingId, amountMinor });
+    if (direction === "IN" && str(form, "receipt") === "on" && !secured?.told) await receiptQuietly({ bookingId, amountMinor });
     await logActivity(
       user,
       "BOOKING",

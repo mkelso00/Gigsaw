@@ -349,3 +349,12 @@ export function lineTimes(l: { startTime: string; endTime: string }) {
 export function eventKindFor(eventType: string): "WEDDING" | "CORPORATE" | "PRIVATE_PARTY" | "OTHER" {
   return eventType === "WEDDING" || eventType === "CORPORATE" || eventType === "PRIVATE_PARTY" ? eventType : "OTHER";
 }
+
+/**
+ * A wedding proposal with a deposit isn't booked when it's accepted: the couple's terms say it's booked once
+ * the deposit is in too. Until then its gigs are on Hold (src/lib/secure-event.ts). Other events, and a
+ * wedding with no deposit, are booked as soon as they're accepted.
+ */
+export function holdsUntilDeposit(q: { eventType: string; depositMinor: number }) {
+  return eventKindFor(q.eventType) === "WEDDING" && q.depositMinor > 0;
+}
