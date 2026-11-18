@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader, Stat } from "@/components/ui";
+import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { proposalRef } from "@/lib/proposals";
 import { formatDateTime } from "@/lib/time";
@@ -35,6 +36,26 @@ export function EventHeader({ event: e, daysLeft }: { event: EventView; daysLeft
         </>
       }
     />
+  );
+}
+
+/** A cancelled wedding or event, with why when Gigsaw cancelled it (its lead's proposal expired or was declined: src/lib/lapsed-leads.ts). */
+export async function CancelledBanner({ eventId, agencyId }: { eventId: string; agencyId: string }) {
+  const why = await prisma.activity.findFirst({
+    where: { agencyId, entity: "EVENT", entityId: eventId, action: "cancelled" },
+    orderBy: { createdAt: "desc" },
+    select: { detail: true },
+  });
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-ink-200 bg-ink-50 px-4 py-3 text-sm text-ink-800">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-ink-400" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="font-medium">Cancelled</span>
+        {why?.detail ? `: ${why.detail}.` : "."}
+        {why?.detail.startsWith("Proposal") &&
+          " The date isn't held for them any more. If they come back, send a new version of their proposal: accepting it makes the bookings again."}
+      </span>
+    </div>
   );
 }
 

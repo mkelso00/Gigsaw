@@ -7,6 +7,7 @@ import { onConfirmed } from "./confirmations";
 import { getSettings, prisma } from "./db";
 import { enquiryTitle, firstName, formatDay } from "./enquiries";
 import { defaultTasks } from "./event-plan";
+import { freeLapsedLeadQuietly } from "./lapsed-leads";
 import { messageFor } from "./message-templates";
 import { appUrl, isEmail, sendEmail, sendPush } from "./messaging";
 import { defaultBookingFee, defaultVat, formatMoney } from "./money";
@@ -583,10 +584,14 @@ export async function afterAccepted(proposalId: string) {
   }
 }
 
-/** After a decline has committed: the team hears, and the customer is thanked for considering us. */
+/**
+ * After a decline has committed: the lead's Enquiry booking or wedding is cancelled so the date isn't held
+ * (src/lib/lapsed-leads.ts), the team hears, and the customer is thanked for considering us.
+ */
 export async function afterDeclined(proposalId: string) {
   const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: proposalInclude });
   if (!q || q.status !== "DECLINED") return;
+  await freeLapsedLeadQuietly(q.id);
   try {
     await tellCustomerDeclined(q);
   } catch (e) {
@@ -858,7 +863,11 @@ export async function markViewed(q: { id: string; agencyId: string; number: stri
     await prisma.activity.create({ data: { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer opened proposal ${proposalRef(q)}` } });
 }
 
-/** A proposal out with the customer past its valid-until date is saved as Expired. */
+/** A proposal out with the customer past its valid-until date is saved as Expired, and its lead's held date is freed (src/lib/lapsed-leads.ts). */
 export async function markExpired(q: { id: string; timezone: string }) {
-  await prisma.quote.updateMany({ where: { id: q.id, status: { in: OPEN_STATUSES }, validUntil: { lt: todayIn(q.timezone) } }, data: { status: "EXPIRED" } });
+  const done = await prisma.quote.updateMany({
+    where: { id: q.id, status: { in: OPEN_STATUSES }, validUntil: { lt: todayIn(q.timezone) } },
+    data: { status: "EXPIRED" },
+  });
+  if (done.count) await freeLapsedLeadQuietly(q.id);
 }

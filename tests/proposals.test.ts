@@ -127,7 +127,9 @@ describe("proposal statuses", () => {
   it("labels replaced versions as updated", () => {
     expect(statusLabel(q("VIEWED"), today)).toBe("Opened");
     expect(statusLabel(q("VIEWED", { supersededById: "newer" }), today)).toBe("Updated");
-    expect(statusLabel(q("SENT", { validUntil: "2026-10-01" }), today)).toBe("Expired");
+    expect(statusLabel(q("SENT", { validUntil: "2026-10-01" }), today)).toBe("Expired: no reply");
+    expect(statusLabel(q("EXPIRED"), today)).toBe("Expired: no reply");
+    expect(statusLabel(q("DECLINED"), today)).toBe("Declined by customer");
   });
 
   it("numbers proposals and their versions", () => {

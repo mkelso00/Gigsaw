@@ -11,7 +11,14 @@ export function ActivitySection({ activity, timeZone }: { activity: BookingPageD
         <ul className="space-y-2 text-sm">
           {activity.map((a) => (
             <li key={a.id}>
-              <span className="font-medium">{a.user?.name ?? "Someone"}</span> {a.action}
+              {/* No one signed in: Gigsaw itself, e.g. cancelled when the lead's proposal expired. */}
+              {a.user?.name ? (
+                <>
+                  <span className="font-medium">{a.user.name}</span> {a.action}
+                </>
+              ) : (
+                a.action.charAt(0).toUpperCase() + a.action.slice(1)
+              )}
               {a.detail && <span className="text-slate-500"> · {a.detail}</span>}
               <span className="block text-xs text-slate-400">{formatDateTime(a.createdAt, timeZone)}</span>
             </li>

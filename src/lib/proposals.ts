@@ -20,8 +20,8 @@ export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   SENT: "Sent",
   VIEWED: "Opened",
   ACCEPTED: "Accepted",
-  DECLINED: "Declined",
-  EXPIRED: "Expired",
+  DECLINED: "Declined by customer",
+  EXPIRED: "Expired: no reply",
   WITHDRAWN: "Withdrawn",
 };
 
