@@ -87,6 +87,7 @@ export async function copyBookingToDates(
       bookingFeeMinor: b.bookingFeeMinor,
       depositMinor: b.depositMinor,
       dealNotes: b.dealNotes,
+      contractTemplateId: b.contractTemplateId,
       radiusKm: b.radiusKm,
       radiusDays: b.radiusDays,
       travel: b.travel,

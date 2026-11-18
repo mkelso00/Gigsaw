@@ -38,6 +38,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     totals: t,
     daysLeft,
     contract,
+    contractType,
     contractSigned,
   } = await loadEventPage(user.agencyId, id);
   // Whose bank details the couple would see for each act (the band's lead, or the act), when they pay acts direct.
@@ -74,7 +75,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               signer={e.customer ? { name: e.customer.name, email: e.customer.email } : null}
               previewHref={`/print/events/${e.id}/contract`}
               agencySigned={!!settings.signatureImage}
-              noTerms={!settings.contractTerms.trim()}
+              contractType={contractType}
+              eventType={e.type}
             />
           </div>
 

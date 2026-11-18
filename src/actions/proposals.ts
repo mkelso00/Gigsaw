@@ -8,6 +8,8 @@ import { requireStaff } from "@/lib/auth";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { EVENT_TYPES } from "@/lib/constants";
 import { checkSignerName, clientIp, checkSignature } from "@/lib/contract-doc";
+import { termsText } from "@/lib/contract-templates";
+import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { logActivity, prisma } from "@/lib/db";
 import { isRealDate } from "@/lib/enquiries";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
@@ -53,7 +55,8 @@ export async function makeProposal(from: "enquiry" | "contact", id: string, _: F
   const res = await proposalForm(async () => {
     const q = await createDraftProposal(user, from === "enquiry" ? { enquiryId: id } : { contactId: id });
     await logActivity(user, "QUOTE", q.id, `started proposal ${proposalRef(q)}`, q.title);
-    if (from === "enquiry") await prisma.enquiry.updateMany({ where: { id, agencyId: user.agencyId, status: "NEW" }, data: { status: "DONE", doneAt: new Date() } });
+    if (from === "enquiry")
+      await prisma.enquiry.updateMany({ where: { id, agencyId: user.agencyId, status: "NEW" }, data: { status: "DONE", doneAt: new Date() } });
     proposalId = q.id;
   });
   if (res?.error) return res;
@@ -87,6 +90,8 @@ export async function saveProposal(proposalId: string, _: FormState, form: FormD
     const validUntil = str(form, "validUntil");
     if (validUntil && !isRealDate(validUntil)) throw new FormError("Check the valid-until date");
     if (validUntil && validUntil < today) throw new FormError("The valid-until date has already passed");
+    // The contract type picked (empty: none). The wording in the Terms box is what the customer reads.
+    const contractTemplateId = await ownContractTemplateId(user.agencyId, str(form, "contractTemplateId"));
     const total = proposalTotals(lines, bookingFeeMinor).totalMinor;
     if (depositMinor > total) throw new FormError(`The deposit can't be more than the total (${formatMoney(total, q.currency)})`);
 
@@ -103,7 +108,8 @@ export async function saveProposal(proposalId: string, _: FormState, form: FormD
           validUntil: validUntil || null,
           tellActs: form.get("tellActs") === "on",
           message: str(form, "message").slice(0, 3000),
-          terms: str(form, "terms").slice(0, 20000),
+          contractTemplateId,
+          terms: termsText(str(form, "terms")).slice(0, 20000),
         },
       });
       if (claimed.count !== 1) throw new FormError("This proposal has just been sent, so it can't be changed. Make a new version instead.");
@@ -122,7 +128,13 @@ export async function sendProposalNow(proposalId: string, _: FormState, form: Fo
   const user = await requireStaff();
   return proposalForm(async () => {
     const r = await sendProposal(user, proposalId, str(form, "to"));
-    await logActivity(user, "QUOTE", proposalId, r.resent ? `sent proposal ${proposalRef(r.proposal)} again` : `sent proposal ${proposalRef(r.proposal)}`, str(form, "to"));
+    await logActivity(
+      user,
+      "QUOTE",
+      proposalId,
+      r.resent ? `sent proposal ${proposalRef(r.proposal)} again` : `sent proposal ${proposalRef(r.proposal)}`,
+      str(form, "to"),
+    );
     revalidatePath("/", "layout");
     return { ok: `Proposal ${r.resent ? "sent again" : "sent"} to ${str(form, "to").toLowerCase()}.` };
   });

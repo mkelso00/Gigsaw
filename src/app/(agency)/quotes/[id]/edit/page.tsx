@@ -6,6 +6,7 @@ import { ProposalEditor } from "@/components/proposal-editor";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
+import { contractTemplatesFor } from "@/lib/contract-templates-server";
 import { getSettings, prisma } from "@/lib/db";
 import { defaultBookingFee, defaultVat, minorToInput } from "@/lib/money";
 import { canEdit, proposalRef } from "@/lib/proposals";
@@ -17,11 +18,12 @@ export const dynamic = "force-dynamic";
 export default async function EditProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [q, settings, acts, venues] = await Promise.all([
+  const [q, settings, acts, venues, contractTypes] = await Promise.all([
     prisma.quote.findFirst({ where: { id, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } }, contact: { select: { name: true } } } }),
     getSettings(user.agencyId),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, genre: true } }),
     prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
+    contractTemplatesFor(user.agencyId),
   ]);
   if (!q) notFound();
   // Once sent, a proposal is changed by making a new version (from its page).
@@ -53,6 +55,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
         acts={acts.map((a) => ({ id: a.id, name: a.name, detail: a.genre || undefined }))}
         venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city || undefined }))}
         eventTypes={EVENT_TYPES.map((t) => ({ value: t, label: eventTypeLabel(t) }))}
+        contractTypes={contractTypes.map((t) => ({ id: t.id, name: t.name, terms: t.terms }))}
         values={{
           title: q.title,
           eventType: q.eventType,
@@ -62,6 +65,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
           validUntil: q.validUntil ?? "",
           tellActs: q.tellActs,
           message: q.message,
+          contractTemplateId: q.contractTemplateId ?? "",
           terms: q.terms,
         }}
         lines={q.lines.map((l) => ({

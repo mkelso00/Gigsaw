@@ -42,6 +42,8 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const today = localDateKey(new Date(), q.timezone);
   const status = effectiveStatus(q, today);
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
+  // The contract type its terms were filled in from, if it still exists.
+  const contractType = q.agency.contractTemplates.find((c) => c.id === q.contractTemplateId) ?? null;
   const m = (x: number) => formatMoney(x, q.currency);
   const when = (d: Date) => formatDateTime(d, q.timezone);
   const notReady = canSend(q) ? readyToSend(q, today) : null;
@@ -216,7 +218,10 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
               )}
               {q.terms && (
                 <div>
-                  <h3 className="section-title mb-1">Terms</h3>
+                  <h3 className="section-title mb-1">
+                    Terms
+                    {contractType && <span className="ml-2 font-normal text-ink-500">from the {contractType.name}</span>}
+                  </h3>
                   <p className="whitespace-pre-line text-ink-700">{q.terms}</p>
                 </div>
               )}
@@ -272,7 +277,10 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
             )}
             {canWithdraw(q) && (
               <ServerForm action={withdrawProposal.bind(null, q.id)} className="mt-4">
-                <ConfirmButton message="Withdraw this proposal? The customer's link will say it's been withdrawn and they can't accept it." className="btn w-full">
+                <ConfirmButton
+                  message="Withdraw this proposal? The customer's link will say it's been withdrawn and they can't accept it."
+                  className="btn w-full"
+                >
                   Withdraw
                 </ConfirmButton>
               </ServerForm>

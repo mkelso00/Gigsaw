@@ -24,6 +24,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     prisma.contact.findFirst({
       where: { id, agencyId: user.agencyId },
       include: {
+        contractTemplate: { select: { name: true } },
         notes: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } } },
         people: { orderBy: { firstName: "asc" } },
         bookings: {
@@ -35,7 +36,11 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     }),
     getSettings(user.agencyId),
     // Each proposal's latest version.
-    prisma.quote.findMany({ where: { agencyId: user.agencyId, contactId: id, supersededById: null }, orderBy: { createdAt: "desc" }, select: proposalRowSelect }),
+    prisma.quote.findMany({
+      where: { agencyId: user.agencyId, contactId: id, supersededById: null },
+      orderBy: { createdAt: "desc" },
+      select: proposalRowSelect,
+    }),
   ]);
   if (!contact) notFound();
 
@@ -93,6 +98,19 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   ),
                 ],
                 ["Address", contact.address],
+                [
+                  "Contract for this client",
+                  <span key="contract" data-testid="client-contract">
+                    {contact.contractTemplate ? (
+                      <>
+                        {contact.contractTemplate.name}
+                        <span className="text-ink-500">, for every new proposal, booking and wedding for them</span>
+                      </>
+                    ) : (
+                      <span className="text-ink-500">None: by the type of event</span>
+                    )}
+                  </span>,
+                ],
                 [
                   "Tags",
                   splitTags(contact.tags)

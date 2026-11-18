@@ -17,6 +17,7 @@ import type { prisma as appPrisma } from "./db";
 export type Db = typeof appPrisma;
 import bcrypt from "bcryptjs";
 import { distanceMetres } from "./arrival";
+import { STARTER_CONTRACTS } from "./contract-templates";
 import { defaultTasks } from "./event-plan";
 import { VENUE_PALETTE, dateInWeek, weekStartOf, weekdayOf } from "./rota";
 import { buildSchedule } from "./schedule";
@@ -102,6 +103,13 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
   const artists: Artist[] = [graham, jo, ellie, sean, diarmuid, finn, jade, rogues, sunset, kestrel, partyBand, wonderlust];
   const solos = [graham, jo, ellie, sean, diarmuid, finn, jade];
   const duos = [rogues, sunset];
+
+  // ---------- Contract types (Settings, Contracts and invoices) ----------
+  // Only for a business with none yet: its own contracts are never replaced. They're kept when the demo
+  // data is removed, like the rest of Settings, so a business can reword them and carry on.
+  if (!(await prisma.contractTemplate.count({ where: { agencyId } }))) {
+    await prisma.contractTemplate.createMany({ data: STARTER_CONTRACTS.map((c, sort) => ({ ...c, agencyId, sort })) });
+  }
 
   // ---------- Who pays: pub companies, and private customers ----------
   const company = (name: string, contact: string, email: string, phone: string, tags = "") =>

@@ -32,7 +32,9 @@ export type ContractDoc = {
   sections: ContractSection[];
 };
 
-type AgencyInfo = { agencyName: string; agencyAddress: string; agencyEmail: string; contractTerms: string };
+type AgencyInfo = { agencyName: string; agencyAddress: string; agencyEmail: string };
+/** The contract type in use (see pickContract in contract-templates.ts): its name heads the contract, its wording goes at the end. */
+export type ContractWording = { name: string; terms: string } | null;
 type Party = { name: string; company: string; address: string } | null;
 type VenueInfo = { name: string; address: string; city: string; country: string } | null;
 
@@ -40,7 +42,9 @@ const rows = (list: ContractRow[]) => list.filter(([, v]) => v !== "");
 const clientName = (c: Party) => (c ? `${c.name}${c.company && c.company !== "Private client" ? ` of ${c.company}` : ""}` : "the Client");
 const venueLine = (v: VenueInfo, text = "") => (v ? [v.name, v.address, v.city, v.country].filter(Boolean).join(", ") : text || "To be confirmed");
 const header = (s: AgencyInfo) => ({ name: s.agencyName, address: s.agencyAddress, email: s.agencyEmail });
-const terms = (s: AgencyInfo): ContractSection[] => (s.contractTerms.trim() ? [{ heading: "Terms", rows: [], text: s.contractTerms.trim(), key: false }] : []);
+const terms = (c: ContractWording): ContractSection[] => (c?.terms.trim() ? [{ heading: "Terms", rows: [], text: c.terms.trim(), key: false }] : []);
+/** The contract's heading: the type's name, e.g. "Corporate contract", or "Performance contract" with none. */
+const titleOf = (c: ContractWording) => c?.name.trim() || "Performance contract";
 
 export type ContractBooking = DealInput & {
   reference: string;
@@ -65,14 +69,14 @@ export type ContractBooking = DealInput & {
 };
 
 /** The contract for one booking. */
-export function bookingContractDoc(b: ContractBooking, s: AgencyInfo): ContractDoc {
+export function bookingContractDoc(b: ContractBooking, s: AgencyInfo, contract: ContractWording): ContractDoc {
   const tz = b.timezone;
   const d = dealBreakdown(b);
   const money = (m: number) => formatMoney(m, b.currency);
   const act = b.artist?.name ?? "Act to be confirmed";
   return {
     version: 1,
-    title: "Performance contract",
+    title: titleOf(contract),
     reference: b.reference,
     agency: header(s),
     client: clientName(b.promoter),
@@ -119,7 +123,7 @@ export function bookingContractDoc(b: ContractBooking, s: AgencyInfo): ContractD
           ["Day of show contact", b.dayContact],
         ]),
       },
-      ...terms(s),
+      ...terms(contract),
     ],
   };
 }
@@ -152,7 +156,7 @@ export type ContractEvent = {
 export const contractGigs = <T extends { status: string }>(gigs: T[]) => gigs.filter((g) => g.status !== "CANCELLED" && g.status !== "ENQUIRY");
 
 /** One contract for a wedding or event, covering every act the customer has booked. */
-export function eventContractDoc(e: ContractEvent, s: AgencyInfo): ContractDoc {
+export function eventContractDoc(e: ContractEvent, s: AgencyInfo, contract: ContractWording): ContractDoc {
   const gigs = contractGigs(e.bookings);
   const currency = gigs[0]?.currency ?? "GBP";
   const money = (m: number) => formatMoney(m, currency);
@@ -176,7 +180,7 @@ export function eventContractDoc(e: ContractEvent, s: AgencyInfo): ContractDoc {
   const total = sale + fees + vat;
   return {
     version: 1,
-    title: "Performance contract",
+    title: titleOf(contract),
     reference: e.reference,
     agency: header(s),
     client: clientName(e.customer),
@@ -215,7 +219,7 @@ export function eventContractDoc(e: ContractEvent, s: AgencyInfo): ContractDoc {
         heading: "Hospitality and production",
         rows: [["Hospitality", names.length === 1 ? "As per the Act's rider." : "As per each Act's rider."]],
       },
-      ...terms(s),
+      ...terms(contract),
     ],
   };
 }
@@ -245,8 +249,8 @@ export function contractHash(doc: ContractDoc): string {
 
 /**
  * What has changed in a contract since it was signed: the labels of the details that differ,
- * e.g. ["Date", "Fee"]. The agency's own header and standard terms are left out, so editing
- * those in Settings doesn't flag every signed contract.
+ * e.g. ["Date", "Fee"]. The agency's own header and its contract wording (and the contract's heading)
+ * are left out, so editing those in Settings doesn't flag every signed contract.
  */
 export function contractChanges(signed: ContractDoc, current: ContractDoc): string[] {
   const out: string[] = [];

@@ -129,7 +129,18 @@ export function ArtistForm({
   );
 }
 
-export function ContactForm({ action, contact, defaultType }: { action: Action; contact?: Contact; defaultType?: string }) {
+export function ContactForm({
+  action,
+  contact,
+  defaultType,
+  contractTypes,
+}: {
+  action: Action;
+  contact?: Contact;
+  defaultType?: string;
+  /** The business's contract types, for "Contract for this client". Left out, the field isn't shown or changed. */
+  contractTypes?: { id: string; name: string }[];
+}) {
   return (
     <ActionForm action={action} className="card card-pad space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -161,6 +172,21 @@ export function ContactForm({ action, contact, defaultType }: { action: Action; 
       <Field label="Address" hint="Used on contracts and invoices">
         <textarea name="address" rows={3} defaultValue={contact?.address} className="input" />
       </Field>
+      {contractTypes && contractTypes.length > 0 && (
+        <Field
+          label="Contract for this client"
+          hint="Optional. Every new proposal, booking and wedding for them uses it, whatever the type of event. You can still change it on each one."
+        >
+          <select name="contractTemplateId" defaultValue={contact?.contractTemplateId ?? ""} className="input">
+            <option value="">None: by the type of event</option>
+            {contractTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       <div className="flex justify-end">
         <SubmitButton>{contact ? "Save changes" : "Add contact"}</SubmitButton>
       </div>

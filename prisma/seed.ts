@@ -31,8 +31,7 @@ async function main() {
   ]);
 
   const hash = await bcrypt.hash("gigsaw123", 10);
-  const contractTerms =
-    "1. The Promoter will provide the hospitality and technical requirements in the Artist's rider.\n2. Cancellation by the Promoter within 30 days of the engagement means the full fee is payable.\n3. The balance is payable in cleared funds no later than the night of the performance.";
+  // Contract types (Wedding, Corporate, small events and a default) come with the demo data.
 
   // Agency one: the owner also runs this one.
   const northern = await prisma.agency.create({
@@ -44,7 +43,6 @@ async function main() {
       agencyName: northern.name,
       agencyEmail: "bookings@northernlights.example",
       agencyAddress: "12 Example Street\nManchester M1 1AA",
-      contractTerms,
     },
   });
   const admin = await prisma.user.create({
@@ -65,7 +63,7 @@ async function main() {
 
   // Agency two: a separate customer, to show agencies can't see each other.
   const harbour = await prisma.agency.create({ data: { name: "Harbour Music", pricePerGigMinor: 250, billingCurrency: "GBP" } });
-  await prisma.settings.create({ data: { agencyId: harbour.id, agencyName: harbour.name, agencyEmail: "hello@harbour.example", contractTerms } });
+  await prisma.settings.create({ data: { agencyId: harbour.id, agencyName: harbour.name, agencyEmail: "hello@harbour.example" } });
   const harbourAdmin = await prisma.user.create({
     data: { email: "harbour@gigsaw.test", name: "Jo Rivers", role: "ADMIN", agencyId: harbour.id, passwordHash: hash },
   });

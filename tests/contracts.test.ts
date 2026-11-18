@@ -17,7 +17,9 @@ import {
   type ContractEvent,
 } from "@/lib/contract-doc";
 
-const settings = { agencyName: "Northern Lights", agencyAddress: "1 High St", agencyEmail: "hi@nl.test", contractTerms: "Cancel 30 days ahead." };
+const settings = { agencyName: "Northern Lights", agencyAddress: "1 High St", agencyEmail: "hi@nl.test" };
+// The contract type in use (see contract-templates.ts): its name heads the contract, its wording goes at the end.
+const wording = { name: "Wedding contract", terms: "Cancel 30 days ahead." };
 
 const booking: ContractBooking = {
   reference: "GS-0042",
@@ -51,7 +53,7 @@ const rowsOf = (doc: ReturnType<typeof bookingContractDoc>) => Object.fromEntrie
 
 describe("booking contract", () => {
   it("shows what the client pays and never what the act is paid", () => {
-    const doc = bookingContractDoc(booking, settings);
+    const doc = bookingContractDoc(booking, settings, wording);
     const rows = rowsOf(doc);
     expect(doc.client).toBe("Hannah Smith");
     expect(rows.Fee).toBe("£1,500.00");
@@ -61,14 +63,21 @@ describe("booking contract", () => {
     expect(rows.Act).toBe("Ellie Rose");
     expect(JSON.stringify(doc)).not.toContain("900.00");
     expect(doc.sections.at(-1)).toMatchObject({ heading: "Terms", text: "Cancel 30 days ahead.", key: false });
+    // The contract type's name heads it.
+    expect(doc.title).toBe("Wedding contract");
   });
   it("leaves out empty rows and the terms section when there are no terms", () => {
-    const doc = bookingContractDoc({ ...booking, bookingFeeMinor: 0, depositMinor: 0 }, { ...settings, contractTerms: " " });
+    const doc = bookingContractDoc({ ...booking, bookingFeeMinor: 0, depositMinor: 0 }, settings, { ...wording, terms: " " });
     const rows = rowsOf(doc);
     expect(rows["Booking fee"]).toBeUndefined();
     expect(rows.Deposit).toBeUndefined();
     expect(rows.Soundcheck).toBeUndefined();
     expect(doc.sections.map((s) => s.heading)).toEqual(["Engagement", "Fee", "Hospitality and production"]);
+  });
+  it("is a plain performance contract with no contract type", () => {
+    const doc = bookingContractDoc(booking, settings, null);
+    expect(doc.title).toBe("Performance contract");
+    expect(doc.sections.some((s) => s.heading === "Terms")).toBe(false);
   });
 });
 
@@ -93,7 +102,7 @@ describe("event contract", () => {
     bookings: [gig("Ceremony Strings", 60000, 40000), gig("The Band", 200000, 150000), gig("DJ Max", 50000, 30000, "CANCELLED"), gig(null, 1, 1, "ENQUIRY")],
   };
   it("covers every act in one contract, leaving out cancelled gigs and enquiries", () => {
-    const doc = eventContractDoc(event, settings);
+    const doc = eventContractDoc(event, settings, wording);
     expect(doc.acts).toBe("Ceremony Strings and The Band");
     expect(doc.plural).toBe(true);
     const perf = doc.sections.find((s) => s.heading === "Performances")!;
@@ -101,7 +110,7 @@ describe("event contract", () => {
     const fee = Object.fromEntries(doc.sections.find((s) => s.heading === "Fee")!.rows);
     expect(fee["The Band"]).toBe("£2,000.00");
     expect(fee["Total payable"]).toBe("£3,120.00");
-    const later = eventContractDoc({ ...event, bookings: [event.bookings[0], { ...event.bookings[1], feeMinor: 210000 }] }, settings);
+    const later = eventContractDoc({ ...event, bookings: [event.bookings[0], { ...event.bookings[1], feeMinor: 210000 }] }, settings, wording);
     expect(contractChanges(doc, later)).toEqual(["The Band (fee)", "VAT", "Total payable"]);
     // Never the acts' own fees.
     expect(JSON.stringify(doc)).not.toMatch(/1,500\.00|400\.00/);
@@ -110,19 +119,19 @@ describe("event contract", () => {
 
 describe("hash and changes", () => {
   it("gives the same hash for the same contract, after a trip through the database", () => {
-    const doc = bookingContractDoc(booking, settings);
+    const doc = bookingContractDoc(booking, settings, wording);
     const stored = asContractDoc(JSON.parse(JSON.stringify(doc)))!;
     expect(contractHash(stored)).toBe(contractHash(doc));
     expect(contractHash(doc)).toMatch(/^[0-9a-f]{64}$/);
     expect(canonicalJson({ b: 1, a: [2, { d: undefined, c: "x" }] })).toBe('{"a":[2,{"c":"x"}],"b":1}');
-    expect(contractHash(bookingContractDoc({ ...booking, feeMinor: 150001 }, settings))).not.toBe(contractHash(doc));
+    expect(contractHash(bookingContractDoc({ ...booking, feeMinor: 150001 }, settings, wording))).not.toBe(contractHash(doc));
   });
-  it("lists the details that changed since signing, ignoring the agency's standard terms", () => {
-    const signed = bookingContractDoc(booking, settings);
-    expect(contractChanges(signed, bookingContractDoc(booking, { ...settings, contractTerms: "New terms" }))).toEqual([]);
-    const later = bookingContractDoc({ ...booking, feeMinor: 160000, setStart: new Date("2026-06-13T19:30:00Z") }, settings);
+  it("lists the details that changed since signing, ignoring the contract type's wording and name", () => {
+    const signed = bookingContractDoc(booking, settings, wording);
+    expect(contractChanges(signed, bookingContractDoc(booking, settings, { name: "Corporate contract", terms: "New terms" }))).toEqual([]);
+    const later = bookingContractDoc({ ...booking, feeMinor: 160000, setStart: new Date("2026-06-13T19:30:00Z") }, settings, wording);
     expect(contractChanges(signed, later)).toEqual(["Performance", "Fee", "VAT", "Total payable", "Balance"]);
-    expect(contractChanges(signed, bookingContractDoc({ ...booking, artist: { name: "Jo Drummond" } }, settings))).toEqual(["Act"]);
+    expect(contractChanges(signed, bookingContractDoc({ ...booking, artist: { name: "Jo Drummond" } }, settings, wording))).toEqual(["Act"]);
   });
 });
 

@@ -11,6 +11,8 @@ import {
   eventContractDoc,
   type ContractDoc,
 } from "./contract-doc";
+import { resolveContract } from "./contract-templates";
+import { contractTemplatesFor } from "./contract-templates-server";
 import { getSettings, prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { appUrl, isEmail, sendEmail } from "./messaging";
@@ -27,16 +29,25 @@ export const contractUrl = (token: string) => `${appUrl()}/c/${token}`;
 
 const bookingInclude = { artist: { select: { name: true } }, venue: true, promoter: true } satisfies Prisma.BookingInclude;
 
-/** Everything needed to draw and send a booking's or an event's contract, scoped to the agency. Null if not found. */
+/**
+ * Everything needed to draw and send a booking's or an event's contract, scoped to the agency. Null if not found.
+ * The wording is the contract type picked for it, then the client's own, then the event type's, then the default.
+ */
 export async function contractSubject(agencyId: string, target: ContractTarget) {
-  const settings = await getSettings(agencyId);
+  const [settings, templates] = await Promise.all([getSettings(agencyId), contractTemplatesFor(agencyId)]);
   if (target.kind === "booking") {
     const b = await prisma.booking.findFirst({ where: { id: target.id, agencyId }, include: bookingInclude });
     if (!b) return null;
     const act = b.artist?.name ?? "";
+    const by = { clientTemplateId: b.promoter?.contractTemplateId, eventType: b.eventType };
+    const picked = resolveContract(templates, { ...by, chosenId: b.contractTemplateId });
     return {
       settings,
-      doc: bookingContractDoc(b, settings),
+      templates,
+      picked,
+      auto: resolveContract(templates, by),
+      chosenId: b.contractTemplateId,
+      doc: bookingContractDoc(b, settings, picked?.template ?? null),
       timeZone: b.timezone,
       agentId: b.agentId,
       contact: b.promoter,
@@ -59,9 +70,15 @@ export async function contractSubject(agencyId: string, target: ContractTarget) 
   });
   if (!e) return null;
   const gigs = contractGigs(e.bookings);
+  const by = { clientTemplateId: e.customer?.contractTemplateId, eventType: e.type };
+  const picked = resolveContract(templates, { ...by, chosenId: e.contractTemplateId });
   return {
     settings,
-    doc: eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings),
+    templates,
+    picked,
+    auto: resolveContract(templates, by),
+    chosenId: e.contractTemplateId,
+    doc: eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings, picked?.template ?? null),
     timeZone: e.timezone,
     agentId: e.agentId,
     contact: e.customer,

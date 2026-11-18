@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { checkSignature, checkSignerName, clientIp, contractHash } from "@/lib/contract-doc";
+import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { afterSigned, ContractError, liveContractDoc, sendContract, type ContractTarget } from "@/lib/contracts";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
@@ -39,6 +40,29 @@ export async function sendContractToSign(kind: ContractTarget["kind"], id: strin
         ? `Contract ${result.resent ? "sent again" : "sent"} to ${c.signerEmail}.`
         : "Contract ready, but no email went (demo data). Copy the link and send it yourself.",
     };
+  });
+}
+
+/**
+ * The Contract select on a booking or a wedding or event: which contract type its contract uses. Empty means
+ * automatic (the client's own contract, then the event type's, then the default). A contract already signed
+ * keeps the copy that was signed.
+ */
+export async function setContractType(kind: ContractTarget["kind"], id: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const contractTemplateId = await ownContractTemplateId(user.agencyId, str(form, "contractTemplateId"));
+    if (str(form, "contractTemplateId") && !contractTemplateId) throw new FormError("That contract type has been deleted. Reload the page.");
+    const template = contractTemplateId ? await prisma.contractTemplate.findUnique({ where: { id: contractTemplateId }, select: { name: true } }) : null;
+    const where = { id, agencyId: user.agencyId };
+    const { count } =
+      kind === "event"
+        ? await prisma.event.updateMany({ where, data: { contractTemplateId } })
+        : await prisma.booking.updateMany({ where: { ...where, archivedAt: undefined }, data: { contractTemplateId } });
+    if (!count) throw new FormError("Not found");
+    await logActivity(user, kind === "event" ? "EVENT" : "BOOKING", id, "chose the contract", template?.name ?? "Automatic");
+    revalidatePath(kind === "event" ? `/events/${id}` : `/bookings/${id}`);
+    return { ok: "Saved." };
   });
 }
 

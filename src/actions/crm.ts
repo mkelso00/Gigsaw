@@ -12,6 +12,7 @@ import { actBookingCounts, actInUseMessage } from "@/lib/archive";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { CONTACT_TYPES } from "@/lib/constants";
+import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { isValidTimeZone } from "@/lib/time";
@@ -187,6 +188,11 @@ export async function resetCalendarToken(artistId: string) {
 
 // ---------- Contacts ----------
 
+/** "Contract for this client", when the form has it: one of the business's contract types, or none. */
+async function contactContract(user: AgencyUser, form: FormData) {
+  return form.has("contractTemplateId") ? { contractTemplateId: await ownContractTemplateId(user.agencyId, str(form, "contractTemplateId")) } : {};
+}
+
 function contactData(form: FormData) {
   return {
     type: oneOf(str(form, "type"), CONTACT_TYPES, "PROMOTER"),
@@ -209,7 +215,7 @@ export async function createContact(_: FormState, form: FormData): Promise<FormS
   const user = await requireStaff();
   let id = "";
   const res = await handleForm(async () => {
-    const c = await prisma.contact.create({ data: { ...contactData(form), agencyId: user.agencyId } });
+    const c = await prisma.contact.create({ data: { ...contactData(form), ...(await contactContract(user, form)), agencyId: user.agencyId } });
     await logActivity(user, "CONTACT", c.id, "added contact", c.name);
     id = c.id;
   });
@@ -221,7 +227,7 @@ export async function updateContact(contactId: string, _: FormState, form: FormD
   const user = await requireStaff();
   const res = await handleForm(async () => {
     await ownContact(user, contactId);
-    await prisma.contact.update({ where: { id: contactId }, data: contactData(form) });
+    await prisma.contact.update({ where: { id: contactId }, data: { ...contactData(form), ...(await contactContract(user, form)) } });
     await logActivity(user, "CONTACT", contactId, "updated contact");
   });
   if (res?.error) return res;

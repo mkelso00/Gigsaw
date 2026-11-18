@@ -28,10 +28,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, deal, totals, checklist, arrival } = await loadBookingPage(
-    user.agencyId,
-    id,
-  );
+  const { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival } =
+    await loadBookingPage(user.agencyId, id);
 
   return (
     <div>
@@ -65,7 +63,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 previewHref={booking.event ? `/print/events/${booking.event.id}/contract` : `/print/bookings/${booking.id}/contract`}
                 partOf={booking.event ? { href: `/events/${booking.event.id}`, name: booking.event.name } : undefined}
                 agencySigned={!!settings.signatureImage}
-                noTerms={!settings.contractTerms.trim()}
+                contractType={booking.event ? null : contractType}
+                eventType={booking.eventType}
               />
             </div>
           )}

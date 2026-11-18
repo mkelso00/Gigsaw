@@ -1,30 +1,55 @@
 import type { Metadata } from "next";
+import { addContractType, deleteContractType, saveContractType } from "@/actions/contract-types";
 import { saveSettings } from "@/actions/settings";
-import { ActionForm } from "@/components/forms";
-import { SettingsCard, SettingsPage, SettingsSection } from "@/components/settings-ui";
+import { ActionForm, ServerForm, SubmitButton } from "@/components/forms";
+import { Badge, SettingsCard, SettingsPage, SettingsSection } from "@/components/settings-ui";
 import { SignaturePad } from "@/components/signature-pad";
 import { Field } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
+import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
+import { shadowedEventTypes } from "@/lib/contract-templates";
+import { contractTemplatesFor, type ContractTemplateRow } from "@/lib/contract-templates-server";
 import { getSettings } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Contracts and invoices" };
 
 export default async function DocumentSettings() {
   const user = await requireAdmin();
-  const settings = await getSettings(user.agencyId!);
+  const [settings, templates] = await Promise.all([getSettings(user.agencyId!), contractTemplatesFor(user.agencyId!)]);
+  const shadowed = shadowedEventTypes(templates);
   return (
     <SettingsPage title="Contracts and invoices">
-      <ActionForm action={saveSettings} saveBar className="space-y-9">
-        <SettingsSection
-          title="Contracts"
-          description="Your terms go at the end of every contract, printed or sent to sign online, just above the signatures, and into every new proposal. Wedding proposals need them: the couple read and agree to them when they sign. Changing them doesn't affect contracts or proposals already signed."
-        >
+      {/* Each contract type is its own form, kept outside the Save bar's form below (forms can't be nested). */}
+      <SettingsSection
+        id="contract-types"
+        title="Contract types"
+        description="Your saved contracts, e.g. one for weddings, one for corporate clients and one for small events. The right one goes into each new proposal and at the end of each contract, printed or sent to sign online, and you can change it on any proposal, booking or wedding. A client can have their own on their page. Proposals already sent and contracts already signed keep the wording they had."
+      >
+        {templates.length === 0 ? (
           <SettingsCard pad>
-            <Field label="Contract terms" hint="e.g. cancellation, deposits and what happens if the act can't make it">
-              <textarea name="contractTerms" rows={8} defaultValue={settings.contractTerms} className="input" />
-            </Field>
+            <p className="text-sm text-ink-600">
+              No contracts yet. Add your terms once, e.g. cancellation, deposits and what happens if the act can&apos;t make it, and they go on every contract
+              and proposal. Wedding proposals need them: the couple read and agree to them when they sign.
+            </p>
+            <ServerForm action={addContractType} className="mt-4">
+              <SubmitButton pendingText="Adding…">Add your first contract</SubmitButton>
+            </ServerForm>
           </SettingsCard>
-        </SettingsSection>
+        ) : (
+          <div className="space-y-4">
+            {templates.map((t, i) => (
+              <ContractTypeCard key={t.id} t={t} shadowed={shadowed[t.id] ?? []} before={templates.slice(0, i)} />
+            ))}
+            <ServerForm action={addContractType}>
+              <SubmitButton className="btn" pendingText="Adding…">
+                Add a contract type
+              </SubmitButton>
+            </ServerForm>
+          </div>
+        )}
+      </SettingsSection>
+
+      <ActionForm action={saveSettings} saveBar className="space-y-9">
         <SettingsSection
           id="signature"
           title="Your signature"
@@ -78,5 +103,67 @@ export default async function DocumentSettings() {
         </SettingsSection>
       </ActionForm>
     </SettingsPage>
+  );
+}
+
+/** One contract type: its own form to save it, and a separate one to delete it (which asks first). */
+function ContractTypeCard({ t, shadowed, before }: { t: ContractTemplateRow; shadowed: string[]; before: ContractTemplateRow[] }) {
+  // The type above this one that already has an event type ticked here too (the first in the list wins).
+  const takenBy = (e: string) => before.find((o) => o.eventTypes.includes(e))?.name;
+  return (
+    <div className="card p-5" data-testid="contract-type" id={`contract-${t.id}`}>
+      <ActionForm action={saveContractType.bind(null, t.id)} className="space-y-4">
+        <div className="flex items-start gap-3">
+          <Field label="Name" className="min-w-0 flex-1">
+            <input name="name" required maxLength={80} defaultValue={t.name} placeholder="e.g. Wedding contract" className="input" />
+          </Field>
+          {t.isDefault && (
+            <span className="mt-7">
+              <Badge tone="green">Default</Badge>
+            </span>
+          )}
+        </div>
+        <fieldset>
+          <legend className="label">Use by default for</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {EVENT_TYPES.map((e) => (
+              <label key={e} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="eventTypes" value={e} defaultChecked={t.eventTypes.includes(e)} />
+                {eventTypeLabel(e)}
+              </label>
+            ))}
+          </div>
+          {shadowed.length > 0 ? (
+            <p className="mt-1.5 text-xs text-amber-800">
+              {shadowed.map((e) => `${eventTypeLabel(e)} already uses the ${takenBy(e) ?? "contract above"}`).join(". ")}. That one comes first, so this one is
+              only used there when you choose it.
+            </p>
+          ) : (
+            <p className="hint">Proposals, bookings and weddings of these types get this contract, unless the client has their own.</p>
+          )}
+        </fieldset>
+        <label className="flex items-start gap-2 text-sm">
+          {/* The default can't be unticked here (there's always one): tick it on another type to move it. */}
+          <input type="checkbox" name="isDefault" defaultChecked={t.isDefault} disabled={t.isDefault} className="mt-0.5" />
+          <span>
+            Default for everything else
+            <span className="hint block">
+              {t.isDefault ? "Used when nothing else fits. To change it, tick this on another contract type." : "Used when nothing else fits."}
+            </span>
+          </span>
+        </label>
+        <Field label="Terms" hint="e.g. cancellation, deposits and what happens if the act can't make it">
+          <textarea name="terms" rows={8} maxLength={20000} defaultValue={t.terms} className="input" />
+        </Field>
+        <div className="flex justify-end">
+          <SubmitButton>Save</SubmitButton>
+        </div>
+      </ActionForm>
+      <ActionForm action={deleteContractType.bind(null, t.id)} className="mt-4 border-t border-ink-100 pt-4">
+        <SubmitButton className="btn btn-sm" pendingText="Checking…">
+          Delete this contract type
+        </SubmitButton>
+      </ActionForm>
+    </div>
   );
 }

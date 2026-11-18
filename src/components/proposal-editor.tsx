@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import type { FormState } from "@/lib/forms";
@@ -22,8 +22,13 @@ export type ProposalEditorValues = {
   validUntil: string;
   tellActs: boolean;
   message: string;
+  /** The contract type picked, or "" for none. */
+  contractTemplateId: string;
   terms: string;
 };
+
+/** A contract type to choose from, with its wording (Settings, Contracts and invoices). */
+export type ContractTypeOption = { id: string; name: string; terms: string };
 
 let seq = 0;
 const newKey = () => `l${Date.now().toString(36)}${(seq++).toString(36)}`;
@@ -39,6 +44,7 @@ export function ProposalEditor({
   defaultDate,
   defaultFee,
   defaultVat = "",
+  contractTypes = [],
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   values: ProposalEditorValues;
@@ -52,6 +58,8 @@ export function ProposalEditor({
   defaultFee: string;
   /** VAT on sales from Settings, for a first line (later lines copy the line above). */
   defaultVat?: string;
+  /** The business's contract types, for the Contract select. */
+  contractTypes?: ContractTypeOption[];
 }) {
   const [lines, setLines] = useState<Line[]>(() => start.map((l) => ({ ...l, key: newKey() })));
   const [fee, setFee] = useState(values.bookingFee);
@@ -68,6 +76,18 @@ export function ProposalEditor({
     [lines, fee, currency],
   ); // eslint-disable-line react-hooks/exhaustive-deps
   const depositMinor = money(deposit);
+  const termsBox = useRef<HTMLTextAreaElement>(null);
+  /**
+   * Picking a contract puts its wording in the Terms box, which stays an ordinary text box staff can change for
+   * this proposal. Set the way typing does (the native setter, then an input event), so the form sees the change.
+   */
+  const pickContract = (id: string) => {
+    const box = termsBox.current;
+    if (!box) return;
+    const terms = contractTypes.find((t) => t.id === id)?.terms ?? "";
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, terms);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  };
 
   const set = (key: string, patch: Partial<ProposalLineDraft>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const add = () =>
@@ -351,12 +371,47 @@ export function ProposalEditor({
           </label>
           <label className="block sm:col-span-2">
             <span className="label">A note to the customer</span>
-            <textarea name="message" rows={3} defaultValue={values.message} maxLength={3000} className="input" placeholder="Shown at the top of their proposal" />
+            <textarea
+              name="message"
+              rows={3}
+              defaultValue={values.message}
+              maxLength={3000}
+              className="input"
+              placeholder="Shown at the top of their proposal"
+            />
           </label>
+          <div className="sm:col-span-2">
+            <label className="block">
+              <span className="label">Contract</span>
+              <select name="contractTemplateId" defaultValue={values.contractTemplateId} onChange={(e) => pickContract(e.target.value)} className="input">
+                <option value="">None</option>
+                {contractTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="hint">
+              {contractTypes.length ? (
+                "Choosing one puts its wording below."
+              ) : (
+                <>
+                  No contract types yet.{" "}
+                  <a href="/settings/documents#contract-types" className="link">
+                    Add them in Settings
+                  </a>
+                  .
+                </>
+              )}
+            </p>
+          </div>
           <label className="block sm:col-span-2">
             <span className="label">Terms</span>
-            <textarea name="terms" rows={5} defaultValue={values.terms} maxLength={20000} className="input" />
-            <span className="hint block">Filled in from your contract wording in Settings. Change it for this proposal if you need to.</span>
+            <textarea ref={termsBox} name="terms" rows={8} defaultValue={values.terms} maxLength={20000} className="input" />
+            <span className="hint block">
+              What the customer reads and agrees to. Change the wording for this proposal if you need to: the contract in Settings stays as it is.
+            </span>
           </label>
         </div>
 

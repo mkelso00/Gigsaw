@@ -1,7 +1,7 @@
 import "server-only";
 import { notFound } from "next/navigation";
-import { contractState, eventContractDoc } from "@/lib/contract-doc";
-import { contractStatusFor } from "@/lib/contracts";
+import { contractState } from "@/lib/contract-doc";
+import { contractStatusFor, contractSubject } from "@/lib/contracts";
 import { getSettings, prisma } from "@/lib/db";
 import { eventFormOptions } from "@/lib/event-options";
 import { daysBetween } from "@/lib/event-plan";
@@ -35,12 +35,31 @@ export async function loadEventPage(agencyId: string, id: string) {
   const today = localDateKey(new Date(), e.timezone);
   const totals = eventTotals(e.bookings);
   const daysLeft = daysBetween(today, e.date);
-  const contractDoc = eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings);
-  const contract = await contractStatusFor(agencyId, { kind: "event", id: e.id }, contractDoc);
+  // The contract as it stands, with the contract type it uses (the one chosen, the customer's, the event type's or the default).
+  const subject = (await contractSubject(agencyId, { kind: "event", id: e.id }))!;
+  const contract = await contractStatusFor(agencyId, { kind: "event", id: e.id }, subject.doc);
+  const contractType = { templates: subject.templates, picked: subject.picked, auto: subject.auto, chosenId: subject.chosenId };
   // A signed proposal is the agreement: once the customer has signed it the booking is locked in.
   const contractSigned = !!proposal || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
 
-  return { event: e, settings, options, acts, tasks, sent, checked, coordinator, payLinks, proposal, today, totals, daysLeft, contract, contractSigned };
+  return {
+    event: e,
+    settings,
+    options,
+    acts,
+    tasks,
+    sent,
+    checked,
+    coordinator,
+    payLinks,
+    proposal,
+    today,
+    totals,
+    daysLeft,
+    contract,
+    contractType,
+    contractSigned,
+  };
 }
 
 export type EventPageData = Awaited<ReturnType<typeof loadEventPage>>;

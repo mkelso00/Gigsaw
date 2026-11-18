@@ -17,7 +17,12 @@ export const SETTINGS_PAGES: { href: string; label: string; icon: string; hint: 
   { href: "/settings/reminders", label: "Act reminders", icon: "clock", hint: "Weekly booking list and on-the-day reminders" },
   { href: "/settings/enquiries", label: "Enquiry form", icon: "inbox", hint: "A form for your website: new customers send you their event details" },
   { href: "/settings/weddings", label: "Weddings and events", icon: "heart", hint: "Planner emails, customer confirmations and reviews" },
-  { href: "/settings/documents", label: "Contracts and invoices", icon: "doc", hint: "Wording added to every contract and invoice" },
+  {
+    href: "/settings/documents",
+    label: "Contracts and invoices",
+    icon: "doc",
+    hint: "Contract types for proposals and contracts, your signature and invoice wording",
+  },
   { href: "/settings/demo", label: "Demo data", icon: "sparkle", hint: "Sample acts, venues and bookings to try things out" },
 ];
 

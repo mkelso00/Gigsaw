@@ -5,6 +5,7 @@ import { ContactForm } from "@/components/crm-forms";
 import { ConfirmButton, ServerForm } from "@/components/forms";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
+import { contractTemplatesFor } from "@/lib/contract-templates-server";
 import { prisma } from "@/lib/db";
 
 export const metadata: Metadata = { title: "Edit contact" };
@@ -12,12 +13,15 @@ export const metadata: Metadata = { title: "Edit contact" };
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const contact = await prisma.contact.findFirst({ where: { id, agencyId: user.agencyId } });
+  const [contact, contractTypes] = await Promise.all([
+    prisma.contact.findFirst({ where: { id, agencyId: user.agencyId } }),
+    contractTemplatesFor(user.agencyId),
+  ]);
   if (!contact) notFound();
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader title={`Edit ${contact.name}`} />
-      <ContactForm action={updateContact.bind(null, contact.id)} contact={contact} />
+      <ContactForm action={updateContact.bind(null, contact.id)} contact={contact} contractTypes={contractTypes} />
       <ServerForm action={deleteContact.bind(null, contact.id)}>
         <ConfirmButton message={`Delete ${contact.name}? Their bookings stay but lose the link to this contact.`}>Delete contact</ConfirmButton>
       </ServerForm>

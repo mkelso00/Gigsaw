@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { cancelContract, sendContractToSign } from "@/actions/contracts";
+import { cancelContract, sendContractToSign, setContractType } from "@/actions/contracts";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { contractState, contractStatusLabel } from "@/lib/contract-doc";
+import { reasonLabel, type ContractReason } from "@/lib/contract-templates";
 import { contractUrl, type contractStatusFor } from "@/lib/contracts";
 import { formatDate, formatDateTime } from "@/lib/time";
 
@@ -10,6 +11,11 @@ import { formatDate, formatDateTime } from "@/lib/time";
 // the signed copy. A booking that's part of a wedding shows the wedding's contract instead.
 
 type Status = Awaited<ReturnType<typeof contractStatusFor>>;
+type Template = { id: string; name: string; terms: string };
+type Picked = { template: Template; reason: ContractReason } | null;
+
+/** The contract types to choose from, the one chosen (null: automatic), and what is used and why. */
+export type ContractTypeChoice = { templates: Template[]; chosenId: string | null; picked: Picked; auto: Picked };
 
 const TONE: Record<string, string> = {
   NONE: "bg-ink-100 text-ink-700",
@@ -27,7 +33,8 @@ export function ContractPanel({
   previewHref,
   partOf,
   agencySigned = true,
-  noTerms = false,
+  contractType,
+  eventType,
 }: {
   kind: "booking" | "event";
   id: string;
@@ -40,8 +47,10 @@ export function ContractPanel({
   partOf?: { href: string; name: string };
   /** Whether the business has drawn its own signature (Settings → Contracts and invoices). */
   agencySigned?: boolean;
-  /** The business hasn't added its terms, so the contract is just the booking and the fee. */
-  noTerms?: boolean;
+  /** The contract types and which one this uses. Null on a booking inside a wedding or event (chosen there). */
+  contractType?: ContractTypeChoice | null;
+  /** The booking's or event's type, to say why a contract type was picked. */
+  eventType?: string;
 }) {
   const { current, changes, earlier } = status;
   const state = contractState(current);
@@ -49,6 +58,9 @@ export function ContractPanel({
   const changed = state === "SIGNED" && changes.length > 0;
   // A resend or a new version goes to whoever it went to last, unless changed.
   const defaults = current ? { name: current.signerName, email: current.signerEmail } : (signer ?? { name: "", email: "" });
+  const picked = contractType?.picked ?? null;
+  // No contract type has wording for this one, so the contract is just the booking and the fee.
+  const noTerms = !!contractType && !picked?.template.terms.trim();
 
   const sendForm = (label: string) => (
     <ActionForm action={sendContractToSign.bind(null, kind, id)} className="mt-3 space-y-2">
@@ -125,6 +137,31 @@ export function ContractPanel({
               <CopyField value={contractUrl(open.token)} />
             </div>
           )}
+          {contractType && contractType.templates.length > 0 && (
+            // Keyed by the choice, so the select shows the saved one once the page refreshes.
+            <ActionForm key={contractType.chosenId ?? "auto"} action={setContractType.bind(null, kind, id)} className="mt-3">
+              <div className="flex items-end gap-2">
+                <label className="block min-w-0 flex-1">
+                  <span className="label">Contract</span>
+                  <select name="contractTemplateId" defaultValue={contractType.chosenId ?? ""} className="input">
+                    <option value="">Automatic{contractType.auto ? `: ${contractType.auto.template.name}` : ""}</option>
+                    {contractType.templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <SubmitButton className="btn">Save</SubmitButton>
+              </div>
+              {picked && (
+                <p className="hint" data-testid="contract-type-in-use">
+                  Uses the {picked.template.name}, {reasonLabel(picked.reason, eventType)}.
+                  {state === "SIGNED" ? " The signed copy stays as it was signed." : ""}
+                </p>
+              )}
+            </ActionForm>
+          )}
           {/* One form in one place, so its "Sent" message stays after the status changes. */}
           {state === "SIGNED" && !changed ? (
             <details className="mt-3 text-sm">
@@ -143,11 +180,11 @@ export function ContractPanel({
           )}
           {noTerms && (
             <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Your contract has no terms yet, only the booking details and the fee.{" "}
-              <a href="/settings/documents" className="font-medium underline">
-                Add your terms
+              No contract type has terms for this one, so the contract is only the booking details and the fee.{" "}
+              <a href="/settings/documents#contract-types" className="font-medium underline">
+                Add your contract types
               </a>{" "}
-              once and they go on every contract.
+              in Settings.
             </p>
           )}
           {!agencySigned && (

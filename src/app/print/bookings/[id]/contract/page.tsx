@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { ContractBody } from "@/components/contract";
 import { DocumentShell } from "@/components/document";
-import { agencySignatureOf, bookingContractDoc } from "@/lib/contract-doc";
+import { notFound } from "next/navigation";
+import { agencySignatureOf } from "@/lib/contract-doc";
+import { contractSubject } from "@/lib/contracts";
 import { loadPrintable } from "@/lib/print";
 import { formatDateTime } from "@/lib/time";
 
@@ -10,7 +12,10 @@ export const metadata: Metadata = { title: "Contract" };
 export default async function ContractPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { booking: b, settings } = await loadPrintable(id);
-  const doc = bookingContractDoc(b, settings);
+  // The same contract the client signs: the booking with the contract type it uses.
+  const subject = await contractSubject(b.agencyId, { kind: "booking", id: b.id });
+  if (!subject) notFound();
+  const doc = subject.doc;
   return (
     <DocumentShell
       title={doc.title}

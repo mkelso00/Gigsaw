@@ -4,7 +4,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { replyCounts } from "@/lib/availability";
 import { awayBetween } from "@/lib/away";
 import { buildChecklist } from "@/lib/checklist";
-import { bookingContractDoc, contractState } from "@/lib/contract-doc";
+import { contractState } from "@/lib/contract-doc";
 import { contractStatusFor, contractSubject, type ContractTarget } from "@/lib/contracts";
 import { linkedActIds } from "@/lib/people";
 import { actName } from "@/lib/constants";
@@ -75,8 +75,10 @@ export async function loadBookingPage(agencyId: string, id: string) {
 
   // A gig inside a wedding or event is covered by the event's contract.
   const contractTarget: ContractTarget = booking.eventId ? { kind: "event", id: booking.eventId } : { kind: "booking", id: booking.id };
-  const contractDoc = booking.eventId ? (await contractSubject(agencyId, contractTarget))?.doc : bookingContractDoc(booking, settings);
-  const contract = contractDoc ? await contractStatusFor(agencyId, contractTarget, contractDoc) : null;
+  // The contract as it stands, with the contract type it uses (the one chosen, the client's, the event type's or the default).
+  const subject = await contractSubject(agencyId, contractTarget);
+  const contract = subject ? await contractStatusFor(agencyId, contractTarget, subject.doc) : null;
+  const contractType = subject ? { templates: subject.templates, picked: subject.picked, auto: subject.auto, chosenId: subject.chosenId } : null;
 
   const deal = dealBreakdown(booking);
   const totals = paymentTotals(booking.payments);
@@ -96,7 +98,7 @@ export async function loadBookingPage(agencyId: string, id: string) {
   const arrival = arrivalFor(booking, settings, now);
   const zone = zoneLabel(booking.arriveBy, tz);
 
-  return { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, deal, totals, checklist, arrival };
+  return { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival };
 }
 
 export type BookingPageData = Awaited<ReturnType<typeof loadBookingPage>>;

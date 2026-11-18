@@ -67,6 +67,7 @@ model Agency {
   quotes       Quote[]
   calendarConnections CalendarConnection[]
   actInvoices  ActInvoice[]
+  contractTemplates ContractTemplate[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -143,6 +144,8 @@ model Settings {
   dayReminders          Boolean @default(true)
   dayReminderTime       String  @default("12:00") // venue's local time
   invoiceTerms          String  @default("Payment due within 14 days of invoice date.")
+  // The single contract wording from before contract types (ContractTemplate). Copied into a "Standard
+  // contract" by the 20261219000000_contract_types migration; kept, but nothing reads it any more.
   contractTerms         String  @default("")
   // The agency's own signature on contracts: a drawn PNG (data URL), and who signs and as what.
   signatureImage        String  @default("")
@@ -305,6 +308,9 @@ model Contact {
   phone     String   @default("")
   address   String   @default("")
   tags      String   @default("") // comma separated
+  // This client's own contract, e.g. Sony always gets the Corporate contract. Null: by event type, then the default.
+  contractTemplateId String?
+  contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
@@ -423,6 +429,10 @@ model Booking {
   // The wedding or event this gig is part of (one customer booking with several acts).
   eventId String?
   event   Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  // The contract type chosen for this gig. Null: the client's own, then by event type, then the default.
+  contractTemplateId String?
+  contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
 
   // The weekly venue slot this gig fills, if it came from a venue's music schedule.
   slotId String?
@@ -803,6 +813,9 @@ model Event {
   planChangedAt DateTime?
   planToldActs  Json?
   notes      String   @default("") // agency only
+  // The contract type chosen for this wedding or event. Null: the customer's own, then by type, then the default.
+  contractTemplateId String?
+  contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
 
   // The plan, filled in by the agency or by the customer using their planner link. Acts see it.
   guestCount    Int?
@@ -1138,6 +1151,10 @@ model Quote {
   depositDue      String? // "YYYY-MM-DD"
   validUntil      String? // "YYYY-MM-DD", the last day it can be accepted
   message         String  @default("") // a note to the customer
+  // The contract type picked for this proposal. `terms` is the wording itself, copied from it and
+  // perhaps changed for this proposal: what the customer reads and agrees to.
+  contractTemplateId String?
+  contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
   terms           String  @default("")
 
   // The customer's private link, made when this version is first sent. It stops opening at tokenExpiresAt.
@@ -1323,4 +1340,30 @@ model BookingLineup {
 
   @@unique([bookingId, personId])
   @@index([personId])
+}
+
+// A saved contract the business can send, e.g. "Wedding contract" or "Corporate contract". Which one a
+// proposal, booking or wedding uses: the one picked for it, then the client's own, then the first whose
+// eventTypes include the event's type, then the default (src/lib/contract-templates.ts). Proposals and
+// signed contracts keep a copy of the wording, so changing or deleting a type never changes those.
+model ContractTemplate {
+  id         String   @id @default(cuid())
+  agencyId   String
+  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name       String
+  terms      String   @default("")
+  // The event types (EVENT_TYPES) it's used for by default, e.g. ["WEDDING"].
+  eventTypes String[] @default([])
+  // Used for everything else. Exactly one per agency while it has any.
+  isDefault  Boolean  @default(false)
+  sort       Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  contacts Contact[]
+  bookings Booking[]
+  events   Event[]
+  quotes   Quote[]
+
+  @@index([agencyId])
 }

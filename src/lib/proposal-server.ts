@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { highestReference, referenceAfter } from "./bookings";
 import { cardPaymentsReady, ensurePayLink, payUrl } from "./card-payments";
 import { onConfirmed } from "./confirmations";
+import { pickContract } from "./contract-templates";
+import { contractTemplatesFor } from "./contract-templates-server";
 import { getSettings, prisma } from "./db";
 import { enquiryTitle, firstName, formatDay } from "./enquiries";
 import { defaultTasks } from "./event-plan";
@@ -51,7 +53,8 @@ export const proposalInclude = {
     },
   },
   contact: true,
-  agency: { include: { settings: true } },
+  // The business's contract types: a proposal with no wording of its own takes its contract's (termsFor).
+  agency: { include: { settings: true, contractTemplates: { orderBy: [{ sort: "asc" }, { createdAt: "asc" }] } } },
 } satisfies Prisma.QuoteInclude;
 export type FullProposal = Prisma.QuoteGetPayload<{ include: typeof proposalInclude }>;
 
@@ -86,6 +89,8 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
   if (!contact) throw new ProposalError("This enquiry has no customer. Add them first.");
 
   const eventType = enquiry?.eventType || "WEDDING";
+  // The contract: the customer's own (e.g. Sony's Corporate contract), else the one for this type of event, else the default.
+  const contract = pickContract(await contractTemplatesFor(user.agencyId), { clientTemplateId: contact.contractTemplateId, eventType });
   const title = enquiryTitle({ name: enquiry?.name ?? contact.name, eventType: eventType as Parameters<typeof enquiryTitle>[0]["eventType"] });
   const liked = (Array.isArray(enquiry?.acts) ? (enquiry.acts as { id?: string }[]) : []).map((a) => a.id).filter((id): id is string => !!id);
   const acts = liked.length ? await prisma.artist.findMany({ where: { id: { in: liked.slice(0, 3) }, agencyId: user.agencyId }, select: { id: true } }) : [];
@@ -117,7 +122,8 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
           currency: settings.defaultCurrency,
           bookingFeeMinor: defaultBookingFee(settings, { eventType }),
           validUntil: addDaysToKey(today, 14),
-          terms: settings.contractTerms,
+          contractTemplateId: contract?.id ?? null,
+          terms: contract?.terms ?? "",
           lines: { create: lines },
         },
       });
@@ -159,6 +165,7 @@ export async function newProposalVersion(user: { id: string; agencyId: string },
         validUntil: q.validUntil && q.validUntil >= todayIn(q.timezone) ? q.validUntil : addDaysToKey(todayIn(q.timezone), 14),
         tellActs: q.tellActs,
         message: q.message,
+        contractTemplateId: q.contractTemplateId,
         terms: q.terms,
         lines: {
           create: q.lines.map((l) => ({
@@ -188,12 +195,23 @@ export async function newProposalVersion(user: { id: string; agencyId: string },
   });
 }
 
-/** The terms the customer agrees to: the proposal's own, or the business's wording from Settings if it has none. */
-export function termsFor(q: Pick<FullProposal, "terms" | "agency">) {
-  return (q.terms.trim() ? q.terms : (q.agency.settings?.contractTerms ?? "")).trim().slice(0, 20000);
+/**
+ * The terms the customer agrees to: the proposal's own wording, or if it has none, its contract type's (the one
+ * picked, then the customer's own, then the one for its type of event, then the default).
+ */
+export function termsFor(
+  q: Pick<FullProposal, "terms" | "agency" | "contractTemplateId" | "eventType"> & { contact: { contractTemplateId: string | null } | null },
+) {
+  if (q.terms.trim()) return q.terms.trim().slice(0, 20000);
+  const contract = pickContract(q.agency.contractTemplates, {
+    chosenId: q.contractTemplateId,
+    clientTemplateId: q.contact?.contractTemplateId,
+    eventType: q.eventType,
+  });
+  return (contract?.terms ?? "").trim().slice(0, 20000);
 }
 
-/** On sending: a proposal made before the terms were in Settings takes them now, so what's signed includes them. */
+/** On sending: a proposal with no wording of its own takes its contract type's now, so what's signed includes it. */
 async function fillTerms(q: FullProposal) {
   if (q.terms.trim()) return;
   const terms = termsFor(q);
@@ -214,7 +232,7 @@ export function readyToSend(q: FullProposal, today: string): string | null {
   if (q.validUntil && q.validUntil < today) return "The valid-until date has passed. Change it first.";
   // A wedding proposal is the couple's contract: they agree to the terms when they sign it.
   if (q.eventType === "WEDDING" && !termsFor(q))
-    return "Add your terms and conditions first, in Settings, Contracts and invoices. The couple agree to them when they sign.";
+    return "Add the terms the couple agree to first: choose a contract with terms, or add your contracts in Settings, Contracts and invoices. The couple agree to them when they sign.";
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
   if (q.depositMinor > t.totalMinor) return "The deposit is more than the total";
   return null;
@@ -391,7 +409,16 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
           ? await tx.event.update({
               where: { id: existing.id },
               // Now booked: the customer gets the usual automatic emails (planner, balance, thank you).
-              data: { name: q.title, type: kind, date, customerId: q.contactId, ...where, agentId: existing.agentId ?? q.agentId, autoEmails: true },
+              data: {
+                name: q.title,
+                type: kind,
+                date,
+                customerId: q.contactId,
+                ...where,
+                agentId: existing.agentId ?? q.agentId,
+                autoEmails: true,
+                contractTemplateId: q.contractTemplateId,
+              },
             })
           : await tx.event.create({
               data: {
@@ -402,6 +429,8 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
                 timezone: q.timezone,
                 customerId: q.contactId,
                 ...where,
+                // The contract type the customer accepted, for any contract sent from the event later.
+                contractTemplateId: q.contractTemplateId,
                 guestCount: q.enquiry?.guests ?? null,
                 agentId: q.agentId,
                 notes: `Booked from proposal ${ref}, accepted by ${answer.name}.`,
