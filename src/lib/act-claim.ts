@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma, logActivity } from "./db";
 import { LOGIN_WINDOW_MS, lockedUntil } from "./login-limit";
 import { appUrl, sendEmail } from "./messaging";
+import { linkActLoginQuietly } from "./login-person";
 import { userByEmail } from "./oauth-flow";
 import { personName } from "./person-name";
 import { createResetToken, HOUR, sendResetLink } from "./reset";
@@ -111,6 +112,7 @@ export async function sendClaimLink(rawEmail: string): Promise<ClaimResult> {
     const again = await userByEmail(email);
     return again ? linkFor(again) : "none";
   }
+  if (pick.kind === "act") await linkActLoginQuietly(user.id);
   await logActivity(
     { id: user.id, agencyId: pick.agencyId },
     pick.kind === "act" ? "ARTIST" : "PERSON",

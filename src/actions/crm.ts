@@ -1,5 +1,6 @@
 "use server";
 
+import { linkActLoginQuietly } from "@/lib/login-person";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -172,7 +173,8 @@ export async function setArtistLogin(artistId: string, _: FormState, form: FormD
       await prisma.user.update({ where: { id: artist.login.id }, data: { email, passwordHash } });
       await prisma.session.deleteMany({ where: { userId: artist.login.id } });
     } else {
-      await prisma.user.create({ data: { email, name: artist.name, passwordHash, role: "ARTIST", artistId, agencyId: user.agencyId } });
+      const login = await prisma.user.create({ data: { email, name: artist.name, passwordHash, role: "ARTIST", artistId, agencyId: user.agencyId } });
+      await linkActLoginQuietly(login.id);
     }
     await logActivity(user, "ARTIST", artistId, artist.login ? "reset artist login" : "created artist login", email);
     revalidatePath(`/artists/${artistId}`);

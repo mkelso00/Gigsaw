@@ -1,3 +1,4 @@
+import { linkActLoginQuietly } from "./login-person";
 import "server-only";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
@@ -25,6 +26,8 @@ export async function createSession(userId: string) {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
   await prisma.session.create({ data: { token, userId, expiresAt } });
+  // An act login that's also someone in other acts: link it to them, so they see all their gigs.
+  await linkActLoginQuietly(userId);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,

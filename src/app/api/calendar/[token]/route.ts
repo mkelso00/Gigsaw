@@ -7,6 +7,7 @@ import { buildIcs, icsResponse } from "@/lib/ics";
 import { appUrl } from "@/lib/messaging";
 import { billingState } from "@/lib/subscription";
 import { markFeedFetched } from "@/lib/act-calendar-step";
+import { linkActLoginQuietly } from "@/lib/login-person";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,16 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token: raw } = await params;
   const token = raw.replace(/\.ics$/, "");
-  const act = await prisma.artist.findUnique({ where: { calendarToken: token }, include: { agency: true } });
-  const person = act
-    ? null
-    : await prisma.person.findUnique({ where: { calendarToken: token }, include: { agency: true, acts: { select: { artistId: true } } } });
+  const actRow = await prisma.artist.findUnique({
+    where: { calendarToken: token },
+    include: { agency: true, login: { select: { id: true, personId: true } } },
+  });
+  // An act's feed whose login is also a person's (someone with a solo act and bands, src/lib/login-person.ts)
+  // carries that person's gigs in every act, so a calendar added from the act's link shows the bands too.
+  const linkedPersonId = actRow?.login ? (actRow.login.personId ?? (await linkActLoginQuietly(actRow.login.id))) : null;
+  const act = linkedPersonId ? null : actRow;
+  const personWhere = linkedPersonId ? { id: linkedPersonId } : act ? null : { calendarToken: token };
+  const person = personWhere ? await prisma.person.findUnique({ where: personWhere, include: { agency: true, acts: { select: { artistId: true } } } }) : null;
   const owner = act ?? person;
   if (!owner || owner.agency.status !== "ACTIVE") return new Response("Not found", { status: 404 });
   // A calendar app fetching the feed means the act has added it: that ticks off the act app's calendar step.
