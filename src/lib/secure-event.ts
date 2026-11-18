@@ -7,6 +7,7 @@ import { messageFor } from "./message-templates";
 import { sendEmail } from "./messaging";
 import { formatMoney, paymentTotals } from "./money";
 import { isDirectPlan } from "./pay-plan";
+import { balanceDueDate } from "./event-plan";
 import { claimReminder } from "./reminders";
 import { formatDate, localDateKey, localTime } from "./time";
 import { log } from "@/server/log";
@@ -41,15 +42,7 @@ export function isSecured(s: { agreed: boolean; depositMinor: number; receivedMi
   return s.agreed && s.receivedMinor >= Math.max(0, s.depositMinor);
 }
 
-/** A day key a number of months earlier, e.g. the balance date 3 months before the wedding (31 May less 3 months is 28 Feb). */
-export function monthsBefore(key: string, months: number) {
-  const [y, m, d] = key.split("-").map(Number);
-  const total = y * 12 + (m - 1) - months;
-  const year = Math.floor(total / 12);
-  const month = (total % 12) + 1;
-  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
-}
+export { monthsBefore } from "./event-plan";
 
 /** When the balance is due: three months before the wedding, as the terms say. */
 export const BALANCE_MONTHS_BEFORE = 3;
@@ -186,7 +179,7 @@ async function tellCoupleBooked(eventId: string) {
   const t = eventTotals(e.bookings);
   const m = (x: number) => formatMoney(x, t.currency);
   const deposit = e.bookings.reduce((n, b) => n + b.depositMinor, 0);
-  const balanceDue = monthsBefore(e.date, BALANCE_MONTHS_BEFORE);
+  const balanceDue = balanceDueDate(e.date);
   const today = localDateKey(new Date(), e.timezone);
   const direct = isDirectPlan(e.payPlan);
   const agent = quote?.agentId ? await prisma.user.findUnique({ where: { id: quote.agentId }, select: { email: true, name: true } }) : null;

@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestAgency, describeDb, removeTestAgency } from "./helpers/db";
+import { balanceDueDate } from "@/lib/event-plan";
 
 // The wedding journey's scheduled emails (src/lib/events.ts runEventMessages): 6 months, 3 months, 4 weeks,
 // 1 week and after, the coordinator's notices, secured weddings only, late bookings, and Send now.
@@ -157,7 +158,7 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
         ["Total", "£1,000.00"],
         ["Paid so far", "£250.00"],
         ["Left to pay", "£750.00"],
-        ["Balance due", time.formatDate(new Date(`${time.addDaysToKey(e.date, -91)}T12:00:00Z`), "UTC")],
+        ["Balance due", time.formatDate(new Date(`${balanceDueDate(e.date)}T12:00:00Z`), "UTC")],
       ]),
     );
     noActFee(mail);
@@ -311,5 +312,18 @@ describeDb("the wedding journey's scheduled emails (database)", () => {
     });
     expect(await sendEventStepNow(e.id, "BALANCE_REMINDER", undefined)).toEqual({ error: "Nothing is left to pay you" });
     expect(await sendEventStepNow(e.id, "NOT_A_STEP", undefined)).toEqual({ error: "Unknown email" });
+  });
+});
+
+describe("weddings already in the diary when the schedule started", () => {
+  it("only get the stages that open after it, plus act details and thanks as before", async () => {
+    const { missedAtLaunch } = await import("@/lib/events");
+    const old = { createdAt: new Date("2026-10-01T10:00:00Z"), date: "2027-01-07" }; // 50 days after launch: in the 3-month stage
+    expect(missedAtLaunch(old, "BALANCE_REMINDER")).toBe(true);
+    expect(missedAtLaunch(old, "TEAM_THREE_MONTHS")).toBe(true);
+    expect(missedAtLaunch(old, "PLANNER_FINAL")).toBe(false);
+    expect(missedAtLaunch(old, "WEEK_TO_GO")).toBe(false);
+    expect(missedAtLaunch(old, "ACT_DETAILS")).toBe(false);
+    expect(missedAtLaunch({ ...old, createdAt: new Date("2026-11-20T10:00:00Z") }, "BALANCE_REMINDER")).toBe(false);
   });
 });

@@ -10,8 +10,21 @@ export type TaskKey = "CONTRACT" | "DEPOSIT" | "PLANNER" | "BALANCE" | "ITINERAR
 export const BALANCE_DUE_DAYS = 91;
 export const PLANNER_DUE_DAYS = 28;
 
-/** The day the balance is due: 3 months (13 weeks) before the event. Booked later than that, it's due on booking. */
-export const balanceDueDate = (date: string) => addDaysToKey(date, -BALANCE_DUE_DAYS);
+/** A day key a number of calendar months earlier (31 May less 3 months is 28 Feb). */
+export function monthsBefore(key: string, months: number) {
+  const [y, m, d] = key.split("-").map(Number);
+  const total = y * 12 + (m - 1) - months;
+  const year = Math.floor(total / 12);
+  const month = (total % 12) + 1;
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
+/**
+ * The day the balance is due: 3 calendar months before the event, as the terms say (14 August: 14 May).
+ * Booked later than that, it's due on booking. The 3-month emails start 13 weeks out, on or just before it.
+ */
+export const balanceDueDate = (date: string) => monthsBefore(date, 3);
 /** The day the running order and songs are due: 4 weeks before the event. */
 export const plannerDueDate = (date: string) => addDaysToKey(date, -PLANNER_DUE_DAYS);
 

@@ -24,10 +24,11 @@ describe("defaultTasks", () => {
   it("counts due dates back from the event day: the planner 4 weeks before, the balance 3 months (13 weeks) before", () => {
     const tasks = defaultTasks("WEDDING", "2027-06-12");
     expect(tasks.find((t) => t.key === "PLANNER")?.dueDate).toBe("2027-05-15");
-    expect(tasks.find((t) => t.key === "BALANCE")?.dueDate).toBe("2027-03-13");
+    expect(tasks.find((t) => t.key === "BALANCE")?.dueDate).toBe("2027-03-12");
     expect(tasks.find((t) => t.key === "ITINERARY")?.dueDate).toBe("2027-06-05");
     expect(tasks.find((t) => t.key === "THANKS")?.dueDate).toBe("2027-06-14");
-    expect(balanceDueDate("2027-06-12")).toBe("2027-03-13");
+    expect(balanceDueDate("2027-06-12")).toBe("2027-03-12");
+    expect(balanceDueDate("2027-05-31")).toBe("2027-02-28");
     expect(plannerDueDate("2027-06-12")).toBe("2027-05-15");
     expect(tasks.find((t) => t.key === "PLANNER")?.title).toMatch(/the couple/);
     expect(defaultTasks("CORPORATE", "2027-06-12").find((t) => t.key === "PLANNER")?.title).toMatch(/the customer/);

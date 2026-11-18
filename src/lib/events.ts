@@ -14,6 +14,7 @@ import {
   plannerDueDate,
   planRows,
   SECURED_STATUSES,
+  stepWindow,
   timeToGo,
   type EventMessage,
   type TaskKey,
@@ -24,7 +25,7 @@ import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForGigs } from "./people";
 import { claimedReminders, claimReminder } from "./reminders";
-import { formatDate, localDateKey, localTime } from "./time";
+import { addDaysToKey, formatDate, localDateKey, localTime } from "./time";
 
 // Weddings and events: one customer booking with several acts. Each act's gig is an ordinary
 // booking linked to the event, so the acts only ever see their own gig and fee, while the
@@ -640,6 +641,19 @@ const ABOUT_PLANNER: EventMessage[] = ["PLANNER_REQUEST", "PLANNER_CHASE", "PLAN
  * stage live today can send (eventMessagesDue: a late booking never gets the earlier stages in a rush),
  * and nothing goes to or about the customer until their booking is secured (isSecured).
  */
+/**
+ * When the 6-month, 3-month, 4-week and 1-week emails started. A wedding already in the diary then only
+ * gets a stage that opens after it, so switching the schedule on doesn't send everyone the stage they're
+ * part-way through all at once; staff can still press Send now. The act details and thank-you, which
+ * were sent before, carry on as they were.
+ */
+export const JOURNEY_LIVE = new Date("2026-11-18T12:00:00Z");
+
+export function missedAtLaunch(e: { createdAt: Date; date: string }, kind: EventMessage) {
+  if (kind === "ACT_DETAILS" || kind === "THANKS" || e.createdAt >= JOURNEY_LIVE) return false;
+  return addDaysToKey(e.date, -stepWindow(kind).from) < localDateKey(JOURNEY_LIVE, "UTC");
+}
+
 export async function runEventMessages(now = new Date()) {
   const DAY = 86_400_000;
   const where = {
@@ -661,6 +675,7 @@ export async function runEventMessages(now = new Date()) {
         date: true,
         timezone: true,
         plannerDoneAt: true,
+        createdAt: true,
         customer: { select: { email: true } },
         // Secured: a gig past On hold and Enquiry (isSecured), counted in the same query.
         _count: { select: { bookings: { where: { archivedAt: null, status: { in: [...SECURED_STATUSES] } } } } },
@@ -687,6 +702,7 @@ export async function runEventMessages(now = new Date()) {
       if (!messageFor(templates.get(e.agencyId), TEMPLATE_OF[kind], {}).on) return false;
       if (kind === "ACT_DETAILS") return true;
       if (!secured) return false;
+      if (missedAtLaunch(e, kind)) return false;
       if (ABOUT_PLANNER.includes(kind) && e.plannerDoneAt) return false;
       return audienceOf(kind) === "TEAM" || !!e.customer?.email;
     });

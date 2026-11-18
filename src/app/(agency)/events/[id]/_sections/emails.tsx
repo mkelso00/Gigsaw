@@ -3,7 +3,7 @@ import { sendEventStepNow, sendPlannerNow, sendPlanToActsNow } from "@/actions/e
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { BALANCE_DUE_DAYS, EVENT_STEPS, isSecured, JOURNEY_STAGES, stepWindow, type EventMessage, type JourneyStage } from "@/lib/event-plan";
-import { owedToUs, plannerUrl } from "@/lib/events";
+import { missedAtLaunch, owedToUs, plannerUrl } from "@/lib/events";
 import { addDaysToKey, formatDateTime } from "@/lib/time";
 import type { EventPageData, EventView } from "../_data";
 import { dayLabel } from "./day-label";
@@ -130,7 +130,9 @@ export function AutoEmailsSection({
                             ? "due, but automatic emails are off"
                             : waitsForSecure
                               ? "due, waiting for the booking to be secured"
-                              : "due now, goes out shortly"
+                              : missedAtLaunch(e, s.kind)
+                                ? "not sent by itself: it fell due before this email started. Send it now if you'd like"
+                                : "due now, goes out shortly"
                         : checked.has(s.kind)
                           ? "not needed when it fell due"
                           : "missed: its window has passed";
