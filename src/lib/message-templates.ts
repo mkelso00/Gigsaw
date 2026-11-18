@@ -18,6 +18,8 @@ export type TemplateDef = {
 
 const GIG = ["first_name", "act", "venue", "date", "time", "business"];
 const EVENT = ["first_name", "event", "date", "business"];
+/** Wedding notices to staff: first_name is the staff member's, customer the couple's names. */
+const TEAM_EVENT = ["first_name", "event", "date", "customer", "business"];
 
 export const TEMPLATES: TemplateDef[] = [
   {
@@ -137,7 +139,7 @@ export const TEMPLATES: TemplateDef[] = [
     key: "PLANNER",
     group: "CUSTOMERS",
     label: "Planner link",
-    hint: "Asks a wedding or event customer for the running order, contacts and song requests.",
+    hint: "Six months before a wedding or event, asks the customer for the running order, contacts and song requests, with a summary of what's paid and when the balance is due.",
     example: { subject: "{event}: a few details from you", intro: "Hi {first_name}, to make the day perfect we need a few details from you." },
     placeholders: EVENT,
   },
@@ -145,8 +147,39 @@ export const TEMPLATES: TemplateDef[] = [
     key: "BALANCE",
     group: "CUSTOMERS",
     label: "Balance reminder",
-    hint: "Reminds a wedding or event customer of what's left to pay.",
-    example: { subject: "{event}: balance due", intro: "Hi {first_name}, just a reminder that the balance for {event} is due soon." },
+    hint: "Three months before a wedding or event, when the balance is due, if anything is still owed to you.",
+    example: { subject: "{event}: balance due", intro: "Hi {first_name}, just a reminder that the balance for {event} is due." },
+    placeholders: EVENT,
+  },
+  // ---- The wedding journey (src/lib/events.ts) ----
+  {
+    key: "PLANNER_CHASE",
+    group: "CUSTOMERS",
+    label: "Planner reminder",
+    hint: "Three months before a wedding or event, if the customer hasn't filled in their planner yet.",
+    example: {
+      subject: "A quick reminder: the running order for {event}",
+      intro: "Hi {first_name}, we still need your running order and a few details for {event}. It only takes about five minutes.",
+    },
+    placeholders: EVENT,
+  },
+  {
+    key: "PLANNER_FINAL",
+    group: "CUSTOMERS",
+    label: "Planner: last call",
+    hint: "Four weeks before a wedding or event, when the running order and songs are due, if the planner still isn't filled in.",
+    example: {
+      subject: "{event}: we need your running order",
+      intro: "Hi {first_name}, {event} is only four weeks away and we still need your running order and song choices. Please fill them in today.",
+    },
+    placeholders: EVENT,
+  },
+  {
+    key: "WEEK_TO_GO",
+    group: "CUSTOMERS",
+    label: "One week to go",
+    hint: "A short, warm note to the customer a week before their wedding or event.",
+    example: { subject: "One week to go!", intro: "Hi {first_name}, we can't wait! There's nothing for you to worry about, we're all ready to go 👌" },
     placeholders: EVENT,
   },
   {
@@ -217,6 +250,37 @@ export const TEMPLATES: TemplateDef[] = [
     hint: "Sent to your business email when someone fills in your join link.",
     example: { subject: "New act wants to join: {act}", intro: "{act} has sent their details." },
     placeholders: ["act", "business"],
+  },
+  // ---- The wedding journey, to the wedding's lead agent (or your business email) ----
+  {
+    key: "TEAM_SIX_MONTHS",
+    group: "TEAM",
+    label: "Wedding: six months to go",
+    hint: "To the wedding or event's lead agent (or your business email) six months before, once the customer has been asked for their running order.",
+    example: {
+      subject: "{event}: six months to go",
+      intro: "Hi {first_name}, {event} is six months away. We've asked {customer} for their running order. Please get in touch with them.",
+    },
+    placeholders: TEAM_EVENT,
+  },
+  {
+    key: "TEAM_THREE_MONTHS",
+    group: "TEAM",
+    label: "Wedding: three months to go",
+    hint: "To the lead agent (or your business email) three months before, when the balance is due: what's still missing, or that all is in hand.",
+    example: { subject: "{event}: three months to go", intro: "Hi {first_name}, {event} is three months away. Here's where things stand." },
+    placeholders: TEAM_EVENT,
+  },
+  {
+    key: "TEAM_PLANNER_LATE",
+    group: "TEAM",
+    label: "Wedding: running order missing",
+    hint: "To the lead agent (or your business email) four weeks before, if the customer still hasn't filled in their planner.",
+    example: {
+      subject: "{event}: running order still missing",
+      intro: "Hi {first_name}, {customer} still haven't filled in their running order for {event}. It's due now, so please give them a call.",
+    },
+    placeholders: TEAM_EVENT,
   },
   {
     key: "NEW_ENQUIRY",

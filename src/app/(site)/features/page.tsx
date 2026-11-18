@@ -136,7 +136,7 @@ const AREAS: Area[] = [
       ["Shared with the acts, without the prices", "Acts see the planner on their booking page, along with who else is performing. They never see any prices."],
       [
         "Automatic emails on the right days",
-        "The planner link eight weeks before, a reminder at three weeks if it's not filled in, a balance reminder in the last two weeks, final details to the acts a week before, and a thank-you with your review link the day after.",
+        "The planner link and a payment summary six months before, the balance reminder at three months, a last call for the running order at four weeks, final details to the acts a week before, and a thank-you with your review link the day after. Your wedding coordinator hears what's missing along the way.",
       ],
       ["Sent at sensible times", "Every automatic email goes between 9am and 8pm, and only once. Change them for the agency or for one event."],
       [

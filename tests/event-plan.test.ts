@@ -1,30 +1,97 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, defaultTasks, eventMessagesDue, extraFieldsFromText, MAX_EXTRA_FIELDS, parseExtraFields, parsePlanExtras, planFieldsFor, planRows, readPlanForm } from "@/lib/event-plan";
+import {
+  balanceDueDate,
+  daysBetween,
+  defaultTasks,
+  EVENT_STEPS,
+  eventMessagesDue,
+  extraFieldsFromText,
+  isSecured,
+  JOURNEY_LOOKAHEAD_DAYS,
+  MAX_EXTRA_FIELDS,
+  parseExtraFields,
+  parsePlanExtras,
+  planFieldsFor,
+  plannerDueDate,
+  planRows,
+  readPlanForm,
+  stageOn,
+  stepWindow,
+  timeToGo,
+} from "@/lib/event-plan";
 
 describe("defaultTasks", () => {
-  it("counts due dates back from the event day", () => {
+  it("counts due dates back from the event day: the planner 4 weeks before, the balance 3 months (13 weeks) before", () => {
     const tasks = defaultTasks("WEDDING", "2027-06-12");
-    expect(tasks.find((t) => t.key === "PLANNER")?.dueDate).toBe("2027-05-01");
-    expect(tasks.find((t) => t.key === "BALANCE")?.dueDate).toBe("2027-05-29");
+    expect(tasks.find((t) => t.key === "PLANNER")?.dueDate).toBe("2027-05-15");
+    expect(tasks.find((t) => t.key === "BALANCE")?.dueDate).toBe("2027-03-13");
+    expect(tasks.find((t) => t.key === "ITINERARY")?.dueDate).toBe("2027-06-05");
+    expect(tasks.find((t) => t.key === "THANKS")?.dueDate).toBe("2027-06-14");
+    expect(balanceDueDate("2027-06-12")).toBe("2027-03-13");
+    expect(plannerDueDate("2027-06-12")).toBe("2027-05-15");
     expect(tasks.find((t) => t.key === "PLANNER")?.title).toMatch(/the couple/);
     expect(defaultTasks("CORPORATE", "2027-06-12").find((t) => t.key === "PLANNER")?.title).toMatch(/the customer/);
   });
 });
 
-describe("eventMessagesDue", () => {
-  it("asks for the planner 8 to 3 weeks out, then chases", () => {
-    expect(eventMessagesDue(60)).toEqual([]);
-    expect(eventMessagesDue(56)).toEqual(["PLANNER_REQUEST"]);
-    expect(eventMessagesDue(21)).toEqual(["PLANNER_CHASE"]);
+describe("eventMessagesDue: the wedding journey", () => {
+  it("starts 6 months out: the planner link with a payment summary, and a notice to the coordinator", () => {
+    expect(eventMessagesDue(190)).toEqual([]);
+    expect(eventMessagesDue(183)).toEqual([]);
+    expect(eventMessagesDue(182)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
+    expect(eventMessagesDue(92)).toEqual(["PLANNER_REQUEST", "TEAM_SIX_MONTHS"]);
   });
-  it("reminds about the balance in the last two weeks and sends act details from a week before", () => {
-    expect(eventMessagesDue(14)).toEqual(["PLANNER_CHASE", "BALANCE_REMINDER"]);
-    expect(eventMessagesDue(7)).toEqual(["BALANCE_REMINDER", "ACT_DETAILS"]);
-    expect(eventMessagesDue(0)).toEqual(["ACT_DETAILS"]);
+  it("at 3 months: the balance, a planner nudge and the coordinator's summary, and nothing to the acts", () => {
+    expect(eventMessagesDue(91)).toEqual(["BALANCE_REMINDER", "PLANNER_CHASE", "TEAM_THREE_MONTHS"]);
+    expect(eventMessagesDue(29)).toEqual(["BALANCE_REMINDER", "PLANNER_CHASE", "TEAM_THREE_MONTHS"]);
+    expect(eventMessagesDue(60)).not.toContain("ACT_DETAILS");
+  });
+  it("at 4 weeks, when the planner is due: the last call and a notice", () => {
+    expect(eventMessagesDue(28)).toEqual(["PLANNER_FINAL", "TEAM_PLANNER_LATE"]);
+    expect(eventMessagesDue(8)).toEqual(["PLANNER_FINAL", "TEAM_PLANNER_LATE"]);
+  });
+  it("a week before: 'we can't wait' to the couple and the final details to the acts", () => {
+    expect(eventMessagesDue(7)).toEqual(["WEEK_TO_GO", "ACT_DETAILS"]);
+    expect(eventMessagesDue(0)).toEqual(["WEEK_TO_GO", "ACT_DETAILS"]);
   });
   it("says thank you the day after, for up to a week", () => {
     expect(eventMessagesDue(-1)).toEqual(["THANKS"]);
+    expect(eventMessagesDue(-7)).toEqual(["THANKS"]);
     expect(eventMessagesDue(-8)).toEqual([]);
+  });
+  it("only ever has one stage live, so a late booking never gets the earlier stages at once", () => {
+    for (let d = -10; d <= 200; d++) {
+      const stages = new Set(eventMessagesDue(d).map((k) => EVENT_STEPS.find((s) => s.kind === k)!.stage));
+      expect(stages.size).toBeLessThanOrEqual(1);
+      expect(stageOn(d) ? [...stages] : []).toEqual(stageOn(d) ? [stageOn(d)] : []);
+    }
+    // Booked 2 months out: only the 3-month step is live, never the 6-month one.
+    expect(eventMessagesDue(60)).not.toContain("PLANNER_REQUEST");
+    expect(stepWindow("PLANNER_REQUEST")).toEqual({ from: 182, to: 92 });
+    expect(stepWindow("THANKS")).toEqual({ from: -1, to: -7 });
+    // The run looks far enough ahead for the first stage.
+    expect(JOURNEY_LOOKAHEAD_DAYS).toBeGreaterThanOrEqual(stepWindow("PLANNER_REQUEST").from);
+  });
+});
+
+describe("isSecured", () => {
+  it("needs a gig past On hold and Enquiry", () => {
+    expect(isSecured([])).toBe(false);
+    expect(isSecured([{ status: "HOLD" }, { status: "ENQUIRY" }, { status: "CANCELLED" }])).toBe(false);
+    expect(isSecured([{ status: "HOLD" }, { status: "CONFIRMED" }])).toBe(true);
+    expect(isSecured([{ status: "PENDING" }])).toBe(true);
+    expect(isSecured([{ status: "SETTLED" }])).toBe(true);
+  });
+});
+
+describe("timeToGo", () => {
+  it("reads naturally", () => {
+    expect(timeToGo(182)).toBe("6 months");
+    expect(timeToGo(91)).toBe("3 months");
+    expect(timeToGo(60)).toBe("2 months");
+    expect(timeToGo(28)).toBe("4 weeks");
+    expect(timeToGo(7)).toBe("7 days");
+    expect(timeToGo(1)).toBe("1 day");
   });
 });
 
@@ -57,7 +124,9 @@ describe("the business's own plan fields", () => {
 
   it("ignores malformed stored data", () => {
     expect(parseExtraFields(null)).toEqual([]);
-    expect(parseExtraFields([{ id: "bad id!", label: "x" }, { id: "abcd1234", label: "  Ok  " }, { id: "abcd5678" }])).toEqual([{ id: "abcd1234", label: "Ok" }]);
+    expect(parseExtraFields([{ id: "bad id!", label: "x" }, { id: "abcd1234", label: "  Ok  " }, { id: "abcd5678" }])).toEqual([
+      { id: "abcd1234", label: "Ok" },
+    ]);
     expect(parsePlanExtras({ a: "yes", b: 3, c: null })).toEqual({ a: "yes" });
     expect(parsePlanExtras([])).toEqual({});
   });
@@ -68,7 +137,11 @@ describe("the business's own plan fields", () => {
       { id: "bbbb2222", label: "Wedding schedule" },
     ];
     const event = { ...blank, timeline: "Ceremony 1pm", planExtras: { aaaa1111: "13:00" } };
-    expect(planFieldsFor(event, extras).map((f) => f.name).slice(-2)).toEqual(["extra_aaaa1111", "extra_bbbb2222"]);
+    expect(
+      planFieldsFor(event, extras)
+        .map((f) => f.name)
+        .slice(-2),
+    ).toEqual(["extra_aaaa1111", "extra_bbbb2222"]);
     expect(planRows(event, extras)).toEqual([
       ["Running order", "Ceremony 1pm"],
       ["Ceremony time", "13:00"],
