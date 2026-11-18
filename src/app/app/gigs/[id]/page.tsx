@@ -9,6 +9,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { CHECK_IN_KIND_LABELS, eventTypeLabel, type CheckInKind, actName, ACT_VISIBLE, type BookingStatus } from "@/lib/constants";
 import { getSettings, prisma } from "@/lib/db";
 import { parseExtraFields, planRows } from "@/lib/event-plan";
+import { onGig } from "@/lib/lineup";
 import { actIdsFor, ownActIds } from "@/lib/people";
 import { dealBreakdown, formatMoney } from "@/lib/money";
 import { formatDate, localTime, zoneLabel } from "@/lib/time";
@@ -28,13 +29,16 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
         artist: { select: { name: true } },
         checkIns: { orderBy: { at: "asc" } },
         event: { select: { payPlan: true } },
+        lineup: { select: { personId: true, change: true } },
       },
     }),
     getSettings(user.agencyId),
   ]);
   // Only gigs for the act(s) this login belongs to; never enquiries.
   const actIds = await actIdsFor(user);
-  if (!b || !b.artistId || !actIds.includes(b.artistId) || !ACT_VISIBLE.includes(b.status as BookingStatus)) notFound();
+  if (!b || !b.artistId || !onGig(b, actIds, user.personId) || !ACT_VISIBLE.includes(b.status as BookingStatus)) notFound();
+  // Standing in for this one gig: they see it, but never the act's fee (that's the act's, paid to the act).
+  const standingIn = !!user.personId && b.lineup.some((l) => l.personId === user.personId && l.change === "IN");
 
   const now = new Date();
   const tz = b.timezone;
@@ -49,7 +53,7 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
     : null;
   // Acts only ever see their own pay (after commission), never what the venue or customer is charged.
   // A band's gig seen by one of its acts shows no fee: that's the band's fee, not theirs (as in the calendar feed).
-  const ownGig = (await ownActIds(user)).includes(b.artistId);
+  const ownGig = !standingIn && (await ownActIds(user)).includes(b.artistId);
   const yourFee = ownGig ? dealBreakdown(b).artistMinor : 0;
   // The invoice made for this gig, for the act it's for (not a band member's solo login).
   const invoice = await prisma.actInvoice.findFirst({
@@ -86,6 +90,11 @@ export default async function ArtistGigPage({ params }: { params: Promise<{ id: 
           {formatDate(b.arriveBy, tz)} · {eventTypeLabel(b.eventType)}
           {b.eventName ? ` · ${b.eventName}` : ""}
         </p>
+        {standingIn && (
+          <p className="mt-2 inline-block rounded-full bg-volt-400/15 px-3 py-1 text-sm font-medium text-volt-400">
+            You&apos;re standing in with {b.artist?.name ?? "the act"} for this gig
+          </p>
+        )}
       </div>
 
       {b.status !== "CANCELLED" && (

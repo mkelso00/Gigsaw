@@ -444,6 +444,7 @@ model Booking {
   demo      Boolean  @default(false) // sample data, removable from Settings
 
   payments             Payment[]
+  lineup               BookingLineup[]
   checkIns             CheckIn[]
   contracts            Contract[]
   payLinks             PayLink[]
@@ -751,6 +752,7 @@ model Person {
   niNumber           String    @default("")
   detailsCompletedAt DateTime?
   acts          PersonAct[]
+  standIns      BookingLineup[]
   login         User?       @relation("PersonLogin")
   leadOf        Artist[]    @relation("ActLead")
 
@@ -1299,4 +1301,19 @@ model BrandLogo {
   width     Int?
   height    Int?
   updatedAt DateTime @updatedAt
+}
+
+// Changes to an act's line-up for one booking: a member off this gig (OUT), or a stand-in on it (IN), e.g. a
+// dep singer while the band's singer is ill. Everyone else in the act plays as usual (src/lib/lineup.ts).
+model BookingLineup {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  change    String // IN | OUT
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId, personId])
+  @@index([personId])
 }

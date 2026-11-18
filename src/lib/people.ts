@@ -102,6 +102,8 @@ export type Recipient = {
   userId: string | null;
   /** True when this is a member hearing about one of their acts (so messages name the act). */
   isMember: boolean;
+  /** Standing in on this one gig (BookingLineup): never shown the act's fee. */
+  standIn?: boolean;
 };
 
 const cleanEmails = (...list: (string | null | undefined)[]) => [...new Set(list.filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()))];
@@ -177,11 +179,51 @@ export async function recipientsForActs(actIds: string[]): Promise<Map<string, R
   return out;
 }
 
-/** Gigs grouped by who hears about them (from recipientsForActs): each person once, with all their gigs in order. */
-export function groupByRecipient<T extends { artistId: string | null }>(gigs: T[], recipients: Map<string, Recipient[]>) {
+/**
+ * Who hears about each gig, keyed by booking id: the act's people (recipientsForActs), less anyone off this
+ * gig, plus anyone standing in on it (BookingLineup). Use this for anything about a particular booking.
+ */
+export async function recipientsForGigs(gigs: { id: string; artistId: string | null }[]): Promise<Map<string, Recipient[]>> {
+  const out = new Map<string, Recipient[]>();
+  const withAct = gigs.filter((g) => g.artistId);
+  if (!withAct.length) return out;
+  const [byAct, changes] = await Promise.all([
+    recipientsForActs(withAct.map((g) => g.artistId!)),
+    prisma.bookingLineup.findMany({
+      where: { bookingId: { in: withAct.map((g) => g.id) } },
+      include: { person: { include: { login: { select: { id: true, email: true } } } } },
+    }),
+  ]);
+  for (const g of withAct) {
+    const mine = changes.filter((c) => c.bookingId === g.id);
+    const off = new Set(mine.filter((c) => c.change === "OUT").map((c) => `person:${c.personId}`));
+    const list = (byAct.get(g.artistId!) ?? []).filter((r) => !off.has(r.key));
+    for (const { person: p } of mine.filter((c) => c.change === "IN")) {
+      if (list.some((r) => r.key === `person:${p.id}`)) continue;
+      list.push({
+        key: `person:${p.id}`,
+        name: personName(p),
+        firstName: p.alias?.trim() || p.firstName,
+        emails: cleanEmails(p.email, p.login?.email),
+        phone: p.phone,
+        userId: p.login?.id ?? null,
+        isMember: true,
+        standIn: true,
+      });
+    }
+    out.set(g.id, list);
+  }
+  return out;
+}
+
+/**
+ * Gigs grouped by who hears about them: each person once, with all their gigs in order. `recipients` is keyed by
+ * booking id (recipientsForGigs), or by act id (recipientsForActs) for things not about one booking.
+ */
+export function groupByRecipient<T extends { id?: string; artistId: string | null }>(gigs: T[], recipients: Map<string, Recipient[]>) {
   const out = new Map<string, { to: Recipient; gigs: T[] }>();
   for (const g of gigs) {
-    for (const r of recipients.get(g.artistId!) ?? []) {
+    for (const r of (g.id && recipients.get(g.id)) || recipients.get(g.artistId!) || []) {
       const entry = out.get(r.key) ?? { to: r, gigs: [] };
       entry.gigs.push(g);
       out.set(r.key, entry);

@@ -4,6 +4,7 @@ import { ACT_FEED_SELECT, type ActFeedOptions } from "@/lib/act-calendar";
 import { getSettings, prisma } from "@/lib/db";
 import { parseExtraFields } from "@/lib/event-plan";
 import { appUrl } from "@/lib/messaging";
+import { gigsForLogin, onGig } from "@/lib/lineup";
 import { actIdsFor, actTree, ownActIds } from "@/lib/people";
 import { billingState } from "@/lib/subscription";
 import { log } from "@/server/log";
@@ -56,6 +57,7 @@ const gigSelect = {
   ...ACT_FEED_SELECT,
   agencyId: true,
   artistId: true,
+  lineup: { select: { personId: true, change: true } },
   archivedAt: true,
   agency: {
     select: {
@@ -177,6 +179,15 @@ export async function syncBookingToCalendars(bookingId: string): Promise<void> {
     const gig = await prisma.booking.findUnique({ where: { id: bookingId }, select: gigSelect });
     const candidates = new Set(linked.map((l) => l.connectionId));
     if (gig?.artistId) for (const id of await connectionsForAct(gig.agencyId, gig.artistId)) candidates.add(id);
+    // Anyone standing in on this gig (BookingLineup), who may not be in the act at all.
+    const standIns = gig?.lineup.filter((l) => l.change === "IN").map((l) => l.personId) ?? [];
+    if (gig && standIns.length) {
+      const rows = await prisma.calendarConnection.findMany({
+        where: { agencyId: gig.agencyId, status: "ACTIVE", user: { personId: { in: standIns } } },
+        select: { id: true },
+      });
+      for (const r of rows) candidates.add(r.id);
+    }
     if (!candidates.size) return;
     for (const connectionId of candidates) {
       await oneAtATime(connectionId, async () => {
@@ -186,7 +197,7 @@ export async function syncBookingToCalendars(bookingId: string): Promise<void> {
         try {
           const link = await prisma.calendarEventLink.findUnique({ where: { connectionId_bookingId: { connectionId, bookingId } } });
           const sameAgency = !!gig && gig.agencyId === conn.agencyId;
-          const wanted = sameAgency && belongsInCalendar(gig!, await actsOf(conn), { ignoreAge: !!link });
+          const wanted = sameAgency && onGig(gig!, await actsOf(conn), conn.user.personId) && belongsInCalendar(gig!, [gig!.artistId!], { ignoreAge: !!link });
           // A locked business leaves events as they are, but still takes out gigs that went.
           if (wanted && !agencyOpen(gig!.agency)) return;
           await applyGig(clientFor(conn), conn, bookingId, sameAgency ? gig : null, wanted, link, await viewOf(conn));
@@ -224,11 +235,11 @@ async function resync(connectionId: string, opts: ResyncOptions) {
     const open = !!agency && agencyOpen(agency);
     // The gigs that belong: the act feed's, less cancelled ones (archived ones are left out by db.ts too).
     const gigs =
-      open && actIds.length
+      open && (actIds.length || conn.user.personId)
         ? await prisma.booking.findMany({
             where: {
               agencyId: conn.agencyId,
-              artistId: { in: actIds },
+              ...gigsForLogin(actIds, conn.user.personId),
               status: { in: CALENDAR_STATUSES },
               archivedAt: null,
               setStart: { gte: new Date(now.getTime() - ACT_FEED_DAYS_BACK * 86_400_000) },

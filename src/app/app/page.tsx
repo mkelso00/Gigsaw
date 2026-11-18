@@ -14,6 +14,7 @@ import { calendarProviders, canConnectCalendar } from "@/lib/calendar-connect";
 import { canAnswer, formatRange, requestTimes } from "@/lib/availability";
 import { requestPlace } from "@/lib/availability-requests";
 import { arrivalFor } from "@/lib/bookings";
+import { gigsForLogin } from "@/lib/lineup";
 import { actIdsFor } from "@/lib/people";
 import { personName } from "@/lib/person-name";
 import { vapidKeys } from "@/lib/push";
@@ -29,7 +30,9 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   // A person's login sees every act they're in; an act's own login sees that act.
   const actIds = await actIdsFor(user);
-  if (!actIds.length) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
+  // Someone not in any act yet can still be standing in on a gig.
+  const standsIn = user.personId ? await prisma.bookingLineup.count({ where: { personId: user.personId, change: "IN" } }) : 0;
+  if (!actIds.length && !standsIn) return <p className="text-sm text-ink-400">Your login isn&apos;t linked to an act yet. Ask your agent to check it.</p>;
   const now = new Date();
   const settings = await getSettings(user.agencyId);
   const today = localDateKey(now, settings.defaultTimezone);
@@ -45,7 +48,7 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
       // Artists don't see early-stage enquiries.
       where: {
         agencyId: user.agencyId,
-        artistId: { in: actIds },
+        ...gigsForLogin(actIds, user.personId),
         status: { in: ACT_VISIBLE },
       },
       include: {

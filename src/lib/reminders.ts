@@ -4,7 +4,7 @@ import { actName, ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
-import { groupByRecipient, recipientsForActs, type Recipient } from "./people";
+import { groupByRecipient, recipientsForGigs, type Recipient } from "./people";
 import { dayReminderAt, partOfDay, weeklyReminderWeek } from "./reminder-time";
 import { addDaysToKey, formatDate, localDateKey, localTime, zonedToUtc } from "./time";
 
@@ -57,7 +57,7 @@ const held = (b: Gig) => (b.status === "HOLD" || b.status === "PENDING" ? " (not
 
 /** Group gigs by who should hear about them. */
 async function byRecipient(gigs: Gig[]) {
-  return [...groupByRecipient(gigs, await recipientsForActs(gigs.map((g) => g.artistId!))).values()];
+  return [...groupByRecipient(gigs, await recipientsForGigs(gigs)).values()];
 }
 
 type Delivery = {

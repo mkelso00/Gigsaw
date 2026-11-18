@@ -1,3 +1,4 @@
+import { gigsForLogin } from "./lineup";
 import type { Prisma } from "@prisma/client";
 import { ACT_VISIBLE, actName, BOOKING_STATUS_LABELS, type BookingStatus } from "./constants";
 import type { PlanExtraField } from "./event-plan";
@@ -19,8 +20,14 @@ import { dealBreakdown, formatMoney } from "./money";
 export const ACT_FEED_DAYS_BACK = 90;
 
 /** The gigs an act's feed lists: anything offered to them or booked, cancelled ones included (marked cancelled). */
-export function actFeedWhere(agencyId: string, actIds: string[], now = new Date()): Prisma.BookingWhereInput {
-  return { agencyId, artistId: { in: actIds }, setStart: { gte: new Date(now.getTime() - ACT_FEED_DAYS_BACK * 86_400_000) }, status: { in: ACT_VISIBLE } };
+export function actFeedWhere(agencyId: string, actIds: string[], now = new Date(), personId: string | null = null): Prisma.BookingWhereInput {
+  // A person's feed: their acts' gigs less any they're off, plus gigs they stand in on (src/lib/lineup.ts).
+  return {
+    agencyId,
+    ...gigsForLogin(actIds, personId),
+    setStart: { gte: new Date(now.getTime() - ACT_FEED_DAYS_BACK * 86_400_000) },
+    status: { in: ACT_VISIBLE },
+  };
 }
 
 /**

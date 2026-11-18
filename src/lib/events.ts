@@ -8,7 +8,7 @@ import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type PaymentLike } from "./money";
 import { actName } from "./constants";
 import { messageFor } from "./message-templates";
-import { recipientsForActs } from "./people";
+import { recipientsForGigs } from "./people";
 import { claimedReminders, claimReminder } from "./reminders";
 import { formatDate, localDateKey, localTime } from "./time";
 
@@ -266,13 +266,13 @@ async function sendDirectBalanceReminder(e: FullEvent) {
 export async function sendActDetails(e: FullEvent) {
   const gigs = withAct(e);
   if (!gigs.length) return 0;
-  const recipients = await recipientsForActs(gigs.map((g) => g.artistId));
+  const recipients = await recipientsForGigs(gigs);
   const plan = planRows(e, parseExtraFields(e.agency.settings?.planExtraFields));
   const where = e.venue ? [e.venue.name, e.venue.address, e.venue.city].filter(Boolean).join(", ") : e.venueText;
   let sent = 0;
   for (const b of gigs) {
     const others = gigs.filter((o) => o.id !== b.id).map((o) => `${o.artist.name} ${localTime(o.setStart, o.timezone)}`);
-    for (const r of recipients.get(b.artistId) ?? []) {
+    for (const r of recipients.get(b.id) ?? []) {
       const t = tpl(e, "EVENT_DETAILS", r.firstName);
       const title = `Final details: ${e.name}, ${eventDay(e)}`;
       const base = { kind: "EVENT" as const, agencyId: e.agencyId, bookingId: b.id };

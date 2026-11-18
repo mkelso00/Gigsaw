@@ -4,7 +4,7 @@ import { describeChanges, type BookingSnapshot, type Change } from "./changes";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { messageFor } from "./message-templates";
-import { groupByRecipient, recipientsForActs } from "./people";
+import { groupByRecipient, recipientsForGigs } from "./people";
 import { dealBreakdown } from "./money";
 import { formatDate, localTime } from "./time";
 
@@ -58,8 +58,11 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
 
   if (!b.artistId || !b.artist) return changes;
   const act = b.artist;
-  const recipients = (await recipientsForActs([b.artistId])).get(b.artistId) ?? [];
+  const recipients = (await recipientsForGigs([b])).get(b.id) ?? [];
   for (const r of recipients) {
+    // A stand-in on this one gig never sees the act's fee, so a fee change on its own isn't news to them.
+    const shown = r.standIn ? changes.filter(([k]) => k !== "Your fee") : changes;
+    if (!shown.length) continue;
     // Cancellations always go out; other changes follow the business's Notifications settings.
     const t = messageFor(b.agency.settings?.messageTemplates, "GIG_CHANGE", {
       first_name: r.firstName,
@@ -76,7 +79,7 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
       await sendPush({
         ...base,
         userId: r.userId,
-        payload: { title, body: changes.map(([k, , v]) => `${k}: ${v || "none"}`).join(" · "), url: `/app/gigs/${b.id}`, tag: `change-${b.id}` },
+        payload: { title, body: shown.map(([k, , v]) => `${k}: ${v || "none"}`).join(" · "), url: `/app/gigs/${b.id}`, tag: `change-${b.id}` },
       });
     }
     for (const to of r.emails) {
@@ -87,12 +90,12 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
         subject: (!cancelled && t.subject) || title,
         email: {
           brand: agencyName,
-          preheader: changes.map(([k, , v]) => `${k}: ${v}`).join(" · "),
+          preheader: shown.map(([k, , v]) => `${k}: ${v}`).join(" · "),
           title,
           intro: cancelled
             ? `Hi ${r.firstName}, ${r.isMember ? `${act.name}'s booking` : "this booking"} has been cancelled.`
             : (t.intro ?? `Hi ${r.firstName}, ${agencyName} has updated ${whose} booking. Here's what's different:`),
-          changes,
+          changes: shown,
           rows: cancelled
             ? []
             : [
@@ -108,7 +111,7 @@ export async function notifyArtistIfChanged(before: BookingSnapshot, bookingId: 
       });
     }
     if (r.phone) {
-      const summary = changes.map(([k, from, to]) => `${k} ${from || "none"} → ${to || "none"}`).join("; ");
+      const summary = shown.map(([k, from, to]) => `${k} ${from || "none"} → ${to || "none"}`).join("; ");
       await sendSms({
         ...base,
         to: r.phone,
@@ -133,7 +136,7 @@ export async function notifyArtistsOfNewGigs(bookingIds: string[]) {
     },
     orderBy: { arriveBy: "asc" },
   });
-  const recipients = await recipientsForActs(bookings.map((b) => b.artistId!));
+  const recipients = await recipientsForGigs(bookings);
   const byRecipient = groupByRecipient(bookings, recipients);
 
   let sent = 0;

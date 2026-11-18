@@ -3,7 +3,7 @@ import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { messageFor } from "./message-templates";
-import { recipientsForActs } from "./people";
+import { recipientsForGigs } from "./people";
 import { formatDate, localTime } from "./time";
 
 // When a gig becomes Confirmed (the act accepted the offer, or the agent confirmed it):
@@ -45,7 +45,7 @@ export async function onConfirmed(bookingId: string) {
   };
   const actOn = messageFor(templates, "BOOKED", gigVars).on;
   const title = `You're booked: ${b.venue?.name ?? b.event?.name ?? "booking"}, ${formatDate(b.arriveBy, b.timezone)}`;
-  for (const r of actOn ? ((await recipientsForActs([b.artistId])).get(b.artistId) ?? []) : []) {
+  for (const r of actOn ? ((await recipientsForGigs([b])).get(b.id) ?? []) : []) {
     const t = messageFor(templates, "BOOKED", { ...gigVars, first_name: r.firstName });
     const link = r.userId ? `${appUrl()}/app/gigs/${b.id}` : null;
     const reached = r.userId
@@ -72,7 +72,7 @@ export async function onConfirmed(bookingId: string) {
             ["Date", formatDate(b.arriveBy, b.timezone)],
             ["Arrive by", localTime(b.arriveBy, b.timezone)],
             ["On", times],
-            ...(fee > 0 ? ([["Fee", formatMoney(fee, b.currency)]] as [string, string][]) : []),
+            ...(fee > 0 && !r.standIn ? ([["Fee", formatMoney(fee, b.currency)]] as [string, string][]) : []),
           ],
           cta: link ? { label: "Open in Gigsaw", url: link } : undefined,
           outro: "If you've added your bookings to your phone's calendar, it'll appear there by itself.",

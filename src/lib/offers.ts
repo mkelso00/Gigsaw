@@ -8,7 +8,7 @@ import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { onConfirmed } from "./confirmations";
 import { answerClaimWhere } from "./offer-links";
-import { groupByRecipient, recipientsForActs } from "./people";
+import { groupByRecipient, recipientsForGigs } from "./people";
 import { formatDate, localTime } from "./time";
 
 // Offering gigs to acts. Setting a gig to "Awaiting confirmation" sends the act (or each of its
@@ -52,7 +52,7 @@ export async function sendOffers(bookingIds: string[]) {
     }),
   );
   const live = gigs.filter((g, i) => saved[i].count === 1 && !g.demo); // demo data never sends anything
-  const recipients = await recipientsForActs(live.map((g) => g.artistId!));
+  const recipients = await recipientsForGigs(live);
   const byPerson = groupByRecipient(live, recipients);
   for (const { to: r, gigs: list } of byPerson.values()) {
     const first = list[0];
@@ -93,7 +93,7 @@ export async function sendOffers(bookingIds: string[]) {
             t.intro ??
             `Hi ${r.firstName}, ${agencyName} would like to book ${named ? "your act" : "you"} for ${n === 1 ? "this booking" : "these bookings"}. Please accept or decline as soon as you can.`,
           rows: list.map((g) => {
-            const fee = dealBreakdown(g).artistMinor;
+            const fee = r.standIn ? 0 : dealBreakdown(g).artistMinor;
             return [
               formatDate(g.arriveBy, g.timezone),
               `${named ? `${g.artist!.name} at ` : ""}${g.venue?.name ?? "Venue to be confirmed"}${g.venue?.city ? `, ${g.venue.city}` : ""}\n${when(g)}${fee > 0 ? `\nFee: ${formatMoney(fee, g.currency)}` : ""}`,

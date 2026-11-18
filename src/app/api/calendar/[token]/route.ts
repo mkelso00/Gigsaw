@@ -31,7 +31,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const locked = billingState(owner.agency).locked;
   const bookings = locked
     ? []
-    : await prisma.booking.findMany({ where: actFeedWhere(owner.agencyId, actIds), select: ACT_FEED_SELECT, orderBy: { setStart: "asc" } });
+    : await prisma.booking.findMany({
+        where: actFeedWhere(owner.agencyId, actIds, new Date(), person?.id ?? null),
+        select: ACT_FEED_SELECT,
+        orderBy: { setStart: "asc" },
+      });
 
   // The same events a connected Google or Outlook calendar gets (src/lib/calendar-sync), built in one place.
   const settings = await getSettings(owner.agencyId);

@@ -16,6 +16,7 @@ import { BookingBanners, BookingHeader } from "./_sections/header";
 import { MoneySection } from "./_sections/money";
 import { PaymentsSection } from "./_sections/payments";
 import { StatusSection } from "./_sections/status";
+import { LineupSection } from "./_sections/lineup";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -48,6 +49,10 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
 
         <div className="space-y-6">
           <StatusSection booking={booking} asked={asked} askedCounts={askedCounts} />
+
+          {booking.artistId && booking.artist && (
+            <LineupSection bookingId={booking.id} agencyId={user.agencyId} artistId={booking.artistId} actName={booking.artist.name} />
+          )}
 
           {contract && (
             <div id="contract" className="scroll-mt-6">
