@@ -42,6 +42,18 @@ export type ServerEnv = {
   calendarTokenKey: Buffer | null;
   /** A stand-in sign-in server for testing. Always null in production. */
   oauthTestBase: string | null;
+  /**
+   * Xero, for raising the monthly invoices (src/lib/xero.ts): the business's own app from developer.xero.com
+   * (XERO_CLIENT_ID and XERO_CLIENT_SECRET). Null when either is missing, and Xero is then off.
+   */
+  xero: { clientId: string; clientSecret: string } | null;
+  /**
+   * Key that encrypts the stored Xero tokens: XERO_TOKEN_KEY, or CALENDAR_TOKEN_KEY when that isn't set
+   * (32 random bytes, base64). Null when neither is set, and Xero is then off.
+   */
+  xeroTokenKey: Buffer | null;
+  /** Where Xero's sign-in, token and API servers are. XERO_*_BASE (stand-ins for testing) are ignored in production. */
+  xeroBases: { login: string; identity: string; api: string };
   /** Gigsaw's own Stripe keys from the environment ("" when not set). Keys saved in the Owner area take priority. */
   stripe: { secretKey: string; webhookSecret: string; connectWebhookSecret: string };
   /** Where Stripe's API is. STRIPE_API_BASE (a stand-in for testing) is ignored in production. */
@@ -62,6 +74,9 @@ export type EnvCheck = {
 };
 
 const STRIPE_API = "https://api.stripe.com";
+
+/** Xero's own servers: sign-in (login), tokens (identity) and the API, which also has /connections. */
+export const XERO_BASES = { login: "https://login.xero.com", identity: "https://identity.xero.com", api: "https://api.xero.com" } as const;
 
 /** Blank and whitespace-only values count as not set. */
 function read(raw: RawEnv, name: string) {
@@ -192,6 +207,22 @@ export function parseEnv(raw: RawEnv): EnvCheck {
   if (calendarTokenKey && !google && !microsoft)
     warnings.push("CALENDAR_TOKEN_KEY is set but neither Google nor Microsoft sign-in is, so there's no calendar to connect.");
 
+  // Xero: the business's own app, and a key for the stored tokens. Its own key if set, otherwise the calendar
+  // one, so a site that already has CALENDAR_TOKEN_KEY needs nothing more; a separate key can be changed without
+  // making every act connect their calendar again.
+  const xero = halfSet(raw, "Xero", ["XERO_CLIENT_ID", "XERO_CLIENT_SECRET"], warnings)
+    ? { clientId: read(raw, "XERO_CLIENT_ID"), clientSecret: read(raw, "XERO_CLIENT_SECRET") }
+    : null;
+  const rawXeroKey = read(raw, "XERO_TOKEN_KEY");
+  let xeroTokenKey: Buffer | null = calendarTokenKey;
+  if (rawXeroKey) {
+    const k = Buffer.from(rawXeroKey, "base64");
+    xeroTokenKey = k.length === 32 ? k : null;
+    if (!xeroTokenKey) warnings.push("XERO_TOKEN_KEY must be 32 random bytes in base64 (openssl rand -base64 32), so Xero is off.");
+  } else if (xero && !xeroTokenKey) {
+    warnings.push("Xero is set up but there's no key for its tokens. Set XERO_TOKEN_KEY (openssl rand -base64 32); until then Xero is off.");
+  }
+
   // Stripe. Keys saved in the Owner area take priority, so these are only warnings.
   const stripe = {
     secretKey: read(raw, "STRIPE_SECRET_KEY"),
@@ -218,6 +249,16 @@ export function parseEnv(raw: RawEnv): EnvCheck {
   if (isProduction && rawOauthBase) warnings.push("OAUTH_TEST_BASE is only for testing and is ignored in production. Remove it.");
   const stripeApiBase = !isProduction && rawStripeBase ? rawStripeBase.replace(/\/+$/, "") : STRIPE_API;
   const oauthTestBase = !isProduction && rawOauthBase ? rawOauthBase.replace(/\/+$/, "") : null;
+  const xeroBase = (name: string, real: string) => {
+    const v = read(raw, name);
+    if (v && isProduction) warnings.push(`${name} is only for testing and is ignored in production. Remove it.`);
+    return v && !isProduction ? v.replace(/\/+$/, "") : real;
+  };
+  const xeroBases = {
+    login: xeroBase("XERO_LOGIN_BASE", XERO_BASES.login),
+    identity: xeroBase("XERO_IDENTITY_BASE", XERO_BASES.identity),
+    api: xeroBase("XERO_API_BASE", XERO_BASES.api),
+  };
 
   // Scheduler and secrets
   const cronSecret = read(raw, "CRON_SECRET") || null;
@@ -252,6 +293,9 @@ export function parseEnv(raw: RawEnv): EnvCheck {
       oauth: { google, microsoft },
       calendarTokenKey,
       oauthTestBase,
+      xero,
+      xeroTokenKey,
+      xeroBases,
       stripe,
       stripeApiBase,
       cronSecret,

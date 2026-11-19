@@ -13,6 +13,7 @@ export const SETTINGS_PAGES: { href: string; label: string; icon: string; hint: 
   { href: "/settings/email-design", label: "Email design", icon: "mail", hint: "Your logo and colours on every email you send" },
   { href: "/settings/booking-fee", label: "Booking fee and VAT", icon: "payments", hint: "VAT on sales, and a fee on top for venues or clients" },
   { href: "/settings/card-payments", label: "Card payments", icon: "billing", hint: "Venues and customers pay deposits and invoices by card" },
+  { href: "/settings/xero", label: "Xero", icon: "reports", hint: "Send monthly invoices to Xero as drafts and see which are paid" },
   { href: "/settings/arrivals", label: "Arrivals and alerts", icon: "arrivals", hint: "Late arrivals, grace period and venue radius" },
   { href: "/settings/reminders", label: "Act reminders", icon: "clock", hint: "Weekly booking list and on-the-day reminders" },
   { href: "/settings/enquiries", label: "Enquiry form", icon: "inbox", hint: "A form for your website: new customers send you their event details" },
