@@ -92,3 +92,13 @@ test("priority venues: star one on Venues, then show just the priority venues on
     await db().venue.update({ where: { id: star.id }, data: { priority: false } });
   }
 });
+
+test("a venue's page has Edit details at the top, leading to its form", async ({ page }) => {
+  const venue = await createVenue(stamp("E2E Edit Hall"));
+  await page.goto(`/venues/${venue.id}`);
+  await page.getByRole("link", { name: "Edit details" }).click();
+  await expect(page).toHaveURL(/#details$/);
+  await expect(page.getByRole("heading", { name: "Venue details" })).toBeInViewport();
+  await expect(page.getByLabel("Venue name")).toHaveValue(venue.name);
+  await expect(page.getByRole("checkbox", { name: /Priority venue/ })).toBeVisible();
+});

@@ -63,6 +63,9 @@ export default async function VenuePage({ params, searchParams }: { params: Prom
         subtitle={[venue.city, venue.country].filter(Boolean).join(", ")}
         actions={
           <>
+            <a href="#details" className="btn">
+              Edit details
+            </a>
             <Link href={`/reports/venues?venue=${venue.id}`} className="btn">
               Statement
             </Link>
@@ -91,7 +94,11 @@ export default async function VenuePage({ params, searchParams }: { params: Prom
         />
       </div>
       <div className="grid gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-2">
+        <div className="xl:col-span-2 scroll-mt-6" id="details">
+          <h2 className="section-title mb-1">Venue details</h2>
+          <p className="hint mb-3">
+            Name, address, map pin, colour, time zone, notes and whether it&apos;s a ★ priority venue. Change anything, then press Save changes at the bottom.
+          </p>
           <VenueForm action={updateVenue.bind(null, venue.id)} venue={venue} defaultTimezone={settings.defaultTimezone} />
           <ServerForm action={deleteVenue.bind(null, venue.id)} className="mt-4">
             <ConfirmButton message={`Delete ${venue.name}? Bookings stay but lose their venue.`}>Delete venue</ConfirmButton>
