@@ -256,6 +256,48 @@ export async function deleteBookings(form: FormData) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Delete the ticked bookings in one go, straight from the list (admins only), e.g. a run of gigs added by
+ * mistake. Money is never lost this way: gigs with payments, or that are settled, are archived instead
+ * (and can be deleted for good from Archived once checked). Then back to the list, saying what happened.
+ */
+export async function deleteSelectedBookings(form: FormData) {
+  const user = await requireAdmin();
+  const ids = tickedIds(form);
+  const back = safeBack(str(form, "back"));
+  if (!ids.length) redirect(back);
+  const gigs = await prisma.booking.findMany({
+    where: { id: { in: ids }, agencyId: user.agencyId! },
+    select: { id: true, reference: true, status: true, _count: { select: { payments: true } } },
+  });
+  const keep = gigs.filter((g) => g._count.payments > 0 || g.status === "SETTLED");
+  const go = gigs.filter((g) => !keep.includes(g));
+  if (go.length) await prisma.booking.deleteMany({ where: { id: { in: go.map((g) => g.id) }, agencyId: user.agencyId! } });
+  if (keep.length)
+    await prisma.booking.updateMany({ where: { id: { in: keep.map((g) => g.id) }, agencyId: user.agencyId! }, data: { archivedAt: new Date() } });
+  // Ids read before deleting: the calendar links are found by them.
+  queueCalendarSync(gigs.map((g) => g.id));
+  await logActivities(user, "BOOKING", [
+    ...go.map((g) => ({ entityId: g.id, action: "deleted", detail: g.reference })),
+    ...keep.map((g) => ({ entityId: g.id, action: "archived (has payments, so not deleted)", detail: g.reference })),
+  ]);
+  revalidatePath("/", "layout");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}deleted=${go.length}${keep.length ? `&kept=${keep.length}` : ""}`);
+}
+
+/** Only the bookings list (with its filters), so the form can't send anyone elsewhere. */
+function safeBack(raw: string) {
+  try {
+    const u = new URL(raw || "/bookings", "http://x");
+    if (u.origin !== "http://x" || u.pathname !== "/bookings") return "/bookings";
+    u.searchParams.delete("deleted");
+    u.searchParams.delete("kept");
+    return `/bookings${u.search}`;
+  } catch {
+    return "/bookings";
+  }
+}
+
 /** Archive or restore one booking from its page. */
 export async function setBookingArchived(bookingId: string, archived: boolean) {
   const user = await requireStaff();

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FilterPanel } from "@/components/header-actions";
 import type { Prisma } from "@prisma/client";
-import { archiveBookings, deleteBookings, restoreBookings } from "@/actions/bookings";
+import { archiveBookings, deleteBookings, deleteSelectedBookings, restoreBookings } from "@/actions/bookings";
 import { SelectAll, SelectedAction } from "@/components/client-bits";
 import { ArrivalBadge, ArtistDot, Empty, PageHeader, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -37,8 +37,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   else if (sp.artist) where.artistId = sp.artist;
   if (sp.type && (EVENT_TYPES as readonly string[]).includes(sp.type)) where.eventType = sp.type;
   // One venue's bookings, from "Change several bookings at once" on a booking: tick some and change them together.
-  const venue = sp.venue ? await prisma.venue.findFirst({ where: { id: sp.venue, agencyId: user.agencyId }, select: { id: true, name: true } }) : null;
+  const noVenue = sp.venue === "none";
+  const venue =
+    sp.venue && !noVenue ? await prisma.venue.findFirst({ where: { id: sp.venue, agencyId: user.agencyId }, select: { id: true, name: true } }) : null;
   if (venue) where.venueId = venue.id;
+  if (noVenue) where.venueId = null;
   if (when === "upcoming" && !unresolved) where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
@@ -141,7 +144,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           </Link>
         </div>
       )}
-      <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
+      <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, noVenue ? "1" : "", sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           {archived && <input type="hidden" name="view" value="archived" />}
           {venue && <input type="hidden" name="venue" value={venue.id} />}
@@ -162,6 +165,15 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               ))}
             </select>
           </label>
+          {!venue && (
+            <label>
+              <span className="label">Venue</span>
+              <select name="venue" defaultValue={noVenue ? "none" : ""} className="input">
+                <option value="">Any venue</option>
+                <option value="none">No venue</option>
+              </select>
+            </label>
+          )}
           <label>
             <span className="label">Status</span>
             <select name="status" defaultValue={sp.status ?? ""} className="input">
@@ -197,6 +209,13 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         </form>
       </FilterPanel>
 
+      {sp.deleted && (
+        <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          {Number(sp.deleted) === 1 ? "1 booking deleted." : `${Number(sp.deleted) || 0} bookings deleted.`}
+          {Number(sp.kept) > 0 &&
+            ` ${Number(sp.kept)} had payments, so ${Number(sp.kept) === 1 ? "it was" : "they were"} archived instead: check them under Archived before deleting for good.`}
+        </p>
+      )}
       {bookings.length === 0 ? (
         <Empty>
           No bookings match.{" "}
@@ -206,6 +225,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
         </Empty>
       ) : (
         <form action="/bookings/bulk" method="get" className="card overflow-x-auto">
+          <input
+            type="hidden"
+            name="back"
+            value={`/bookings?${new URLSearchParams(Object.entries(sp).filter(([k, v]) => k !== "deleted" && k !== "kept" && !!v) as [string, string][])}`}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
             <span className="text-sm text-ink-500">
               {archived
@@ -240,6 +264,15 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                     label="Archive selected"
                     confirm="Archive {n} booking{s}? They leave your lists and calendar, and acts aren't told. You can restore them from Archived."
                   />
+                  {isAdmin && (
+                    <SelectedAction
+                      name="ids"
+                      action={deleteSelectedBookings}
+                      label="Delete selected"
+                      confirm="Delete {n} booking{s} for good? Acts aren't told. Any with payments are archived instead, so no money is lost. This can't be undone."
+                      danger
+                    />
+                  )}
                 </>
               )}
             </span>

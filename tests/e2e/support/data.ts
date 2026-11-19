@@ -73,7 +73,9 @@ export async function createActLogin(artistId: string, name: string) {
     },
   });
   // Calendar already added, so the act app doesn't stop at that step either.
-  await db().user.create({ data: { email, name, role: "ARTIST", agencyId, artistId, passwordHash: await bcrypt.hash(password, 10), calendarAddedAt: new Date() } });
+  await db().user.create({
+    data: { email, name, role: "ARTIST", agencyId, artistId, passwordHash: await bcrypt.hash(password, 10), calendarAddedAt: new Date() },
+  });
   return { email, password };
 }
 
@@ -112,7 +114,7 @@ export async function createMemberLogin(artistId: string, firstName: string, sur
 /** A booking made the way the app numbers them (GS-0001 and up), trying again if a parallel test takes the number. */
 export async function createBooking(data: {
   artistId: string;
-  venueId: string;
+  venueId: string | null;
   status: string;
   arriveBy: Date;
   setStart: Date;
@@ -140,6 +142,15 @@ export async function createBooking(data: {
 export async function createWedding(name: string, date = someFutureDay()) {
   const { agencyId, adminId } = await seededAgency();
   return db().event.create({
-    data: { agencyId, name, type: "WEDDING", date, timezone: "Europe/London", agentId: adminId, venueText: "Home Farm, near York", tasks: { create: defaultTasks("WEDDING", date) } },
+    data: {
+      agencyId,
+      name,
+      type: "WEDDING",
+      date,
+      timezone: "Europe/London",
+      agentId: adminId,
+      venueText: "Home Farm, near York",
+      tasks: { create: defaultTasks("WEDDING", date) },
+    },
   });
 }
