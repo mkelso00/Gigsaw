@@ -1409,6 +1409,8 @@ model MonthlyBill {
   // The invoice in Xero, once it's sent there (filled in by the Xero connection).
   xeroInvoiceId      String    @default("")
   xeroStatus         String    @default("")
+  // A link that opens the invoice in Xero.
+  xeroUrl            String    @default("")
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

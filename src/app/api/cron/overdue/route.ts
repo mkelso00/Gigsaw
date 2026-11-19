@@ -4,7 +4,7 @@ import { runOverdueCheck } from "@/lib/alerts";
 import { runCalendarSync } from "@/lib/calendar-sync/job";
 import { cronSecretMatches } from "@/lib/cron";
 import { runEventMessages } from "@/lib/events";
-import { runBillingReminders } from "@/lib/monthly-billing-server";
+import { runBillingReminders, runXeroPaymentChecks } from "@/lib/monthly-billing-server";
 import { runProposalChasers } from "@/lib/proposal-chasers";
 import { runReminders } from "@/lib/reminders";
 import { env } from "@/server/env";
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     eventEmails: () => withHeartbeat("event-emails", runEventMessages),
     proposalChasers: () => withHeartbeat("proposal-chasers", runProposalChasers),
     actInvoices: () => withHeartbeat("act-invoices", runActInvoices),
-    monthlyBilling: () => withHeartbeat("monthly-billing", runBillingReminders),
+    monthlyBilling: () => withHeartbeat("monthly-billing", async () => ({ ...(await runBillingReminders()), ...(await runXeroPaymentChecks()) })),
     calendarSync: () => withHeartbeat("calendar-sync", runCalendarSync),
   });
   return NextResponse.json(run, { status: run.ok ? 200 : 500, headers: { "Cache-Control": "no-store" } });

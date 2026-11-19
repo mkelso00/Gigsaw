@@ -26,6 +26,7 @@ import {
   type Payer,
 } from "./monthly-billing";
 import { claimedReminders, claimReminder } from "./reminders";
+import { getInvoiceStatuses, XeroError, xeroConnectionFor } from "./xero";
 import { formatDate, localDateKey, localTime, zonedParts } from "./time";
 
 // The database side of monthly billing (src/lib/monthly-billing.ts has the rules): the month's billable gigs,
@@ -381,4 +382,69 @@ function stepWords(v: BillView) {
     default:
       return v.step.toLowerCase();
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Xero: which invoices sent from here are paid
+
+/**
+ * Ask Xero about the unpaid bills sent to it (this month's, or every one from the last year) and mark the paid
+ * ones paid, on the day Xero says. Voided or deleted ones keep their Xero status, which the bill shows.
+ */
+export async function checkXeroPayments(agencyId: string, month?: string): Promise<{ checked: number; paid: number; error?: string }> {
+  const conn = await xeroConnectionFor(agencyId);
+  if (!conn) return { checked: 0, paid: 0, error: month ? "Xero isn't connected. Connect it in Settings, Xero first." : undefined };
+  const bills = await prisma.monthlyBill.findMany({
+    where: {
+      agencyId,
+      xeroInvoiceId: { not: "" },
+      paidAt: null,
+      ...(month ? { month } : { invoicedAt: { gte: new Date(Date.now() - 400 * 86_400_000) } }),
+    },
+    select: { id: true, xeroInvoiceId: true, xeroStatus: true },
+  });
+  if (!bills.length) return { checked: 0, paid: 0 };
+  let found: Awaited<ReturnType<typeof getInvoiceStatuses>>;
+  try {
+    found = await getInvoiceStatuses(
+      conn,
+      bills.map((b) => b.xeroInvoiceId),
+    );
+  } catch (e) {
+    if (e instanceof XeroError) return { checked: 0, paid: 0, error: e.message };
+    throw e;
+  }
+  let paid = 0;
+  for (const b of bills) {
+    const s = found.get(b.xeroInvoiceId.toLowerCase());
+    if (!s) continue;
+    const isPaid = s.state === "paid";
+    if (!isPaid && s.status === b.xeroStatus) continue;
+    await prisma.monthlyBill.updateMany({
+      where: { id: b.id, paidAt: null },
+      data: { xeroStatus: s.status, ...(isPaid ? { paidAt: s.fullyPaidOn ? new Date(`${s.fullyPaidOn.slice(0, 10)}T12:00:00Z`) : new Date() } : {}) },
+    });
+    if (isPaid) paid++;
+  }
+  return { checked: bills.length, paid };
+}
+
+/** Once a day (from 10am, the business's time), for each business with Xero connected. */
+export async function runXeroPaymentChecks(now = new Date()) {
+  const conns = await prisma.xeroConnection.findMany({
+    where: { needsReconnect: false, tenantId: { not: "" }, agency: { status: "ACTIVE" } },
+    select: { agencyId: true, agency: { select: { settings: { select: { defaultTimezone: true } } } } },
+  });
+  let paid = 0;
+  for (const c of conns) {
+    const tz = c.agency.settings?.defaultTimezone ?? "Europe/London";
+    if (localTime(now, tz) < "10:00") continue;
+    if (!(await claimReminder("XERO_PAYMENTS", recipientOf(c.agencyId), localDateKey(now, tz)))) continue;
+    try {
+      paid += (await checkXeroPayments(c.agencyId)).paid;
+    } catch (e) {
+      log.error("Checking Xero for payments failed", { job: "monthly-billing", agencyId: c.agencyId, err: e });
+    }
+  }
+  return { paid };
 }

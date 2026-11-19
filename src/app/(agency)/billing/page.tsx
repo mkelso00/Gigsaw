@@ -1,6 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { askForPo, markInvoiced, markNothingToBill, markPaid, saveBillNote, savePo, undoBillStep } from "@/actions/monthly-billing";
+import {
+  askForPo,
+  checkXeroNow,
+  markInvoiced,
+  markNothingToBill,
+  markPaid,
+  saveBillNote,
+  savePo,
+  sendBillToXero,
+  undoBillStep,
+} from "@/actions/monthly-billing";
+import { xeroConnectionFor } from "@/lib/xero";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Empty, PageHeader, Segmented, StatusBadge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -61,7 +72,8 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
   const thisMonth = localDateKey(new Date(), tz).slice(0, 7);
   const month = readMonth(sp.month) ?? shiftMonth(thisMonth, -1);
   const show = (BILL_STEPS as readonly string[]).includes(sp.show ?? "") ? (sp.show as BillStep) : null;
-  const bills = await monthlyBills(user.agencyId, month, settings.defaultCurrency);
+  const [bills, xero] = await Promise.all([monthlyBills(user.agencyId, month, settings.defaultCurrency), xeroConnectionFor(user.agencyId)]);
+  const xeroOn = !!xero && !xero.needsReconnect;
   const summary = summarise(bills.map((b) => b.step));
   const listed = show ? bills.filter((b) => b.step === show) : bills;
   // Who an "Ask for PO" email would go to, for the bills still waiting on one.
@@ -107,6 +119,36 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
         )}
       </div>
 
+      {isAdmin && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-600">
+          {xeroOn ? (
+            <>
+              <span>Xero is connected: send each bill there as a draft invoice. Payments are checked every morning.</span>
+              <ActionForm action={checkXeroNow.bind(null, month)}>
+                <SubmitButton className="btn btn-sm" pendingText="Checking…">
+                  Check Xero for payments now
+                </SubmitButton>
+              </ActionForm>
+            </>
+          ) : xero?.needsReconnect ? (
+            <span>
+              Xero needs connecting again.{" "}
+              <Link href="/settings/xero" className="link">
+                Settings, Xero
+              </Link>
+            </span>
+          ) : (
+            <span>
+              Raise invoices in Xero from here:{" "}
+              <Link href="/settings/xero" className="link">
+                connect Xero
+              </Link>
+              .
+            </span>
+          )}
+        </div>
+      )}
+
       <p className="mb-4 rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-medium text-ink-800" data-testid="billing-summary">
         {summaryLine(summary)}
         {summary.paid ? <span className="font-normal text-ink-500"> · {summary.paid} paid</span> : null}
@@ -130,7 +172,7 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
         <ul className="space-y-3">
           {listed.map((v) => (
             <li key={v.id}>
-              <BillCard v={v} isAdmin={isAdmin} tz={tz} recipient={recipients.get(v.id)?.email ?? ""} />
+              <BillCard v={v} isAdmin={isAdmin} tz={tz} recipient={recipients.get(v.id)?.email ?? ""} xeroOn={xeroOn} />
             </li>
           ))}
         </ul>
@@ -139,7 +181,7 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
   );
 }
 
-function BillCard({ v, isAdmin, tz, recipient }: { v: BillView; isAdmin: boolean; tz: string; recipient: string }) {
+function BillCard({ v, isAdmin, tz, recipient, xeroOn }: { v: BillView; isAdmin: boolean; tz: string; recipient: string; xeroOn: boolean }) {
   const m = (x: number) => formatMoney(x, v.currency);
   const g = v.group;
   const b = v.bill;
@@ -385,12 +427,41 @@ function BillCard({ v, isAdmin, tz, recipient }: { v: BillView; isAdmin: boolean
                         {b.invoicedTotalMinor !== null ? `, ${m(b.invoicedTotalMinor)}` : ""}
                       </span>
                     </span>
+                    {b.xeroUrl && (
+                      <a href={b.xeroUrl} target="_blank" rel="noreferrer" className="btn btn-sm">
+                        Open in Xero
+                      </a>
+                    )}
                     <ActionForm action={undoBillStep.bind(null, v.id, "INVOICED")}>
                       <SubmitButton className="btn btn-sm" pendingText="Undoing…">
                         Undo invoice
                       </SubmitButton>
                     </ActionForm>
                   </div>
+                  {b.xeroStatus && !b.paidAt && (
+                    <p className={`text-xs ${b.xeroStatus === "VOIDED" || b.xeroStatus === "DELETED" ? "font-medium text-rose-700" : "text-ink-500"}`}>
+                      In Xero:{" "}
+                      {b.xeroStatus === "DRAFT"
+                        ? "a draft, waiting for you to approve it there"
+                        : b.xeroStatus === "SUBMITTED"
+                          ? "awaiting approval"
+                          : b.xeroStatus === "AUTHORISED"
+                            ? "approved, awaiting payment"
+                            : b.xeroStatus === "VOIDED" || b.xeroStatus === "DELETED"
+                              ? `${b.xeroStatus.toLowerCase()}. Undo the invoice here and send it again if it still needs billing.`
+                              : b.xeroStatus.toLowerCase()}
+                    </p>
+                  )}
+                  {v.warnings.totalChanged && g && g.lines.length > 0 && xeroOn && (
+                    <ActionForm action={sendBillToXero.bind(null, v.id)}>
+                      <p className="mb-2 text-xs text-ink-500">
+                        Send the bill as it is now: Xero gets a new draft, and the old invoice stays there for you to void or credit.
+                      </p>
+                      <SubmitButton className="btn btn-sm" pendingText="Sending…">
+                        Send the new total to Xero
+                      </SubmitButton>
+                    </ActionForm>
+                  )}
                   {v.warnings.totalChanged && g && g.lines.length > 0 && (
                     <ActionForm action={markInvoiced.bind(null, v.id)}>
                       <div className="flex flex-wrap items-end gap-2">
@@ -422,21 +493,34 @@ function BillCard({ v, isAdmin, tz, recipient }: { v: BillView; isAdmin: boolean
                   )}
                 </div>
               ) : g && g.lines.length > 0 ? (
-                <ActionForm action={markInvoiced.bind(null, v.id)} className="space-y-2">
-                  <p className="text-sm text-ink-500">
-                    Raise the invoice for {m(g.totals.total)}
-                    {b.poNumber ? ` with PO ${b.poNumber}` : ""}, then put its number here.
-                  </p>
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="min-w-0 flex-1 basis-40">
-                      <span className="label">Invoice number</span>
-                      <input name="invoiceNumber" required className="input" aria-label="Invoice number" />
-                    </label>
-                    <SubmitButton className={`btn ${v.step === "TO_INVOICE" ? "btn-primary" : ""}`} pendingText="Saving…">
-                      Mark invoiced
-                    </SubmitButton>
-                  </div>
-                </ActionForm>
+                <div className="space-y-3">
+                  {xeroOn && (
+                    <ActionForm action={sendBillToXero.bind(null, v.id)} className="space-y-2">
+                      <p className="text-sm text-ink-500">
+                        Makes a draft invoice in Xero for {m(g.totals.total)}, one line per gig{b.poNumber ? `, with PO ${b.poNumber} as the reference` : ""}.
+                      </p>
+                      <SubmitButton className={`btn ${v.step === "TO_INVOICE" ? "btn-primary" : ""}`} pendingText="Sending to Xero…">
+                        Send to Xero
+                      </SubmitButton>
+                    </ActionForm>
+                  )}
+                  <ActionForm action={markInvoiced.bind(null, v.id)} className="space-y-2">
+                    <p className="text-sm text-ink-500">
+                      {xeroOn
+                        ? "Or raise it yourself and put its number here."
+                        : `Raise the invoice for ${m(g.totals.total)}${b.poNumber ? ` with PO ${b.poNumber}` : ""}, then put its number here.`}
+                    </p>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="min-w-0 flex-1 basis-40">
+                        <span className="label">Invoice number</span>
+                        <input name="invoiceNumber" required className="input" aria-label="Invoice number" />
+                      </label>
+                      <SubmitButton className={`btn ${v.step === "TO_INVOICE" && !xeroOn ? "btn-primary" : ""}`} pendingText="Saving…">
+                        Mark invoiced
+                      </SubmitButton>
+                    </div>
+                  </ActionForm>
+                </div>
               ) : (
                 <p className="text-sm text-ink-500">Nothing to invoice.</p>
               )}

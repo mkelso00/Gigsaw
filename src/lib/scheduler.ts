@@ -5,7 +5,7 @@ import { runActInvoices } from "./act-invoices";
 import { runOverdueCheck } from "./alerts";
 import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
-import { runBillingReminders } from "./monthly-billing-server";
+import { runBillingReminders, runXeroPaymentChecks } from "./monthly-billing-server";
 import { runProposalChasers } from "./proposal-chasers";
 import { runReminders } from "./reminders";
 
@@ -58,8 +58,9 @@ export function startScheduler() {
       log.error("Act invoices failed", { job: "act-invoices", err: e });
     }
     try {
-      const r = await withHeartbeat("monthly-billing", runBillingReminders);
+      const r = await withHeartbeat("monthly-billing", async () => ({ ...(await runBillingReminders()), ...(await runXeroPaymentChecks()) }));
       if (r.sent) log.info("Monthly billing reminders sent", { job: "monthly-billing", sent: r.sent });
+      if (r.paid) log.info("Bills marked paid from Xero", { job: "monthly-billing", paid: r.paid });
     } catch (e) {
       log.error("Monthly billing reminders failed", { job: "monthly-billing", err: e });
     }
