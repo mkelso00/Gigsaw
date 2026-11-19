@@ -35,6 +35,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // then puts the place in the address bar.
   const restored = Object.keys(sp).length ? null : recallCalendar((await cookies()).get(CALENDAR_COOKIE)?.value, user.id, Date.now());
   if (restored) sp = Object.fromEntries(new URLSearchParams(restored));
+  // One or more venues, e.g. three to compare: ?venue=a&venue=b from the filter's tick boxes, or ?venue=a,b
+  // from a saved place or a link.
+  const rawVenue = (sp as Record<string, string | string[] | undefined>).venue;
+  const venueIds = [
+    ...new Set(
+      [rawVenue]
+        .flat()
+        .flatMap((v) => (v ?? "").split(","))
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, 50);
+  const venueParam = venueIds.join(",") || undefined;
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const todayKey = localDateKey(new Date(), tz);
@@ -88,8 +101,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   };
   if (sp.artist) where.artistId = sp.artist;
   if (sp.town) where.venue = { city: { equals: sp.town, mode: "insensitive" } };
-  // One venue only, to concentrate on its gigs.
-  if (sp.venue) where.venueId = sp.venue;
+  // Only these venues, to concentrate on their gigs.
+  if (venueIds.length) where.venueId = { in: venueIds };
   if (sp.status && (BOOKING_STATUSES as readonly string[]).includes(sp.status)) where.status = sp.status;
   else where.status = { not: "CANCELLED" };
 
@@ -162,7 +175,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       select: { id: true, name: true, city: true },
     }),
   ]);
-  const venueName = sp.venue ? venues.find((v) => v.id === sp.venue)?.name : undefined;
+  const picked = venues.filter((v) => venueIds.includes(v.id));
+  const venueName = picked.length === 1 ? picked[0].name : picked.length > 1 ? `${picked.length} venues` : undefined;
   // Days acts have blocked out are their own business: they show only when the calendar is filtered to one
   // act (its own, and those of acts inside it, since a band is away while one of its acts is).
   const away = sp.artist ? awayAll.filter((e) => e.artistId === sp.artist) : [];
@@ -187,7 +201,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     status: sp.status,
     colour: sp.colour,
     town: sp.town,
-    venue: sp.venue,
+    venue: venueParam,
     view,
   };
   const qs = (extra: Record<string, string>) =>
@@ -316,22 +330,37 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </span>
       </div>
 
-      <FilterPanel always active={[sp.venue, sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
+      <FilterPanel always active={[venueParam, sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="date" value={anchor} />
-          <label>
-            <span className="label">Venue</span>
-            <select name="venue" defaultValue={sp.venue ?? ""} className="input max-w-56">
-              <option value="">All venues</option>
-              {venues.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.city ? `, ${v.city}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <span className="label">Venues</span>
+            {/* Tick one or several (e.g. three to compare); none ticked is every venue. */}
+            <details className="relative">
+              <summary className="input flex max-w-56 cursor-pointer list-none items-center justify-between gap-2">
+                <span className="truncate">{picked.length === 0 ? "All venues" : picked.length === 1 ? picked[0].name : `${picked.length} venues`}</span>
+                <span aria-hidden className="text-ink-400">
+                  ▾
+                </span>
+              </summary>
+              <div className="absolute z-30 mt-1 max-h-80 w-72 overflow-y-auto rounded-xl border border-ink-200 bg-white p-2 shadow-lg">
+                <p className="px-2 pt-1 pb-2 text-xs text-ink-500">Tick the venues to show. None ticked shows them all.</p>
+                {venues.map((v) => (
+                  <label key={v.id} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink-50">
+                    <input type="checkbox" name="venue" value={v.id} defaultChecked={venueIds.includes(v.id)} className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      {v.name}
+                      {v.city ? <span className="text-ink-500">, {v.city}</span> : null}
+                    </span>
+                  </label>
+                ))}
+                <div className="sticky -bottom-2 -mx-2 mt-1 border-t border-ink-100 bg-white px-2 pt-2 pb-1">
+                  <button className="btn btn-primary btn-sm w-full">Show these venues</button>
+                </div>
+              </div>
+            </details>
+          </div>
           <label>
             <span className="label">Town</span>
             <select name="town" defaultValue={sp.town ?? ""} className="input">

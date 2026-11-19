@@ -49,7 +49,7 @@ export function CalendarJump({ title, anchor, today, base }: { title: string; an
         {title} <span aria-hidden>▾</span>
       </button>
       {open && (
-        <div role="dialog" aria-label="Choose a date" className="absolute right-0 z-30 mt-1 w-72 rounded-xl border border-ink-200 bg-white p-3 shadow-lg">
+        <div role="dialog" aria-label="Choose a date" className="absolute right-0 z-40 mt-1 w-72 rounded-xl border border-ink-200 bg-white p-3 shadow-lg">
           <div className="mb-2 flex items-center justify-between">
             <button type="button" className="btn btn-sm" onClick={() => setYear((y) => y - 1)} aria-label="Previous year">
               ‹

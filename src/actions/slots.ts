@@ -3,7 +3,7 @@
 import type { Artist } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
-import { createBookingWithReference, createBookingsWithReferences } from "@/lib/bookings";
+import { createBookingWithReference, createBookingsWithReferences, VENUE_NEEDED } from "@/lib/bookings";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { applyBulkChange } from "@/lib/bulk";
 import { BOOKING_STATUSES, CURRENCIES, EVENT_TYPES, LIVE_STATUSES, MAX_COPY_DATES, type BookingStatus } from "@/lib/constants";
@@ -524,7 +524,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
     const dates = repeatDates(form, date);
     const weekly = str(form, "repeat") === "on" && str(form, "weekly") !== "on";
     const venueId = str(form, "venueId");
-    if (!venueId && weekly) throw new FormError("Choose a venue to make this a weekly slot");
+    if (!venueId) throw new FormError(VENUE_NEEDED);
     const venue = venueId ? await ownVenue(user, venueId) : null;
     const fields = await slotFields(form, user);
     const settings = await getSettings(user.agencyId);

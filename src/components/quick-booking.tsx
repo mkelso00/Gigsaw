@@ -230,13 +230,7 @@ export function QuickBooking({ currency, today, version }: { currency: string; t
               <label htmlFor="qb-venue" className={label}>
                 Venue
               </label>
-              <Combobox
-                id="qb-venue"
-                name="venueId"
-                options={lists?.venues ?? NONE}
-                emptyLabel="No venue (e.g. a private address)"
-                placeholder="Type a venue or town"
-              />
+              <Combobox id="qb-venue" name="venueId" options={lists?.venues ?? NONE} required placeholder="Type a venue or town" />
             </div>
             <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-3">
               <label>

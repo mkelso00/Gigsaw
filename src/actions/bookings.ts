@@ -60,7 +60,7 @@ export async function createBooking(_: FormState, form: FormData): Promise<FormS
   let id = "";
   const result = await handleForm(async () => {
     const settings = await getSettings(user.agencyId);
-    const data = await parseBookingForm(form, settings, user.agencyId);
+    const data = await parseBookingForm(form, settings, user.agencyId, { requireVenue: true });
     const hold = await clashCheck(user, form, data, settings.changeoverMinutes);
     if (hold) return hold;
     const booking = await createBookingWithReference(user.agencyId, { ...data, createdById: user.id, agentId: data.agentId ?? user.id });
@@ -79,7 +79,8 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const old = await ownBooking(user, bookingId);
     const before = snapshotOf(old);
     const settings = await getSettings(user.agencyId);
-    const data = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId });
+    // A gig that has a venue can't lose it; an older one saved without can still be edited.
+    const data = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId, requireVenue: !!old.venueId });
     const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
     const alsoChange = await venueChangeFor(old, data, form);
     // Copying to other bookings always asks first. One box covers that and any double booking warning,

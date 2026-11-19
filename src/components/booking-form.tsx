@@ -94,13 +94,19 @@ export function BookingForm({
               ))}
             </select>
           </Field>
-          <Field label="Venue" htmlFor="bf-venue" hint={venues.length ? "The venue's time zone is used for all times" : "Add venues under Venues"}>
+          <Field
+            label="Venue"
+            htmlFor="bf-venue"
+            hint={venues.length ? "Needed. Not listed (e.g. a private address)? Add it under Venues first." : "Add venues under Venues first"}
+          >
             <Combobox
               id="bf-venue"
               name="venueId"
               options={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city }))}
               defaultValue={booking?.venueId ?? defaults.venueId ?? ""}
-              emptyLabel="No venue yet"
+              // A new gig needs a venue, and one that has a venue keeps one; an older gig saved without can still be edited.
+              required={!booking || !!booking.venueId}
+              emptyLabel={booking && !booking.venueId ? "No venue yet" : undefined}
               placeholder="Type a venue or town"
             />
           </Field>
@@ -193,25 +199,30 @@ export function BookingForm({
           moreInUse={!!(booking && (booking.depositMinor || booking.dealNotes || booking.radiusKm || booking.radiusDays))}
           more={
             <>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Deposit">
-            <input name="deposit" inputMode="decimal" defaultValue={minorToInput(booking?.depositMinor, cur)} placeholder="0.00" className="input" />
-          </Field>
-          <Field label="Deposit due">
-            <input type="date" name="depositDueDate" defaultValue={booking?.depositDueDate ? localDateKey(booking.depositDueDate, tz) : ""} className="input" />
-          </Field>
-        </div>
-        <Field label="Money notes" hint="Anything extra agreed, e.g. food, parking, extra set">
-          <textarea name="dealNotes" rows={2} defaultValue={booking?.dealNotes} className="input" />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Radius clause (km)">
-            <input name="radiusKm" inputMode="numeric" defaultValue={booking?.radiusKm ?? ""} className="input" />
-          </Field>
-          <Field label="Radius clause (days either side)">
-            <input name="radiusDays" inputMode="numeric" defaultValue={booking?.radiusDays ?? ""} className="input" />
-          </Field>
-        </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Deposit">
+                  <input name="deposit" inputMode="decimal" defaultValue={minorToInput(booking?.depositMinor, cur)} placeholder="0.00" className="input" />
+                </Field>
+                <Field label="Deposit due">
+                  <input
+                    type="date"
+                    name="depositDueDate"
+                    defaultValue={booking?.depositDueDate ? localDateKey(booking.depositDueDate, tz) : ""}
+                    className="input"
+                  />
+                </Field>
+              </div>
+              <Field label="Money notes" hint="Anything extra agreed, e.g. food, parking, extra set">
+                <textarea name="dealNotes" rows={2} defaultValue={booking?.dealNotes} className="input" />
+              </Field>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Radius clause (km)">
+                  <input name="radiusKm" inputMode="numeric" defaultValue={booking?.radiusKm ?? ""} className="input" />
+                </Field>
+                <Field label="Radius clause (days either side)">
+                  <input name="radiusDays" inputMode="numeric" defaultValue={booking?.radiusDays ?? ""} className="input" />
+                </Field>
+              </div>
             </>
           }
         />

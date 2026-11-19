@@ -134,6 +134,9 @@ export function needsAct(status: string, inEvent: boolean) {
   return NEEDS_ACT.includes(status as (typeof NEEDS_ACT)[number]) && !(inEvent && status === "HOLD");
 }
 
+/** Why a booking can't be saved without a venue, and what to do. */
+export const VENUE_NEEDED = "Choose a venue. Not listed (e.g. a private address)? Add it under Venues first, then book it.";
+
 /**
  * Turn the booking form into database fields.
  * Times are entered as wall-clock times in the venue's time zone. The date is the day of the
@@ -141,7 +144,7 @@ export function needsAct(status: string, inEvent: boolean) {
  * the next day (e.g. arrive 22:00, on stage 01:00).
  * Every linked record (artist, venue, promoter, agent) must belong to the same agency.
  */
-export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string, opts: { inEvent?: boolean } = {}) {
+export async function parseBookingForm(form: FormData, settings: Settings, agencyId: string, opts: { inEvent?: boolean; requireVenue?: boolean } = {}) {
   // The act can be left empty while the gig is being set up (Pending), or kept On hold for a wedding or event.
   const artistId = optStr(form, "artistId");
   const artist = artistId ? await prisma.artist.findFirst({ where: { id: artistId, agencyId } }) : null;
@@ -154,6 +157,8 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   const venueId = optStr(form, "venueId");
   const venue = venueId ? await prisma.venue.findFirst({ where: { id: venueId, agencyId } }) : null;
   if (venueId && !venue) throw new FormError("That venue no longer exists");
+  // Every gig made from the booking forms has a venue (a wedding or event's gigs use the event's place).
+  if (!venueId && opts.requireVenue && !opts.inEvent) throw new FormError(VENUE_NEEDED);
 
   const promoterId = optStr(form, "promoterId");
   if (promoterId && !(await prisma.contact.findFirst({ where: { id: promoterId, agencyId }, select: { id: true } }))) {

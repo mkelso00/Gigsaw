@@ -25,7 +25,8 @@ function clean(input: Record<string, string | undefined>): Saved {
   if (input.colour === "artist") out.colour = input.colour;
   for (const k of ["town", "venue", "artist"] as const) {
     const v = input[k]?.trim();
-    if (v && v.length <= 120) out[k] = v;
+    // Venue can be several, comma separated (up to about 30 picked at once).
+    if (v && v.length <= (k === "venue" ? 800 : 120)) out[k] = v;
   }
   return out;
 }

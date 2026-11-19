@@ -35,7 +35,7 @@ export function HeaderActions({ children }: { children: React.ReactNode }) {
       <div
         // Tapping a link or button inside closes the menu (a form button still submits first).
         onClick={(e) => (e.target as HTMLElement).closest("a,button") && setTimeout(() => setOpen(false), 0)}
-        className={`${open ? "flex" : "hidden"} absolute top-full right-0 z-30 mt-2 w-64 flex-col items-stretch gap-2 rounded-xl border border-ink-200 bg-white p-2 shadow-xl sm:static sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&_.btn]:justify-center`}
+        className={`${open ? "flex" : "hidden"} absolute top-full right-0 z-40 mt-2 w-64 flex-col items-stretch gap-2 rounded-xl border border-ink-200 bg-white p-2 shadow-xl sm:static sm:mt-0 sm:flex sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none [&_.btn]:justify-center`}
       >
         {children}
       </div>
@@ -102,7 +102,8 @@ export function FilterPanel({ active = 0, always = false, children }: { active?:
   // always: folded behind the button on computers too (and open while any filter is set), for calm busy pages.
   const [open, setOpen] = useState(always && active > 0);
   return (
-    <div className="mb-4">
+    // Above the page below it, so a drop-down inside a filter (e.g. the calendar's venues) isn't covered.
+    <div className="relative z-30 mb-4">
       <button type="button" onClick={() => setOpen((o) => !o)} className={`btn btn-sm mb-2 ${always ? "" : "sm:hidden"}`} aria-expanded={open}>
         <Icon name="filter" className="h-4 w-4" />
         {open ? "Hide filters" : "Filters"}
