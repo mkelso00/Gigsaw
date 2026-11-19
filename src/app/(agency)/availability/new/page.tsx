@@ -8,6 +8,7 @@ import { getSettings, prisma } from "@/lib/db";
 import { minorToInput } from "@/lib/money";
 import { isDateKey } from "@/lib/rota";
 import { localDateKey, localTime } from "@/lib/time";
+import { VENUE_ORDER } from "@/lib/venue-order";
 
 export const metadata: Metadata = { title: "Ask who's free" };
 
@@ -38,7 +39,7 @@ export default async function NewAvailabilityPage({ searchParams }: { searchPara
   const date = isDateKey(sp.date) && sp.date >= today ? sp.date : gigDate && gigDate >= today ? gigDate : today;
   const [acts, venues, hints] = await Promise.all([
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, actType: true, town: true } }),
-    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
+    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: VENUE_ORDER, select: { id: true, name: true, city: true } }),
     actHintsOn(user.agencyId, date, settings.defaultTimezone),
   ]);
   const defaults: AvailabilityDefaults = gig

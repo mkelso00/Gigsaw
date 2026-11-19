@@ -284,7 +284,18 @@ function venueData(form: FormData) {
     timezone,
     colour: /^#[0-9a-f]{6}$/i.test(str(form, "colour")) ? str(form, "colour") : "",
     notes: str(form, "notes"),
+    priority: form.get("priority") === "on",
   };
+}
+
+/** Star or unstar a venue from the Venues list: priority venues are listed first everywhere venues are picked. */
+export async function setVenuePriority(venueId: string, priority: boolean) {
+  const user = await requireStaff();
+  const v = await prisma.venue.updateMany({ where: { id: venueId, agencyId: user.agencyId }, data: { priority } });
+  if (!v.count) return;
+  await logActivity(user, "VENUE", venueId, priority ? "made a priority venue" : "no longer a priority venue");
+  revalidatePath("/venues");
+  revalidatePath("/calendar");
 }
 
 export async function createVenue(_: FormState, form: FormData): Promise<FormState> {

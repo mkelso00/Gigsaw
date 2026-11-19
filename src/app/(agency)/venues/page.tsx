@@ -4,6 +4,9 @@ import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { venueColour } from "@/lib/rota";
+import { VENUE_ORDER } from "@/lib/venue-order";
+import { setVenuePriority } from "@/actions/crm";
+import { ServerForm } from "@/components/forms";
 
 export const metadata: Metadata = { title: "Venues" };
 
@@ -23,14 +26,14 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
           }
         : {}),
     },
-    orderBy: { name: "asc" },
+    orderBy: VENUE_ORDER,
     include: { _count: { select: { bookings: { where: { archivedAt: null } } } } },
   });
   return (
     <div>
       <PageHeader
         title="Venues"
-        subtitle="Add a map pin to each venue so arrivals can be verified."
+        subtitle="Star your priority venues to list them first in the calendar filter and booking forms. Add a map pin to each venue so arrivals can be verified."
         actions={
           <>
             <Link href="/artists/import#template-venues" className="btn">
@@ -65,6 +68,16 @@ export default async function VenuesPage({ searchParams }: { searchParams: Promi
                 <tr key={v.id} className="hover:bg-slate-50">
                   <td>
                     <span className="flex items-center gap-2.5">
+                      <ServerForm action={setVenuePriority.bind(null, v.id, !v.priority)}>
+                        <button
+                          title={v.priority ? "Priority venue: listed first. Click to unstar." : "Make a priority venue (listed first)"}
+                          aria-label={v.priority ? `Unstar ${v.name}` : `Make ${v.name} a priority venue`}
+                          aria-pressed={v.priority}
+                          className={`text-lg leading-none ${v.priority ? "text-amber-500" : "text-ink-300 hover:text-amber-500"}`}
+                        >
+                          {v.priority ? "★" : "☆"}
+                        </button>
+                      </ServerForm>
                       <span
                         className="inline-block h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/10"
                         style={{ background: venueColour(v) }}

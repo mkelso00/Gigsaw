@@ -11,6 +11,7 @@ import { getSettings, prisma } from "@/lib/db";
 import { defaultBookingFee, defaultVat, minorToInput } from "@/lib/money";
 import { canEdit, proposalRef } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
+import { VENUE_ORDER } from "@/lib/venue-order";
 
 export const metadata: Metadata = { title: "Edit proposal" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
     prisma.quote.findFirst({ where: { id, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } }, contact: { select: { name: true } } } }),
     getSettings(user.agencyId),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, genre: true } }),
-    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, city: true } }),
+    prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: VENUE_ORDER, select: { id: true, name: true, city: true } }),
     contractTemplatesFor(user.agencyId),
   ]);
   if (!q) notFound();

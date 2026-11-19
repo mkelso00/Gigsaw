@@ -8,6 +8,7 @@ import { getSettings, prisma } from "@/lib/db";
 import { readStatuses, statusParams } from "@/lib/count-statuses";
 import { formatMoney } from "@/lib/money";
 import { isDateKey, venueColour } from "@/lib/rota";
+import { VENUE_ORDER } from "@/lib/venue-order";
 import { formatDate, localDateKey, localTime } from "@/lib/time";
 import { monthRange, venueStatement } from "@/lib/venue-statement";
 
@@ -31,7 +32,7 @@ export default async function VenueStatementPage({
   const to = valid(sp.to) ?? lastTo;
   const venues = await prisma.venue.findMany({
     where: { agencyId: user.agencyId },
-    orderBy: { name: "asc" },
+    orderBy: VENUE_ORDER,
     select: { id: true, name: true, city: true, colour: true },
   });
   const venueId = sp.venue ?? "";

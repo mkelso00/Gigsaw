@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { awayBetween } from "@/lib/away";
 import { getSettings, prisma } from "@/lib/db";
 import { localDateKey } from "@/lib/time";
+import { VENUE_ORDER } from "@/lib/venue-order";
 
 export type QuickBookingOption = { id: string; name: string; detail?: string };
 
@@ -28,7 +29,7 @@ export async function loadQuickBookingLists(): Promise<QuickBookingLists> {
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const } };
   const [acts, venues, contacts, away] = await Promise.all([
     prisma.artist.findMany({ ...pick, select: { id: true, name: true } }),
-    prisma.venue.findMany({ ...pick, select: { id: true, name: true, city: true } }),
+    prisma.venue.findMany({ where: pick.where, orderBy: VENUE_ORDER, select: { id: true, name: true, city: true } }),
     prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     awayBetween(user.agencyId, localDateKey(new Date(), settings.defaultTimezone), "9999-12-31"),
   ]);

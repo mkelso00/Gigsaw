@@ -215,6 +215,13 @@ export function VenueForm({
         <Field label="Capacity">
           <input name="capacity" inputMode="numeric" defaultValue={venue?.capacity ?? ""} className="input" />
         </Field>
+        <label className="flex items-start gap-3 rounded-xl bg-ink-50 p-3 text-sm sm:col-span-2">
+          <input type="checkbox" name="priority" defaultChecked={!!venue?.priority} className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <span className="font-medium">★ Priority venue</span>
+            <span className="hint block">Listed first in the calendar filter and when picking a venue for a booking.</span>
+          </span>
+        </label>
         <Field label="Address" className="sm:col-span-2">
           <input name="address" defaultValue={venue?.address} className="input" />
         </Field>

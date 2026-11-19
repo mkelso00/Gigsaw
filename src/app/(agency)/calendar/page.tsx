@@ -20,6 +20,7 @@ import { RememberCalendar } from "@/components/calendar-memory";
 import { daySummary, GIG_KEY, gigLook } from "@/lib/calendar-look";
 import { CalendarJump } from "@/components/calendar-jump";
 import { CALENDAR_COOKIE, CALENDAR_COOKIE_DAYS, recallCalendar, rememberCalendar } from "@/lib/calendar-memory";
+import { VENUE_ORDER } from "@/lib/venue-order";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -171,10 +172,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     awayBetween(user.agencyId, gridStart, addDaysToKey(gridEnd, -1)),
     prisma.venue.findMany({
       where: { agencyId: user.agencyId },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, city: true },
+      orderBy: VENUE_ORDER,
+      select: { id: true, name: true, city: true, priority: true },
     }),
   ]);
+  const priorityIds = venues.filter((v) => v.priority).map((v) => v.id);
   const picked = venues.filter((v) => venueIds.includes(v.id));
   const venueName = picked.length === 1 ? picked[0].name : picked.length > 1 ? `${picked.length} venues` : undefined;
   // Days acts have blocked out are their own business: they show only when the calendar is filtered to one
@@ -330,6 +332,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </span>
       </div>
 
+      {picked.length > 0 && (
+        <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-600">
+          <span>Showing {picked.length === 1 ? picked[0].name : `${picked.length} venues: ${picked.map((v) => v.name).join(", ")}`}</span>
+          <Link href={`/calendar${qs({ venue: "", date: anchor })}`} className="link">
+            Show all venues
+          </Link>
+        </p>
+      )}
       <FilterPanel always active={[venueParam, sp.town, sp.artist, sp.status, byArtist ? "1" : ""].filter(Boolean).length}>
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           <input type="hidden" name="view" value={view} />
@@ -337,7 +347,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <div>
             <span className="label">Venues</span>
             {/* Tick one or several (e.g. three to compare); none ticked is every venue. */}
-            <details className="relative">
+            {/* Keyed by the choice, so it closes once a choice is made. */}
+            <details key={venueParam ?? "all"} className="relative">
               <summary className="input flex max-w-56 cursor-pointer list-none items-center justify-between gap-2">
                 <span className="truncate">{picked.length === 0 ? "All venues" : picked.length === 1 ? picked[0].name : `${picked.length} venues`}</span>
                 <span aria-hidden className="text-ink-400">
@@ -345,16 +356,39 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 </span>
               </summary>
               <div className="absolute z-30 mt-1 max-h-80 w-72 overflow-y-auto rounded-xl border border-ink-200 bg-white p-2 shadow-lg">
-                <p className="px-2 pt-1 pb-2 text-xs text-ink-500">Tick the venues to show. None ticked shows them all.</p>
-                {venues.map((v) => (
-                  <label key={v.id} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink-50">
-                    <input type="checkbox" name="venue" value={v.id} defaultChecked={venueIds.includes(v.id)} className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>
-                      {v.name}
-                      {v.city ? <span className="text-ink-500">, {v.city}</span> : null}
-                    </span>
-                  </label>
-                ))}
+                {/* One click for all of them, or just the priority ones (set on each venue). */}
+                <div className="flex flex-wrap gap-1.5 px-2 pt-1 pb-2">
+                  <Link href={`/calendar${qs({ venue: "", date: anchor })}`} className="btn btn-sm">
+                    All venues
+                  </Link>
+                  {priorityIds.length > 0 && (
+                    <Link href={`/calendar${qs({ venue: priorityIds.join(","), date: anchor })}`} className="btn btn-sm">
+                      ★ Priority venues
+                    </Link>
+                  )}
+                </div>
+                <p className="px-2 pb-2 text-xs text-ink-500">Or tick the venues to show.</p>
+                {(
+                  [
+                    ["Priority", venues.filter((v) => v.priority)],
+                    [priorityIds.length ? "Other venues" : "", venues.filter((v) => !v.priority)],
+                  ] as const
+                ).map(([heading, list]) =>
+                  list.length ? (
+                    <div key={heading || "all"}>
+                      {heading && <p className="px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-ink-500 uppercase">{heading}</p>}
+                      {list.map((v) => (
+                        <label key={v.id} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink-50">
+                          <input type="checkbox" name="venue" value={v.id} defaultChecked={venueIds.includes(v.id)} className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            {v.name}
+                            {v.city ? <span className="text-ink-500">, {v.city}</span> : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null,
+                )}
                 <div className="sticky -bottom-2 -mx-2 mt-1 border-t border-ink-100 bg-white px-2 pt-2 pb-1">
                   <button className="btn btn-primary btn-sm w-full">Show these venues</button>
                 </div>

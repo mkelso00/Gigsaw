@@ -44,30 +44,30 @@ model Agency {
   stripeDetailsDone    Boolean   @default(false)
   createdAt            DateTime  @default(now())
 
-  settings     Settings?
-  brandLogo    BrandLogo?
-  users        User[]
-  artists      Artist[]
-  contacts     Contact[]
-  venues       Venue[]
-  bookings     Booking[]
-  activity     Activity[]
-  statements   BillingStatement[]
-  messages     Message[]
-  slots        VenueSlot[]
-  people       Person[]
-  events       Event[]
-  applications ActApplication[]
-  contracts    Contract[]
-  payLinks     PayLink[]
-  cardPayments CardPayment[]
-  enquiries    Enquiry[]
-  away         ArtistUnavailability[]
-  availability AvailabilityRequest[]
-  quotes       Quote[]
+  settings            Settings?
+  brandLogo           BrandLogo?
+  users               User[]
+  artists             Artist[]
+  contacts            Contact[]
+  venues              Venue[]
+  bookings            Booking[]
+  activity            Activity[]
+  statements          BillingStatement[]
+  messages            Message[]
+  slots               VenueSlot[]
+  people              Person[]
+  events              Event[]
+  applications        ActApplication[]
+  contracts           Contract[]
+  payLinks            PayLink[]
+  cardPayments        CardPayment[]
+  enquiries           Enquiry[]
+  away                ArtistUnavailability[]
+  availability        AvailabilityRequest[]
+  quotes              Quote[]
   calendarConnections CalendarConnection[]
-  actInvoices  ActInvoice[]
-  contractTemplates ContractTemplate[]
+  actInvoices         ActInvoice[]
+  contractTemplates   ContractTemplate[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -159,45 +159,45 @@ model Settings {
 }
 
 model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
+  id               String    @id @default(cuid())
+  email            String    @unique
   name             String
-  phone            String   @default("") // for overdue alert texts
+  phone            String    @default("") // for overdue alert texts
   passwordHash     String
-  role             String   @default("AGENT") // ADMIN | AGENT | ARTIST (within their agency)
+  role             String    @default("AGENT") // ADMIN | AGENT | ARTIST (within their agency)
   // The platform owner runs the Owner area. They may also belong to an agency.
-  isOwner          Boolean  @default(false)
+  isOwner          Boolean   @default(false)
   agencyId         String?
-  agency           Agency?  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  artistId         String?  @unique
-  artist           Artist?  @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
+  agency           Agency?   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  artistId         String?   @unique
+  artist           Artist?   @relation("ArtistLogin", fields: [artistId], references: [id], onDelete: SetNull)
   // A person's own login: they see the gigs of every act they're in.
-  personId         String?  @unique
-  person           Person?  @relation("PersonLogin", fields: [personId], references: [id], onDelete: SetNull)
-  createdAt        DateTime @default(now())
-  demo             Boolean  @default(false) // sample data, removable from Settings
+  personId         String?   @unique
+  person           Person?   @relation("PersonLogin", fields: [personId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  demo             Boolean   @default(false) // sample data, removable from Settings
   // Which alerts this internal user wants, by kind and channel, e.g. { "LATE": { "text": false } }.
   // Anything not mentioned is on.
-  notifyPrefs      Json     @default("{}")
+  notifyPrefs      Json      @default("{}")
   // When this act login first had its gigs in a calendar: its feed was first fetched by a calendar app, it connected
   // Google or Outlook, or it said it had added it. The act app asks for this before anything else (src/lib/act-calendar-step.ts).
   calendarAddedAt  DateTime?
   // Calendar sync for staff: a private feed of bookings at /api/calendar/team/<token>. Null means not set up.
-  calendarToken    String?  @unique
-  calendarScope    String   @default("MINE") // MINE (bookings where they're lead agent) | ALL
+  calendarToken    String?   @unique
+  calendarScope    String    @default("MINE") // MINE (bookings where they're lead agent) | ALL
   // Statuses to include, comma separated, e.g. "CONFIRMED,SETTLED". Blank means all (never cancelled or archived).
-  calendarStatuses String   @default("")
+  calendarStatuses String    @default("")
 
-  sessions          Session[]
-  linkedAccounts    LinkedAccount[]
-  passwordResets    PasswordReset[]
-  managedArtists    Artist[]           @relation("ArtistAgent")
-  bookingsCreated   Booking[]          @relation("BookingCreator")
-  bookingsAgented   Booking[]          @relation("BookingAgent")
-  notes             ContactNote[]
-  checkIns          CheckIn[]
-  activity          Activity[]
-  pushSubscriptions PushSubscription[]
+  sessions            Session[]
+  linkedAccounts      LinkedAccount[]
+  passwordResets      PasswordReset[]
+  managedArtists      Artist[]             @relation("ArtistAgent")
+  bookingsCreated     Booking[]            @relation("BookingCreator")
+  bookingsAgented     Booking[]            @relation("BookingAgent")
+  notes               ContactNote[]
+  checkIns            CheckIn[]
+  activity            Activity[]
+  pushSubscriptions   PushSubscription[]
   calendarConnections CalendarConnection[]
 
   @@index([agencyId]) // the team list, and the agent pickers on most forms
@@ -251,32 +251,32 @@ model Artist {
   demo              Boolean  @default(false) // sample data, removable from Settings
 
   // Profile, filled in by the act when they join or by the agency.
-  actType           String  @default("") // SOLO | DUO | BAND | DJ | OTHER
-  town              String  @default("")
-  photoUrl          String  @default("")
-  videoUrl          String  @default("")
-  instagram         String  @default("")
-  website           String  @default("")
-  setList           String  @default("")
-  usualFeeMinor     Int? // what they usually charge, a guide for the agency
+  actType            String    @default("") // SOLO | DUO | BAND | DJ | OTHER
+  town               String    @default("")
+  photoUrl           String    @default("")
+  videoUrl           String    @default("")
+  instagram          String    @default("")
+  website            String    @default("")
+  setList            String    @default("")
+  usualFeeMinor      Int? // what they usually charge, a guide for the agency
   // Bank details for paying the act. Agency only.
-  bankAccountName   String  @default("")
-  bankSortCode      String  @default("")
-  bankAccountNumber String  @default("")
-  vatRegistered     Boolean @default(false)
-  vatNumber         String  @default("")
+  bankAccountName    String    @default("")
+  bankSortCode       String    @default("")
+  bankAccountNumber  String    @default("")
+  vatRegistered      Boolean   @default(false)
+  vatNumber          String    @default("")
   // Postal address, for the self-billing invoices Gigsaw makes for the act. Filled in by the act or the agency.
-  address           String  @default("")
+  address            String    @default("")
   // National Insurance number, kept for the agency's records only: never shown to venues, customers or other acts.
-  niNumber          String  @default("")
+  niNumber           String    @default("")
   // When the act last finished the details the agency asks for (bank, address, NI), so staff can see who's ready to be paid.
   // Since people have their own pay details (see Person), these are only used for an act with nobody on file, or one
   // whose details from before couldn't be moved to a person yet (src/lib/payee.ts).
   detailsCompletedAt DateTime?
   // The person a band's self-billing invoices are made out to and paid to ("Invoices go to"). Chosen by staff; an act
   // with only one person doesn't need one (that person is the payee).
-  leadPersonId      String?
-  leadPerson        Person? @relation("ActLead", fields: [leadPersonId], references: [id], onDelete: SetNull)
+  leadPersonId       String?
+  leadPerson         Person?   @relation("ActLead", fields: [leadPersonId], references: [id], onDelete: SetNull)
 
   login    User?                  @relation("ArtistLogin")
   slots    VenueSlot[]
@@ -296,24 +296,24 @@ model Artist {
 }
 
 model Contact {
-  id        String   @id @default(cuid())
-  agencyId  String
-  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id                 String            @id @default(cuid())
+  agencyId           String
+  agency             Agency            @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
-  importRef String?
-  type      String   @default("PROMOTER") // PROMOTER | CLIENT | VENUE_CONTACT | COLLABORATOR | OTHER
-  name      String
-  company   String   @default("")
-  email     String   @default("")
-  phone     String   @default("")
-  address   String   @default("")
-  tags      String   @default("") // comma separated
+  importRef          String?
+  type               String            @default("PROMOTER") // PROMOTER | CLIENT | VENUE_CONTACT | COLLABORATOR | OTHER
+  name               String
+  company            String            @default("")
+  email              String            @default("")
+  phone              String            @default("")
+  address            String            @default("")
+  tags               String            @default("") // comma separated
   // This client's own contract, e.g. Sony always gets the Corporate contract. Null: by event type, then the default.
   contractTemplateId String?
   contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  demo      Boolean  @default(false) // sample data, removable from Settings
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  demo               Boolean           @default(false) // sample data, removable from Settings
 
   notes     ContactNote[]
   slots     VenueSlot[]
@@ -355,6 +355,8 @@ model Venue {
   // Secret for the venue's read-only page (/v/<token>). Null means no link has been made.
   shareToken String?  @unique
   colour     String   @default("") // calendar colour; blank means pick one automatically
+  // A priority venue is listed first wherever venues are picked (calendar filter, booking forms).
+  priority   Boolean  @default(false)
   timezone   String   @default("Europe/London")
   notes      String   @default("")
   createdAt  DateTime @default(now())
@@ -732,43 +734,43 @@ model Reminder {
 // A person: a musician in one or more acts, a venue manager, someone at a promoter, and so on.
 // Their company is either a venue or another company (a contact).
 model Person {
-  id            String      @id @default(cuid())
-  agencyId      String
-  agency        Agency      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id                 String          @id @default(cuid())
+  agencyId           String
+  agency             Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
-  importRef     String?
-  firstName     String
-  surname       String      @default("")
-  alias         String      @default("") // stage or known-as name
-  pronouns      String      @default("")
-  email         String      @default("")
-  phone         String      @default("")
-  social        String      @default("")
-  website       String      @default("")
-  address       String      @default("")
-  notes         String      @default("")
-  venueId       String?
-  venue         Venue?      @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  companyId     String?
-  company       Contact?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  jobTitle      String      @default("") // their role at the venue or company, e.g. "General manager"
-  calendarToken String      @unique @default(cuid())
-  demo          Boolean     @default(false)
-  createdAt     DateTime    @default(now())
+  importRef          String?
+  firstName          String
+  surname            String          @default("")
+  alias              String          @default("") // stage or known-as name
+  pronouns           String          @default("")
+  email              String          @default("")
+  phone              String          @default("")
+  social             String          @default("")
+  website            String          @default("")
+  address            String          @default("")
+  notes              String          @default("")
+  venueId            String?
+  venue              Venue?          @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  companyId          String?
+  company            Contact?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobTitle           String          @default("") // their role at the venue or company, e.g. "General manager"
+  calendarToken      String          @unique @default(cuid())
+  demo               Boolean         @default(false)
+  createdAt          DateTime        @default(now())
   // Pay details, for a musician in an act: they fill them in from their own login (Your details), and the act's
   // invoices go to them when they're the act's payee (src/lib/payee.ts). Bank and NI number: the person themself
   // and the agency's admins only. `address` above is their postal address, used on the invoices too.
-  bankAccountName    String    @default("")
-  bankSortCode       String    @default("")
-  bankAccountNumber  String    @default("")
-  vatRegistered      Boolean   @default(false)
-  vatNumber          String    @default("")
-  niNumber           String    @default("")
+  bankAccountName    String          @default("")
+  bankSortCode       String          @default("")
+  bankAccountNumber  String          @default("")
+  vatRegistered      Boolean         @default(false)
+  vatNumber          String          @default("")
+  niNumber           String          @default("")
   detailsCompletedAt DateTime?
-  acts          PersonAct[]
-  standIns      BookingLineup[]
-  login         User?       @relation("PersonLogin")
-  leadOf        Artist[]    @relation("ActLead")
+  acts               PersonAct[]
+  standIns           BookingLineup[]
+  login              User?           @relation("PersonLogin")
+  leadOf             Artist[]        @relation("ActLead")
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -793,26 +795,26 @@ model PersonAct {
 // is a normal booking linked here, so acts only ever see their own gig and fee, while the
 // customer's money is added up across all of them.
 model Event {
-  id         String   @id @default(cuid())
-  agencyId   String
-  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  name       String // e.g. "Hannah & Sam's wedding"
-  type       String   @default("WEDDING") // WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
-  date       String // "YYYY-MM-DD", the day of the event
-  timezone   String   @default("Europe/London")
-  customerId String?
-  customer   Contact? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  venueId    String?
-  venue      Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  venueText  String   @default("") // a venue not on file, e.g. a marquee at a farm
-  agentId    String?
-  status     String   @default("ACTIVE") // ACTIVE | CANCELLED
+  id                 String            @id @default(cuid())
+  agencyId           String
+  agency             Agency            @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name               String // e.g. "Hannah & Sam's wedding"
+  type               String            @default("WEDDING") // WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
+  date               String // "YYYY-MM-DD", the day of the event
+  timezone           String            @default("Europe/London")
+  customerId         String?
+  customer           Contact?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  venueId            String?
+  venue              Venue?            @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  venueText          String            @default("") // a venue not on file, e.g. a marquee at a farm
+  agentId            String?
+  status             String            @default("ACTIVE") // ACTIVE | CANCELLED
   // How the customer pays: FULL (all to the business) | DEPOSIT_CASH | DEPOSIT_TRANSFER (src/lib/pay-plan.ts).
-  payPlan    String   @default("FULL")
+  payPlan            String            @default("FULL")
   // The plan changed (planner or staff) and the acts haven't been told yet; what they were last sent.
-  planChangedAt DateTime?
-  planToldActs  Json?
-  notes      String   @default("") // agency only
+  planChangedAt      DateTime?
+  planToldActs       Json?
+  notes              String            @default("") // agency only
   // The contract type chosen for this wedding or event. Null: the customer's own, then by type, then the default.
   contractTemplateId String?
   contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
@@ -1141,21 +1143,21 @@ model Quote {
   agentId        String? // the lead agent: hears when the customer answers
   createdById    String?
 
-  title           String // e.g. "Hannah & Sam's wedding"
-  eventType       String  @default("WEDDING")
-  timezone        String  @default("Europe/London")
-  currency        String  @default("GBP")
+  title              String // e.g. "Hannah & Sam's wedding"
+  eventType          String            @default("WEDDING")
+  timezone           String            @default("Europe/London")
+  currency           String            @default("GBP")
   // The agency's booking fee, on top and all theirs (put on the first line's booking when accepted).
-  bookingFeeMinor Int     @default(0)
-  depositMinor    Int     @default(0)
-  depositDue      String? // "YYYY-MM-DD"
-  validUntil      String? // "YYYY-MM-DD", the last day it can be accepted
-  message         String  @default("") // a note to the customer
+  bookingFeeMinor    Int               @default(0)
+  depositMinor       Int               @default(0)
+  depositDue         String? // "YYYY-MM-DD"
+  validUntil         String? // "YYYY-MM-DD", the last day it can be accepted
+  message            String            @default("") // a note to the customer
   // The contract type picked for this proposal. `terms` is the wording itself, copied from it and
   // perhaps changed for this proposal: what the customer reads and agrees to.
   contractTemplateId String?
   contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
-  terms           String  @default("")
+  terms              String            @default("")
 
   // The customer's private link, made when this version is first sent. It stops opening at tokenExpiresAt.
   token           String?   @unique
@@ -1218,24 +1220,24 @@ model QuoteLine {
 // (see docs/calendar-connect.md). One per login and provider. Tokens are encrypted with
 // CALENDAR_TOKEN_KEY (src/server/token-box.ts) and never leave the server.
 model CalendarConnection {
-  id                   String    @id @default(cuid())
+  id                   String              @id @default(cuid())
   agencyId             String
-  agency               Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agency               Agency              @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   userId               String
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider             String // GOOGLE | MICROSOFT
-  accountEmail         String    @default("")
+  accountEmail         String              @default("")
   // Which calendar the gigs go in: "primary" (Google) or the default calendar (Microsoft) unless one is chosen.
-  calendarId           String    @default("primary")
-  calendarName         String    @default("")
+  calendarId           String              @default("primary")
+  calendarName         String              @default("")
   refreshTokenEnc      String
-  accessTokenEnc       String    @default("")
+  accessTokenEnc       String              @default("")
   accessTokenExpiresAt DateTime?
-  status               String    @default("ACTIVE") // ACTIVE | NEEDS_RECONNECT
-  lastError            String    @default("")
+  status               String              @default("ACTIVE") // ACTIVE | NEEDS_RECONNECT
+  lastError            String              @default("")
   lastSyncedAt         DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
   events               CalendarEventLink[]
 
   @@unique([userId, provider])
