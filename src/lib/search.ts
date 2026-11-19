@@ -33,6 +33,7 @@ const PAGES: [string, string, string][] = [
   ["Add a venue", "/venues/new", "new venue"],
   ["Reports", "/reports", "money earnings commission"],
   ["Payments", "/payments", "paid owed collect settle"],
+  ["Monthly billing", "/billing", "invoice invoices po purchase order xero month bill"],
   ["Import from Overture", "/artists/import", "csv contacts upload"],
   ["New acts", "/artists/applications", "join link applications onboarding"],
   ["Settings", "/settings/general", "business details time zone currency"],

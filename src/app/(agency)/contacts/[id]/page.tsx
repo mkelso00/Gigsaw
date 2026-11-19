@@ -13,6 +13,7 @@ import { CONTACT_TYPE_LABELS, type ContactType, actName } from "@/lib/constants"
 import { getSettings, prisma } from "@/lib/db";
 import { splitTags } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
+import { BILLING_MODE_LABELS, billingModeOf } from "@/lib/monthly-billing";
 import { formatDate, formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Contact" };
@@ -111,6 +112,23 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     )}
                   </span>,
                 ],
+                ...(contact.type !== "CLIENT"
+                  ? [
+                      [
+                        "Monthly bill",
+                        <span key="billing" data-testid="client-billing">
+                          {BILLING_MODE_LABELS[billingModeOf(contact.billing)]}
+                          <span className="text-ink-500">
+                            {" "}
+                            ·{" "}
+                            <Link href="/billing" className="link">
+                              Monthly billing
+                            </Link>
+                          </span>
+                        </span>,
+                      ] as [string, React.ReactNode],
+                    ]
+                  : []),
                 [
                   "Tags",
                   splitTags(contact.tags)

@@ -27,6 +27,7 @@ export type MessageKind =
   | "QUOTE"
   | "AVAILABILITY"
   | "BANK_CHANGE"
+  | "BILLING"
   | "TEST";
 
 type Base = {

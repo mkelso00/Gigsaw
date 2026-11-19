@@ -289,6 +289,19 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: ["first_name", "event", "date", "business"],
   },
   {
+    key: "BILL_PO_REQUEST",
+    group: "CUSTOMERS",
+    label: "Monthly bill: please send a PO",
+    hint: "Sent when you press Ask for PO in Monthly billing. Lists the month's gigs (date, venue, act and what each costs the client, never the act's fee) and the total. Replies go to your business email.",
+    example: {
+      subject: "Purchase order needed: {client}, {month}",
+      intro:
+        "Hi {first_name}, here are the gigs {business} will be billing {client} for in {month}. Please could you send us a purchase order (PO) number for them? Just reply to this email.",
+    },
+    placeholders: ["first_name", "client", "month", "total", "business"],
+    manual: true,
+  },
+  {
     key: "NEW_ACT",
     group: "TEAM",
     label: "New act applied",
@@ -342,6 +355,28 @@ export const TEMPLATES: TemplateDef[] = [
     hint: "To the proposal's lead agent (or your business email) when a customer accepts or declines a proposal.",
     example: { subject: "Proposal accepted: {event}", intro: "{name} has accepted the proposal for {event}. The bookings are made." },
     placeholders: ["name", "event", "answer", "business"],
+  },
+  {
+    key: "BILL_MONTH_START",
+    group: "TEAM",
+    label: "Monthly billing: time to bill",
+    hint: "To your business email (or each admin when there isn't one) on the 1st of the month, or the first weekday after: how many bills last month needs, with a link to Monthly billing.",
+    example: {
+      subject: "Monthly billing for {month}: {count} to bill",
+      intro: "{month} is over, so it's time to ask for POs and raise the invoices.",
+    },
+    placeholders: ["month", "count", "business"],
+  },
+  {
+    key: "BILL_MONTH_CHASE",
+    group: "TEAM",
+    label: "Monthly billing: still to do",
+    hint: "On the 5th of the month (or the first weekday after), if any of last month's bills are still missing a PO or haven't been invoiced, a list of them.",
+    example: {
+      subject: "Monthly billing for {month}: {count} still to do",
+      intro: "These bills for {month} are still missing a PO or haven't been invoiced yet.",
+    },
+    placeholders: ["month", "count", "business"],
   },
 ];
 

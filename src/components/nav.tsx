@@ -21,9 +21,7 @@ type NavItem = {
 // The menu, in sections. On phones it becomes one scrolling strip and the headings are hidden.
 const SECTIONS: { title?: string; links: NavItem[] }[] = [
   {
-    links: [
-      { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-    ],
+    links: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }],
   },
   {
     title: "Bookings",
@@ -53,6 +51,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
     title: "Money",
     links: [
       { href: "/payments", label: "Payments", icon: "payments" },
+      { href: "/billing", label: "Monthly billing", icon: "receipt" },
       { href: "/payments/acts", label: "Pay acts", icon: "doc" },
       { href: "/reports", label: "Reports", icon: "reports" },
       { href: "/reports/venues", label: "Venue statements", icon: "billing" },

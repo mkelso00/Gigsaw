@@ -68,6 +68,7 @@ model Agency {
   calendarConnections CalendarConnection[]
   actInvoices  ActInvoice[]
   contractTemplates ContractTemplate[]
+  monthlyBills MonthlyBill[]
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -311,11 +312,15 @@ model Contact {
   // This client's own contract, e.g. Sony always gets the Corporate contract. Null: by event type, then the default.
   contractTemplateId String?
   contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
+  // How this company is billed each month (Money, Monthly billing): COMBINED (one bill for all its
+  // venues) | PER_VENUE (one bill for each venue).
+  billing   String   @default("COMBINED")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   demo      Boolean  @default(false) // sample data, removable from Settings
 
   notes     ContactNote[]
+  monthlyBills MonthlyBill[]
   slots     VenueSlot[]
   bookings  Booking[]
   people    Person[]
@@ -366,6 +371,7 @@ model Venue {
   events       Event[]
   availability AvailabilityRequest[]
   quoteLines   QuoteLine[]
+  monthlyBills MonthlyBill[]
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -1366,4 +1372,43 @@ model ContractTemplate {
   quotes   Quote[]
 
   @@index([agencyId])
+}
+
+// One bill a month to a paying company or venue, and how far it has got: PO asked for, PO in, invoiced, paid
+// (Money, Monthly billing; src/lib/monthly-billing.ts). Which gigs are on it is worked out afresh from the
+// bookings each time; this row keeps the steps, made the first time the page lists the bill.
+//  - A company billed COMBINED: contactId set, venueId null, key "c:<contactId>".
+//  - A company billed PER_VENUE: venueId and contactId set, key "cv:<contactId>:<venueId>".
+//  - A venue with nobody to bill but itself: venueId only, key "v:<venueId>".
+model MonthlyBill {
+  id                 String    @id @default(cuid())
+  agencyId           String
+  agency             Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  month              String // "YYYY-MM"
+  key                String
+  contactId          String?
+  contact            Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  venueId            String?
+  venue              Venue?    @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  // The purchase order: when it was asked for, its number and when it came in.
+  poRequestedAt      DateTime?
+  poNumber           String    @default("")
+  poReceivedAt       DateTime?
+  // The invoice raised (e.g. in Xero), and the total it was for, to spot gigs changed since.
+  invoicedAt         DateTime?
+  invoiceNumber      String    @default("")
+  invoicedTotalMinor Int?
+  paidAt             DateTime?
+  // Nothing to bill this month after all (e.g. every gig was cancelled or moved).
+  nothingToBill      Boolean   @default(false)
+  note               String    @default("")
+  // The invoice in Xero, once it's sent there (filled in by the Xero connection).
+  xeroInvoiceId      String    @default("")
+  xeroStatus         String    @default("")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([agencyId, month, key])
+  @@index([contactId])
+  @@index([venueId])
 }
