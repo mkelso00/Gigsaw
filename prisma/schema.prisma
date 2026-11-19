@@ -68,6 +68,7 @@ model Agency {
   calendarConnections CalendarConnection[]
   actInvoices  ActInvoice[]
   contractTemplates ContractTemplate[]
+  xeroConnection XeroConnection?
 }
 
 // A month's bill for one agency, frozen when the owner issues it.
@@ -199,6 +200,7 @@ model User {
   activity          Activity[]
   pushSubscriptions PushSubscription[]
   calendarConnections CalendarConnection[]
+  xeroConnections   XeroConnection[]
 
   @@index([agencyId]) // the team list, and the agent pickers on most forms
 }
@@ -1366,4 +1368,39 @@ model ContractTemplate {
   quotes   Quote[]
 
   @@index([agencyId])
+}
+
+// The agency's Xero organisation, for raising the monthly invoices to venues and companies as drafts and reading
+// back whether they're paid (src/lib/xero.ts). One per agency. Disconnecting clears the tokens and the
+// organisation but keeps the invoice settings, so connecting again doesn't lose them.
+model XeroConnection {
+  id                   String    @id @default(cuid())
+  agencyId             String    @unique
+  agency               Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  // The organisation invoices go to ("" while not connected), and its short code for links into Xero.
+  tenantId             String    @default("")
+  tenantName           String    @default("")
+  shortCode            String    @default("")
+  // Every organisation the admin allowed when connecting, [{ tenantId, tenantName }], to switch between them.
+  tenants              Json      @default("[]")
+  // Sealed with XERO_TOKEN_KEY (or CALENDAR_TOKEN_KEY) by src/server/token-box.ts. Xero gives a new refresh
+  // token with every refresh; the newest is kept. Access tokens last 30 minutes.
+  refreshTokenEnc      String    @default("")
+  accessTokenEnc       String    @default("")
+  accessTokenExpiresAt DateTime?
+  connectedById        String?
+  connectedBy          User?     @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  connectedAt          DateTime?
+  // Xero refused the tokens (access removed, or not used for 60 days): an admin has to connect again.
+  needsReconnect       Boolean   @default(false)
+  lastError            String    @default("")
+  // Invoice lines go to this sales account, with this tax rate (OUTPUT2: 20% VAT on Income, in a UK organisation).
+  salesAccountCode     String    @default("200")
+  taxType              String    @default("OUTPUT2")
+  // Days after the invoice date that it's due. Null leaves it to Xero: the contact's or the organisation's terms.
+  dueDays              Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([connectedById])
 }

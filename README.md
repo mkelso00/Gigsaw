@@ -127,13 +127,15 @@ Every variable is listed, grouped and explained in [`.env.example`](.env.example
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Shows "Sign in with Google" and "Sign up with Google". In Google Cloud Console, make an OAuth client (Web application) with the redirect URI `<your site>/api/auth/google/callback` and the scopes `openid`, `email` and `profile`. |
 | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` | Optional. Shows "Sign in with Microsoft" for work, school and personal accounts. In Microsoft Entra, register an app for "any organisational directory and personal Microsoft accounts" with the Web redirect URI `<your site>/api/auth/microsoft/callback`, and add the optional `email` and `xms_edov` claims to the ID token. |
 | `CALENDAR_TOKEN_KEY` | Optional. Lets acts connect their own Google Calendar or Outlook in their app, so their gigs go straight in (uses the Google and Microsoft apps above, with calendar access added). Make it with `openssl rand -base64 32`. The step-by-step setup, including Google's review of calendar access, is in [docs/calendar-connect.md](docs/calendar-connect.md#setting-it-up). |
+| `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` | Optional. Sends the monthly invoices to the business's Xero as drafts and reads back whether they're paid. Make a free app (type "Web app") at [developer.xero.com](https://developer.xero.com/app/manage) with the redirect URI `<your site>/api/xero/callback`; an admin then connects in Settings, Xero, which also shows these steps. Xero is off until both are set. |
+| `XERO_TOKEN_KEY` | Optional. Encrypts the stored Xero tokens; `CALENDAR_TOKEN_KEY` is used when it isn't set, and one of the two is needed for Xero. Make it with `openssl rand -base64 32`. Changing it means connecting Xero again. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Optional. Keys that sign phone notifications. If not set, Gigsaw makes a pair once and keeps it in the database, which is fine for most installs. Changing them means every phone has to turn reminders on again. |
 | `DISABLE_SCHEDULER`, `CRON_SECRET` | Optional. Turn off the built-in checker (late alerts and gig reminders) and call `POST /api/cron/overdue` with `Authorization: Bearer <CRON_SECRET>` from your own scheduler instead. |
 | `ENQUIRY_SECRET` | Optional. Signs the enquiry form's time stamp. If not set, Gigsaw makes one and keeps it in the database. |
 | `LOG_LEVEL` | Optional. `debug`, `info` (the default), `warn` or `error`. In production each log entry is one line of JSON (`level`, `msg`, `time` and details), so the logs can be searched and filtered by any of them. |
 | `SENTRY_DSN` | Optional. Also send server errors to [Sentry](https://sentry.io). Without it, errors are only in the logs. |
 | `PORT`, `NODE_ENV` | Set by Railway and by `npm start`. Don't set them by hand. |
-| `STRIPE_API_BASE`, `OAUTH_TEST_BASE` | Testing only: send Stripe calls or sign-ins to a stand-in server. Ignored in production. |
+| `STRIPE_API_BASE`, `OAUTH_TEST_BASE`, `XERO_LOGIN_BASE`, `XERO_IDENTITY_BASE`, `XERO_API_BASE` | Testing only: send Stripe calls, sign-ins or Xero calls to a stand-in server. Ignored in production. |
 
 Settings → Messages → **Send me a test** checks both are working.
 
