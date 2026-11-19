@@ -201,7 +201,7 @@ model User {
   activity            Activity[]
   pushSubscriptions   PushSubscription[]
   calendarConnections CalendarConnection[]
-  xeroConnections   XeroConnection[]
+  xeroConnections     XeroConnection[]
 
   @@index([agencyId]) // the team list, and the agent pickers on most forms
 }
@@ -1415,6 +1415,7 @@ model MonthlyBill {
   @@unique([agencyId, month, key])
   @@index([contactId])
   @@index([venueId])
+}
 
 // The agency's Xero organisation, for raising the monthly invoices to venues and companies as drafts and reading
 // back whether they're paid (src/lib/xero.ts). One per agency. Disconnecting clears the tokens and the
