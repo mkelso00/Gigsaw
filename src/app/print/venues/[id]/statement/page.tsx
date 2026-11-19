@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { readStatuses } from "@/lib/count-statuses";
 import { getSettings } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
+import { billForVenueMonth } from "@/lib/monthly-billing-server";
 import { isDateKey } from "@/lib/rota";
 import { formatDate, localTime } from "@/lib/time";
 import { venueStatement } from "@/lib/venue-statement";
@@ -32,6 +33,8 @@ export default async function VenueInvoicePage({
     getSettings(user.agencyId),
   ]);
   if (!s) notFound();
+  // A statement for one month shows that month's bill's PO and invoice number (Monthly billing), when there is one.
+  const bill = from.slice(0, 7) === to.slice(0, 7) ? await billForVenueMonth(user.agencyId, id, from.slice(0, 7)) : null;
   const m = (x: number) => formatMoney(x, s.currency);
   const period = `${formatDate(new Date(`${from}T12:00:00Z`), "UTC")} to ${formatDate(new Date(`${to}T12:00:00Z`), "UTC")}`;
   const billName = s.billTo ? s.billTo.company || s.billTo.name : s.venue.name;
@@ -40,10 +43,13 @@ export default async function VenueInvoicePage({
   return (
     <DocumentShell
       title="Invoice"
-      reference={`INV-${s.venue.name
-        .replace(/[^A-Za-z0-9]/g, "")
-        .slice(0, 6)
-        .toUpperCase()}-${from.slice(0, 7).replace("-", "")}`}
+      reference={
+        bill?.invoiceNumber ||
+        `INV-${s.venue.name
+          .replace(/[^A-Za-z0-9]/g, "")
+          .slice(0, 6)
+          .toUpperCase()}-${from.slice(0, 7).replace("-", "")}`
+      }
       settings={settings}
     >
       <div className="mb-8 grid grid-cols-2 gap-6 text-sm">
@@ -64,6 +70,16 @@ export default async function VenueInvoicePage({
           <div>
             <span className="text-slate-500">Period</span> {period}
           </div>
+          {bill?.poNumber && (
+            <div data-testid="print-po">
+              <span className="text-slate-500">PO number</span> <strong>{bill.poNumber}</strong>
+            </div>
+          )}
+          {bill?.invoiceNumber && (
+            <div data-testid="print-invoice">
+              <span className="text-slate-500">Invoice number</span> <strong>{bill.invoiceNumber}</strong>
+            </div>
+          )}
         </div>
       </div>
       <table className="w-full text-sm">

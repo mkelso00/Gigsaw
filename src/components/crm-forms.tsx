@@ -6,6 +6,7 @@ import { Field } from "@/components/ui";
 import { ACT_TYPES, ACT_TYPE_LABELS } from "@/lib/act-profile";
 import { CONTACT_TYPES, CONTACT_TYPE_LABELS, TIMEZONES } from "@/lib/constants";
 import { minorToInput } from "@/lib/money";
+import { BILLING_MODES, BILLING_MODE_LABELS, billingModeOf } from "@/lib/monthly-billing";
 import { VENUE_PALETTE, venueColour } from "@/lib/rota";
 import type { FormState } from "@/lib/forms";
 
@@ -171,6 +172,18 @@ export function ContactForm({
       </div>
       <Field label="Address" hint="Used on contracts and invoices">
         <textarea name="address" rows={3} defaultValue={contact?.address} className="input" />
+      </Field>
+      <Field
+        label="Monthly bill"
+        hint="For a company that pays for gigs at venues, e.g. a group running several bars. Used by Monthly billing. Private customers can leave it."
+      >
+        <select name="billing" defaultValue={billingModeOf(contact?.billing)} className="input">
+          {BILLING_MODES.map((b) => (
+            <option key={b} value={b}>
+              {BILLING_MODE_LABELS[b]}
+            </option>
+          ))}
+        </select>
       </Field>
       {contractTypes && contractTypes.length > 0 && (
         <Field

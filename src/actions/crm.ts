@@ -13,6 +13,7 @@ import { actBookingCounts, actInUseMessage } from "@/lib/archive";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { CONTACT_TYPES } from "@/lib/constants";
+import { BILLING_MODES } from "@/lib/monthly-billing";
 import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
@@ -204,6 +205,8 @@ function contactData(form: FormData) {
     phone: str(form, "phone"),
     address: str(form, "address"),
     tags: normaliseTags(str(form, "tags")),
+    // "Monthly bill", when the form has it: one bill for all the company's venues, or one per venue.
+    ...(form.has("billing") ? { billing: oneOf(str(form, "billing"), BILLING_MODES, "COMBINED") } : {}),
   };
 }
 

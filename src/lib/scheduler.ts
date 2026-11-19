@@ -5,6 +5,7 @@ import { runActInvoices } from "./act-invoices";
 import { runOverdueCheck } from "./alerts";
 import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
+import { runBillingReminders } from "./monthly-billing-server";
 import { runProposalChasers } from "./proposal-chasers";
 import { runReminders } from "./reminders";
 
@@ -13,7 +14,8 @@ let started = false;
 let running = false;
 
 /**
- * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders and acts' invoices every minute, and catch up
+ * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders, acts' invoices and the monthly billing
+ * reminders every minute, and catch up
  * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
@@ -54,6 +56,12 @@ export function startScheduler() {
       if (r.issued || r.paid || r.voided || r.reissued) log.info("Act invoices updated", { job: "act-invoices", ...r });
     } catch (e) {
       log.error("Act invoices failed", { job: "act-invoices", err: e });
+    }
+    try {
+      const r = await withHeartbeat("monthly-billing", runBillingReminders);
+      if (r.sent) log.info("Monthly billing reminders sent", { job: "monthly-billing", sent: r.sent });
+    } catch (e) {
+      log.error("Monthly billing reminders failed", { job: "monthly-billing", err: e });
     }
     // Last, and time-boxed inside, so slow calendar providers never delay the jobs above.
     try {
