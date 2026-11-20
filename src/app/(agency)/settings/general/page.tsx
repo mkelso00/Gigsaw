@@ -27,6 +27,13 @@ export default async function GeneralSettings() {
               <Field label="Address" hint="Printed on contracts and invoices" className="sm:col-span-2">
                 <textarea name="agencyAddress" rows={3} defaultValue={settings.agencyAddress} className="input" />
               </Field>
+              <Field
+                label="Accounts email (optional)"
+                hint="The weekly pay run's invoices for your records go here, and the Monday “ready to check” email. Empty: the records go to your business email and the reminder to each admin."
+                className="sm:col-span-2"
+              >
+                <input name="accountsEmail" type="email" defaultValue={settings.accountsEmail} placeholder="accounts@example.co.uk" className="input" />
+              </Field>
             </div>
           </SettingsCard>
         </SettingsSection>

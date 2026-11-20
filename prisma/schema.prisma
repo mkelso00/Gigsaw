@@ -69,6 +69,7 @@ model Agency {
   actInvoices         ActInvoice[]
   contractTemplates   ContractTemplate[]
   monthlyBills        MonthlyBill[]
+  payRuns             PayRun[]
   xeroConnection      XeroConnection?
 }
 
@@ -158,6 +159,12 @@ model Settings {
   enquirySlug           String? @unique
   // Which fields show, the thank-you message, who hears about new enquiries and the logo (src/lib/enquiries.ts).
   enquiryForm           Json    @default("{}")
+  // Where the weekly pay run's records go (the week's invoices and payment list), and who hears it's ready to
+  // check. Empty: the records go to the business email, and the Monday reminder to each admin.
+  accountsEmail         String  @default("")
+  // The weekly pay run's bank file: a bank's preset or the business's own layout (src/lib/bank-file.ts), e.g.
+  // { "preset": "MONZO" } or { "preset": "CUSTOM", "custom": { "columns": [...], "header": true, ... } }.
+  bankFile              Json    @default("{}")
 }
 
 model User {
@@ -1452,4 +1459,29 @@ model XeroConnection {
   updatedAt            DateTime  @updatedAt
 
   @@index([connectedById])
+}
+
+// The weekly pay run (src/lib/pay-run.ts): one row per business and week (Monday to Sunday in the business's time
+// zone, by gig date), made the first time the week's invoices are sent to the business for its records. It keeps
+// what was sent, so the page can say "Sent Monday 9:12 by Lucy" and spot invoices made, replaced or voided since.
+// Paying isn't kept here: that's the invoices' own status and the payments on their bookings.
+model PayRun {
+  id             String    @id @default(cuid())
+  agencyId       String
+  agency         Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  weekStart      String // "YYYY-MM-DD", the Monday
+  // The first send: when, and by whom (the name is copied, so it stays if the login is removed).
+  sentAt         DateTime?
+  sentById       String?
+  sentByName     String    @default("")
+  // The live invoices (and their numbers, in the same order) as of the last send, to tell what's changed since.
+  sentInvoiceIds String[]  @default([])
+  sentNumbers    String[]  @default([])
+  sentTotalMinor Int       @default(0)
+  // Every send, oldest first: [{ at, byName, to, kind: "ALL" | "CHANGES", numbers, voided, totalMinor }].
+  sends          Json      @default("[]")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([agencyId, weekStart])
 }

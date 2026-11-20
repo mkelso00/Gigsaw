@@ -4,17 +4,21 @@ import { log } from "@/server/log";
 import {
   AUTO_INVOICE_DAYS,
   actFeeMinor,
+  gigFinished,
   invoiceAmounts,
   invoiceChange,
   invoiceNumber,
   invoiceSnapshot,
   issueDecision,
+  owedOnInvoice,
   paidOutMinor,
   type IssueDecision,
 } from "./act-invoice-rules";
 import { prisma } from "./db";
+import { formatMoney } from "./money";
 import { loadPayActs, payeeFor } from "./payee-server";
-import { formatDate } from "./time";
+import { outstanding } from "./payments";
+import { formatDate, localDateKey, zonedToUtc } from "./time";
 
 // Self-billing invoices for acts, in the database. The rules (when one is made, when it's replaced)
 // are in ./act-invoice-rules.ts. Every change here runs in a transaction that locks the booking row
@@ -257,6 +261,164 @@ export async function uninvoicedGigs(agencyId: string, now = new Date()) {
     if (d.waiting) return [{ booking: b, owedMinor, reason: d.reason, canMake: false }];
     return [];
   });
+}
+
+export type WeekGapKind = "DUE" | "WAITING" | "UNCONFIRMED" | "NOT_FINISHED";
+
+/**
+ * The gigs in a range of dates (by start) with an act to pay and no live invoice, for the weekly pay run: due
+ * now (the scheduler hasn't got to it, or it's older than it looks back), waiting for the payee's details, not
+ * confirmed yet, or not finished yet. Never cancelled gigs, enquiries, demo data, or acts paid already.
+ */
+export async function gigsWithoutInvoice(agencyId: string, range: { gte: Date; lt: Date }, now = new Date()) {
+  const rows = await withPayees(
+    await prisma.booking.findMany({
+      where: {
+        agencyId,
+        demo: false,
+        artistId: { not: null },
+        setStart: range,
+        status: { notIn: ["CANCELLED", "ENQUIRY"] },
+        actInvoices: { none: { status: { not: "VOID" } } },
+      },
+      include: bookingInclude,
+      orderBy: { setStart: "asc" },
+    }),
+  );
+  return rows.flatMap((b) => {
+    const owedMinor = Math.max(0, actFeeMinor(b) - paidOutMinor(b.payments));
+    if (owedMinor <= 0) return [];
+    const d = issueDecision(b, now, true);
+    const row = (kind: WeekGapKind, reason: string) => [{ booking: b, owedMinor, kind, reason, canMake: kind === "DUE" }];
+    if (d.issue) return row("DUE", "No invoice yet");
+    if (b.status !== "CONFIRMED" && b.status !== "SETTLED") return row("UNCONFIRMED", "Not confirmed yet");
+    if (!gigFinished(b, now)) return row("NOT_FINISHED", "Hasn't finished yet");
+    if (d.waiting) return row("WAITING", d.reason);
+    return [];
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Paying invoices, and undoing it
+// ---------------------------------------------------------------------------------------------------------
+
+/** The note on the payment logged when an invoice is marked paid, which is how undoing it finds the payment again. */
+export const paymentNoteFor = (number: string) => `Invoice ${number}`;
+
+type ActivityLine = { entityId: string; action: string; detail: string };
+
+/**
+ * Mark these unpaid invoices (of this agency) paid: each logs a payment out to the act on its gig for what's
+ * still owed on it, exactly as paying an act anywhere else in Gigsaw does, so the booking, Payments and reports
+ * all agree. A gig that's been and gone and is now paid both ways is marked Settled, as from Payments. The gigs
+ * are locked first, so a double tap waits and then finds nothing left to pay. Used by Pay acts and the pay run.
+ */
+export async function payActInvoices(agencyId: string, ids: string[], now = new Date()) {
+  let count = 0;
+  let totalMinor = 0;
+  let currency = "GBP";
+  const payments: Prisma.PaymentCreateManyInput[] = [];
+  const settled: string[] = [];
+  const activity: ActivityLine[] = [];
+  const paidIds: string[] = [];
+  if (!ids.length) return { count, totalMinor, currency, settled, activity, paidIds };
+  await prisma.$transaction(async (tx) => {
+    const found = await tx.actInvoice.findMany({ where: { id: { in: ids }, agencyId, status: "ISSUED" }, select: { bookingId: true } });
+    const bookingIds = [...new Set(found.flatMap((f) => (f.bookingId ? [f.bookingId] : [])))];
+    if (bookingIds.length) await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ANY(${bookingIds}) ORDER BY id FOR UPDATE`;
+    const invoices = await tx.actInvoice.findMany({
+      where: { id: { in: ids }, agencyId, status: "ISSUED" },
+      include: { booking: { include: { payments: true } } },
+      orderBy: { seq: "asc" },
+    });
+    currency = invoices[0]?.currency ?? "GBP";
+    // A gig has one live invoice at most (liveBookingId is unique), so each invoice here is on a gig of its own.
+    for (const inv of invoices) {
+      const b = inv.booking;
+      const owed = b ? owedOnInvoice(inv, b.payments) : 0;
+      if (b && owed > 0) {
+        const payment = {
+          bookingId: b.id,
+          direction: "OUT",
+          kind: "SETTLEMENT",
+          amountMinor: owed,
+          paidAt: zonedToUtc(localDateKey(now, b.timezone), "12:00", b.timezone),
+          note: paymentNoteFor(inv.number),
+        };
+        payments.push(payment);
+        activity.push({ entityId: b.id, action: "payment sent", detail: `${formatMoney(owed, b.currency)} for ${inv.number}` });
+        const after = outstanding({ ...b, payments: [...b.payments, payment] });
+        if (b.status === "CONFIRMED" && b.setStart < now && after.toCollect === 0 && after.toPay === 0) {
+          settled.push(b.id);
+          activity.push({ entityId: b.id, action: "settled", detail: "paid in and out" });
+        }
+      }
+      count++;
+      paidIds.push(inv.id);
+      if (inv.currency === currency) totalMinor += owed;
+    }
+    if (payments.length) await tx.payment.createMany({ data: payments });
+    await tx.actInvoice.updateMany({ where: { id: { in: invoices.map((i) => i.id) } }, data: { status: "PAID", paidAt: now } });
+    if (settled.length) await tx.booking.updateMany({ where: { id: { in: settled } }, data: { status: "SETTLED" } });
+  });
+  return { count, totalMinor, currency, settled, activity, paidIds };
+}
+
+/**
+ * Undo marking these invoices paid: the payment logged for each (the one noted "Invoice SB-0012") is taken off its
+ * gig, the invoice goes back to unpaid, and a gig that was Settled by it goes back to Confirmed. An invoice paid
+ * some other way (e.g. a payment logged on the booking by hand) is left as it is and listed in `notUndone`.
+ */
+export async function unpayActInvoices(agencyId: string, ids: string[], now = new Date()) {
+  let count = 0;
+  let totalMinor = 0;
+  let currency = "GBP";
+  const notUndone: string[] = [];
+  const unsettled: string[] = [];
+  const activity: ActivityLine[] = [];
+  if (!ids.length) return { count, totalMinor, currency, notUndone, unsettled, activity };
+  await prisma.$transaction(async (tx) => {
+    const found = await tx.actInvoice.findMany({ where: { id: { in: ids }, agencyId, status: "PAID" }, select: { bookingId: true } });
+    const bookingIds = [...new Set(found.flatMap((f) => (f.bookingId ? [f.bookingId] : [])))];
+    if (bookingIds.length) await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ANY(${bookingIds}) ORDER BY id FOR UPDATE`;
+    const invoices = await tx.actInvoice.findMany({
+      where: { id: { in: ids }, agencyId, status: "PAID" },
+      include: { booking: { include: { payments: true } } },
+      orderBy: { seq: "asc" },
+    });
+    currency = invoices[0]?.currency ?? "GBP";
+    const removed = new Set<string>();
+    for (const inv of invoices) {
+      const b = inv.booking;
+      const mine = b?.payments.filter((p) => p.direction === "OUT" && p.note === paymentNoteFor(inv.number)) ?? [];
+      if (!b || !mine.length) {
+        notUndone.push(inv.number);
+        continue;
+      }
+      await tx.payment.deleteMany({ where: { id: { in: mine.map((p) => p.id) } } });
+      for (const p of mine) removed.add(p.id);
+      const amount = mine.reduce((t, p) => t + p.amountMinor, 0);
+      activity.push({ entityId: b.id, action: "payment removed", detail: `${formatMoney(amount, b.currency)} for ${inv.number} (marked paid by mistake)` });
+      count++;
+      if (inv.currency === currency) totalMinor += amount;
+    }
+    const touched = [...new Set(invoices.flatMap((i) => (i.booking && !notUndone.includes(i.number) ? [i.booking] : [])))];
+    // Back to unpaid: the same check as when a payment is taken off a booking anywhere.
+    await syncActInvoicePaid(
+      touched.map((b) => b.id),
+      now,
+      tx,
+    );
+    for (const b of touched) {
+      const after = outstanding({ ...b, payments: b.payments.filter((p) => !removed.has(p.id)) });
+      if (b.status === "SETTLED" && after.toPay > 0) {
+        unsettled.push(b.id);
+        activity.push({ entityId: b.id, action: "status changed", detail: "back to confirmed: the act isn't paid after all" });
+      }
+    }
+    if (unsettled.length) await tx.booking.updateMany({ where: { id: { in: unsettled } }, data: { status: "CONFIRMED" } });
+  });
+  return { count, totalMinor, currency, notUndone, unsettled, activity };
 }
 
 /**

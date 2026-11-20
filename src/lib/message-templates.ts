@@ -378,6 +378,17 @@ export const TEMPLATES: TemplateDef[] = [
     },
     placeholders: ["month", "count", "business"],
   },
+  {
+    key: "PAY_RUN_READY",
+    group: "TEAM",
+    label: "Weekly pay run ready to check",
+    hint: "On Monday morning (or the first weekday after), when last week's act invoices are ready: how many and the total, with a link to the Weekly pay run. Goes to your accounts email (Settings, General), or each admin when there isn't one. Nothing is sent for your records until you press Send.",
+    example: {
+      subject: "Last week's pay run is ready to check: {count} invoices, {total}",
+      intro: "The act invoices for the gigs from {week} are ready. Check them, send them for your records, then pay everyone and mark them paid.",
+    },
+    placeholders: ["week", "count", "total", "business"],
+  },
 ];
 
 export const TEMPLATE_GROUPS: Record<TemplateGroup, { label: string; hint: string; icon: string; slug: string }> = {
