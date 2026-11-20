@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { chooseXeroOrganisation, disconnectXeroAction, saveXeroSettings, testXeroConnection } from "@/actions/xero";
+import { chooseXeroOrganisation, disconnectXeroAction, saveXeroActSettings, saveXeroSettings, testXeroConnection } from "@/actions/xero";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, ServerForm, SubmitButton } from "@/components/forms";
-import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
+import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection, SettingsToggle } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
@@ -28,6 +28,18 @@ export default async function XeroSettings({ searchParams }: { searchParams: Pro
   const message = xeroConnectMessage(sp.xero, conn?.tenantName);
   const tenants = conn && connected ? savedTenants(conn) : [];
   const timeZone = (await getSettings(user.agencyId)).defaultTimezone;
+  // Acts' invoices in Xero: how many are there, and any that need someone to look (src/lib/act-invoices-xero.ts).
+  const [billsSent, billProblems] = connected
+    ? await Promise.all([
+        prisma.actInvoice.count({ where: { agencyId: user.agencyId, xeroBillId: { not: "" } } }),
+        prisma.actInvoice.findMany({
+          where: { agencyId: user.agencyId, xeroProblem: { not: "" } },
+          select: { id: true, number: true, xeroProblem: true },
+          orderBy: { seq: "desc" },
+          take: 5,
+        }),
+      ])
+    : [0, []];
   const taxTypes =
     conn && !UK_SALES_TAX_TYPES.some((t) => t.value === conn.taxType)
       ? [...UK_SALES_TAX_TYPES, { value: conn.taxType, label: conn.taxType }]
@@ -116,7 +128,7 @@ export default async function XeroSettings({ searchParams }: { searchParams: Pro
             <SettingsRow
               icon="company"
               title="Not connected"
-              sub="Sign in to Xero and choose your organisation. Gigsaw only asks to add contacts and invoices and to read them back."
+              sub="Sign in to Xero and choose your organisation. Gigsaw only asks to add contacts, invoices, bills and payments and to read them back."
               right={
                 <a href="/api/xero/connect" className="btn btn-primary btn-sm">
                   Connect Xero
@@ -165,6 +177,66 @@ export default async function XeroSettings({ searchParams }: { searchParams: Pro
               </div>
             </SettingsCard>
           </ActionForm>
+        </SettingsSection>
+      )}
+
+      {(setup === "ready" || connected) && (
+        <SettingsSection
+          id="act-invoices"
+          title="Act invoices"
+          description="The self-billing invoices Gigsaw makes for your acts go to Xero as bills to pay, from the act (or whoever their invoices go to) as a supplier. VAT is added only for VAT-registered acts. Once an invoice is paid in Gigsaw, the payment is recorded against its bill."
+        >
+          <ActionForm action={saveXeroActSettings} saveBar>
+            <SettingsCard>
+              <div className="grid gap-4 px-5 py-4 sm:grid-cols-3">
+                <Field label="Act fees account code" hint="An expense account in your chart of accounts. 310 is Cost of Goods Sold in a new UK organisation.">
+                  <input name="actFeesAccountCode" defaultValue={conn?.actFeesAccountCode ?? "310"} className="input" maxLength={10} required />
+                </Field>
+                <Field label="Bills arrive in Xero as" hint="Payments can only be recorded once a bill is approved.">
+                  <select name="billStatus" defaultValue={conn?.billStatus ?? "DRAFT"} className="input">
+                    <option value="DRAFT">Drafts, to approve in Xero</option>
+                    <option value="AUTHORISED">Approved, ready to pay</option>
+                  </select>
+                </Field>
+                <Field label="Paid from bank account code" hint="The code of the bank account in your chart of accounts that you pay acts from.">
+                  <input
+                    name="payFromBankAccountCode"
+                    defaultValue={conn?.payFromBankAccountCode ?? ""}
+                    placeholder="e.g. 090"
+                    className="input"
+                    maxLength={10}
+                  />
+                </Field>
+              </div>
+              <div className="border-t border-ink-100">
+                <SettingsToggle
+                  name="actBillsAuto"
+                  defaultChecked={conn?.actBillsAuto ?? false}
+                  label="Send act invoices to Xero automatically"
+                  hint="Every hour on weekdays, 9am to 5pm: new invoices go to Xero as bills, payments are recorded once they're paid, and voided ones are taken back out. Only invoices made after you turn this on."
+                />
+              </div>
+            </SettingsCard>
+          </ActionForm>
+          {connected && (billsSent > 0 || billProblems.length > 0) && (
+            <SettingsCard pad className="mt-4">
+              <p className="text-sm text-ink-600">
+                {billsSent} act invoice{billsSent === 1 ? " is" : "s are"} in Xero as bills.
+              </p>
+              {billProblems.length > 0 && (
+                <ul className="mt-2 space-y-1 text-sm" data-testid="xero-bill-problems">
+                  {billProblems.map((b) => (
+                    <li key={b.id} className="text-amber-800">
+                      <a href={`/print/act-invoices/${b.id}`} target="_blank" className="font-medium hover:underline">
+                        {b.number}
+                      </a>
+                      : {b.xeroProblem}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SettingsCard>
+          )}
         </SettingsSection>
       )}
 

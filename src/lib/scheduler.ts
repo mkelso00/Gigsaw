@@ -2,10 +2,12 @@ import { log } from "@/server/log";
 import { withHeartbeat } from "@/server/scheduler-health";
 import { runAsLeader } from "@/server/scheduler-lock";
 import { runActInvoices } from "./act-invoices";
+import { runActBillsToXero } from "./act-invoices-xero";
 import { runOverdueCheck } from "./alerts";
 import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
 import { runBillingReminders, runXeroPaymentChecks } from "./monthly-billing-server";
+import { runPayDetailsChase } from "./pay-details-chase";
 import { runProposalChasers } from "./proposal-chasers";
 import { runReminders } from "./reminders";
 
@@ -14,8 +16,8 @@ let started = false;
 let running = false;
 
 /**
- * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders, acts' invoices and the monthly billing
- * reminders every minute, and catch up
+ * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders, acts' invoices (with the weekly pay details
+ * reminder and, where it's on, sending them to Xero) and the monthly billing reminders every minute, and catch up
  * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
@@ -56,6 +58,18 @@ export function startScheduler() {
       if (r.issued || r.paid || r.voided || r.reissued) log.info("Act invoices updated", { job: "act-invoices", ...r });
     } catch (e) {
       log.error("Act invoices failed", { job: "act-invoices", err: e });
+    }
+    try {
+      const r = await withHeartbeat("pay-details-chase", () => runPayDetailsChase());
+      if (r.chased) log.info("Acts reminded about their pay details", { job: "pay-details-chase", chased: r.chased });
+    } catch (e) {
+      log.error("Pay details reminders failed", { job: "pay-details-chase", err: e });
+    }
+    try {
+      const r = await withHeartbeat("act-bills-xero", () => runActBillsToXero());
+      if (r.sent || r.paid || r.voided || r.problems) log.info("Act invoices sent to Xero", { job: "act-bills-xero", ...r });
+    } catch (e) {
+      log.error("Sending act invoices to Xero failed", { job: "act-bills-xero", err: e });
     }
     try {
       const r = await withHeartbeat("monthly-billing", async () => ({ ...(await runBillingReminders()), ...(await runXeroPaymentChecks()) }));

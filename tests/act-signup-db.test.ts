@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SELF_BILLING_TEXT } from "@/lib/self-billing";
 import { createTestAgency, describeDb, removeTestAgency } from "./helpers/db";
 
 // Acts setting up their own login from the email their agency has (/start), the Your details
@@ -53,9 +54,11 @@ vi.mock("@/components/forms", () => ({
 
 type Db = typeof import("@/lib/db");
 const empty = undefined as never;
+/** A Your details form, with the self-billing agreement ticked (src/lib/self-billing.ts) as the act app asks for it. */
 const form = (fields: Record<string, string>) => {
   const f = new FormData();
-  for (const [k, v] of Object.entries(fields)) f.append(k, v);
+  const agreed = { selfBilling: "on", selfBillingText: DEFAULT_SELF_BILLING_TEXT.replace(/\{business\}/g, "Northern Test Music") };
+  for (const [k, v] of Object.entries({ ...agreed, ...fields })) f.append(k, v);
   return f;
 };
 const DETAILS = {

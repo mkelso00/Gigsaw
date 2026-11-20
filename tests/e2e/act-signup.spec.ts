@@ -74,6 +74,7 @@ test("an act sets up their login by email, fills in their details and reaches th
   await page.getByLabel("Postal address").fill("12 Canal Street\nManchester\nM1 3HE");
   await page.getByLabel("National Insurance number").fill("QQ 12 34 56 C");
   await expect(page.getByText("This is for our records only.")).toBeVisible();
+  await page.getByRole("checkbox", { name: /will make out invoices for my gigs on my behalf \(self-billing\)/ }).check();
   await save.click();
   await expect(page.getByRole("alert").filter({ hasText: "Check the National Insurance number" })).toBeVisible();
   await page.getByLabel("National Insurance number").fill("jg 10 37 26 a");

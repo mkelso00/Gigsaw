@@ -5,11 +5,12 @@ import { redirect } from "next/navigation";
 import { bankChanged, completedAt, formatNi, readPayFields } from "@/lib/act-details";
 import { notifyBankChange } from "@/lib/act-details-server";
 import { requireAdmin, requireStaff, requireUser } from "@/lib/auth";
-import { logActivity, prisma } from "@/lib/db";
+import { getSettings, logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { hasBank, leadOf, legalName, peopleOf } from "@/lib/payee";
 import { loadPayActs, PERSON_PAY_SELECT, payHoldersFor } from "@/lib/payee-server";
 import { personName } from "@/lib/person-name";
+import { agreementCurrent, selfBillingWording } from "@/lib/self-billing";
 
 type Kind = "act" | "person";
 
@@ -37,12 +38,24 @@ export async function saveMyDetails(kind: Kind, id: string, _: FormState, form: 
     if (!holder) throw new FormError("You can't change these details. Ask your agency.");
     const after = readPayFields(form, holder, { required: true });
     first = !holder.detailsCompletedAt;
-    const data = { ...payColumns(after, holder.detailsCompletedAt), phone: after.phone };
+    // The self-billing agreement: ticked with the details whenever there's no current one (first time, or after 12
+    // months). Only ever from the act's own login, never by staff. The wording kept is the wording they were shown.
+    let agreement: { selfBillingAgreedAt: Date; selfBillingAgreedText: string } | null = null;
+    if (!agreementCurrent(holder.selfBillingAgreedAt)) {
+      const settings = await getSettings(user.agencyId);
+      const wording = selfBillingWording(settings.selfBillingAgreementText, settings.agencyName);
+      if (str(form, "selfBilling") !== "on") throw new FormError(`Tick to agree to ${settings.agencyName} making out your invoices for you (self-billing)`);
+      if (str(form, "selfBillingText").replace(/\r\n?/g, "\n") !== wording)
+        throw new FormError("The self-billing agreement has just been reworded. Read it again and tick to agree.");
+      agreement = { selfBillingAgreedAt: new Date(), selfBillingAgreedText: wording };
+    }
+    const data = { ...payColumns(after, holder.detailsCompletedAt), phone: after.phone, ...agreement };
     if (kind === "person") await prisma.person.updateMany({ where: { id, agencyId: user.agencyId }, data });
     else await prisma.artist.updateMany({ where: { id, agencyId: user.agencyId }, data });
     const entity = kind === "person" ? "PERSON" : "ARTIST";
     // Never the numbers themselves: the activity log is seen by every member of staff.
     await logActivity(user, entity, id, first ? "added their pay details in the app" : "updated their pay details in the app");
+    if (agreement) await logActivity(user, entity, id, "agreed to self-billing in the app");
     if (bankChanged(holder, after)) {
       await logActivity(user, entity, id, "changed their bank details in the app");
       await notifyBankChange({ agencyId: user.agencyId, holder: { kind, id, name: holder.name }, before: holder, after, by: user.email });

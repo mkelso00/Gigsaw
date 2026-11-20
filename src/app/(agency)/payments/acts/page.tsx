@@ -4,8 +4,10 @@ import { makeActInvoice, markActInvoicesPaid } from "@/actions/act-invoices";
 import { SelectAll } from "@/components/client-bits";
 import { CopyValue } from "@/components/copy-value";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { NoAgreement } from "@/components/no-agreement";
+import { RemindPayDetails } from "@/components/remind-pay-details";
 import { ArtistDot, Empty, PageHeader, Segmented, Stat } from "@/components/ui";
-import { INVOICE_STATUS_LABELS, formatSortCode, maskAccount, owedOnInvoice, type ActInvoiceStatus } from "@/lib/act-invoice-rules";
+import { INVOICE_STATUS_LABELS, NO_PAYEE, formatSortCode, maskAccount, owedOnInvoice, type ActInvoiceStatus } from "@/lib/act-invoice-rules";
 import { uninvoicedGigs } from "@/lib/act-invoices";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
@@ -221,6 +223,7 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
                             {r.vatMinor > 0 ? `${m(r.netMinor, r.currency)} + VAT ${m(r.vatMinor, r.currency)}` : "No VAT"}
                             {r.status === "PAID" && r.paidAt && ` · Paid ${formatDate(r.paidAt, tz)}`}
                             {r.note && ` · ${r.note}`}
+                            {!r.selfBillingAgreedAt && r.status !== "VOID" && <NoAgreement />}
                             {show === "open" && r.owed < r.totalMinor && ` · ${m(r.totalMinor - r.owed, r.currency)} paid already`}
                           </div>
                         </div>
@@ -286,6 +289,7 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
                   <div className={`text-xs ${r.canMake ? "text-ink-500" : "font-medium text-amber-700"}`}>{r.reason}</div>
                 </div>
                 <span className="ml-auto w-24 text-right font-semibold tabular-nums">{m(r.owedMinor, r.booking.currency)}</span>
+                {!r.canMake && r.booking.artistId && r.reason !== NO_PAYEE && <RemindPayDetails artistId={r.booking.artistId} />}
                 {r.canMake && (
                   <ActionForm action={makeActInvoice.bind(null, r.booking.id)}>
                     <SubmitButton className="btn btn-sm" pendingText="Making…">

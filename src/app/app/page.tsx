@@ -7,6 +7,7 @@ import { AvailabilityAnswer } from "@/components/availability-answer";
 import { CheckInPanel } from "@/components/check-in-panel";
 import { InAppOffer } from "@/components/in-app-offer";
 import { PushSetup } from "@/components/push-setup";
+import { SelfBillingPrompt } from "@/components/self-billing-prompt";
 import { ArrivalBadge, StatusBadge } from "@/components/ui";
 import { checkInWindow, punctuality } from "@/lib/arrival";
 import { requireActApp } from "@/lib/act-details-server";
@@ -125,6 +126,7 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-8">
+      <SelfBillingPrompt user={user} agency={settings.agencyName || "Your agency"} />
       {openAsks.length > 0 && (
         <section>
           <h2 className="mb-3 text-sm font-medium text-volt-400">

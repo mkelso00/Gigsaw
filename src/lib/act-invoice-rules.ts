@@ -48,6 +48,8 @@ export type PayeeDetails = {
   bankSortCode: string;
   bankAccountNumber: string;
   detailsCompletedAt: Date | null;
+  /** When the payee last agreed to self-billing (src/lib/self-billing.ts). An invoice is made either way. */
+  selfBillingAgreedAt?: Date | null;
 };
 
 /** Why nothing can be made for a band with no payee yet (see payeeOf). */

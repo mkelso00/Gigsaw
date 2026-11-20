@@ -5,6 +5,7 @@ import { formatSortCode, maskAccount } from "@/lib/act-invoice-rules";
 import { invoiceForViewer } from "@/lib/act-invoices";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/db";
+import { agreementDate, issuedUnderLine } from "@/lib/self-billing";
 import { formatDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Self-billing invoice" };
@@ -83,6 +84,7 @@ export default async function ActInvoicePrint({ params }: { params: Promise<{ id
             Self-billing invoice, made out by {settings.agencyName} on behalf of {payee}.
             {hasVat ? " The VAT shown is your output tax due to HMRC." : ` No VAT is charged: ${payee} isn't registered for VAT.`}
           </p>
+          {inv.selfBillingAgreedAt && <p data-testid="self-billing-agreement">{issuedUnderLine(agreementDate(inv.selfBillingAgreedAt, tz))}</p>}
         </div>
       }
     />

@@ -7,6 +7,8 @@ import { getSettings } from "@/lib/db";
 import { leadOf } from "@/lib/payee";
 import { loadPayActs, payHoldersFor } from "@/lib/payee-server";
 import { personName } from "@/lib/person-name";
+import { agreementState, selfBillingWording } from "@/lib/self-billing";
+import { formatDate } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Your details" };
 export const dynamic = "force-dynamic";
@@ -18,6 +20,7 @@ export default async function YourDetailsPage({ searchParams }: { searchParams: 
   const user = await requireUser(["ARTIST"]);
   const [holders, settings, sp] = await Promise.all([payHoldersFor(user), getSettings(user.agencyId), searchParams]);
   const agency = settings.agencyName || "Your agency";
+  const wording = selfBillingWording(settings.selfBillingAgreementText, settings.agencyName);
   const gate = holders.some(needsDetails);
   // A band's own login when its lead gives their own details: say who that is.
   const lead = !holders.length && user.artistId ? leadOf((await loadPayActs(user.agencyId, [user.artistId])).get(user.artistId) ?? noAct) : null;
@@ -42,7 +45,15 @@ export default async function YourDetailsPage({ searchParams }: { searchParams: 
         </p>
       )}
       {holders.length ? (
-        holders.map((h) => <ActDetailsForm key={h.id} holder={h} showName={holders.length > 1} />)
+        holders.map((h) => {
+          const state = agreementState(h.selfBillingAgreedAt);
+          const selfBilling = {
+            wording: state === "current" ? h.selfBillingAgreedText || wording : wording,
+            agreedOn: state === "current" && h.selfBillingAgreedAt ? formatDate(h.selfBillingAgreedAt, settings.defaultTimezone) : null,
+            renewing: state === "expired",
+          };
+          return <ActDetailsForm key={h.id} holder={h} showName={holders.length > 1} selfBilling={selfBilling} />;
+        })
       ) : (
         <p className="rounded-2xl border border-white/[0.06] bg-ink-900 p-5 text-sm text-ink-400">
           {lead

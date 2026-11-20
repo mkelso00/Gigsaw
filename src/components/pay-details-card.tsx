@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { hasBank, leadOf, needsLead, payeeOf, peopleOf } from "@/lib/payee";
 import { loadPayActs, PERSON_PAY_SELECT } from "@/lib/payee-server";
 import { personName } from "@/lib/person-name";
+import { agreementRenewsAt, agreementState } from "@/lib/self-billing";
 import { formatDate } from "@/lib/time";
 
 // The Pay details cards on the staff act and person pages. Any member of staff sees whether details are in
@@ -39,6 +40,42 @@ function DetailsStatus({ h, tz, waiting }: { h: Holder; tz: string; waiting: str
         </>
       )}
     </p>
+  );
+}
+
+/**
+ * The self-billing agreement (src/lib/self-billing.ts): when they agreed and to what, or that there's none (or it's
+ * more than 12 months old). Any member of staff sees it; only the act can agree, from their app.
+ */
+function AgreementStatus({ at, text, tz }: { at: Date | null | undefined; text: string | undefined; tz: string }) {
+  const state = agreementState(at);
+  return (
+    <div className="mt-2 text-sm" data-testid="self-billing-status">
+      <p className="flex flex-wrap items-center gap-2">
+        {state === "current" ? (
+          <>
+            <span className="badge bg-emerald-50 text-emerald-800">Self-billing agreed</span>
+            <span className="text-ink-500">
+              on {formatDate(at!, tz)}, to be agreed again by {formatDate(agreementRenewsAt(at!), tz)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="badge bg-amber-50 text-amber-800">No self-billing agreement</span>
+            <span className="text-ink-500">
+              {state === "expired" ? `Agreed on ${formatDate(at!, tz)}, more than 12 months ago.` : "Not agreed yet."} Invoices are still made. They agree from
+              their app, and the weekly reminder asks them to.
+            </span>
+          </>
+        )}
+      </p>
+      {at && text && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-ink-500">What they agreed to</summary>
+          <p className="mt-1 whitespace-pre-line text-ink-700">{text}</p>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -158,6 +195,7 @@ export async function PayDetailsCard({ artistId, user }: { artistId: string; use
       {payee?.kind === "person" && (
         <>
           <DetailsStatus h={payee.person} tz={tz} waiting={`Waiting for ${personName(payee.person)} to check them.`} />
+          <AgreementStatus at={payee.person.selfBillingAgreedAt} text={payee.person.selfBillingAgreedText} tz={tz} />
           {!payee.person.detailsCompletedAt && (
             <p className="mt-2 text-sm text-ink-500">They add these themselves from their own login, or an admin can on their page.</p>
           )}
@@ -170,6 +208,7 @@ export async function PayDetailsCard({ artistId, user }: { artistId: string; use
             <p className="mt-2 text-sm text-ink-500">Paid from the act&apos;s own details from before{lead ? ` until ${personName(lead)} adds theirs` : ""}.</p>
           )}
           <DetailsStatus h={act} tz={tz} waiting="Waiting for the act to check them." />
+          <AgreementStatus at={act.selfBillingAgreedAt} text={act.selfBillingAgreedText} tz={tz} />
           {loginLine && <p className="mt-2 text-sm text-ink-500">{loginLine}</p>}
           {isAdmin ? <DetailsList h={act} kind="act" id={act.id} /> : <p className="mt-3 text-sm text-ink-500">{ADMINS_ONLY}</p>}
         </>
@@ -218,6 +257,7 @@ export async function PersonPayCard({ personId, user }: { personId: string; user
     <section className="card card-pad scroll-mt-20" id="pay" data-testid="person-pay-details">
       <h2 className="section-title">Pay details</h2>
       <DetailsStatus h={p} tz={tz} waiting="Waiting for them to check them." />
+      <AgreementStatus at={p.selfBillingAgreedAt} text={p.selfBillingAgreedText} tz={tz} />
       {leads.length > 0 && (
         <p className="mt-2 text-sm text-ink-500">
           Invoices for{" "}

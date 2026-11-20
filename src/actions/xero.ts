@@ -182,6 +182,44 @@ export async function saveXeroSettings(_: FormState, form: FormData): Promise<Fo
   });
 }
 
+/**
+ * The act invoices settings (src/lib/act-invoices-xero.ts): the expense account acts' bills go to, whether they
+ * arrive as drafts or approved, the bank account their payments are recorded from, and sending them automatically.
+ * Turning automatic sending on starts from now: invoices made before are sent from the pay run, not all at once.
+ */
+export async function saveXeroActSettings(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireAdmin();
+  return handleForm(async () => {
+    const actFeesAccountCode = str(form, "actFeesAccountCode");
+    const payFromBankAccountCode = str(form, "payFromBankAccountCode");
+    const billStatus = str(form, "billStatus") === "AUTHORISED" ? "AUTHORISED" : "DRAFT";
+    const auto = str(form, "actBillsAuto") === "on";
+    if (!ACCOUNT_CODE.test(actFeesAccountCode))
+      throw new FormError("Enter the code of the account act fees go to, from your Xero chart of accounts, like 310.");
+    if (payFromBankAccountCode && !ACCOUNT_CODE.test(payFromBankAccountCode))
+      throw new FormError("Enter the code of the bank account acts are paid from, as it is in your Xero chart of accounts, like 090.");
+    const before = await prisma.xeroConnection.findUnique({ where: { agencyId: user.agencyId }, select: { actBillsAuto: true } });
+    const data = {
+      actFeesAccountCode,
+      payFromBankAccountCode,
+      billStatus,
+      actBillsAuto: auto,
+      // From the moment it's turned on: invoices made before aren't sent in one go.
+      ...(auto && !before?.actBillsAuto ? { actBillsAutoFrom: new Date() } : {}),
+    };
+    await prisma.xeroConnection.upsert({ where: { agencyId: user.agencyId }, create: { agencyId: user.agencyId, ...data }, update: data });
+    await logActivity(
+      user,
+      "SETTINGS",
+      user.agencyId,
+      "changed the Xero act invoice settings",
+      `account ${actFeesAccountCode}, ${billStatus === "AUTHORISED" ? "approved" : "draft"} bills${payFromBankAccountCode ? `, paid from ${payFromBankAccountCode}` : ""}, ${auto ? "sent automatically" : "not sent automatically"}`,
+    );
+    revalidatePath("/settings/xero");
+    return { ok: "Saved" };
+  });
+}
+
 /** Send invoices to another of the organisations allowed when connecting. */
 export async function chooseXeroOrganisation(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireAdmin();

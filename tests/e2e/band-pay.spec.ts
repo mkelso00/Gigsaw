@@ -41,6 +41,7 @@ test("a band member adds their own details, staff choose the lead, and the invoi
   await page.getByLabel("Sort code").fill("308012");
   await page.getByLabel("Account number").fill(MEMBER_ACCOUNT);
   await page.getByLabel("Postal address").fill("2 Drum Road\nLeeds");
+  await page.getByRole("checkbox", { name: /self-billing/ }).check();
   await save.click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 20_000 });
   expect(await db().person.findUniqueOrThrow({ where: { id: member.person.id } })).toMatchObject({ bankAccountNumber: MEMBER_ACCOUNT });

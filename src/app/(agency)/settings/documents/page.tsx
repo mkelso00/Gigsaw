@@ -10,6 +10,7 @@ import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { shadowedEventTypes } from "@/lib/contract-templates";
 import { contractTemplatesFor, type ContractTemplateRow } from "@/lib/contract-templates-server";
 import { getSettings } from "@/lib/db";
+import { DEFAULT_SELF_BILLING_TEXT } from "@/lib/self-billing";
 
 export const metadata: Metadata = { title: "Contracts and invoices" };
 
@@ -96,6 +97,24 @@ export default async function DocumentSettings() {
                 rows={4}
                 defaultValue={settings.invoiceTerms}
                 placeholder={"Payment within 14 days, please.\nBank: Example Bank, sort code 00-00-00, account 12345678"}
+                className="input"
+              />
+            </Field>
+          </SettingsCard>
+        </SettingsSection>
+        <SettingsSection
+          id="self-billing"
+          title="Self-billing agreement"
+          description="Gigsaw makes out each act's invoice for them (self-billing). HMRC asks for the act's written agreement to that, reviewed every 12 months. Acts tick this wording when they give their pay details in the app, and are asked again a year later. Changing it here doesn't change what anyone has already agreed to."
+        >
+          <SettingsCard pad>
+            <Field label="What acts agree to" hint="Leave it blank for the wording shown. {business} is your business name.">
+              <textarea
+                name="selfBillingAgreementText"
+                rows={4}
+                maxLength={2000}
+                defaultValue={settings.selfBillingAgreementText}
+                placeholder={DEFAULT_SELF_BILLING_TEXT}
                 className="input"
               />
             </Field>

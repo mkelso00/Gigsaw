@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runActInvoices } from "@/lib/act-invoices";
+import { runActBillsToXero } from "@/lib/act-invoices-xero";
 import { runOverdueCheck } from "@/lib/alerts";
 import { runCalendarSync } from "@/lib/calendar-sync/job";
 import { cronSecretMatches } from "@/lib/cron";
 import { runEventMessages } from "@/lib/events";
 import { runBillingReminders, runXeroPaymentChecks } from "@/lib/monthly-billing-server";
+import { runPayDetailsChase } from "@/lib/pay-details-chase";
 import { runProposalChasers } from "@/lib/proposal-chasers";
 import { runReminders } from "@/lib/reminders";
 import { env } from "@/server/env";
@@ -12,11 +14,11 @@ import { withHeartbeat } from "@/server/scheduler-health";
 import { runJobsAsLeader } from "@/server/scheduler-lock";
 
 // Optional: let an external scheduler run the overdue check, booking reminders, wedding/event emails, proposal
-// reminders, acts' invoices, the monthly billing reminders and the connected-calendar catch-up (set DISABLE_SCHEDULER=1 to turn
+// reminders, acts' invoices, the weekly pay details reminder, sending act invoices to Xero, the monthly billing reminders and the connected-calendar catch-up (set DISABLE_SCHEDULER=1 to turn
 // the built-in one off). Needs CRON_SECRET to be set, passed as "Authorization: Bearer <secret>". Runs count towards the scheduler heartbeat.
 //
 // Each job runs on its own, so one failing doesn't stop the rest. The reply lists every job:
-//   { ok, jobs: { overdue: { ok, ms, result }, reminders: { ok, ms, result }, eventEmails: { ok, ms, error }, proposalChasers: { ok, ms, result }, actInvoices: { ok, ms, result }, monthlyBilling: { ok, ms, result }, calendarSync: { ok, ms, result } } }
+//   { ok, jobs: { overdue: { ok, ms, result }, reminders: { ok, ms, result }, eventEmails: { ok, ms, error }, proposalChasers: { ok, ms, result }, actInvoices: { ok, ms, result }, payDetailsChase: { ok, ms, result }, actBillsXero: { ok, ms, result }, monthlyBilling: { ok, ms, result }, calendarSync: { ok, ms, result } } }
 // with status 200 when all of them worked and 500 when any failed (so the scheduler can alert on it).
 // They share the built-in scheduler's lock (src/server/scheduler-lock.ts): if a server is running
 // them right now, nothing runs and the reply is { ok: true, skipped: true, jobs: {} }.
@@ -32,6 +34,8 @@ export async function POST(req: NextRequest) {
     eventEmails: () => withHeartbeat("event-emails", runEventMessages),
     proposalChasers: () => withHeartbeat("proposal-chasers", runProposalChasers),
     actInvoices: () => withHeartbeat("act-invoices", runActInvoices),
+    payDetailsChase: () => withHeartbeat("pay-details-chase", () => runPayDetailsChase()),
+    actBillsXero: () => withHeartbeat("act-bills-xero", () => runActBillsToXero()),
     monthlyBilling: () => withHeartbeat("monthly-billing", async () => ({ ...(await runBillingReminders()), ...(await runXeroPaymentChecks()) })),
     calendarSync: () => withHeartbeat("calendar-sync", runCalendarSync),
   });

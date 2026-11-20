@@ -116,6 +116,7 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       data.defaultVatPct = vat;
     }
     if (has("invoiceTerms")) data.invoiceTerms = str(form, "invoiceTerms");
+    if (has("selfBillingAgreementText")) data.selfBillingAgreementText = str(form, "selfBillingAgreementText").replace(/\r\n?/g, "\n").slice(0, 2000);
     // The agency's signature: a new drawing replaces the old one, an empty box keeps it, and Remove clears it.
     if (has("signatureName")) data.signatureName = str(form, "signatureName").slice(0, 120);
     if (has("signatureRole")) data.signatureRole = str(form, "signatureRole").slice(0, 120);

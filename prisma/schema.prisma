@@ -139,6 +139,9 @@ model Settings {
   messageTemplates      Json    @default("{}")
   // Secret for the private link new acts use to join (/join/<token>). Null means no link yet.
   joinToken             String? @unique
+  // The self-billing agreement acts tick when they give their pay details. Blank: Gigsaw's own wording
+  // (src/lib/self-billing.ts). {business} is the business's name.
+  selfBillingAgreementText String @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
   weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
@@ -276,6 +279,11 @@ model Artist {
   // Since people have their own pay details (see Person), these are only used for an act with nobody on file, or one
   // whose details from before couldn't be moved to a person yet (src/lib/payee.ts).
   detailsCompletedAt DateTime?
+  // The self-billing agreement (HMRC VAT Notice 700/62): when the act last agreed, from their app, that the agency makes
+  // out their invoices, and the exact wording they agreed to. Asked again after 12 months (src/lib/self-billing.ts).
+  // Only the act can agree: staff see it but never set it.
+  selfBillingAgreedAt   DateTime?
+  selfBillingAgreedText String    @default("")
   // The person a band's self-billing invoices are made out to and paid to ("Invoices go to"). Chosen by staff; an act
   // with only one person doesn't need one (that person is the payee).
   leadPersonId       String?
@@ -775,6 +783,9 @@ model Person {
   vatNumber          String          @default("")
   niNumber           String          @default("")
   detailsCompletedAt DateTime?
+  // The self-billing agreement, as on Artist: when they last agreed from their own login, and the wording agreed to.
+  selfBillingAgreedAt   DateTime?
+  selfBillingAgreedText String          @default("")
   acts               PersonAct[]
   standIns           BookingLineup[]
   login              User?           @relation("PersonLogin")
@@ -1315,6 +1326,16 @@ model ActInvoice {
   bankAccountName   String    @default("")
   bankSortCode      String    @default("")
   bankAccountNumber String    @default("")
+  // The date of the payee's self-billing agreement this invoice was made under, or null when there was no current
+  // one (it's still made, so pay isn't held up, and staff see "No self-billing agreement").
+  selfBillingAgreedAt DateTime?
+  // The bill in the agency's Xero for this invoice (src/lib/act-invoices-xero.ts): its InvoiceID, Xero's status
+  // for it (DRAFT, AUTHORISED, PAID, VOIDED, DELETED) as last seen, and the payment Gigsaw recorded against it.
+  xeroBillId        String    @default("")
+  xeroBillStatus    String    @default("")
+  xeroPaymentId     String    @default("")
+  // What went wrong last time with Xero, or what needs doing there by hand (e.g. a voided invoice whose bill is paid).
+  xeroProblem       String    @default("")
   createdAt         DateTime  @default(now())
 
   @@unique([agencyId, seq])
@@ -1448,6 +1469,15 @@ model XeroConnection {
   taxType              String    @default("OUTPUT2")
   // Days after the invoice date that it's due. Null leaves it to Xero: the contact's or the organisation's terms.
   dueDays              Int?
+  // Acts' self-billing invoices go to Xero as bills (src/lib/act-invoices-xero.ts): to this expense account (310 is
+  // Cost of Goods Sold, a Direct Costs account, in a new UK organisation), as DRAFT or AUTHORISED bills, and their
+  // payments are recorded from this bank account's code. Sent by themselves only when actBillsAuto is on, for invoices
+  // made from actBillsAutoFrom (when it was turned on).
+  actFeesAccountCode   String    @default("310")
+  billStatus           String    @default("DRAFT")
+  payFromBankAccountCode String  @default("")
+  actBillsAuto         Boolean   @default(false)
+  actBillsAutoFrom     DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

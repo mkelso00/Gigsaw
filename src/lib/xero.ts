@@ -31,6 +31,12 @@ import { log } from "@/server/log";
 //   Dates in JSON ("/Date(…)/"):                    https://developer.xero.com/documentation/api/accounting/requests-and-responses
 //   Idempotency-Key header:                         https://developer.xero.com/documentation/guides/idempotent-requests/idempotency
 //   Deep links into Xero:                           https://developer.xero.com/documentation/guides/how-to-guides/deep-link-xero
+//   Payments (PUT /Payments against a bill):        https://developer.xero.com/documentation/api/accounting/payments
+//
+// Acts' self-billing invoices go in as bills (Type ACCPAY on the same Invoices endpoint) to the act as a supplier
+// contact, and their payments are recorded with PUT /Payments: see createBill, recordBillPayment and setBillStatus,
+// and src/lib/act-invoices-xero.ts. Those were written without access to Xero's live documentation; what's assumed
+// is noted by each one.
 
 type Env = Pick<ServerEnv, "xero" | "xeroTokenKey" | "xeroBases">;
 export type XeroOpts = { env?: Env; now?: number; sleep?: (ms: number) => Promise<void> };
@@ -39,11 +45,17 @@ export type XeroOpts = { env?: Env; now?: number; sleep?: (ms: number) => Promis
  * What Gigsaw asks Xero for. Apps made at developer.xero.com since 2 March 2026 can only ask for the granular
  * scopes, so invoices come from accounting.invoices rather than the old accounting.transactions. Older apps
  * may use these too. offline_access is what brings a refresh token.
- *   accounting.invoices       create the draft invoices and read whether they're paid
- *   accounting.contacts       find the venue or company, or add it
+ *   accounting.invoices       create the draft invoices and acts' bills, and read whether they're paid
+ *   accounting.payments       record that an act's bill has been paid (PUT /Payments)
+ *   accounting.contacts       find the venue, company or act, or add it
  *   accounting.settings.read  the organisation's name and short code (for links into Xero), for "Test the connection"
+ * A connection made before accounting.payments was asked for can't record payments until an admin connects again;
+ * recordBillPayment says so rather than marking the whole connection as needing reconnecting.
  */
-export const XERO_SCOPES = "offline_access accounting.invoices accounting.contacts accounting.settings.read";
+export const XERO_SCOPES = "offline_access accounting.invoices accounting.payments accounting.contacts accounting.settings.read";
+
+/** UK tax types for purchases: an act's bill is 20% VAT on Expenses when they're VAT registered, otherwise No VAT. */
+export const UK_PURCHASE_TAX = { vat: "INPUT2", none: "NONE" } as const;
 
 /** UK tax types for sales (https://developer.xero.com/documentation/api/accounting/types#tax-types). */
 export const UK_SALES_TAX_TYPES: { value: string; label: string }[] = [
@@ -387,7 +399,12 @@ export async function xeroApi<T>(
   conn: XeroConnection,
   method: "GET" | "PUT" | "POST",
   path: string,
-  opts: XeroOpts & { body?: unknown; idempotencyKey?: string } = {},
+  opts: XeroOpts & {
+    body?: unknown;
+    idempotencyKey?: string;
+    /** Said instead when Xero answers 403, without marking the connection as needing reconnecting (a missing scope). */
+    forbidden?: string;
+  } = {},
 ): Promise<T> {
   const env = opts.env ?? serverEnv();
   const sleep = opts.sleep ?? sleepFor;
@@ -425,6 +442,7 @@ export async function xeroApi<T>(
       await markReconnect(conn, "Xero refused Gigsaw's access. Connect Xero again.");
       throw new XeroReconnectNeeded();
     }
+    if (res.status === 403 && opts.forbidden) throw new XeroError(opts.forbidden, 403, xeroProblems(json));
     if (res.status === 403) {
       await markReconnect(
         conn,
@@ -503,15 +521,40 @@ export async function findOrCreateXeroContact(
   who: { name: string; email?: string | null },
   opts: XeroOpts = {},
 ): Promise<{ contactId: string; name: string; created: boolean }> {
+  return findOrCreate(conn, who, {}, "invoice", opts);
+}
+
+/**
+ * The act (or the person an act's invoices go to) in Xero as a supplier: the same search by name as for customers,
+ * or a new contact. Xero has no separate supplier record: a contact becomes a supplier once it has a bill
+ * (IsSupplier is read only), so this is the same contact search and create. A new one gets the act's email and,
+ * when they're VAT registered, their VAT number (TaxNumber). An existing contact is used as it is, never changed.
+ */
+export async function findOrCreateXeroSupplier(
+  conn: XeroConnection,
+  who: { name: string; email?: string | null; vatNumber?: string | null },
+  opts: XeroOpts = {},
+): Promise<{ contactId: string; name: string; created: boolean }> {
+  const vat = (who.vatNumber ?? "").trim();
+  return findOrCreate(conn, who, vat ? { TaxNumber: vat.slice(0, 50) } : {}, "bill", opts);
+}
+
+async function findOrCreate(
+  conn: XeroConnection,
+  who: { name: string; email?: string | null },
+  extra: Record<string, string>,
+  what: "invoice" | "bill",
+  opts: XeroOpts,
+): Promise<{ contactId: string; name: string; created: boolean }> {
   const name = who.name.trim().replace(/\s+/g, " ").slice(0, 255);
-  if (!name) throw new XeroError("The invoice needs a contact name.");
+  if (!name) throw new XeroError(`The ${what} needs a contact name.`);
   const found = await findContact(conn, name, opts);
   if (found) {
-    if (found.ContactStatus === "ARCHIVED") throw new XeroError(`${found.Name} is archived in Xero. Restore the contact in Xero, then send the invoice again.`);
+    if (found.ContactStatus === "ARCHIVED") throw new XeroError(`${found.Name} is archived in Xero. Restore the contact in Xero, then send the ${what} again.`);
     return { contactId: found.ContactID, name: found.Name ?? name, created: false };
   }
   const email = (who.email ?? "").trim();
-  const contact = { Name: name, ...(looksLikeEmail(email) ? { EmailAddress: email } : {}) };
+  const contact = { Name: name, ...(looksLikeEmail(email) ? { EmailAddress: email } : {}), ...extra };
   try {
     const json = await xeroApi<{ Contacts?: XeroContact[] }>(conn, "PUT", "Contacts", { ...opts, body: { Contacts: [contact] } });
     const made = json.Contacts?.[0];
@@ -755,6 +798,181 @@ export async function getInvoiceStatuses(conn: XeroConnection, invoiceIds: strin
     for (const inv of json.Invoices ?? []) if (inv.InvoiceID) out.set(inv.InvoiceID.toLowerCase(), statusOf(inv));
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bills: acts' self-billing invoices, in the agency's Xero as bills to pay (Type ACCPAY on the Invoices endpoint)
+
+/** Days after its date a bill is due. Acts are paid in the weekly pay run, so a week. */
+export const BILL_DUE_DAYS = 7;
+
+export type BillInput = {
+  /** Gigsaw's number for the act's invoice, e.g. "SB-0012": the bill's InvoiceNumber (shown as its Reference in Xero). */
+  invoiceNumber: string;
+  /** Who it's from: the act's payee, as their supplier contact is (or will be) named. */
+  supplierName: string;
+  supplierEmail?: string | null;
+  /** Their Xero contact, when it's already been found (several bills to one act in a run): skips the search. */
+  supplierContactId?: string;
+  /** The payee's VAT number when they're VAT registered: VAT is then on the bill (INPUT2), otherwise No VAT. */
+  vatNumber?: string | null;
+  /** The one line, e.g. "Live performance by Ellie Hart at The Crown on Sat, 12 Oct 2026". */
+  description: string;
+  /** The act's fee, ex VAT, and the VAT on it, in pence: exactly what's on Gigsaw's invoice. */
+  netMinor: number;
+  vatMinor: number;
+  currency: string;
+  /** The invoice date, "YYYY-MM-DD" (or a Date, taken as that day in London). */
+  date: string | Date;
+  dueDate?: string | Date | null;
+  /** Sent as Idempotency-Key, so the same bill isn't made twice if a request is repeated. */
+  idempotencyKey?: string;
+};
+
+export type BillSettings = Pick<XeroConnection, "actFeesAccountCode" | "billStatus">;
+
+/**
+ * The body Gigsaw sends to PUT /Invoices for an act's bill. Pure, for tests.
+ *  - Type ACCPAY: a bill (accounts payable). Status DRAFT or AUTHORISED, from Settings, Xero.
+ *  - InvoiceNumber: Gigsaw's invoice number. For a bill Xero shows InvoiceNumber as the bill's "Reference" in its
+ *    screens; Xero's Reference field is documented as for sales invoices (ACCREC) only, so it isn't sent.
+ *  - One line for the fee, ex VAT ("Exclusive"), to the act fees account, taxed INPUT2 (20% VAT on Expenses) for a
+ *    VAT-registered act or NONE (No VAT). TaxAmount is sent too, so Xero's VAT matches Gigsaw's invoice to the penny
+ *    (Xero works it out from the rate unless TaxAmount is given).
+ *  - Due BILL_DUE_DAYS after its date unless a due date is given.
+ */
+export function billPayload(settings: BillSettings, contactId: string, input: BillInput) {
+  const currency = input.currency.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new XeroError(`"${input.currency}" isn't a currency code.`);
+  const number = input.invoiceNumber.trim();
+  if (!number) throw new XeroError("The bill needs Gigsaw's invoice number.");
+  const Description = input.description.trim().slice(0, 4000);
+  if (!Description) throw new XeroError("The bill needs a description.");
+  for (const [what, v] of [
+    ["fee", input.netMinor],
+    ["VAT", input.vatMinor],
+  ] as const) {
+    if (!Number.isInteger(v) || v < 0) throw new XeroError(`The ${what} on ${number} must be a whole number of pence, not less than 0.`);
+  }
+  if (input.netMinor <= 0) throw new XeroError(`${number} has nothing to pay.`);
+  const vat = !!(input.vatNumber ?? "").trim();
+  if (!vat && input.vatMinor > 0) throw new XeroError(`${number} has VAT on it but no VAT number.`);
+  const status = settings.billStatus === "AUTHORISED" ? "AUTHORISED" : "DRAFT";
+  const AccountCode = (settings.actFeesAccountCode || "310").trim();
+  const date = isoDay(input.date);
+  const due = input.dueDate ? isoDay(input.dueDate) : addDays(date, BILL_DUE_DAYS);
+  return {
+    Invoices: [
+      {
+        Type: "ACCPAY",
+        Contact: { ContactID: contactId },
+        Date: date,
+        DueDate: due,
+        InvoiceNumber: number.slice(0, 255),
+        Status: status,
+        LineAmountTypes: "Exclusive",
+        CurrencyCode: currency,
+        LineItems: [
+          {
+            Description,
+            Quantity: 1,
+            UnitAmount: fromMinor(input.netMinor, currency),
+            AccountCode,
+            TaxType: vat ? UK_PURCHASE_TAX.vat : UK_PURCHASE_TAX.none,
+            TaxAmount: fromMinor(vat ? input.vatMinor : 0, currency),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export type CreatedBill = { billId: string; status: string; url: string; totalMinor: number; taxMinor: number; contactId: string };
+
+/** Finds the act as a supplier (or adds them), then creates their bill in Xero. */
+export async function createBill(conn: XeroConnection, input: BillInput, opts: XeroOpts = {}): Promise<CreatedBill> {
+  // Checked before any call to Xero, so a mistake doesn't add a contact for nothing.
+  billPayload(conn, "check", input);
+  const contact = input.supplierContactId
+    ? { contactId: input.supplierContactId }
+    : await findOrCreateXeroSupplier(conn, { name: input.supplierName, email: input.supplierEmail, vatNumber: input.vatNumber }, opts);
+  const body = billPayload(conn, contact.contactId, input);
+  const json = await xeroApi<{ Invoices?: XeroInvoiceJson[] }>(conn, "PUT", "Invoices", { ...opts, body, idempotencyKey: input.idempotencyKey });
+  const bill = json.Invoices?.[0];
+  if (!bill?.InvoiceID) throw new XeroError("Xero didn't make the bill.");
+  if (!conn.shortCode) {
+    await getXeroOrganisation(conn, opts).catch((e) =>
+      log.warn("Couldn't read the Xero organisation's short code", { agencyId: conn.agencyId, reason: e?.message }),
+    );
+  }
+  const currency = bill.CurrencyCode || body.Invoices[0].CurrencyCode;
+  return {
+    billId: bill.InvoiceID,
+    status: bill.Status ?? body.Invoices[0].Status,
+    url: xeroBillUrl(bill.InvoiceID, conn.shortCode),
+    totalMinor: toMinor(bill.Total ?? 0, currency),
+    taxMinor: toMinor(bill.TotalTax ?? 0, currency),
+    contactId: contact.contactId,
+  };
+}
+
+/** A link that opens the bill in Xero (Business, Bills to pay), like xeroInvoiceUrl. */
+export function xeroBillUrl(billId: string, shortCode = "") {
+  const page = `/AccountsPayable/View.aspx?InvoiceID=${encodeURIComponent(billId)}`;
+  return shortCode
+    ? `https://go.xero.com/organisationlogin/default.aspx?shortcode=${encodeURIComponent(shortCode)}&redirecturl=${page}`
+    : `https://go.xero.com${page}`;
+}
+
+/** What Gigsaw says when the connection wasn't allowed to record payments (made before accounting.payments was asked for). */
+export const PAYMENTS_NOT_ALLOWED = "Xero didn't let Gigsaw record payments. An admin can connect Xero again in Settings, Xero to allow it.";
+
+/**
+ * Records that a bill has been paid: PUT /Payments with the bill, the bank account it was paid from (by its code in
+ * the chart of accounts; it has to be a bank account, or one with payments turned on), the day and the amount. Xero
+ * only takes payments on an AUTHORISED bill, never a draft. Returns Xero's PaymentID.
+ */
+export async function recordBillPayment(
+  conn: XeroConnection,
+  p: { invoiceId: string; amountMinor: number; date: string | Date; bankAccountCode: string; currency?: string; reference?: string },
+  opts: XeroOpts & { idempotencyKey?: string } = {},
+): Promise<{ paymentId: string; status: string }> {
+  if (!isXeroId(p.invoiceId)) throw new XeroError("That isn't a Xero bill id.");
+  const code = p.bankAccountCode.trim();
+  if (!code) throw new XeroError("Choose the bank account acts are paid from in Settings, Xero first.");
+  if (!Number.isInteger(p.amountMinor) || p.amountMinor <= 0) throw new XeroError("A payment must be a whole number of pence, more than 0.");
+  const body = {
+    Payments: [
+      {
+        Invoice: { InvoiceID: p.invoiceId },
+        Account: { Code: code },
+        Date: isoDay(p.date),
+        Amount: fromMinor(p.amountMinor, (p.currency || "GBP").toUpperCase()),
+        ...(p.reference ? { Reference: p.reference.slice(0, 255) } : {}),
+      },
+    ],
+  };
+  const json = await xeroApi<{ Payments?: { PaymentID?: string; Status?: string }[] }>(conn, "PUT", "Payments", {
+    ...opts,
+    body,
+    forbidden: PAYMENTS_NOT_ALLOWED,
+  });
+  const pay = json.Payments?.[0];
+  if (!pay?.PaymentID) throw new XeroError("Xero didn't record the payment.");
+  return { paymentId: pay.PaymentID, status: pay.Status ?? "AUTHORISED" };
+}
+
+/**
+ * Takes a bill back out of the accounts: POST /Invoices/<id> with the new Status. An AUTHORISED bill with no
+ * payments is VOIDED; a DRAFT or SUBMITTED one can't be voided in Xero, only DELETED. Returns Xero's new status.
+ */
+export async function setBillStatus(conn: XeroConnection, billId: string, status: "VOIDED" | "DELETED", opts: XeroOpts = {}) {
+  if (!isXeroId(billId)) throw new XeroError("That isn't a Xero bill id.");
+  const json = await xeroApi<{ Invoices?: XeroInvoiceJson[] }>(conn, "POST", `Invoices/${billId}`, {
+    ...opts,
+    body: { Invoices: [{ InvoiceID: billId, Status: status }] },
+  });
+  return json.Invoices?.[0]?.Status ?? status;
 }
 
 // ---------------------------------------------------------------------------------------------

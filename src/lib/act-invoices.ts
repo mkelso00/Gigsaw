@@ -14,6 +14,7 @@ import {
 } from "./act-invoice-rules";
 import { prisma } from "./db";
 import { loadPayActs, payeeFor } from "./payee-server";
+import { agreementInForce } from "./self-billing";
 import { formatDate } from "./time";
 
 // Self-billing invoices for acts, in the database. The rules (when one is made, when it's replaced)
@@ -93,6 +94,8 @@ async function createFor(tx: Tx, b: BookingForInvoice, now: Date, byHand: boolea
       description: describe(b),
       gigDate: b.setStart,
       ...snap,
+      // Made either way, so pay isn't held up; without a current agreement staff see "No self-billing agreement".
+      selfBillingAgreedAt: agreementInForce(b.payee, now),
     },
   });
   await tx.activity.create({
@@ -288,6 +291,7 @@ export const actInvoiceSelect = {
   bankAccountName: true,
   bankSortCode: true,
   bankAccountNumber: true,
+  selfBillingAgreedAt: true,
   artistId: true,
 } satisfies Prisma.ActInvoiceSelect;
 

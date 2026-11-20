@@ -156,7 +156,13 @@ describe("settings and the start of connecting", () => {
     expect(url.origin + url.pathname).toBe(`${LOGIN}/identity/connect/authorize`);
     const q = Object.fromEntries(url.searchParams);
     expect(q).toMatchObject({ response_type: "code", client_id: "x-client", redirect_uri: REDIRECT, state: flow.state });
-    expect(q.scope.split(" ").sort()).toEqual(["accounting.contacts", "accounting.invoices", "accounting.settings.read", "offline_access"]);
+    expect(q.scope.split(" ").sort()).toEqual([
+      "accounting.contacts",
+      "accounting.invoices",
+      "accounting.payments",
+      "accounting.settings.read",
+      "offline_access",
+    ]);
     expect(q.scope).not.toContain("accounting.transactions");
     expect(flow.state.length).toBeGreaterThan(30);
     expect(xero.xeroRedirectUri("https://gigsaw.live/")).toBe("https://gigsaw.live/api/xero/callback");

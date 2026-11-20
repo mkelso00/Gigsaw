@@ -103,6 +103,29 @@ export const TEMPLATES: TemplateDef[] = [
     placeholders: ["act", "business"],
   },
   {
+    key: "PAY_DETAILS",
+    group: "ACTS",
+    label: "Pay details reminder",
+    hint: "Once a week (Monday morning, in office hours) to whoever an act's invoices go to, while their bank details or address are missing and they have a gig coming up or one still to be paid for. Staff can also send it from Pay acts with Remind now. A link to their details in the app is always added.",
+    example: {
+      subject: "Add your bank and address so {business} can pay you",
+      intro: "Hi {first_name}, {business} needs your bank details and address to pay you for your gigs. It takes a minute in the app, and you only do it once.",
+    },
+    placeholders: ["first_name", "act", "business"],
+  },
+  {
+    key: "SELF_BILLING",
+    group: "ACTS",
+    label: "Self-billing agreement reminder",
+    hint: "Once a week (Monday morning, in office hours) to whoever an act's invoices go to, when their details are in but they haven't agreed to self-billing, or agreed more than 12 months ago, and they have a gig coming up or one still to be paid for. A link to agree in the app is always added.",
+    example: {
+      subject: "Please confirm self-billing with {business}",
+      intro:
+        "Hi {first_name}, {business} makes out your invoices for you (self-billing). HMRC asks for your agreement to that, renewed once a year. Please read it and tick to agree in the app. It takes a moment.",
+    },
+    placeholders: ["first_name", "act", "business"],
+  },
+  {
     key: "CUSTOMER_CONFIRMED",
     group: "CUSTOMERS",
     label: "Booking confirmed",

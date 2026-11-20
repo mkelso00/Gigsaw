@@ -16,7 +16,16 @@
 
 import type { PayDetails } from "./act-details";
 
-export type PayHolderFields = PayDetails & { vatRegistered: boolean; vatNumber: string; phone: string; detailsCompletedAt: Date | null };
+export type PayHolderFields = PayDetails & {
+  vatRegistered: boolean;
+  vatNumber: string;
+  phone: string;
+  detailsCompletedAt: Date | null;
+  /** When they last agreed to self-billing (src/lib/self-billing.ts). */
+  selfBillingAgreedAt?: Date | null;
+  /** The wording they agreed to. */
+  selfBillingAgreedText?: string;
+};
 
 export type PayPerson = PayHolderFields & { id: string; firstName: string; surname: string; alias: string; email: string };
 
@@ -88,6 +97,7 @@ export function payeeDetails(act: PayAct, payee: Payee) {
     bankSortCode: from.bankSortCode,
     bankAccountNumber: from.bankAccountNumber,
     detailsCompletedAt: from.detailsCompletedAt,
+    selfBillingAgreedAt: from.selfBillingAgreedAt ?? null,
   };
 }
 

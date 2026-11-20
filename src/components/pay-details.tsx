@@ -18,8 +18,14 @@ type Holder = PayFields & { kind: "act" | "person"; id: string; name: string; de
 
 const hasBank = (a: PayFields) => !!(a.bankAccountName && a.bankSortCode && a.bankAccountNumber);
 
+/**
+ * The self-billing agreement on the form (src/lib/self-billing.ts): the wording to tick when there's no current
+ * agreement (`agreedOn` null; `renewing` after 12 months), or the day they agreed when there is.
+ */
+export type SelfBillingAsk = { wording: string; agreedOn: string | null; renewing: boolean };
+
 /** The form in the act app (Your details). Numbers already on file are masked, with Change. */
-export function ActDetailsForm({ holder: act, showName }: { holder: Holder; showName: boolean }) {
+export function ActDetailsForm({ holder: act, showName, selfBilling }: { holder: Holder; showName: boolean; selfBilling: SelfBillingAsk }) {
   const first = !act.detailsCompletedAt;
   const missing = missingDetails(act);
   const bankInputs = (
@@ -123,6 +129,27 @@ export function ActDetailsForm({ holder: act, showName }: { holder: Holder; show
             <span className={darkLabel}>VAT number</span>
             <input name="vatNumber" defaultValue={act.vatNumber} placeholder="GB 123 4567 89" className={`${darkField} h-11 tabular-nums`} />
           </label>
+        </fieldset>
+
+        <fieldset className="space-y-3" id="self-billing">
+          <legend className="mb-3 text-sm font-medium text-volt-400">Self-billing agreement</legend>
+          {selfBilling.agreedOn ? (
+            <p className="text-sm text-ink-300" data-testid="self-billing-agreed">
+              You agreed on {selfBilling.agreedOn}: <span className="whitespace-pre-line text-ink-400">{selfBilling.wording}</span>
+            </p>
+          ) : (
+            <>
+              {selfBilling.renewing && (
+                <p className="text-sm text-volt-400">It&apos;s been 12 months since you agreed to this. Please read it again and tick to carry on.</p>
+              )}
+              <input type="hidden" name="selfBillingText" value={selfBilling.wording} />
+              <label className="flex items-start gap-3 rounded-xl bg-white/[0.04] px-3 py-3 text-[15px] leading-relaxed">
+                <input type="checkbox" name="selfBilling" required className="mt-1 h-4 w-4 shrink-0 accent-volt-400" />
+                <span className="whitespace-pre-line">{selfBilling.wording}</span>
+              </label>
+              <span className={darkHint}>This lets us make out your invoices for you, so you don&apos;t have to. We ask again once a year.</span>
+            </>
+          )}
         </fieldset>
 
         <SubmitButton className="h-12 w-full rounded-xl bg-volt-400 text-[15px] font-medium text-ink-950 hover:bg-volt-300 disabled:opacity-50">

@@ -22,6 +22,8 @@ export const PERSON_PAY_SELECT = {
   vatNumber: true,
   niNumber: true,
   detailsCompletedAt: true,
+  selfBillingAgreedAt: true,
+  selfBillingAgreedText: true,
 } as const;
 
 export const ACT_PAY_SELECT = {
@@ -37,6 +39,8 @@ export const ACT_PAY_SELECT = {
   vatNumber: true,
   niNumber: true,
   detailsCompletedAt: true,
+  selfBillingAgreedAt: true,
+  selfBillingAgreedText: true,
   leadPersonId: true,
 } as const;
 
