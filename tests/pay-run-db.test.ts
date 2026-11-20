@@ -92,7 +92,7 @@ describeDb("weekly pay run (database)", () => {
     server = await import("@/lib/pay-run-server");
     actions = await import("@/actions/pay-run");
     invoices = await import("@/lib/act-invoices");
-    const a = await createTestAgency(prisma, "payrun", { agencyName: "Suave Agency", agencyAddress: "2 Office Row", agencyEmail: "" });
+    const a = await createTestAgency(prisma, "payrun", { agencyName: "Suave Agency", agencyAddress: "2 Office Row", agencyEmail: "", actInvoiceMode: "AUTO" });
     agencyId = a.agency.id;
     adminEmail = a.admin.email;
     staff.user = { ...a.user, name: "Lucy" };
@@ -269,7 +269,7 @@ describeDb("weekly pay run (database)", () => {
     const v = await week();
     const open = v.payees.filter((p) => !p.paid);
     const [first, second] = open;
-    const other = await createTestAgency(prisma, "payrun-other");
+    const other = await createTestAgency(prisma, "payrun-other", { actInvoiceMode: "AUTO" });
     try {
       const otherAct = await prisma.artist.create({ data: { agencyId: other.agency.id, name: "Elsewhere", ...details } });
       const ob = await prisma.booking.create({

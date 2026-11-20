@@ -9,7 +9,7 @@ import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import { readWeek, weekShort, weekWindow } from "@/lib/pay-run";
-import { PayRunError, sendPayRunRecords } from "@/lib/pay-run-server";
+import { PayRunError, sendPayRunRecords, signOffWeek } from "@/lib/pay-run-server";
 
 // The weekly pay run's buttons (src/app/(agency)/payments/run). Sending for the records is for admins; marking
 // payees paid is for staff, as on Pay acts, and goes through the same payActInvoices so the bookings and Payments
@@ -45,6 +45,33 @@ export async function sendPayRun(weekStart: string, mode: "ALL" | "CHANGES", _: 
       await logActivity(user, "PAY_RUN", week, mode === "CHANGES" ? "changes sent for the records" : "sent for the records", `${what} to ${r.to}`);
       revalidatePath("/payments/run");
       return { ok: `${mode === "CHANGES" ? "Changes sent" : "Sent"} to ${r.to}: ${what} for ${weekShort(week)}.` };
+    } catch (e) {
+      if (e instanceof PayRunError) throw new FormError(e.message);
+      throw e;
+    }
+  });
+}
+
+/**
+ * Sign off the week's gigs (admins): every gig listed (gig) that's ticked (played) is signed off and its invoice
+ * made; an unticked one is left out with its reason (reason_<id>), logged on the booking, with no invoice.
+ */
+export async function signOffGigs(weekStart: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireAdmin();
+  return handleForm(async () => {
+    const week = weekOf(weekStart);
+    const gigIds = form.getAll("gig").map(String).slice(0, 2000);
+    const reasons = Object.fromEntries(gigIds.map((id) => [id, str(form, `reason_${id}`)]));
+    try {
+      const r = await signOffWeek(user.agencyId, week, { id: user.id, name: user.name }, { gigIds, played: form.getAll("played").map(String), reasons });
+      await logActivity(user, "PAY_RUN", week, "week signed off", `${plural(r.played, "gig")} played, ${r.leftOut} left out`);
+      revalidatePath("/", "layout");
+      const parts = [
+        `Signed off: ${plural(r.played, "gig")} played${r.leftOut ? `, ${r.leftOut} left out` : ""}.`,
+        `${plural(r.issued, "invoice")} made.`,
+        r.waiting.length ? `${r.waiting.length} more as soon as they can be (${r.waiting.join("; ")}).` : "",
+      ];
+      return { ok: parts.filter(Boolean).join(" ") };
     } catch (e) {
       if (e instanceof PayRunError) throw new FormError(e.message);
       throw e;

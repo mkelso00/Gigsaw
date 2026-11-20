@@ -1,10 +1,11 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { log } from "@/server/log";
-import { gigsWithoutInvoice } from "./act-invoices";
+import { actFeeMinor } from "./act-invoice-rules";
+import { gigsWithoutInvoice, invoiceModeOf, issueActInvoice, weekGigsForSignOff, type InvoiceMode } from "./act-invoices";
 import { bankFile, readBankFile, templateOf } from "./bank-file";
 import { toCsv } from "./csv";
-import { prisma } from "./db";
+import { logActivities, prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { appUrl, sendEmail } from "./messaging";
 import { formatMoney } from "./money";
@@ -14,19 +15,24 @@ import {
   bankPayments,
   groupByPayee,
   lastWeekStart,
+  mergeSignOff,
+  gigState,
+  readLeftOut,
   readSends,
+  readSignOffs,
   recordsRows,
   runProgress,
   weekLabel,
   weekShort,
   weekWindow,
+  type GigState,
   type RunPayee,
   type SendRecord,
 } from "./pay-run";
 import { invoicesPdf } from "./pay-run-pdf";
 import { personName } from "./person-name";
 import { claimedReminders, claimReminder } from "./reminders";
-import { localDateKey, localTime } from "./time";
+import { formatDate, localDateKey, localTime } from "./time";
 
 // The database side of the weekly pay run (src/lib/pay-run.ts has the rules): the week's invoices with what may
 // need checking, sending them to the business for its records (one email with a summary, the CSV and every
@@ -83,7 +89,9 @@ export async function payRunWeek(
 ) {
   const now = opts.now ?? new Date();
   const range = weekWindow(weekStart, opts.timeZone);
-  const [rows, voided, run, gaps] = await Promise.all([
+  const mode: InvoiceMode = await invoiceModeOf(agencyId);
+  const signOff = mode === "SIGN_OFF";
+  const [rows0, voided, run, gaps, weekGigs] = await Promise.all([
     prisma.actInvoice.findMany({
       where: { agencyId, status: { in: ["ISSUED", "PAID"] }, gigDate: range },
       include: invoiceInclude,
@@ -95,8 +103,14 @@ export async function payRunWeek(
       orderBy: { seq: "asc" },
     }),
     prisma.payRun.findUnique({ where: { agencyId_weekStart: { agencyId, weekStart } } }),
-    gigsWithoutInvoice(agencyId, range, now),
+    // Signing off lists every gig instead.
+    signOff ? Promise.resolve([]) : gigsWithoutInvoice(agencyId, range, now),
+    signOff ? weekGigsForSignOff(agencyId, range, now) : Promise.resolve([]),
   ]);
+  // Signing off: only the invoices of gigs signed off as played are paid (and sent for the records).
+  const signedOff = new Set(run?.signedOffBookingIds ?? []);
+  const rows = signOff ? rows0.filter((r) => r.bookingId && signedOff.has(r.bookingId)) : rows0;
+  const gigs = signOff ? signOffGigs(weekGigs, run, signedOff) : [];
   const invoices: PayRunInvoice[] = rows.map((r) => ({ ...r, payments: r.booking?.payments ?? [] }));
   const payees = groupByPayee(invoices, opts.business);
   const bank = bankFile(templateOf(readBankFile(opts.bankFile)), bankPayments(payees, await payeeEmails(agencyId, payees)), localDateKey(now, opts.timeZone));
@@ -132,10 +146,112 @@ export async function payRunWeek(
     notes,
     lineupChanged,
     bank,
+    mode,
+    gigs,
+    signOffs: readSignOffs(run?.signOffs),
   };
 }
 
+type WeekGig = Awaited<ReturnType<typeof weekGigsForSignOff>>[number];
+
+/** The week's gigs for signing off, each with where it stands and what may need a look. */
+function signOffGigs(list: WeekGig[], run: { signedOffAt: Date | null; leftOut: unknown } | null, signedOff: Set<string>) {
+  const leftOut = new Map(readLeftOut(run?.leftOut).map((l) => [l.bookingId, l]));
+  return list.map((g) => {
+    const b = g.booking;
+    const s = gigState({ id: b.id, status: b.status, finished: g.finished, updatedAt: b.updatedAt }, signedOff, leftOut);
+    const flags: string[] = [];
+    if (s.state === "CANCELLED") flags.push(g.invoice ? `Cancelled: invoice ${g.invoice.number} is being voided` : "Cancelled");
+    if (s.state === "NOT_FINISHED") flags.push("Hasn't finished yet");
+    if (s.state === "TO_SIGN_OFF" && run?.signedOffAt)
+      flags.push(s.editedSinceLeftOut ? "Edited since it was left out: not signed off yet" : "Not signed off yet");
+    if (["PENDING", "AWAITING", "HOLD"].includes(b.status))
+      flags.push(`Still ${b.status === "AWAITING" ? "awaiting confirmation" : b.status.toLowerCase()}: the invoice is made once it's confirmed`);
+    const lineup = lineupWords(b.lineup);
+    if (lineup) flags.push(`Line-up changed (${lineup}): may need checking`);
+    if (g.waiting && !g.invoice && s.state !== "CANCELLED") flags.push(`${g.waiting}: the invoice is made as soon as they're in`);
+    return {
+      id: b.id,
+      reference: b.reference,
+      setStart: b.setStart,
+      timezone: b.timezone,
+      status: b.status,
+      actName: b.artist?.name ?? "No act",
+      artistId: b.artistId,
+      venue: b.venue ? b.venue.name : "",
+      feeMinor: g.feeMinor,
+      currency: b.currency,
+      invoice: g.invoice,
+      state: s.state as GigState,
+      leftOut: s.leftOut,
+      flags,
+    };
+  });
+}
+
+export type SignOffGig = ReturnType<typeof signOffGigs>[number];
+
 export type PayRunView = Awaited<ReturnType<typeof payRunWeek>>;
+
+/**
+ * Sign off the week's gigs (or the ones not signed off yet): those in `played` are signed off and their invoices
+ * made now with issueActInvoice (so numbering and locking are as everywhere else), or as soon as they can be; the
+ * rest of `gigIds` are left out with their reason, logged on the booking, and get no invoice. Only gigs waiting to
+ * be signed off count. Records who and when on the week's PayRun.
+ */
+export async function signOffWeek(
+  agencyId: string,
+  weekStart: string,
+  by: { id: string; name: string },
+  input: { gigIds: string[]; played: string[]; reasons: Record<string, string> },
+  now = new Date(),
+) {
+  const settings = await prisma.settings.findUniqueOrThrow({ where: { agencyId } });
+  if (settings.actInvoiceMode !== "SIGN_OFF") throw new PayRunError("Invoices are made after each gig here, so there's nothing to sign off.");
+  const v = await payRunWeek(agencyId, weekStart, { timeZone: settings.defaultTimezone, business: settings.agencyName, now });
+  const asked = new Set(input.gigIds);
+  const toSign = v.gigs.filter((g) => g.state === "TO_SIGN_OFF" && asked.has(g.id));
+  if (!toSign.length) throw new PayRunError("Nothing here is waiting to be signed off.");
+  const playedSet = new Set(input.played);
+  const played = toSign.filter((g) => playedSet.has(g.id));
+  const out = toSign.filter((g) => !playedSet.has(g.id)).map((g) => ({ g, reason: (input.reasons[g.id] ?? "").trim().slice(0, 200) }));
+  const missing = out.find((o) => !o.reason);
+  if (missing) throw new PayRunError(`Say why ${missing.g.actName} on ${formatDate(missing.g.setStart, missing.g.timezone)} is left out.`);
+
+  await prisma.payRun.upsert({ where: { agencyId_weekStart: { agencyId, weekStart } }, create: { agencyId, weekStart }, update: {} });
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "PayRun" WHERE "agencyId" = ${agencyId} AND "weekStart" = ${weekStart} FOR UPDATE`;
+    const row = await tx.payRun.findUniqueOrThrow({ where: { agencyId_weekStart: { agencyId, weekStart } } });
+    const merged = mergeSignOff(
+      row,
+      played.map((g) => g.id),
+      out.map((o) => ({ bookingId: o.g.id, reason: o.reason })),
+      { name: by.name, at: now },
+    );
+    await tx.payRun.update({
+      where: { id: row.id },
+      data: { ...merged, ...(row.signedOffAt ? {} : { signedOffAt: now, signedOffById: by.id, signedOffByName: by.name }) },
+    });
+  });
+  await logActivities({ id: by.id, agencyId }, "BOOKING", [
+    ...played.map((g) => ({ entityId: g.id, action: "signed off as played", detail: weekShort(weekStart) })),
+    ...out.map((o) => ({ entityId: o.g.id, action: "left out of the pay run", detail: o.reason })),
+  ]);
+  let issued = 0;
+  const waiting: string[] = [];
+  for (const g of played) {
+    if (g.invoice) continue;
+    try {
+      const r = await issueActInvoice(g.id, { byHand: true, now });
+      if ("number" in r) issued++;
+      else if (r.skipped !== "Already invoiced") waiting.push(`${g.actName}: ${r.skipped}`);
+    } catch (e) {
+      log.error("Act invoice at sign-off failed", { bookingId: g.id, err: e });
+      waiting.push(`${g.actName}: not made yet, Gigsaw tries again shortly`);
+    }
+  }
+  return { played: played.length, leftOut: out.length, issued, waiting };
+}
 
 /** Where the records go: the accounts email, else the business email, else whoever pressed Send. */
 export function recordsRecipient(s: { accountsEmail: string; agencyEmail: string }, fallback: string) {
@@ -272,6 +388,8 @@ export class PayRunError extends Error {}
 // ---------------------------------------------------------------------------------------------------------
 
 export const READY_KIND = "PAY_RUN_READY";
+/** The template for the Monday email when invoices are made at sign-off. */
+export const SIGN_OFF_KIND = "PAY_RUN_SIGN_OFF";
 const recipientOf = (agencyId: string) => `agency:${agencyId}`;
 
 /** The accounts email, or each admin's when there isn't one. */
@@ -297,7 +415,9 @@ export async function runPayRunReminders(now = new Date()) {
     select: {
       id: true,
       name: true,
-      settings: { select: { defaultTimezone: true, agencyName: true, accountsEmail: true, defaultCurrency: true, messageTemplates: true } },
+      settings: {
+        select: { defaultTimezone: true, agencyName: true, accountsEmail: true, defaultCurrency: true, messageTemplates: true, actInvoiceMode: true },
+      },
     },
   });
   const due: { agencyId: string; name: string; week: string; s: NonNullable<(typeof agencies)[number]["settings"]> }[] = [];
@@ -320,6 +440,46 @@ export async function runPayRunReminders(now = new Date()) {
     if (claimed.has(`${READY_KIND}|${recipientOf(d.agencyId)}|${d.week}`)) continue;
     try {
       const range = weekWindow(d.week, d.s.defaultTimezone);
+      const run = await prisma.payRun.findUnique({ where: { agencyId_weekStart: { agencyId: d.agencyId, weekStart: d.week } }, select: { signedOffAt: true } });
+      if (d.s.actInvoiceMode === "SIGN_OFF" && !run?.signedOffAt) {
+        // Invoices are made at sign-off: "Last week's gigs are ready to sign off: 104 gigs, 98 acts".
+        const gigs = (
+          await prisma.booking.findMany({
+            where: { agencyId: d.agencyId, demo: false, artistId: { not: null }, setStart: range, status: { notIn: ["CANCELLED", "ENQUIRY"] } },
+            select: { artistId: true, dealType: true, feeMinor: true, artistFeeMinor: true, commissionPct: true, vatPct: true, bookingFeeMinor: true },
+          })
+        ).filter((b) => actFeeMinor(b) > 0);
+        if (!gigs.length) continue;
+        if (!(await claimReminder(READY_KIND, recipientOf(d.agencyId), d.week))) continue;
+        const acts = new Set(gigs.map((g) => g.artistId)).size;
+        const t = messageFor(d.s.messageTemplates, SIGN_OFF_KIND, {
+          week: weekLabel(d.week),
+          gigs: String(gigs.length),
+          acts: String(acts),
+          business: d.s.agencyName || d.name,
+        });
+        if (!t.on) continue;
+        const subject = t.subject ?? `Last week's gigs are ready to sign off: ${plural(gigs.length, "gig")}, ${plural(acts, "act")}`;
+        for (const to of await readyEmails(d.agencyId, d.s.accountsEmail)) {
+          await sendEmail({
+            kind: "PAY_RUN",
+            agencyId: d.agencyId,
+            to,
+            subject,
+            email: {
+              brand: d.s.agencyName || d.name,
+              preheader: subject,
+              title: subject,
+              intro:
+                t.intro ??
+                `Check that everyone played their gigs from ${weekLabel(d.week)} (in case anyone swapped or didn't turn up), then sign off the week. That makes the act invoices, ready to send for your records and pay.`,
+              cta: { label: "Sign off the week", url: `${appUrl()}/payments/run?week=${d.week}` },
+            },
+          });
+        }
+        sent++;
+        continue;
+      }
       const agg = await prisma.actInvoice.aggregate({
         where: { agencyId: d.agencyId, status: { in: ["ISSUED", "PAID"] }, gigDate: range },
         _count: true,

@@ -2,6 +2,40 @@
 
 import { useEffect, useRef, useState } from "react";
 
+/**
+ * "Played", ticked to start with. Unticking it (a no-show, say) asks for a short reason, which goes on the
+ * booking, and leaves the gig out: no invoice is made for it.
+ */
+export function PlayedTick({ id, label }: { id: string; label: string }) {
+  const [played, setPlayed] = useState(true);
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-1.5 text-sm font-medium">
+        <input
+          type="checkbox"
+          name="played"
+          value={id}
+          defaultChecked
+          onChange={(e) => setPlayed(e.currentTarget.checked)}
+          aria-label={`Played: ${label}`}
+          className="h-4 w-4 accent-ink-950"
+        />
+        Played
+      </label>
+      {!played && (
+        <input
+          name={`reason_${id}`}
+          required
+          maxLength={200}
+          placeholder="Why not? e.g. didn't turn up"
+          aria-label={`Why ${label} is left out`}
+          className="input h-8 w-56 max-w-full py-1 text-sm"
+        />
+      )}
+    </span>
+  );
+}
+
 /** "3 ticked": how many of the form's `name` boxes are ticked, kept up to date as they change. */
 export function TickedCount({ name }: { name: string }) {
   const ref = useRef<HTMLSpanElement>(null);

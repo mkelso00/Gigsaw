@@ -165,6 +165,9 @@ model Settings {
   // The weekly pay run's bank file: a bank's preset or the business's own layout (src/lib/bank-file.ts), e.g.
   // { "preset": "MONZO" } or { "preset": "CUSTOM", "custom": { "columns": [...], "header": true, ... } }.
   bankFile              Json    @default("{}")
+  // When acts' self-billing invoices are made: SIGN_OFF (an admin signs off the week's gigs in the weekly pay run,
+  // and that makes them) | AUTO (each one as soon as its gig is over). See src/lib/act-invoices.ts.
+  actInvoiceMode        String  @default("SIGN_OFF")
 }
 
 model User {
@@ -1466,22 +1469,31 @@ model XeroConnection {
 // what was sent, so the page can say "Sent Monday 9:12 by Lucy" and spot invoices made, replaced or voided since.
 // Paying isn't kept here: that's the invoices' own status and the payments on their bookings.
 model PayRun {
-  id             String    @id @default(cuid())
-  agencyId       String
-  agency         Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  weekStart      String // "YYYY-MM-DD", the Monday
+  id                  String    @id @default(cuid())
+  agencyId            String
+  agency              Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  weekStart           String // "YYYY-MM-DD", the Monday
   // The first send: when, and by whom (the name is copied, so it stays if the login is removed).
-  sentAt         DateTime?
-  sentById       String?
-  sentByName     String    @default("")
+  sentAt              DateTime?
+  sentById            String?
+  sentByName          String    @default("")
   // The live invoices (and their numbers, in the same order) as of the last send, to tell what's changed since.
-  sentInvoiceIds String[]  @default([])
-  sentNumbers    String[]  @default([])
-  sentTotalMinor Int       @default(0)
+  sentInvoiceIds      String[]  @default([])
+  sentNumbers         String[]  @default([])
+  sentTotalMinor      Int       @default(0)
   // Every send, oldest first: [{ at, byName, to, kind: "ALL" | "CHANGES", numbers, voided, totalMinor }].
-  sends          Json      @default("[]")
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  sends               Json      @default("[]")
+  // Signing off the week (when invoices are made at sign-off, Settings.actInvoiceMode): the first sign-off, the gigs
+  // signed off as played (their invoices are made then, or as soon as they can be), the gigs left out
+  // [{ bookingId, reason, at, byName }], and every sign-off [{ at, byName, bookingIds, leftOut }].
+  signedOffAt         DateTime?
+  signedOffById       String?
+  signedOffByName     String    @default("")
+  signedOffBookingIds String[]  @default([])
+  leftOut             Json      @default("[]")
+  signOffs            Json      @default("[]")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([agencyId, weekStart])
 }

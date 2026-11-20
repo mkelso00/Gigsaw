@@ -265,6 +265,66 @@ export function readSends(json: unknown): SendRecord[] {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Signing off the week (for a business that makes invoices then: Settings.actInvoiceMode SIGN_OFF)
+// ---------------------------------------------------------------------------------------------------------
+//
+// On Monday an admin checks last week's gigs off: every finished gig with an act and a fee is ticked "Played"; one
+// that didn't happen (a no-show) is unticked with a reason and left out, so no invoice is made for it. Signing off
+// makes the invoices for the played ones (or as soon as they can be: the payee's details in, the booking confirmed).
+// Gigs added to the week afterwards, or a left-out gig edited since, are "Not signed off yet" until signed off too.
+
+export type LeftOutRecord = { bookingId: string; reason: string; at: string; byName: string };
+export type SignOffRecord = { at: string; byName: string; bookingIds: string[]; leftOut: string[] };
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
+
+export function readLeftOut(json: unknown): LeftOutRecord[] {
+  return Array.isArray(json) ? (json.filter((x) => isObj(x) && typeof x.bookingId === "string" && typeof x.at === "string") as LeftOutRecord[]) : [];
+}
+
+export function readSignOffs(json: unknown): SignOffRecord[] {
+  return Array.isArray(json) ? (json.filter((x) => isObj(x) && typeof x.at === "string" && Array.isArray(x.bookingIds)) as SignOffRecord[]) : [];
+}
+
+export type GigState = "SIGNED_OFF" | "LEFT_OUT" | "TO_SIGN_OFF" | "NOT_FINISHED" | "CANCELLED";
+
+/**
+ * Where a gig stands in the week's sign-off. Cancelled and unfinished gigs can't be signed off. A left-out gig
+ * that's been edited since (the booking fixed, say) is back to be signed off.
+ */
+export function gigState(
+  g: { id: string; status: string; finished: boolean; updatedAt: Date },
+  signedOff: Set<string>,
+  leftOut: Map<string, LeftOutRecord>,
+): { state: GigState; leftOut: LeftOutRecord | null; editedSinceLeftOut: boolean } {
+  const out = leftOut.get(g.id) ?? null;
+  if (g.status === "CANCELLED") return { state: "CANCELLED", leftOut: out, editedSinceLeftOut: false };
+  if (signedOff.has(g.id)) return { state: "SIGNED_OFF", leftOut: null, editedSinceLeftOut: false };
+  if (!g.finished) return { state: "NOT_FINISHED", leftOut: null, editedSinceLeftOut: false };
+  if (out) {
+    const edited = g.updatedAt.getTime() > new Date(out.at).getTime();
+    return { state: edited ? "TO_SIGN_OFF" : "LEFT_OUT", leftOut: out, editedSinceLeftOut: edited };
+  }
+  return { state: "TO_SIGN_OFF", leftOut: null, editedSinceLeftOut: false };
+}
+
+/** A sign-off added to what's on the week's PayRun: played gigs signed off, the rest left out with their reasons. */
+export function mergeSignOff(
+  before: { signedOffBookingIds: string[]; leftOut: unknown; signOffs: unknown },
+  played: string[],
+  out: { bookingId: string; reason: string }[],
+  by: { name: string; at: Date },
+) {
+  const at = by.at.toISOString();
+  const touched = new Set([...played, ...out.map((o) => o.bookingId)]);
+  return {
+    signedOffBookingIds: [...new Set([...before.signedOffBookingIds, ...played])],
+    leftOut: [...readLeftOut(before.leftOut).filter((l) => !touched.has(l.bookingId)), ...out.map((o) => ({ ...o, at, byName: by.name }))],
+    signOffs: [...readSignOffs(before.signOffs), { at, byName: by.name, bookingIds: played, leftOut: out.map((o) => o.bookingId) }],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Files: the payment list for the bank, and the invoices for the records
 // ---------------------------------------------------------------------------------------------------------
 

@@ -16,6 +16,8 @@ import {
   thisWeekStart,
   weekLabel,
   weekWindow,
+  gigState,
+  mergeSignOff,
   type RunInvoice,
 } from "@/lib/pay-run";
 import { invoicesPdf } from "@/lib/pay-run-pdf";
@@ -236,5 +238,44 @@ describe("files", () => {
     );
     expect(Buffer.from(pdf).toString("latin1", 0, 5)).toBe("%PDF-");
     expect((await PDFDocument.load(pdf)).getPageCount()).toBe(2);
+  });
+});
+
+describe("signing off the week", () => {
+  const t0 = new Date("2026-06-22T09:00:00Z");
+  const gig = (over: Partial<{ id: string; status: string; finished: boolean; updatedAt: Date }> = {}) => ({
+    id: "g1",
+    status: "CONFIRMED",
+    finished: true,
+    updatedAt: new Date("2026-06-20T10:00:00Z"),
+    ...over,
+  });
+  const out = new Map([["g1", { bookingId: "g1", reason: "No-show", at: t0.toISOString(), byName: "Lucy" }]]);
+
+  it("knows where each gig stands", () => {
+    expect(gigState(gig(), new Set(), new Map()).state).toBe("TO_SIGN_OFF");
+    expect(gigState(gig(), new Set(["g1"]), new Map()).state).toBe("SIGNED_OFF");
+    expect(gigState(gig({ status: "CANCELLED" }), new Set(["g1"]), new Map()).state).toBe("CANCELLED");
+    expect(gigState(gig({ finished: false }), new Set(), new Map()).state).toBe("NOT_FINISHED");
+    expect(gigState(gig(), new Set(), out)).toMatchObject({ state: "LEFT_OUT", editedSinceLeftOut: false });
+    // Fixed since it was left out: back to sign off.
+    expect(gigState(gig({ updatedAt: new Date(t0.getTime() + 60_000) }), new Set(), out)).toMatchObject({ state: "TO_SIGN_OFF", editedSinceLeftOut: true });
+  });
+
+  it("adds a sign-off to the week's record", () => {
+    const first = mergeSignOff({ signedOffBookingIds: [], leftOut: [], signOffs: [] }, ["a", "b"], [{ bookingId: "c", reason: "No-show" }], {
+      name: "Lucy",
+      at: t0,
+    });
+    expect(first.signedOffBookingIds).toEqual(["a", "b"]);
+    expect(first.leftOut).toEqual([{ bookingId: "c", reason: "No-show", at: t0.toISOString(), byName: "Lucy" }]);
+    // Later: c is signed off after all, and d added.
+    const later = mergeSignOff(first, ["c", "d"], [], { name: "Ann", at: new Date(t0.getTime() + 3_600_000) });
+    expect(later.signedOffBookingIds).toEqual(["a", "b", "c", "d"]);
+    expect(later.leftOut).toEqual([]);
+    expect(later.signOffs.map((s) => [s.byName, s.bookingIds, s.leftOut])).toEqual([
+      ["Lucy", ["a", "b"], ["c"]],
+      ["Ann", ["c", "d"], []],
+    ]);
   });
 });

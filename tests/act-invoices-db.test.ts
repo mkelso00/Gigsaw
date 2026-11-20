@@ -72,10 +72,10 @@ describeDb("act invoices (database)", () => {
   beforeAll(async () => {
     ({ prisma } = await import("@/lib/db"));
     lib = await import("@/lib/act-invoices");
-    const a = await createTestAgency(prisma, "invoices", { agencyName: "Test Agency Ltd", agencyAddress: "2 Office Row" });
+    const a = await createTestAgency(prisma, "invoices", { agencyName: "Test Agency Ltd", agencyAddress: "2 Office Row", actInvoiceMode: "AUTO" });
     agencyId = a.agency.id;
     staff.user = a.user;
-    otherAgencyId = (await createTestAgency(prisma, "invoices-other")).agency.id;
+    otherAgencyId = (await createTestAgency(prisma, "invoices-other", { actInvoiceMode: "AUTO" })).agency.id;
   });
 
   afterAll(async () => {

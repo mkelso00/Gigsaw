@@ -389,6 +389,17 @@ export const TEMPLATES: TemplateDef[] = [
     },
     placeholders: ["week", "count", "total", "business"],
   },
+  {
+    key: "PAY_RUN_SIGN_OFF",
+    group: "TEAM",
+    label: "Weekly gigs ready to sign off",
+    hint: "When act invoices are made at sign-off (Settings, General): on Monday morning (or the first weekday after), how many gigs and acts last week had, with a link to sign them off in the Weekly pay run. Goes to your accounts email, or each admin when there isn't one.",
+    example: {
+      subject: "Last week's gigs are ready to sign off: {gigs} gigs, {acts} acts",
+      intro: "Check that everyone played their gigs from {week}, then sign off the week. That makes the act invoices.",
+    },
+    placeholders: ["week", "gigs", "acts", "business"],
+  },
 ];
 
 export const TEMPLATE_GROUPS: Record<TemplateGroup, { label: string; hint: string; icon: string; slug: string }> = {

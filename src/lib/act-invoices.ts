@@ -109,18 +109,62 @@ function isUniqueClash(e: unknown) {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// When invoices are made: after each gig (AUTO) or when the week is signed off in the pay run (SIGN_OFF)
+// ---------------------------------------------------------------------------------------------------------
+
+export const INVOICE_MODES = ["SIGN_OFF", "AUTO"] as const;
+export type InvoiceMode = (typeof INVOICE_MODES)[number];
+export const INVOICE_MODE_LABELS: Record<InvoiceMode, string> = {
+  SIGN_OFF: "When we sign off the week (weekly pay run)",
+  AUTO: "After each gig (automatic)",
+};
+export const NOT_SIGNED_OFF = "Waiting for the week to be signed off";
+
+/** How this business makes its acts' invoices. */
+export async function invoiceModeOf(agencyId: string, db: Pick<Tx, "settings"> = prisma): Promise<InvoiceMode> {
+  const s = await db.settings.findUnique({ where: { agencyId }, select: { actInvoiceMode: true } });
+  return s?.actInvoiceMode === "AUTO" ? "AUTO" : "SIGN_OFF";
+}
+
+/** True once this gig has been signed off as played in a weekly pay run. */
+export async function isSignedOff(agencyId: string, bookingId: string, db: Pick<Tx, "payRun"> = prisma) {
+  return !!(await db.payRun.findFirst({ where: { agencyId, signedOffBookingIds: { has: bookingId } }, select: { id: true } }));
+}
+
+/** Gigs signed off in the last year and a bit, for businesses that make invoices at sign-off. */
+async function signedOffBookingIds(agencyId?: string) {
+  const since = new Date(Date.now() - 400 * DAY).toISOString().slice(0, 10);
+  const runs = await prisma.payRun.findMany({
+    where: { ...(agencyId ? { agencyId } : {}), signedOffAt: { not: null }, weekStart: { gte: since }, agency: { status: "ACTIVE" } },
+    select: { signedOffBookingIds: true },
+  });
+  return new Set(runs.flatMap((r) => r.signedOffBookingIds));
+}
+
 /**
  * Make the act's invoice for a booking if it's due (see issueDecision). Safe to call any number of
- * times: a booking with a live invoice is left alone. `byHand` is staff asking for one from Pay acts.
+ * times: a booking with a live invoice is left alone. `byHand` is staff asking for one from Pay acts, or the
+ * week being signed off. `auto` is Gigsaw making it by itself (the scheduler, or the act checking out): for a
+ * business that makes invoices at sign-off, only once the gig has been signed off.
  */
-export async function issueActInvoice(bookingId: string, opts: { now?: Date; byHand?: boolean } = {}): Promise<{ number: string } | { skipped: string }> {
+export async function issueActInvoice(
+  bookingId: string,
+  opts: { now?: Date; byHand?: boolean; auto?: boolean } = {},
+): Promise<{ number: string } | { skipped: string }> {
   const now = opts.now ?? new Date();
   try {
     return await prisma.$transaction(async (tx) => {
       const b = await lockBooking(tx, bookingId);
       if (!b) return { skipped: "Booking not found" };
       if (await tx.actInvoice.findUnique({ where: { liveBookingId: b.id }, select: { id: true } })) return { skipped: "Already invoiced" };
-      const r = await createFor(tx, b, now, !!opts.byHand);
+      let byHand = !!opts.byHand;
+      if (opts.auto && (await invoiceModeOf(b.agencyId, tx)) === "SIGN_OFF") {
+        if (!(await isSignedOff(b.agencyId, b.id, tx))) return { skipped: NOT_SIGNED_OFF };
+        // Signed off as played: made whenever it can be (details in, confirmed), however long that takes.
+        byHand = true;
+      }
+      const r = await createFor(tx, b, now, byHand);
       return r.issue && r.number ? { number: r.number } : { skipped: r.issue ? "Not made" : r.reason };
     });
   } catch (e) {
@@ -207,21 +251,39 @@ export async function runActInvoices(now = new Date()) {
   // Only acts where someone's details are done (the act's own, or a person's in it): the rest are listed for staff
   // as waiting, not tried every minute. Whether they're the payee's is worked out by issueDecision.
   const done = { detailsCompletedAt: { not: null } };
+  const detailsIn = {
+    OR: [done, { members: { some: { person: done } } }, { partActs: { some: { child: { OR: [done, { members: { some: { person: done } } }] } } } }],
+  } satisfies Prisma.ArtistWhereInput;
+  // Businesses that make invoices at sign-off: only the gigs signed off as played, whenever they're ready (the payee's
+  // details came in late, or the booking was confirmed after). The rest: each gig as it finishes.
+  const signedOff = await signedOffBookingIds();
+  const auto = { status: "ACTIVE", settings: { is: { actInvoiceMode: "AUTO" } } } satisfies Prisma.AgencyWhereInput;
   const due = await withPayees(
     await prisma.booking.findMany({
       where: {
-        ...candidateWhere(now, AUTO_INVOICE_DAYS),
-        artist: {
-          OR: [done, { members: { some: { person: done } } }, { partActs: { some: { child: { OR: [done, { members: { some: { person: done } } }] } } } }],
-        },
+        OR: [
+          { ...candidateWhere(now, AUTO_INVOICE_DAYS), agency: auto, artist: detailsIn },
+          ...(signedOff.size
+            ? [
+                {
+                  id: { in: [...signedOff] },
+                  demo: false,
+                  status: { in: ["CONFIRMED", "SETTLED"] },
+                  artistId: { not: null },
+                  actInvoices: { none: { status: { not: "VOID" } } },
+                  artist: detailsIn,
+                },
+              ]
+            : []),
+        ],
       },
       include: bookingInclude,
     }),
   );
   for (const b of due) {
-    if (!issueDecision(b, now).issue) continue;
+    if (!issueDecision(b, now, signedOff.has(b.id)).issue) continue;
     try {
-      if ("number" in (await issueActInvoice(b.id, { now }))) result.issued++;
+      if ("number" in (await issueActInvoice(b.id, { now, auto: true }))) result.issued++;
     } catch (e) {
       log.error("Act invoice failed", { bookingId: b.id, err: e });
     }
@@ -251,9 +313,16 @@ export async function uninvoicedGigs(agencyId: string, now = new Date()) {
   const rows = await withPayees(
     await prisma.booking.findMany({ where: { ...candidateWhere(now, 365), agencyId }, include: bookingInclude, orderBy: { setStart: "asc" } }),
   );
+  // A business that makes invoices at sign-off: a gig that isn't signed off waits for the weekly pay run.
+  const signOff = (await invoiceModeOf(agencyId)) === "SIGN_OFF";
+  const signedOff = signOff ? await signedOffBookingIds(agencyId) : new Set<string>();
   return rows.flatMap((b) => {
     const owedMinor = Math.max(0, actFeeMinor(b) - paidOutMinor(b.payments));
     if (owedMinor <= 0) return [];
+    if (signOff && !signedOff.has(b.id)) {
+      const d = issueDecision(b, now, true);
+      return [{ booking: b, owedMinor, reason: d.issue || !d.waiting ? NOT_SIGNED_OFF : `${d.reason} (and the week to be signed off)`, canMake: false }];
+    }
     // Due now, but the scheduler hasn't got to it yet (or isn't running on this server).
     if (issueDecision(b, now).issue) return [{ booking: b, owedMinor, reason: "Due now", canMake: true }];
     const d = issueDecision(b, now, true);
@@ -295,6 +364,31 @@ export async function gigsWithoutInvoice(agencyId: string, range: { gte: Date; l
     if (!gigFinished(b, now)) return row("NOT_FINISHED", "Hasn't finished yet");
     if (d.waiting) return row("WAITING", d.reason);
     return [];
+  });
+}
+
+/**
+ * Every gig in a range of dates (by start) with an act and a fee for it, cancelled ones too (to show them), for
+ * signing off the week: with who the invoice goes to and why it can't be made yet, the line-up changes and the
+ * live invoice if it has one. Never enquiries or demo data.
+ */
+export async function weekGigsForSignOff(agencyId: string, range: { gte: Date; lt: Date }, now = new Date()) {
+  const rows = await withPayees(
+    await prisma.booking.findMany({
+      where: { agencyId, demo: false, artistId: { not: null }, setStart: range, status: { not: "ENQUIRY" } },
+      include: {
+        ...bookingInclude,
+        lineup: { select: { change: true, person: { select: { firstName: true, surname: true, alias: true } } } },
+        actInvoices: { where: { status: { not: "VOID" } }, select: { id: true, number: true, status: true } },
+      },
+      orderBy: [{ setStart: "asc" }, { reference: "asc" }],
+    }),
+  );
+  return rows.flatMap((b) => {
+    const feeMinor = actFeeMinor(b);
+    if (feeMinor <= 0) return [];
+    const d = issueDecision(b, now, true);
+    return [{ booking: b, feeMinor, finished: gigFinished(b, now), invoice: b.actInvoices[0] ?? null, waiting: !d.issue && d.waiting ? d.reason : "" }];
   });
 }
 

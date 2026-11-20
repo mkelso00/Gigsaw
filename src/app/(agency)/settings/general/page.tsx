@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { saveSettings } from "@/actions/settings";
+import { INVOICE_MODES, INVOICE_MODE_LABELS } from "@/lib/act-invoices";
 import { ActionForm } from "@/components/forms";
 import { SettingsCard, SettingsPage, SettingsSection } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
@@ -35,6 +36,25 @@ export default async function GeneralSettings() {
                 <input name="accountsEmail" type="email" defaultValue={settings.accountsEmail} placeholder="accounts@example.co.uk" className="input" />
               </Field>
             </div>
+          </SettingsCard>
+        </SettingsSection>
+        <SettingsSection
+          title="Acts' invoices"
+          description="Gigsaw makes a self-billing invoice for each act's fee. Choose when: after each gig, or all at once when you sign off the week's gigs in the Weekly pay run."
+        >
+          <SettingsCard pad>
+            <Field
+              label="When act invoices are made"
+              hint="Signing off: on Monday you tick off last week's gigs as played (leaving out any that didn't happen) and that makes the invoices. Automatic: each one once its gig is over."
+            >
+              <select name="actInvoiceMode" defaultValue={settings.actInvoiceMode === "AUTO" ? "AUTO" : "SIGN_OFF"} className="input">
+                {INVOICE_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {INVOICE_MODE_LABELS[m]}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </SettingsCard>
         </SettingsSection>
         <SettingsSection

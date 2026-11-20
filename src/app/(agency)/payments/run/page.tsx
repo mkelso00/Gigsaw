@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { makeActInvoice } from "@/actions/act-invoices";
-import { payPayees, payWholeWeek, saveBankFile, sendPayRun } from "@/actions/pay-run";
+import { payPayees, payWholeWeek, saveBankFile, sendPayRun, signOffGigs } from "@/actions/pay-run";
 import { SelectAll } from "@/components/client-bits";
 import { CopyValue } from "@/components/copy-value";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -11,10 +11,10 @@ import { requireStaff } from "@/lib/auth";
 import { BANK_FIELDS, BANK_FIELD_LABELS, BANK_PRESETS, CUSTOM_MAX_COLUMNS, DATE_FORMATS, PRESETS, readBankFile, type BankFileSetting } from "@/lib/bank-file";
 import { getSettings } from "@/lib/db";
 import { formatMoney, minorToInput } from "@/lib/money";
-import { lastWeekStart, progressLine, readWeek, weekLabel, type RunPayee } from "@/lib/pay-run";
+import { lastWeekStart, progressLine, readWeek, weekLabel, type GigState, type RunPayee } from "@/lib/pay-run";
 import { payRunWeek, recordsRecipient, type PayRunInvoice, type PayRunView } from "@/lib/pay-run-server";
 import { addDaysToKey, formatDate, localTime } from "@/lib/time";
-import { TickedCount } from "./_ticked";
+import { PlayedTick, TickedCount } from "./_ticked";
 
 export const metadata: Metadata = { title: "Weekly pay run" };
 
@@ -36,6 +36,7 @@ export default async function PayRunPage({ searchParams }: { searchParams: Promi
   const lastWeek = lastWeekStart(new Date(), tz);
   const week = readWeek(sp.week) ?? lastWeek;
   const v = await payRunWeek(user.agencyId, week, { timeZone: tz, business: settings.agencyName, bankFile: settings.bankFile });
+  const signOff = v.mode === "SIGN_OFF";
   const currency = v.invoices[0]?.currency ?? settings.defaultCurrency;
   const m = (x: number) => formatMoney(x, currency);
   const href = (w: string) => `/payments/run?week=${w}`;
@@ -98,12 +99,15 @@ export default async function PayRunPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {v.invoices.length === 0 && v.gaps.length === 0 && v.voided.length === 0 ? (
-        <Empty>No act invoices for gigs in this week.</Empty>
+      {v.invoices.length === 0 && v.gaps.length === 0 && v.voided.length === 0 && v.gigs.length === 0 ? (
+        <Empty>{signOff ? "No gigs with an act to pay in this week." : "No act invoices for gigs in this week."}</Empty>
       ) : (
         <div className="space-y-10">
-          <CheckSection v={v} isAdmin={isAdmin} tz={tz} m={m} week={week} business={business} to={to} />
-          {v.payees.length > 0 && <PaySection v={v} isAdmin={isAdmin} m={m} week={week} bank={readBankFile(settings.bankFile)} />}
+          {signOff && <SignOffSection v={v} isAdmin={isAdmin} m={m} week={week} tz={tz} />}
+          {(!signOff || v.invoices.length > 0 || v.voided.length > 0) && (
+            <CheckSection v={v} isAdmin={isAdmin} tz={tz} m={m} week={week} business={business} to={to} step={signOff ? 2 : 1} />
+          )}
+          {v.payees.length > 0 && <PaySection v={v} isAdmin={isAdmin} m={m} week={week} bank={readBankFile(settings.bankFile)} step={signOff ? 3 : 2} />}
         </div>
       )}
     </div>
@@ -124,6 +128,170 @@ function StepTitle({ n, children, aside }: { n: number; children: React.ReactNod
   );
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// Sign off the week (when invoices are made at sign-off)
+// ---------------------------------------------------------------------------------------------------------
+
+const STATE_BADGES: Record<GigState, [string, string]> = {
+  SIGNED_OFF: ["Signed off", "bg-emerald-50 text-emerald-800"],
+  LEFT_OUT: ["Left out", "bg-rose-50 text-rose-800"],
+  TO_SIGN_OFF: ["To sign off", "bg-amber-50 text-amber-900"],
+  NOT_FINISHED: ["Not finished", "bg-ink-100 text-ink-600"],
+  CANCELLED: ["Cancelled", "bg-ink-100 text-ink-500"],
+};
+
+function SignOffSection({ v, isAdmin, m, week, tz }: { v: PayRunView; isAdmin: boolean; m: (x: number) => string; week: string; tz: string }) {
+  const toSign = v.gigs.filter((g) => g.state === "TO_SIGN_OFF");
+  const run = v.run?.signedOffAt ? v.run : null;
+  const acts = new Set(v.gigs.filter((g) => g.state !== "CANCELLED").map((g) => g.artistId)).size;
+  const count = (s: GigState) => v.gigs.filter((g) => g.state === s).length;
+  const flagged = (match: (f: string) => boolean) => v.gigs.filter((g) => g.flags.some(match)).length;
+  const chips = [
+    run && toSign.length && `${plural(toSign.length, "gig")} not signed off yet`,
+    flagged((f) => f.startsWith("Still ")) &&
+      `${plural(
+        flagged((f) => f.startsWith("Still ")),
+        "gig",
+      )} pending or awaiting confirmation`,
+    flagged((f) => f.startsWith("Line-up")) &&
+      `${plural(
+        flagged((f) => f.startsWith("Line-up")),
+        "gig",
+      )} with stand-ins or line-up changes`,
+    flagged((f) => f.includes("as soon as they're in")) &&
+      `${plural(
+        flagged((f) => f.includes("as soon as they're in")),
+        "act",
+      )} missing pay details`,
+    count("CANCELLED") && `${plural(count("CANCELLED"), "gig")} cancelled`,
+    count("NOT_FINISHED") && `${plural(count("NOT_FINISHED"), "gig")} not finished yet`,
+  ].filter(Boolean) as string[];
+  // By day, Monday to Sunday.
+  const days = new Map<string, typeof v.gigs>();
+  for (const g of v.gigs) {
+    const d = formatDate(g.setStart, tz);
+    days.set(d, [...(days.get(d) ?? []), g]);
+  }
+  const canSign = isAdmin && toSign.length > 0;
+  const list = (
+    <div className="divide-y divide-ink-100">
+      {[...days.entries()].map(([day, gigs]) => (
+        <div key={day}>
+          <h3 className="bg-ink-50 px-4 py-1.5 text-xs font-semibold tracking-wide text-ink-600 uppercase">{day}</h3>
+          <ul className="divide-y divide-ink-100">
+            {gigs.map((g) => {
+              const [label, style] = STATE_BADGES[g.state];
+              return (
+                <li key={g.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-2.5 text-sm" data-testid="signoff-gig" data-gig={g.id}>
+                  {canSign && g.state === "TO_SIGN_OFF" && <input type="hidden" name="gig" value={g.id} />}
+                  <div className="min-w-0 flex-1 basis-60">
+                    <div className="font-medium">
+                      {g.artistId ? (
+                        <Link href={`/artists/${g.artistId}`} className="hover:underline">
+                          {g.actName}
+                        </Link>
+                      ) : (
+                        g.actName
+                      )}
+                      <span className="font-normal text-ink-500">
+                        {g.venue ? ` · ${g.venue}` : ""} ·{" "}
+                        <Link href={`/bookings/${g.id}`} className="hover:underline">
+                          {g.reference}
+                        </Link>
+                      </span>
+                    </div>
+                    {g.leftOut && g.state !== "SIGNED_OFF" && (
+                      <div className="text-xs font-medium text-rose-700">
+                        Left out by {g.leftOut.byName}: {g.leftOut.reason}
+                      </div>
+                    )}
+                    {g.flags.map((f) => (
+                      <div key={f} className="text-xs font-medium text-amber-700" data-testid="signoff-flag">
+                        {f}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="w-20 text-right tabular-nums">{formatMoney(g.feeMinor, g.currency)}</span>
+                  <span className="flex min-w-32 justify-end">
+                    {canSign && g.state === "TO_SIGN_OFF" ? (
+                      <PlayedTick id={g.id} label={`${g.actName}, ${g.reference}`} />
+                    ) : g.invoice && g.state === "SIGNED_OFF" ? (
+                      <span className="badge bg-emerald-50 text-emerald-800">{g.invoice.number}</span>
+                    ) : (
+                      <span className={`badge ${style}`}>{label}</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <section aria-label="Sign off">
+      <StepTitle n={1} aside={`${plural(v.gigs.filter((g) => g.state !== "CANCELLED").length, "gig")}, ${plural(acts, "act")}`}>
+        Sign off the week
+      </StepTitle>
+      <div className="card mb-4 space-y-3 p-4 text-sm">
+        {run ? (
+          <p data-testid="run-signed-off">
+            <span className="font-semibold text-emerald-700">
+              Signed off {sentWhen(run.signedOffAt!, tz)} by {run.signedOffByName || "an admin"}
+            </span>
+            <span className="text-ink-500">
+              {" "}
+              · {count("SIGNED_OFF")} played{count("LEFT_OUT") ? `, ${count("LEFT_OUT")} left out` : ""}
+            </span>
+            {v.signOffs.slice(1).map((s) => (
+              <span key={s.at} className="block text-ink-500">
+                Then {sentWhen(new Date(s.at), tz)} by {s.byName}: {plural(s.bookingIds.length, "more gig")}
+                {s.leftOut.length ? `, ${s.leftOut.length} left out` : ""}
+              </span>
+            ))}
+          </p>
+        ) : (
+          <p className="text-ink-600">
+            Check everyone played their gigs. Untick any that didn&apos;t happen (a no-show, say) and say why: no invoice is made for it. Signing off makes the
+            invoices for the rest.
+          </p>
+        )}
+        {chips.length > 0 && (
+          <ul className="flex flex-wrap gap-2" data-testid="signoff-warnings">
+            {chips.map((c) => (
+              <li key={c} className="rounded-lg bg-amber-50 px-3 py-1.5 font-medium text-amber-900">
+                {c}
+              </li>
+            ))}
+          </ul>
+        )}
+        {!isAdmin && toSign.length > 0 && <p className="text-ink-500">An admin signs off the week.</p>}
+      </div>
+      {canSign ? (
+        <ActionForm action={signOffGigs.bind(null, week)} className="card overflow-hidden">
+          {list}
+          <div className="flex flex-wrap items-center gap-3 border-t border-ink-100 bg-white p-4">
+            <SubmitButton className="btn btn-primary h-12 px-6 text-base" pendingText="Signing off…">
+              {run ? `Sign these off (${toSign.length})` : "Sign off the week"}
+            </SubmitButton>
+            <span className="text-xs text-ink-500">
+              Makes the invoices for the gigs ticked Played ({plural(toSign.length, "gig")} listed, {m(toSign.reduce((t, g) => t + g.feeMinor, 0))} in fees
+              before VAT). Unticked ones are left out with your reason.
+            </span>
+          </div>
+        </ActionForm>
+      ) : (
+        <details open={!run} className="card group overflow-hidden" data-testid="signoff-list">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">The week&apos;s gigs ({v.gigs.length})</summary>
+          <div className="border-t border-ink-100">{list}</div>
+        </details>
+      )}
+    </section>
+  );
+}
+
 function CheckSection({
   v,
   isAdmin,
@@ -132,6 +300,7 @@ function CheckSection({
   week,
   business,
   to,
+  step,
 }: {
   v: PayRunView;
   isAdmin: boolean;
@@ -140,6 +309,7 @@ function CheckSection({
   week: string;
   business: string;
   to: string;
+  step: number;
 }) {
   const sent = v.run?.sentAt ? v.run : null;
   const later = v.sends.slice(1);
@@ -168,7 +338,7 @@ function CheckSection({
 
   return (
     <section aria-label="Check">
-      <StepTitle n={1} aside={`${plural(v.invoices.length, "invoice")}, ${m(v.progress.totalMinor)}`}>
+      <StepTitle n={step} aside={`${plural(v.invoices.length, "invoice")}, ${m(v.progress.totalMinor)}`}>
         Check
       </StepTitle>
 
@@ -361,14 +531,28 @@ function CheckPayee({ pe, notes, tz }: { pe: RunPayee<PayRunInvoice>; notes: Map
 // (b) Pay
 // ---------------------------------------------------------------------------------------------------------
 
-function PaySection({ v, isAdmin, m, week, bank }: { v: PayRunView; isAdmin: boolean; m: (x: number) => string; week: string; bank: BankFileSetting }) {
+function PaySection({
+  v,
+  isAdmin,
+  m,
+  week,
+  bank,
+  step,
+}: {
+  v: PayRunView;
+  isAdmin: boolean;
+  m: (x: number) => string;
+  week: string;
+  bank: BankFileSetting;
+  step: number;
+}) {
   const p = v.progress;
   const pct = p.totalMinor ? Math.round((p.paidMinor / p.totalMinor) * 100) : 0;
   const unpaidIds = v.payees.flatMap((pe) => pe.invoices.filter((i) => i.owedMinor > 0).map((i) => i.id));
   const preset = PRESETS[bank.preset];
   return (
     <section aria-label="Pay">
-      <StepTitle n={2} aside="Pay each one from your bank, then mark them paid">
+      <StepTitle n={step} aside="Pay each one from your bank, then mark them paid">
         Pay
       </StepTitle>
 
