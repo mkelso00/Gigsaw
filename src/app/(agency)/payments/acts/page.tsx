@@ -82,11 +82,16 @@ export default async function PayActsPage({ searchParams }: { searchParams: Prom
         title="Pay acts"
         subtitle="Gigsaw makes out an invoice for each act's fee once their gig is over. Pay it from your bank, then mark it paid here."
         actions={
-          isAdmin && show === "open" && invoices.length > 0 ? (
-            <a href={`/api/export/act-invoices${actId ? `?act=${actId}` : ""}`} className="btn">
-              Bank payments CSV
-            </a>
-          ) : null
+          <>
+            <Link href="/payments/run" className="btn">
+              Weekly pay run
+            </Link>
+            {isAdmin && show === "open" && invoices.length > 0 && (
+              <a href={`/api/export/act-invoices${actId ? `?act=${actId}` : ""}`} className="btn">
+                Bank payments CSV
+              </a>
+            )}
+          </>
         }
       />
 

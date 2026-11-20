@@ -8,6 +8,7 @@ import { runCalendarSync } from "./calendar-sync/job";
 import { runEventMessages } from "./events";
 import { runBillingReminders, runXeroPaymentChecks } from "./monthly-billing-server";
 import { runPayDetailsChase } from "./pay-details-chase";
+import { runPayRunReminders } from "./pay-run-server";
 import { runProposalChasers } from "./proposal-chasers";
 import { runReminders } from "./reminders";
 
@@ -17,7 +18,7 @@ let running = false;
 
 /**
  * Check for overdue arrivals, due gig reminders, wedding/event emails, proposal reminders, acts' invoices (with the weekly pay details
- * reminder and, where it's on, sending them to Xero) and the monthly billing reminders every minute, and catch up
+ * reminder and, where it's on, sending them to Xero), the monthly billing reminders and the Monday pay run email every minute, and catch up
  * connected calendars. Overlapping
  * runs are skipped. Each job's last success is recorded for the health check (schedulerHealth).
  */
@@ -77,6 +78,12 @@ export function startScheduler() {
       if (r.paid) log.info("Bills marked paid from Xero", { job: "monthly-billing", paid: r.paid });
     } catch (e) {
       log.error("Monthly billing reminders failed", { job: "monthly-billing", err: e });
+    }
+    try {
+      const r = await withHeartbeat("pay-run", runPayRunReminders);
+      if (r.sent) log.info("Weekly pay run reminders sent", { job: "pay-run", sent: r.sent });
+    } catch (e) {
+      log.error("Weekly pay run reminders failed", { job: "pay-run", err: e });
     }
     // Last, and time-boxed inside, so slow calendar providers never delay the jobs above.
     try {

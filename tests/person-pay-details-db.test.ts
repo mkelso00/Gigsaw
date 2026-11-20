@@ -98,6 +98,7 @@ describeDb("pay details on people (database)", () => {
     for (const k of ["RESEND_API_KEY", "MAIL_FROM", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM"]) delete process.env[k];
     const t = await createTestAgency(prisma, "bandpay", {
       agencyName: "Band Pay Music",
+      actInvoiceMode: "AUTO",
       agencyEmail: "office@bandpay.gigsaw.invalid",
       weeklyReminders: false,
       dayReminders: true,

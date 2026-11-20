@@ -29,6 +29,7 @@ export type MessageKind =
   | "BANK_CHANGE"
   | "PAY_DETAILS"
   | "BILLING"
+  | "PAY_RUN"
   | "TEST";
 
 type Base = {
@@ -136,9 +137,27 @@ export function brandLogoUrl(agencyId: string, updatedAt: Date) {
   return `${appUrl()}/brand/${agencyId}/logo?v=${updatedAt.getTime().toString(36)}`;
 }
 
+/** A file sent with an email, e.g. a CSV or a PDF. */
+export type EmailAttachment = { filename: string; content: Buffer | Uint8Array | string; contentType?: string };
+
+/**
+ * The most an email's attachments may add up to. Resend takes 40 MB per email once encoded (base64 adds a third),
+ * so this keeps well inside it.
+ */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+const bytesOf = (a: EmailAttachment) => (typeof a.content === "string" ? Buffer.byteLength(a.content) : a.content.byteLength);
+
+/** "act-invoices.pdf (120 KB)": how an attachment is listed in the Outbox, which keeps the names, never the files. */
+function attachmentLine(a: EmailAttachment) {
+  const kb = Math.max(1, Math.round(bytesOf(a) / 1024));
+  return `${a.filename} (${kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`})`;
+}
+
 /**
  * Send a branded email. `replyTo` should be a real person or inbox (e.g. the agency's email),
- * so replies don't go to the no-reply sending address.
+ * so replies don't go to the no-reply sending address. `attachments` go with it as files (up to
+ * MAX_ATTACHMENT_BYTES in all; more than that and the email isn't sent, and says why in the Outbox).
  */
 export async function sendEmail(
   m: Base & {
@@ -146,10 +165,13 @@ export async function sendEmail(
     subject: string;
     email: EmailContent;
     replyTo?: string | null;
+    attachments?: EmailAttachment[];
   },
 ) {
   const to = m.to.trim();
   if (!isEmail(to)) return "SKIPPED";
+  const attachments = m.attachments ?? [];
+  const attachedBytes = attachments.reduce((t, a) => t + bytesOf(a), 0);
   const biz = await sender(m.agencyId, m.kind);
   // The business's own look, unless the caller set one (e.g. the settings preview).
   const { html, text } = renderEmail(biz && !m.email.look ? { ...m.email, look: biz.look } : m.email);
@@ -158,9 +180,11 @@ export async function sendEmail(
   // Customers, acts and staff see the business's own name as the sender. Gigsaw's own account
   // emails (password resets, welcomes) keep the name in MAIL_FROM.
   const from = provider ? fromWithName(provider.from, env().mailFromAddress, biz?.name) : "";
+  const tooBig = attachedBytes > MAX_ATTACHMENT_BYTES;
   const send = provider
-    ? () =>
-        post("https://api.resend.com/emails", {
+    ? async () => {
+        if (tooBig) throw new Error(`The attachments are too large to email (${attachments.map(attachmentLine).join(", ")}).`);
+        await post("https://api.resend.com/emails", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${provider.apiKey}`,
@@ -173,10 +197,23 @@ export async function sendEmail(
             text,
             html,
             ...(replyTo && isEmail(replyTo) ? { reply_to: replyTo } : {}),
+            // Resend takes each file as base64.
+            ...(attachments.length
+              ? {
+                  attachments: attachments.map((a) => ({
+                    filename: a.filename,
+                    content: Buffer.from(a.content).toString("base64"),
+                    ...(a.contentType ? { content_type: a.contentType } : {}),
+                  })),
+                }
+              : {}),
           }),
-        })
+        });
+      }
     : null;
-  return record({ ...m, channel: "EMAIL", to, body: text }, send, "resend");
+  // The Outbox lists what was attached (names and sizes), so it's clear later what went.
+  const body = attachments.length ? `${text}\n\nAttached: ${attachments.map(attachmentLine).join(", ")}` : text;
+  return record({ ...m, channel: "EMAIL", to, body }, send, "resend");
 }
 
 export async function sendSms(m: Base & { to: string; text: string }) {

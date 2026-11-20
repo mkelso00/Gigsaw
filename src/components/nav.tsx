@@ -53,6 +53,7 @@ const SECTIONS: { title?: string; links: NavItem[] }[] = [
       { href: "/payments", label: "Payments", icon: "payments" },
       { href: "/billing", label: "Monthly billing", icon: "receipt" },
       { href: "/payments/acts", label: "Pay acts", icon: "doc" },
+      { href: "/payments/run", label: "Weekly pay run", icon: "checklist" },
       { href: "/reports", label: "Reports", icon: "reports" },
       { href: "/reports/venues", label: "Venue statements", icon: "billing" },
     ],

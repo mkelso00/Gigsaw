@@ -16,6 +16,7 @@ const SCHEDULER_JOBS = [
   "pay-details-chase",
   "act-bills-xero",
   "monthly-billing",
+  "pay-run",
   "calendar-sync",
 ] as const;
 export type SchedulerJob = (typeof SCHEDULER_JOBS)[number];

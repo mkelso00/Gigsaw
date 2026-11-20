@@ -43,6 +43,8 @@ async function main() {
       agencyName: northern.name,
       agencyEmail: "bookings@northernlights.example",
       agencyAddress: "12 Example Street\nManchester M1 1AA",
+      // Each act's invoice is made as soon as its gig is over. Harbour Music (below) signs off its weeks instead.
+      actInvoiceMode: "AUTO",
     },
   });
   const admin = await prisma.user.create({
@@ -63,7 +65,8 @@ async function main() {
 
   // Agency two: a separate customer, to show agencies can't see each other.
   const harbour = await prisma.agency.create({ data: { name: "Harbour Music", pricePerGigMinor: 250, billingCurrency: "GBP" } });
-  await prisma.settings.create({ data: { agencyId: harbour.id, agencyName: harbour.name, agencyEmail: "hello@harbour.example" } });
+  // Signs off each week in the pay run, which makes the acts' invoices (the default for a new business).
+  await prisma.settings.create({ data: { agencyId: harbour.id, agencyName: harbour.name, agencyEmail: "hello@harbour.example", actInvoiceMode: "SIGN_OFF" } });
   const harbourAdmin = await prisma.user.create({
     data: { email: "harbour@gigsaw.test", name: "Jo Rivers", role: "ADMIN", agencyId: harbour.id, passwordHash: hash },
   });

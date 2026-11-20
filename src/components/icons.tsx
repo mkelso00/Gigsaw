@@ -32,6 +32,7 @@ const paths: Record<string, string> = {
   mail: "M3 6h18v12H3zM3 7l9 6 9-6",
   inbox: "M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5",
   doc: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6",
+  checklist: "M10 6h10M10 12h10M10 18h10M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5",
   lock: "M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3",
   join: "M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM7 21a8 8 0 0 1 12-6.9M19 16v6M16 19h6",
   payments: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM14.5 8.5a2.5 2.5 0 0 0-4.5 1.5v5M8.5 12.5h5M8.5 15.5h7",

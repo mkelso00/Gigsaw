@@ -134,6 +134,7 @@ describe("scheduler heartbeat", () => {
     await recordRun("pay-details-chase", { ok: true }, t0);
     await recordRun("act-bills-xero", { ok: true }, t0);
     await recordRun("monthly-billing", { ok: true }, t0);
+    await recordRun("pay-run", { ok: true }, t0);
     await recordRun("calendar-sync", { ok: true }, t0);
     expect((await schedulerHealth({ now: new Date("2026-11-04T10:02:00Z") })).ok).toBe(true);
 
@@ -151,7 +152,7 @@ describe("scheduler heartbeat", () => {
     rows.clear();
     const h = await schedulerHealth();
     expect(h.ok).toBe(false);
-    expect(h.jobs.map((j) => j.ageMs)).toEqual([null, null, null, null, null, null, null, null, null]);
+    expect(h.jobs.map((j) => j.ageMs)).toEqual([null, null, null, null, null, null, null, null, null, null]);
   });
 
   it("records around a job and passes its result or error on", async () => {

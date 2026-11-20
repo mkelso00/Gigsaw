@@ -15,6 +15,7 @@ const KIND: Record<string, string> = {
   BANK_CHANGE: "Act: bank details changed",
   PAY_DETAILS: "Act: pay details reminder",
   BILLING: "Monthly billing",
+  PAY_RUN: "Weekly pay run",
   TEST: "Test",
 };
 const STATUS: Record<string, [string, string]> = {

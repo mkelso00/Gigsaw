@@ -80,7 +80,9 @@ export async function artistCheckIn(bookingId: string, payload: CheckInPayload):
   }
   // Leaving the venue means the gig is over: the act's invoice is made now rather than at the set's end
   // time (if their details are done). The scheduler catches it later if this fails.
-  if (payload.kind === "DEPARTED") await issueActInvoice(bookingId).catch((e) => log.error("Act invoice on check-out failed", { bookingId, err: e }));
+  // Made now only where invoices come after each gig; otherwise when the week is signed off (src/lib/act-invoices.ts).
+  if (payload.kind === "DEPARTED")
+    await issueActInvoice(bookingId, { auto: true }).catch((e) => log.error("Act invoice on check-out failed", { bookingId, err: e }));
   revalidatePath("/", "layout");
 
   const messages: Record<CheckInKind, string> = {

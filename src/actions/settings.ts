@@ -6,11 +6,12 @@ import { revalidatePath } from "next/cache";
 import { endOtherSessions, hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
+import { INVOICE_MODES } from "@/lib/act-invoices";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
-import { emailConfigured, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
+import { emailConfigured, isEmail, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
 import { isHhmm } from "@/lib/reminder-time";
 import { sendWelcome } from "@/lib/welcome";
 import { toMinor } from "@/lib/money";
@@ -49,6 +50,12 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
     }
     if (has("agencyEmail")) data.agencyEmail = str(form, "agencyEmail");
     if (has("agencyAddress")) data.agencyAddress = str(form, "agencyAddress");
+    if (has("actInvoiceMode")) data.actInvoiceMode = oneOf(str(form, "actInvoiceMode"), INVOICE_MODES, "SIGN_OFF");
+    if (has("accountsEmail")) {
+      const accountsEmail = str(form, "accountsEmail").toLowerCase();
+      if (accountsEmail && !isEmail(accountsEmail)) throw new FormError("Check the accounts email address");
+      data.accountsEmail = accountsEmail;
+    }
     if (has("actContactName")) data.actContactName = str(form, "actContactName").slice(0, 80);
     if (has("actContactPhone")) {
       const phone = str(form, "actContactPhone").slice(0, 40);
