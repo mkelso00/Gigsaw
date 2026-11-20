@@ -10,6 +10,8 @@ import { FormError, confirmed, handleForm, str, type FormState } from "@/lib/for
 import { formatMoney } from "@/lib/money";
 import { readWeek, weekShort, weekWindow } from "@/lib/pay-run";
 import { PayRunError, sendPayRunRecords, signOffWeek } from "@/lib/pay-run-server";
+import { pushActInvoicesToXero, recordActInvoicePaymentsInXero, type ActBillRun } from "@/lib/act-invoices-xero";
+import { log } from "@/server/log";
 
 // The weekly pay run's buttons (src/app/(agency)/payments/run). Sending for the records is for admins; marking
 // payees paid is for staff, as on Pay acts, and goes through the same payActInvoices so the bookings and Payments
@@ -21,6 +23,30 @@ function weekOf(weekStart: string) {
   const week = readWeek(weekStart);
   if (!week) throw new FormError("Choose a week");
   return week;
+}
+
+/**
+ * With "Send act invoices to Xero automatically" on (Settings, Xero): the week's invoices go to Xero as bills when
+ * they're sent for the records, and payments are recorded there when payees are marked paid. A Xero problem never
+ * stops the pay run; it's added to the message, and each invoice's own problem shows in Settings, Xero.
+ */
+async function xeroFollowUp(agencyId: string, what: "bills" | "payments", ids: string[]) {
+  if (!ids.length) return "";
+  const conn = await prisma.xeroConnection.findUnique({ where: { agencyId }, select: { actBillsAuto: true, needsReconnect: true, tenantId: true } });
+  if (!conn?.actBillsAuto || !conn.tenantId) return "";
+  if (conn.needsReconnect) return " Xero needs connecting again (Settings, Xero), so nothing went there.";
+  let r: ActBillRun;
+  try {
+    r = what === "bills" ? await pushActInvoicesToXero(agencyId, ids) : await recordActInvoicePaymentsInXero(agencyId, ids);
+  } catch (e) {
+    log.error("Pay run: Xero follow-up failed", { agencyId, what, err: e });
+    return " Xero couldn't be reached just now: it will catch up within the hour.";
+  }
+  if (!r.ok) return ` Xero: ${r.error ?? "not updated"}.`;
+  const done = r.results.filter((x) => x.ok).length;
+  const failed = r.results.length - done;
+  const word = what === "bills" ? "bill" : "payment";
+  return [done ? ` ${plural(done, word)} in Xero.` : "", failed ? ` ${failed} couldn't go to Xero: see Settings, Xero.` : ""].join("");
 }
 
 /** Only the ids that are this business's act invoices for gigs in this week. */
@@ -43,8 +69,18 @@ export async function sendPayRun(weekStart: string, mode: "ALL" | "CHANGES", _: 
       const r = await sendPayRunRecords(user.agencyId, week, { id: user.id, name: user.name, email: user.email }, mode === "CHANGES" ? "CHANGES" : "ALL");
       const what = [r.count ? plural(r.count, "invoice") : "", r.voided ? `${r.voided} voided` : ""].filter(Boolean).join(" and ");
       await logActivity(user, "PAY_RUN", week, mode === "CHANGES" ? "changes sent for the records" : "sent for the records", `${what} to ${r.to}`);
+      const { defaultTimezone } = await getSettings(user.agencyId);
+      const live = await prisma.actInvoice.findMany({
+        where: { agencyId: user.agencyId, gigDate: weekWindow(week, defaultTimezone), status: { in: ["ISSUED", "PAID"] } },
+        select: { id: true },
+      });
+      const xero = await xeroFollowUp(
+        user.agencyId,
+        "bills",
+        live.map((i) => i.id),
+      );
       revalidatePath("/payments/run");
-      return { ok: `${mode === "CHANGES" ? "Changes sent" : "Sent"} to ${r.to}: ${what} for ${weekShort(week)}.` };
+      return { ok: `${mode === "CHANGES" ? "Changes sent" : "Sent"} to ${r.to}: ${what} for ${weekShort(week)}.${xero}` };
     } catch (e) {
       if (e instanceof PayRunError) throw new FormError(e.message);
       throw e;
@@ -112,7 +148,8 @@ export async function payPayees(weekStart: string, _: FormState, form: FormData)
     revalidatePath("/", "layout");
     if (!r.count) return { ok: "Already paid." };
     const whom = one ? who(one) : plural(keys.length, "payee");
-    return { ok: `Paid: ${whom}, ${formatMoney(r.totalMinor, r.currency)} (${plural(r.count, "invoice")}).` };
+    const xero = await xeroFollowUp(user.agencyId, "payments", r.paidIds);
+    return { ok: `Paid: ${whom}, ${formatMoney(r.totalMinor, r.currency)} (${plural(r.count, "invoice")}).${xero}` };
   });
 }
 
@@ -182,6 +219,7 @@ export async function payWholeWeek(weekStart: string, _: FormState, form: FormDa
     queueCalendarSync(r.settled);
     await logActivities(user, "BOOKING", r.activity);
     revalidatePath("/", "layout");
-    return { ok: `All paid: ${plural(r.count, "invoice")}, ${formatMoney(r.totalMinor, r.currency)}.` };
+    const xero = await xeroFollowUp(user.agencyId, "payments", r.paidIds);
+    return { ok: `All paid: ${plural(r.count, "invoice")}, ${formatMoney(r.totalMinor, r.currency)}.${xero}` };
   });
 }
