@@ -26,6 +26,7 @@ import {
   type Payer,
 } from "./monthly-billing";
 import { claimedReminders, claimReminder } from "./reminders";
+import { teamRecipients } from "./team-alerts";
 import { getInvoiceStatuses, XeroError, xeroConnectionFor } from "./xero";
 import { formatDate, localDateKey, localTime, zonedParts } from "./time";
 
@@ -268,13 +269,6 @@ export const START_KIND = "BILL_START";
 export const CHASE_KIND = "BILL_CHASE";
 const recipientOf = (agencyId: string) => `agency:${agencyId}`;
 
-/** The business email, or each admin's when there isn't one. */
-async function officeEmails(agencyId: string, agencyEmail: string) {
-  if (agencyEmail.trim()) return [agencyEmail.trim()];
-  const admins = await prisma.user.findMany({ where: { agencyId, role: "ADMIN", demo: false }, select: { email: true } });
-  return admins.map((a) => a.email);
-}
-
 /**
  * The monthly billing reminders, run by the scheduler: on the 1st, "Monthly billing for <last month>: N to bill",
  * and on the 5th, the bills still missing a PO or not invoiced. Weekdays, 9am to 5pm in the business's time zone
@@ -349,7 +343,8 @@ async function sendBillingReminder(d: Due) {
     (start
       ? `${month} is over, so it's time to ask for POs and raise the invoices. ${summaryLine(summary)}.`
       : `These bills for ${month} are still missing a PO or haven't been invoiced yet.`);
-  for (const to of await officeEmails(d.agencyId, d.s.agencyEmail)) {
+  // Settings, Notifications says who: by default the business email, or each admin's when there isn't one.
+  for (const to of (await teamRecipients(d.agencyId, "BILLING")).emails) {
     await sendEmail({
       kind: "BILLING",
       agencyId: d.agencyId,

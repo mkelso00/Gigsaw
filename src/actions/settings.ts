@@ -17,6 +17,7 @@ import { sendWelcome } from "@/lib/welcome";
 import { toMinor } from "@/lib/money";
 import { TEMPLATES } from "@/lib/message-templates";
 import { prefsFromForm } from "@/lib/notify-prefs";
+import { routingFromForm } from "@/lib/team-alert-routing";
 import { syncExtraUsers } from "@/lib/subscription-sync";
 
 /** Keep a subscription's extra-user charge in step; a Stripe hiccup mustn't stop adding a user. */
@@ -55,6 +56,20 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       const accountsEmail = str(form, "accountsEmail").toLowerCase();
       if (accountsEmail && !isEmail(accountsEmail)) throw new FormError("Check the accounts email address");
       data.accountsEmail = accountsEmail;
+    }
+    // Where team alerts go (Settings, Notifications): the two shared inboxes and the table of choices.
+    for (const [key, what] of [
+      ["eventsEmail", "weddings and events email"],
+      ["gigsEmail", "venue gigs email"],
+    ] as const) {
+      if (!has(key)) continue;
+      const address = str(form, key).toLowerCase();
+      if (address && !isEmail(address)) throw new FormError(`Check the ${what} address`);
+      data[key] = address;
+    }
+    if (has("alertRouting__shown")) {
+      const current = await prisma.settings.findUnique({ where: { agencyId: user.agencyId }, select: { alertRouting: true } });
+      data.alertRouting = routingFromForm((k) => (form.has(k) ? str(form, k) : null), current?.alertRouting);
     }
     if (has("actContactName")) data.actContactName = str(form, "actContactName").slice(0, 80);
     if (has("actContactPhone")) {

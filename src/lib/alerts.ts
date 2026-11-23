@@ -3,7 +3,7 @@ import { arrivalFor } from "./bookings";
 import { ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendSms } from "./messaging";
-import { wants } from "./notify-prefs";
+import { bookingContext, teamRecipients } from "./team-alerts";
 import { messageFor } from "./message-templates";
 import { formatDate, formatMinutes, localTime } from "./time";
 
@@ -33,7 +33,6 @@ export async function runOverdueCheck(now = new Date()) {
       checkIns: true,
       venue: true,
       artist: true,
-      agent: true,
       agency: { include: { settings: true } },
     },
   });
@@ -71,12 +70,12 @@ export async function runOverdueCheck(now = new Date()) {
     const base = { kind: "OVERDUE_ALERT" as const, agencyId: b.agencyId, bookingId: b.id };
     const subject = `Late: ${b.artist.name} not at ${b.venue?.name ?? "the venue"} yet`;
 
-    // Don't message the same address twice if the agent is also the on-call contact.
-    // The agent can turn these off for themselves; the on-call contact always gets them.
-    const agentEmail = b.agent && wants(b.agent.notifyPrefs, "LATE", "email") ? b.agent.email : null;
-    const agentPhone = b.agent && wants(b.agent.notifyPrefs, "LATE", "text") ? b.agent.phone : null;
-    const emails = new Set([agentEmail, settings.alertEmail].filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()));
-    const phones = new Set([agentPhone, settings.alertPhone].filter((p): p is string => !!p?.trim()));
+    // Settings, Notifications says who on the team hears (the lead agent, who can turn these off for themselves,
+    // the events or gigs inbox, both or nobody). The on-call contact from Settings, Arrivals always gets them too.
+    // Don't message the same address twice if someone is also the on-call contact.
+    const team = await teamRecipients(b.agencyId, "LATE", { context: bookingContext(b), agent: b.agentId });
+    const emails = new Set([...team.emails, settings.alertEmail].filter((e): e is string => !!e?.trim()).map((e) => e.trim().toLowerCase()));
+    const phones = new Set([...team.text.map((t) => t.phone), settings.alertPhone].filter((p): p is string => !!p?.trim()));
     for (const to of emails) await sendEmail({ ...base, to, subject, email });
     for (const to of phones) await sendSms({ ...base, to, text: short });
     sent++;

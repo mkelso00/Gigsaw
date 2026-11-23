@@ -17,7 +17,7 @@ import { defaultTasks, EVENT_STEPS, isEventMessage, parseExtraFields, planChange
 import { eventInclude, markEventMessageSent, noActsWhy, sendActDetails, sendEventStep, sendPlannerEmail, unmarkEventMessageSent } from "@/lib/events";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
 import { sendEmail } from "@/lib/messaging";
-import { wants } from "@/lib/notify-prefs";
+import { teamRecipients } from "@/lib/team-alerts";
 import { dealBreakdown, defaultBookingFee, paymentTotals, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { isDateKey } from "@/lib/rota";
@@ -395,10 +395,9 @@ export async function submitPlanner(token: string, _: FormState, form: FormData)
     await prisma.activity.create({
       data: { agencyId: e.agencyId, entity: "EVENT", entityId: e.id, action: first ? "customer filled in the planner" : "customer updated the planner" },
     });
-    // Let the agency know.
-    const agent = e.agentId ? await prisma.user.findUnique({ where: { id: e.agentId }, select: { email: true, notifyPrefs: true } }) : null;
-    const to = agent ? (wants(agent.notifyPrefs, "PLANNER", "email") ? agent.email : null) : e.agency.settings?.agencyEmail;
-    if (to) {
+    // Let the agency know, as Settings, Notifications says (by default the lead agent, or the business email).
+    const team = await teamRecipients(e.agencyId, "PLANNER", { context: "EVENTS", agent: e.agentId });
+    for (const to of team.emails) {
       await sendEmail({
         kind: "EVENT",
         agencyId: e.agencyId,

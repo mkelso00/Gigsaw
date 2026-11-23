@@ -23,7 +23,7 @@ import { defaultTasks } from "./event-plan";
 import { messageFor } from "./message-templates";
 import { appUrl, sendEmail, sendPush } from "./messaging";
 import { defaultBookingFee, defaultVat } from "./money";
-import { wants } from "./notify-prefs";
+import { teamRecipients } from "./team-alerts";
 import { buildSchedule } from "./schedule";
 
 // The enquiry form's server side: the secret that signs the form's time stamp, rate limiting by
@@ -160,26 +160,8 @@ export async function recordEnquiry(o: {
   return enquiry;
 }
 
-type Settings = { agencyId: string; agencyName: string; agencyEmail: string; alertEmail: string; messageTemplates: unknown; enquiryForm: unknown };
-
 function details(e: Enquiry): EnquiryDetails {
   return { ...e, acts: Array.isArray(e.acts) ? (e.acts as { id: string; name: string }[]) : [] };
-}
-
-/** Who hears about new enquiries: people (with their own alert choices) and plain addresses. */
-async function recipients(s: Settings) {
-  const notify = readEnquiryConfig(s.enquiryForm).notify;
-  const businessEmail = s.agencyEmail || s.alertEmail;
-  const staff = { agencyId: s.agencyId, role: { in: ["ADMIN", "AGENT"] } };
-  const users =
-    notify === "BUSINESS"
-      ? []
-      : await prisma.user.findMany({
-          where: notify === "ADMINS" ? { ...staff, role: "ADMIN" } : notify === "TEAM" ? staff : { ...staff, id: notify.slice(5) },
-          select: { id: true, email: true, notifyPrefs: true },
-        });
-  // Nobody to tell (e.g. the chosen person has left): the business email hears instead.
-  return { users, emails: users.length ? [] : businessEmail ? [businessEmail] : [] };
 }
 
 /** Tell the team about a new enquiry, by email and phone notification, as each person has chosen. */
@@ -211,17 +193,16 @@ export async function notifyTeam(enquiryId: string) {
         cta: { label: "Open enquiries", url },
       },
     });
-  const { users, emails } = await recipients({ ...s, agencyName: business });
-  for (const u of users) {
-    if (wants(u.notifyPrefs, "ENQUIRY", "email")) await email(u.email);
-    if (wants(u.notifyPrefs, "ENQUIRY", "push"))
-      await sendPush({
-        ...base,
-        userId: u.id,
-        payload: { title: `New enquiry: ${e.name}`, body: what || e.message.slice(0, 120), url: `/enquiries#${e.id}`, tag: `enquiry-${e.id}` },
-      });
-  }
-  for (const to of emails) await email(to);
+  // Settings, Notifications says who hears: the people chosen in Settings, Enquiry form (each as they've chosen in
+  // their profile; the business email when that's nobody), the business email, both or nobody.
+  const team = await teamRecipients(e.agencyId, "ENQUIRY");
+  for (const to of team.emails) await email(to);
+  for (const userId of team.push)
+    await sendPush({
+      ...base,
+      userId,
+      payload: { title: `New enquiry: ${e.name}`, body: what || e.message.slice(0, 120), url: `/enquiries#${e.id}`, tag: `enquiry-${e.id}` },
+    });
 }
 
 /** The automatic reply to the customer, listing what they sent. */

@@ -3,11 +3,11 @@ import { randomBytes } from "node:crypto";
 import { queueCalendarSync } from "./calendar-sync/queue";
 import { prisma } from "./db";
 import { messageFor } from "./message-templates";
-import { wants } from "./notify-prefs";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { onConfirmed } from "./confirmations";
 import { answerClaimWhere } from "./offer-links";
+import { bookingContext, teamRecipients } from "./team-alerts";
 import { groupByRecipient, recipientsForGigs } from "./people";
 import { formatDate, localTime } from "./time";
 
@@ -148,11 +148,12 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
   const agencyName = b.agency.settings?.agencyName || b.agency.name;
   const accepted = answer === "ACCEPTED";
   const subject = `${b.artist.name} ${accepted ? "accepted" : "declined"}: ${b.venue?.name ?? "booking"}, ${formatDate(b.arriveBy, b.timezone)}`;
-  // The lead agent hears about it (unless they've turned this off); with no agent, the business email does.
+  // Settings, Notifications says who hears: the lead agent (unless they've turned it off; with no agent, the
+  // business email), the events or gigs inbox, both or nobody.
   const kind = accepted ? "ACCEPTED" : "DECLINED";
-  const to = b.agent ? (wants(b.agent.notifyPrefs, kind, "email") ? b.agent.email : null) : b.agency.settings?.agencyEmail;
+  const team = await teamRecipients(b.agencyId, kind, { context: bookingContext(b), agent: b.agentId });
   const base = { kind: "BOOKING_CHANGE" as const, agencyId: b.agencyId, bookingId: b.id };
-  if (to) {
+  for (const to of team.emails) {
     await sendEmail({
       ...base,
       to,
@@ -170,8 +171,8 @@ export async function answerOffer(bookingId: string, answer: "ACCEPTED" | "DECLI
     });
   }
   // A decline needs sorting quickly: text the agent too.
-  if (!accepted && b.agent?.phone && wants(b.agent.notifyPrefs, "DECLINED", "text")) {
-    await sendSms({ ...base, to: b.agent.phone, text: `Gigsaw: ${subject}. ${appUrl()}/bookings/${b.id}` });
+  if (!accepted) {
+    for (const t of team.text) await sendSms({ ...base, to: t.phone, text: `Gigsaw: ${subject}. ${appUrl()}/bookings/${b.id}` });
   }
   return true;
 }

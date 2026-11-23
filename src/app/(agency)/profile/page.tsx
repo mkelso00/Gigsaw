@@ -64,7 +64,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
       <SettingsSection
         id="notifications"
         title="Notifications"
-        description="What you hear about on the bookings and events you look after. Turning one off here only affects you."
+        description="What you hear about on the bookings and events you look after. Turning one off here only affects you. Admins choose which alerts come to the lead agent and which go to a shared inbox, in Settings, Notifications."
       >
         <ActionForm action={saveMyNotifications} saveBar className="space-y-4">
           <SettingsCard>

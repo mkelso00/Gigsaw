@@ -4,10 +4,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { appUrl, sendEmail } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals } from "./money";
-import { wants } from "./notify-prefs";
 import { allocate, amountDue, isPayKind, PAY_KIND_LABELS, type PayGig, type PayKind } from "./pay-links";
 import { directTotals, isDirectPlan } from "./pay-plan";
 import { secureEventQuietly } from "./secure-event";
+import { bookingContext, teamRecipients } from "./team-alerts";
 import { stripe, stripeConfigured } from "./stripe";
 import { formatDate } from "./time";
 
@@ -464,31 +464,35 @@ export async function recordCardRefund(c: StripeCharge, accountId: string): Prom
   return "recorded";
 }
 
-/** The lead agent hears about it (unless they've turned it off); with no agent, the business email does. */
+/**
+ * The team hears about it, as Settings, Notifications says: by default the lead agent (unless they've turned it off),
+ * or the business email with no agent.
+ */
 async function tellAgent(t: PayTarget, amount: number, currency: string, payerEmail: string) {
-  const agent = t.agentId ? await prisma.user.findUnique({ where: { id: t.agentId }, select: { email: true, notifyPrefs: true } }) : null;
-  const to = agent ? (wants(agent.notifyPrefs, "PAID", "email") ? agent.email : null) : t.agency.settings?.agencyEmail;
-  if (!to) return;
+  const context = t.link.booking ? bookingContext(t.link.booking) : "EVENTS";
+  const team = await teamRecipients(t.agency.id, "PAID", { context, agent: t.agentId });
   const money = formatMoney(amount, currency);
   const left = Math.max(0, t.totalMinor - t.paidMinor - amount);
   const subject = `Paid by card: ${money} for ${t.what}`;
-  await sendEmail({
-    kind: "PAYMENT",
-    agencyId: t.agency.id,
-    bookingId: t.link.bookingId,
-    to,
-    subject,
-    email: {
-      brand: t.brand,
-      title: subject,
-      highlight: { label: `${PAY_KIND_LABELS[t.kind]} paid by card`, value: money, tone: "good" },
-      rows: [
-        ["For", t.what],
-        ...(t.payer ? ([["Paid by", [t.payer.name, payerEmail].filter(Boolean).join(", ")]] as [string, string][]) : []),
-        ["Still to pay", formatMoney(left, currency)],
-      ],
-      cta: { label: t.link.bookingId ? "Open the booking" : "Open the event", url: t.staffUrl },
-      outro: "It's in your Stripe account and logged in Gigsaw as a payment.",
-    },
-  });
+  for (const to of team.emails) {
+    await sendEmail({
+      kind: "PAYMENT",
+      agencyId: t.agency.id,
+      bookingId: t.link.bookingId,
+      to,
+      subject,
+      email: {
+        brand: t.brand,
+        title: subject,
+        highlight: { label: `${PAY_KIND_LABELS[t.kind]} paid by card`, value: money, tone: "good" },
+        rows: [
+          ["For", t.what],
+          ...(t.payer ? ([["Paid by", [t.payer.name, payerEmail].filter(Boolean).join(", ")]] as [string, string][]) : []),
+          ["Still to pay", formatMoney(left, currency)],
+        ],
+        cta: { label: t.link.bookingId ? "Open the booking" : "Open the event", url: t.staffUrl },
+        outro: "It's in your Stripe account and logged in Gigsaw as a payment.",
+      },
+    });
+  }
 }
