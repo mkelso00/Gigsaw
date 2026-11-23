@@ -10,13 +10,24 @@ import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { channelLabel, ENQUIRY_EVENT_TYPES, enquiryRows, enquiryTypeLabel } from "@/lib/enquiries";
-import { effectiveStatus, OPEN_STATUSES, PROPOSAL_STATUS_LABELS, PROPOSAL_STATUSES, proposalRef, type ProposalStatus } from "@/lib/proposals";
+import { effectiveStatus, OPEN_STATUSES, PROPOSAL_STATUSES, proposalRef, type ProposalStatus } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Inbound leads" };
 export const dynamic = "force-dynamic";
 
 const VIEWS = { new: "New", done: "Dealt with", all: "All leads", quotes: "Proposals" } as const;
+
+/** The Proposals tabs: every stage a proposal can be at. */
+const PROPOSAL_TABS: Record<string, string> = {
+  "": "All",
+  DRAFT: "Drafts, not sent",
+  WAITING: "Sent, waiting for an answer",
+  ACCEPTED: "Accepted",
+  DECLINED: "Declined",
+  EXPIRED: "Expired: no reply",
+  WITHDRAWN: "Withdrawn",
+};
 type View = keyof typeof VIEWS;
 
 /** Enquiries from the form on the business's website or added by hand, new ones first, each with what it made and its proposal. */
@@ -35,16 +46,38 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
     where.OR = ["name", "email", "phone", "venue", "message", "budget"].map((k) => ({ [k]: { contains: sp.q, mode: "insensitive" } }));
   }
   // The Proposals tab: every proposal's latest version, those waiting for an answer first.
+  // "WAITING" is a tab: sent or opened, and still in date.
+  const waiting = sp.status === "WAITING";
   const proposalStatus = PROPOSAL_STATUSES.find((s) => s === sp.status);
   const live = { OR: [{ validUntil: null }, { validUntil: { gte: today } }] };
-  const proposalWhere =
-    proposalStatus === "EXPIRED"
-      ? { OR: [{ status: "EXPIRED" }, { status: { in: OPEN_STATUSES }, validUntil: { lt: today } }] }
+  const expiredWhere: Prisma.QuoteWhereInput = { OR: [{ status: "EXPIRED" }, { status: { in: OPEN_STATUSES }, validUntil: { lt: today } }] };
+  const proposalWhere: Prisma.QuoteWhereInput = waiting
+    ? { status: { in: OPEN_STATUSES }, ...live }
+    : proposalStatus === "EXPIRED"
+      ? expiredWhere
       : proposalStatus && OPEN_STATUSES.includes(proposalStatus)
         ? { status: proposalStatus, ...live }
         : proposalStatus
           ? { status: proposalStatus }
           : {};
+  // How many proposals are at each stage (latest versions only), for the tabs.
+  const latest = { agencyId: user.agencyId, supersededById: null };
+  const tabCounts =
+    view === "quotes"
+      ? await Promise.all(
+          (
+            [
+              ["", {}],
+              ["DRAFT", { status: "DRAFT" }],
+              ["WAITING", { status: { in: OPEN_STATUSES }, ...live }],
+              ["ACCEPTED", { status: "ACCEPTED" }],
+              ["DECLINED", { status: "DECLINED" }],
+              ["EXPIRED", expiredWhere],
+              ["WITHDRAWN", { status: "WITHDRAWN" }],
+            ] as [string, Prisma.QuoteWhereInput][]
+          ).map(async ([key, w]) => [key, await prisma.quote.count({ where: { ...latest, ...w } })] as const),
+        )
+      : [];
   const [enquiries, counts, proposals, openProposals] = await Promise.all([
     view === "quotes"
       ? Promise.resolve([])
@@ -151,29 +184,39 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
             </Link>{" "}
             and press <span className="font-medium">Turn into a proposal</span>. For a repeat customer, use Make a proposal on their customer page.
           </p>
-          <FilterPanel active={[sp.q, sp.status].filter(Boolean).length}>
+          {/* Where every proposal stands, at a glance. */}
+          <nav aria-label="Proposals by stage" className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            {tabCounts.map(([key, n]) => {
+              const label = PROPOSAL_TABS[key] ?? key;
+              const on = (sp.status ?? "") === key;
+              const q = new URLSearchParams({ view: "quotes", ...(key ? { status: key } : {}), ...(sp.q ? { q: sp.q } : {}) });
+              return (
+                <Link
+                  key={key || "all"}
+                  href={`/enquiries?${q}`}
+                  aria-current={on ? "page" : undefined}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap ${
+                    on ? "border-ink-950 bg-ink-950 text-white" : "border-ink-200 bg-white text-ink-700 hover:border-ink-400"
+                  }`}
+                >
+                  {label} <span className={on ? "text-white/70" : "text-ink-500"}>{n}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <FilterPanel active={[sp.q].filter(Boolean).length}>
             <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
               <input type="hidden" name="view" value="quotes" />
               <label className="min-w-48 flex-1">
                 <span className="label">Search</span>
                 <input name="q" defaultValue={sp.q} placeholder="Proposal name or customer" className="input" />
               </label>
-              <label>
-                <span className="label">Status</span>
-                <select name="status" defaultValue={proposalStatus ?? ""} className="input">
-                  <option value="">Any status</option>
-                  {PROPOSAL_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {PROPOSAL_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {sp.status && <input type="hidden" name="status" value={sp.status} />}
               <button className="btn">Filter</button>
             </form>
           </FilterPanel>
           {sortedProposals.length === 0 ? (
-            <Empty>{sp.q || proposalStatus ? "No proposals match." : "No proposals yet. Press Turn into a proposal on a lead to start one."}</Empty>
+            <Empty>{sp.q || proposalStatus || waiting ? "No proposals here." : "No proposals yet. Press Turn into a proposal on a lead to start one."}</Empty>
           ) : (
             <ProposalList proposals={sortedProposals} today={today} />
           )}
