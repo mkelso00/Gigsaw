@@ -86,8 +86,11 @@ test("check the week, send it for the records, pay one payee, then everyone", as
   await expect(page.getByTestId("run-sent")).toContainText("by Alex Morgan", { timeout: 15_000 });
   const run = await db().payRun.findFirstOrThrow({ where: { agencyId, weekStart: week } });
   expect(run.sentInvoiceIds).toHaveLength(3);
-  const msg = await db().message.findFirstOrThrow({ where: { agencyId, kind: "PAY_RUN" }, orderBy: { createdAt: "desc" } });
-  expect(msg.body).toContain(a.act.name);
+  // This run's email (other tests may send one for the same business at the same time).
+  const msg = await db().message.findFirstOrThrow({
+    where: { agencyId, kind: "PAY_RUN", body: { contains: a.act.name } },
+    orderBy: { createdAt: "desc" },
+  });
   expect(msg.body).toMatch(/Attached: act-invoices-w-c-.*\.csv .*\.pdf/);
 
   // (b) Pay: one row per payee, totalled.
