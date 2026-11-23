@@ -7,6 +7,7 @@ import { getSettings } from "@/lib/db";
 import { TEMPLATES, TEMPLATE_GROUPS, templateSettings, type TemplateGroup } from "@/lib/message-templates";
 import { emailConfigured, smsConfigured } from "@/lib/messaging";
 import { env } from "@/server/env";
+import { AlertRoutingSection } from "./_alert-routing";
 
 export const metadata: Metadata = { title: "Notifications" };
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ export default async function NotificationSettings() {
   };
   return (
     <SettingsPage title="Notifications">
+      <AlertRoutingSection settings={settings} />
+
       <SettingsSection title="Sender email" description="The address your emails come from, and where replies go.">
         <SettingsCard>
           <SettingsRow
@@ -75,7 +78,7 @@ export default async function NotificationSettings() {
           <SettingsRow
             icon="user"
             title="Your own alerts"
-            sub="Late acts, turned-down bookings and more: each person chooses in their profile"
+            sub="Late acts, turned-down gigs and more: each person can switch them off for themselves in their profile"
             href="/profile"
           />
           <SettingsRow icon="arrivals" title="Late act alerts" sub="Who's alerted when an act is late, and an on-call contact" href="/settings/arrivals" />

@@ -13,7 +13,7 @@ import { freeLapsedLeadQuietly } from "./lapsed-leads";
 import { messageFor } from "./message-templates";
 import { appUrl, isEmail, sendEmail, sendPush } from "./messaging";
 import { defaultBookingFee, defaultVat, formatMoney } from "./money";
-import { wants } from "./notify-prefs";
+import { teamRecipients, typeContext } from "./team-alerts";
 import {
   answerProblem,
   canNewVersion,
@@ -905,7 +905,10 @@ async function tellCustomerBooked(q: FullProposal) {
   });
 }
 
-/** The lead agent (or the business email, with no agent) hears the answer, by email and phone as they've chosen. */
+/**
+ * The team hears the answer, as Settings, Notifications says: by default the lead agent (or the business email, with no
+ * agent), by email and phone as they've chosen. Shared inboxes get the email.
+ */
 async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
   const brand = brandOf(q);
   const accepted = answer === "ACCEPTED";
@@ -923,13 +926,12 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
   const plan = chosen ? balancePlan(q, chosen) : null;
   const subject = w.subject ?? `Proposal ${accepted ? "accepted" : "declined"}: ${q.title} (${proposalRef(q)})`;
   const url = accepted && q.eventId ? `${appUrl()}/events/${q.eventId}` : `${appUrl()}/quotes/${q.id}`;
-  const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { id: true, email: true, notifyPrefs: true } }) : null;
-  const to = agent ? (wants(agent.notifyPrefs, "QUOTE", "email") ? agent.email : null) : q.agency.settings?.agencyEmail;
+  const team = await teamRecipients(q.agencyId, "QUOTE", { context: typeContext(q.eventType), agent: q.agentId });
   const pending = q.lines.filter((l) => !l.artistId).length;
   // A wedding with a deposit: made, but on Hold until the deposit is in. The acts hear then.
   const held = accepted && holdsUntilDeposit(q);
   const base = { kind: "QUOTE" as const, agencyId: q.agencyId, bookingId: q.lines[0]?.bookingId ?? null };
-  if (to) {
+  for (const to of team.emails) {
     await sendEmail({
       ...base,
       to,
@@ -966,10 +968,10 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
       },
     });
   }
-  if (agent && wants(agent.notifyPrefs, "QUOTE", "push")) {
+  for (const userId of team.push) {
     await sendPush({
       ...base,
-      userId: agent.id,
+      userId,
       payload: {
         title: subject,
         body: held ? "On hold until the deposit is paid." : accepted ? "The bookings are made." : q.answerNote.slice(0, 120) || "No reason given.",

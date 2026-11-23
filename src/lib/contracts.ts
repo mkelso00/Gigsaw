@@ -16,7 +16,7 @@ import { contractTemplatesFor } from "./contract-templates-server";
 import { getSettings, prisma } from "./db";
 import { messageFor } from "./message-templates";
 import { appUrl, isEmail, sendEmail } from "./messaging";
-import { wants } from "./notify-prefs";
+import { bookingContext, teamRecipients, type AlertContext } from "./team-alerts";
 import { formatDate, formatDateTime } from "./time";
 
 // Contracts signed online. Staff send a booking's (or a whole wedding's) contract to the client,
@@ -50,6 +50,7 @@ export async function contractSubject(agencyId: string, target: ContractTarget) 
       doc: bookingContractDoc(b, settings, picked?.template ?? null),
       timeZone: b.timezone,
       agentId: b.agentId,
+      alertContext: bookingContext(b),
       contact: b.promoter,
       what: b.eventName || [act, b.venue?.name].filter(Boolean).join(" at ") || b.reference,
       act,
@@ -81,6 +82,7 @@ export async function contractSubject(agencyId: string, target: ContractTarget) 
     doc: eventContractDoc({ ...e, reference: e.bookings[0]?.reference ?? e.id.slice(-6).toUpperCase() }, settings, picked?.template ?? null),
     timeZone: e.timezone,
     agentId: e.agentId,
+    alertContext: "EVENTS" as AlertContext,
     contact: e.customer,
     what: e.name,
     act: gigs
@@ -202,7 +204,8 @@ export async function sendContract(user: { id: string; agencyId: string }, targe
 }
 
 /**
- * After signing: tell the lead agent (or the business email with no agent) and send the signer their copy.
+ * After signing: tell the team (as Settings, Notifications says: by default the lead agent, or the business email with
+ * no agent) and send the signer their copy.
  * For a wedding, `held` says it isn't booked yet (the deposit secures it), so the copy says signed, not
  * approved; `coupleTold` says the couple have just had their "you're booked" email, which links to the
  * signed copy, so this one isn't sent as well.
@@ -213,11 +216,10 @@ export async function afterSigned(contractId: string, wedding: { held?: boolean;
   const s = await liveContractDoc(c);
   if (!s || s.demo) return;
   const brand = s.settings.agencyName;
-  const agent = s.agentId ? await prisma.user.findUnique({ where: { id: s.agentId }, select: { email: true, notifyPrefs: true } }) : null;
-  const to = agent ? (wants(agent.notifyPrefs, "SIGNED", "email") ? agent.email : null) : s.settings.agencyEmail;
+  const team = await teamRecipients(c.agencyId, "SIGNED", { context: s.alertContext, agent: s.agentId });
   const when = formatDateTime(c.signedAt!, s.timeZone);
   const base = { kind: "CONTRACT" as const, agencyId: c.agencyId, bookingId: c.bookingId };
-  if (to) {
+  for (const to of team.emails) {
     await sendEmail({
       ...base,
       to,

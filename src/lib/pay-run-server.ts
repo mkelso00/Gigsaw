@@ -32,6 +32,7 @@ import {
 import { invoicesPdf } from "./pay-run-pdf";
 import { personName } from "./person-name";
 import { claimedReminders, claimReminder } from "./reminders";
+import { teamRecipients } from "./team-alerts";
 import { formatDate, localDateKey, localTime } from "./time";
 
 // The database side of the weekly pay run (src/lib/pay-run.ts has the rules): the week's invoices with what may
@@ -392,13 +393,6 @@ export const READY_KIND = "PAY_RUN_READY";
 export const SIGN_OFF_KIND = "PAY_RUN_SIGN_OFF";
 const recipientOf = (agencyId: string) => `agency:${agencyId}`;
 
-/** The accounts email, or each admin's when there isn't one. */
-async function readyEmails(agencyId: string, accountsEmail: string) {
-  if (accountsEmail.trim()) return [accountsEmail.trim()];
-  const admins = await prisma.user.findMany({ where: { agencyId, role: "ADMIN", demo: false }, select: { email: true } });
-  return admins.map((a) => a.email);
-}
-
 /** Due on a weekday (Monday, or the first weekday after if Monday was missed), 9am to 5pm, the business's time. */
 export function readyEmailDue(local: { weekday: number; time: string }) {
   return local.weekday >= 1 && local.weekday <= 5 && local.time >= "09:00" && local.time < "17:00";
@@ -460,7 +454,7 @@ export async function runPayRunReminders(now = new Date()) {
         });
         if (!t.on) continue;
         const subject = t.subject ?? `Last week's gigs are ready to sign off: ${plural(gigs.length, "gig")}, ${plural(acts, "act")}`;
-        for (const to of await readyEmails(d.agencyId, d.s.accountsEmail)) {
+        for (const to of (await teamRecipients(d.agencyId, "PAY_RUN")).emails) {
           await sendEmail({
             kind: "PAY_RUN",
             agencyId: d.agencyId,
@@ -497,7 +491,8 @@ export async function runPayRunReminders(now = new Date()) {
       if (!t.on) continue;
       const total = formatMoney(agg._sum.totalMinor ?? 0, d.s.defaultCurrency);
       const subject = t.subject ?? `Last week's pay run is ready to check: ${plural(agg._count, "invoice")}, ${total}`;
-      for (const to of await readyEmails(d.agencyId, d.s.accountsEmail)) {
+      // Settings, Notifications says who: by default the accounts email, or each admin's when there isn't one.
+      for (const to of (await teamRecipients(d.agencyId, "PAY_RUN")).emails) {
         await sendEmail({
           kind: "PAY_RUN",
           agencyId: d.agencyId,

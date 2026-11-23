@@ -34,7 +34,7 @@ export default async function ArrivalSettings() {
               name="overdueAlerts"
               defaultChecked={settings.overdueAlerts}
               label="Alert us when an act is late"
-              hint="Emails and texts the booking's lead agent once the arrive-by time passes with no check-in."
+              hint="Emails and texts the booking's lead agent (or whoever Notifications, Where team alerts go, says) once the arrive-by time passes with no check-in."
             >
               <div className="grid gap-4 p-5 sm:grid-cols-2">
                 <Field label="Also alert this email" hint="Optional, e.g. a shared inbox or whoever's on call">

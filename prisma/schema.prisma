@@ -117,7 +117,7 @@ model Settings {
   changeoverMinutes     Int     @default(15)
   // How close (in metres) a check-in must be to the venue to count as "on site".
   geofenceMetres        Int     @default(500)
-  // Arrival alerts. The booking's agent is always alerted; these add an on-call contact.
+  // Arrival alerts. The booking's agent (or as alertRouting says) is alerted; these add an on-call contact.
   overdueAlerts         Boolean @default(true)
   alertEmail            String  @default("")
   alertPhone            String  @default("")
@@ -169,6 +169,14 @@ model Settings {
   // Where the weekly pay run's records go (the week's invoices and payment list), and who hears it's ready to
   // check. Empty: the records go to the business email, and the Monday reminder to each admin.
   accountsEmail         String  @default("")
+  // Shared inboxes for team alerts: one for weddings and events (e.g. events@…), one for venue gigs (e.g. gigs@…).
+  eventsEmail           String  @default("")
+  gigsEmail             String  @default("")
+  // Where each team alert goes, by context: the lead agent, the shared inbox, both or nobody (src/lib/team-alert-routing.ts),
+  // e.g. { "ACCEPTED": { "EVENTS": "INBOX", "GIGS": "AGENT" } }. A cell not set follows the defaults: businesses from
+  // before this setting (stored as {}) keep the lead agent for everything; new ones start with "_defaults": "SHARED",
+  // which sends wedding and event alerts to the events inbox once it's set.
+  alertRouting          Json    @default("{\"_defaults\":\"SHARED\"}")
   // The weekly pay run's bank file: a bank's preset or the business's own layout (src/lib/bank-file.ts), e.g.
   // { "preset": "MONZO" } or { "preset": "CUSTOM", "custom": { "columns": [...], "header": true, ... } }.
   bankFile              Json    @default("{}")

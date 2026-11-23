@@ -25,6 +25,7 @@ import { dealBreakdown, formatMoney, paymentTotals, type DealInput, type Payment
 import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForGigs } from "./people";
+import { teamRecipients } from "./team-alerts";
 import { claimedReminders, claimReminder } from "./reminders";
 import { cashAddressLine } from "./proposal-pay";
 import { formatDate, localDateKey, localTime } from "./time";
@@ -535,14 +536,6 @@ async function sendWeekToGo(e: FullEvent) {
   return true;
 }
 
-/** Who at the business hears about a wedding: its lead agent (the wedding coordinator), or else the business email. */
-async function teamContact(e: FullEvent) {
-  const agent = e.agentId ? await prisma.user.findFirst({ where: { id: e.agentId, agencyId: e.agencyId }, select: { email: true, name: true } }) : null;
-  if (agent?.email) return { to: agent.email, first: firstOf(agent.name) };
-  const to = e.agency.settings?.agencyEmail?.trim();
-  return to ? { to, first: "" } : null;
-}
-
 type TeamStep = "TEAM_SIX_MONTHS" | "TEAM_THREE_MONTHS" | "TEAM_PLANNER_LATE";
 
 /**
@@ -550,8 +543,14 @@ type TeamStep = "TEAM_SIX_MONTHS" | "TEAM_THREE_MONTHS" | "TEAM_PLANNER_LATE";
  * or all in hand) and 4 weeks out (the running order is still missing). Staff see the money in full.
  */
 async function sendTeamNotice(e: FullEvent, kind: TeamStep) {
-  const who = await teamContact(e);
-  if (!who) return false;
+  // Who hears, as Settings, Notifications says: by default the lead agent (the wedding coordinator), or else the
+  // business email; or the events inbox, both or nobody.
+  const team = await teamRecipients(e.agencyId, "CHECK_INS", { context: "EVENTS", agent: e.agentId });
+  for (const to of team.emails) await sendTeamNoticeTo(e, kind, { to, first: team.names[to.toLowerCase()] ?? "" });
+  return team.emails.length > 0;
+}
+
+async function sendTeamNoticeTo(e: FullEvent, kind: TeamStep, who: { to: string; first: string }) {
   const away = timeToGo(daysBetween(todayOf(e), e.date));
   const name = e.customer?.name || theCustomer(e);
   const w = tpl(e, kind, who.first, { customer: name });
@@ -629,7 +628,6 @@ async function sendTeamNotice(e: FullEvent, kind: TeamStep) {
       cta: { label: isWedding(e) ? "Open the wedding" : "Open the event", url: `${appUrl()}/events/${e.id}` },
     },
   });
-  return true;
 }
 
 /** How a step went: how many people it went to, and if none, why not (shown by the Send now buttons). */
@@ -657,7 +655,10 @@ export async function sendEventStep(e: FullEvent, kind: EventMessage): Promise<S
       return n ? { sent: n } : { sent: 0, why: noActsWhy(e) };
     }
     default:
-      return one(await sendTeamNotice(e, kind), "No one to tell: choose a lead agent, or add your business email in Settings");
+      return one(
+        await sendTeamNotice(e, kind),
+        "No one to tell: choose a lead agent, add your business email, or check where team alerts go in Settings, Notifications",
+      );
   }
 }
 

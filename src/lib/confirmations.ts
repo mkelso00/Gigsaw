@@ -4,6 +4,7 @@ import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
 import { messageFor } from "./message-templates";
 import { recipientsForGigs } from "./people";
+import { CUSTOMER_EVENT_TYPES } from "./team-alert-routing";
 import { formatDate, localTime } from "./time";
 
 // When a gig becomes Confirmed (the act accepted the offer, or the agent confirmed it):
@@ -11,8 +12,6 @@ import { formatDate, localTime } from "./time";
 //  - for weddings and private events, the customer is told the act is confirmed
 //    (Settings decides: weddings and private events only, every booking, or never).
 // A bar gig's venue is never told: that's just for the agency's records.
-
-const CUSTOMER_EVENT_TYPES = ["WEDDING", "PRIVATE_PARTY", "CORPORATE"];
 
 export async function onConfirmed(bookingId: string) {
   const b = await prisma.booking.findUnique({
