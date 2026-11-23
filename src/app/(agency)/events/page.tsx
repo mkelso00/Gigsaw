@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Empty, PageHeader } from "@/components/ui";
+import { SelectAll, SelectedAction } from "@/components/client-bits";
+import { deleteEvents } from "@/actions/events";
 import { requireStaff } from "@/lib/auth";
 import { getSettings, prisma } from "@/lib/db";
 import { autoDone, eventTotals, sentEventMessagesFor } from "@/lib/events";
@@ -16,6 +18,7 @@ const dayLabel = (key: string) =>
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<{ when?: string }> }) {
   const user = await requireStaff();
+  const isAdmin = user.role === "ADMIN";
   const { when } = await searchParams;
   const settings = await getSettings(user.agencyId);
   const today = localDateKey(new Date(), settings.defaultTimezone);
@@ -70,10 +73,27 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
           .
         </Empty>
       ) : (
-        <div className="card overflow-x-auto">
+        <form className="card overflow-x-auto">
+          {isAdmin && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-4 py-3">
+              <span className="text-sm text-ink-500">Tick test weddings or mistakes to delete them, with their gigs and proposals.</span>
+              <SelectedAction
+                name="ids"
+                action={deleteEvents}
+                label="Delete selected"
+                confirm="Delete {n} wedding{s} for good, with their gigs, payments and proposals? They come off the acts' calendars. This can't be undone."
+                danger
+              />
+            </div>
+          )}
           <table className="table">
             <thead>
               <tr>
+                {isAdmin && (
+                  <th className="w-10">
+                    <SelectAll name="ids" />
+                  </th>
+                )}
                 <th>Date</th>
                 <th>Event</th>
                 <th>Acts</th>
@@ -86,6 +106,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
             <tbody>
               {rows.map(({ e, totals, done, overdue }) => (
                 <tr key={e.id} className="hover:bg-ink-50">
+                  {isAdmin && (
+                    <td>
+                      <input type="checkbox" name="ids" value={e.id} aria-label={`Select ${e.name}`} className="h-4 w-4 accent-ink-950" />
+                    </td>
+                  )}
                   <td className="whitespace-nowrap">
                     <div className="font-medium">{dayLabel(e.date)}</div>
                     <div className="text-xs text-ink-500">{TYPE[e.type] ?? "Event"}</div>
@@ -130,7 +155,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
               ))}
             </tbody>
           </table>
-        </div>
+        </form>
       )}
     </div>
   );

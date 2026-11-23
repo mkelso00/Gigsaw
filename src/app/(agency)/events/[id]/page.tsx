@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { deleteEvent } from "@/actions/events";
+import { deleteEvent, deleteEventFully } from "@/actions/events";
 import { ContractPanel } from "@/components/contract-panel";
 import { PayLinksCard } from "@/components/pay-links-card";
 import { cardPaymentsReady } from "@/lib/card-payments";
@@ -120,11 +120,25 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             </section>
           )}
 
-          <ServerForm action={deleteEvent.bind(null, e.id)}>
-            <ConfirmButton message="Delete this wedding or event? The acts' bookings stay as normal bookings." className="btn btn-danger w-full">
-              Delete
-            </ConfirmButton>
-          </ServerForm>
+          {user.role === "ADMIN" && (
+            <section className="card card-pad space-y-3" aria-label="Delete">
+              <h2 className="section-title">Delete</h2>
+              <ServerForm action={deleteEventFully.bind(null, e.id)}>
+                <ConfirmButton
+                  message={`Delete ${e.name} for good, with its gigs, payments and proposals? They come off the acts' calendars. This can't be undone.`}
+                  className="btn btn-danger w-full"
+                >
+                  Delete for good, with its gigs
+                </ConfirmButton>
+              </ServerForm>
+              <p className="hint">For test weddings and mistakes. A real wedding that's off is better cancelled, so its history stays.</p>
+              <ServerForm action={deleteEvent.bind(null, e.id)}>
+                <ConfirmButton message="Delete this wedding or event? The acts' bookings stay as normal bookings." className="btn w-full">
+                  Delete the wedding, keep its gigs
+                </ConfirmButton>
+              </ServerForm>
+            </section>
+          )}
         </div>
       </div>
     </div>

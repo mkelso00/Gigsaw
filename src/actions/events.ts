@@ -5,7 +5,7 @@ import { receiptQuietly } from "@/lib/receipts";
 import { secureEventQuietly } from "@/lib/secure-event";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireStaff, type AgencyUser } from "@/lib/auth";
+import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, needsAct } from "@/lib/bookings";
 import { vatOnShareFor } from "@/lib/pay-plan";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
@@ -354,6 +354,42 @@ export async function sendPlanToActsNow(eventId: string, _: FormState): Promise<
     revalidatePath(`/events/${eventId}`);
     return { ok: `Plan sent to the acts (${n} ${n === 1 ? "person" : "people"}).` };
   });
+}
+
+/**
+ * Delete weddings or events for good, with everything made for them: their gigs (and those gigs' payments,
+ * check-ins and line-ups), their proposals and their contracts. For test weddings and mistakes. Admins only.
+ * The gigs come off the acts' calendars too. Act invoices already made stay as records, unlinked.
+ */
+async function deleteEventsFully(user: AgencyUser, eventIds: string[]) {
+  const events = await prisma.event.findMany({ where: { id: { in: eventIds.slice(0, 200) }, agencyId: user.agencyId }, select: { id: true, name: true } });
+  if (!events.length) return 0;
+  const ids = events.map((e) => e.id);
+  const gigs = await prisma.booking.findMany({ where: { eventId: { in: ids }, agencyId: user.agencyId, archivedAt: undefined }, select: { id: true } });
+  await prisma.$transaction([
+    prisma.booking.deleteMany({ where: { id: { in: gigs.map((g) => g.id) }, agencyId: user.agencyId } }),
+    prisma.quote.deleteMany({ where: { eventId: { in: ids }, agencyId: user.agencyId } }),
+    prisma.event.deleteMany({ where: { id: { in: ids }, agencyId: user.agencyId } }),
+  ]);
+  // Ids read before deleting: the calendar links are found by them.
+  queueCalendarSync(gigs.map((g) => g.id));
+  for (const e of events) await logActivity(user, "EVENT", e.id, "deleted with its gigs and proposals", e.name);
+  return events.length;
+}
+
+/** The wedding page's "Delete for good": the wedding, its gigs and its proposals. */
+export async function deleteEventFully(eventId: string) {
+  const user = await requireAdmin();
+  await deleteEventsFully(user, [eventId]);
+  revalidatePath("/", "layout");
+  redirect("/events");
+}
+
+/** Wedding bookings list: delete the ticked weddings and everything made for them. */
+export async function deleteEvents(form: FormData) {
+  const user = await requireAdmin();
+  await deleteEventsFully(user, form.getAll("ids").map(String));
+  revalidatePath("/", "layout");
 }
 
 export async function deleteEvent(eventId: string) {
