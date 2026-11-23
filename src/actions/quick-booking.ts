@@ -2,6 +2,7 @@
 
 import { requireStaff } from "@/lib/auth";
 import { awayBetween } from "@/lib/away";
+import { pickerNotes } from "@/lib/book-signed-up-server";
 import { getSettings, prisma } from "@/lib/db";
 import { localDateKey } from "@/lib/time";
 import { VENUE_ORDER } from "@/lib/venue-order";
@@ -27,14 +28,16 @@ export async function loadQuickBookingLists(): Promise<QuickBookingLists> {
   const user = await requireStaff({ allowLocked: true });
   const settings = await getSettings(user.agencyId);
   const pick = { where: { agencyId: user.agencyId }, orderBy: { name: "asc" as const } };
-  const [acts, venues, contacts, away] = await Promise.all([
+  const [acts, venues, contacts, away, notes] = await Promise.all([
     prisma.artist.findMany({ ...pick, select: { id: true, name: true } }),
     prisma.venue.findMany({ where: pick.where, orderBy: VENUE_ORDER, select: { id: true, name: true, city: true } }),
     prisma.contact.findMany({ ...pick, select: { id: true, name: true, company: true } }),
     awayBetween(user.agencyId, localDateKey(new Date(), settings.defaultTimezone), "9999-12-31"),
+    pickerNotes(user.agencyId),
   ]);
   return {
-    acts,
+    // "Not signed up" or "Approved" beside acts while the business only books acts who've signed up (src/lib/book-signed-up.ts).
+    acts: acts.map((a) => ({ ...a, detail: notes.get(a.id) })),
     venues: venues.map((v) => ({ id: v.id, name: v.name, detail: v.city })),
     contacts: contacts.map((c) => ({ id: c.id, name: c.name, detail: c.company })),
     away: away.map(({ artistId, startDate, endDate, note, actName, own }) => ({ artistId, startDate, endDate, note, actName, own })),

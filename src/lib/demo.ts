@@ -77,6 +77,9 @@ export async function addDemoData(prisma: Db, opts: { agencyId: string; leadAgen
           .replace(/^\.|\.$/g, "")}@example.com`,
         agentId,
         demo: true,
+        // Sample acts never sign up (their emails go nowhere), so they're approved to be booked anyway for a
+        // business that only books acts who've signed up (src/lib/book-signed-up.ts).
+        bookBeforeSignupAt: new Date(),
         ...extra,
       },
     });

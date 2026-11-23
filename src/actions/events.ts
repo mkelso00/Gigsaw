@@ -10,6 +10,7 @@ import { createBookingWithReference, needsAct } from "@/lib/bookings";
 import { vatOnShareFor } from "@/lib/pay-plan";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { findClashes } from "@/lib/clash-check";
+import { logBookedAnyway, mergeHolds, signupGate } from "@/lib/book-signed-up-server";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
 import { sendOffers } from "@/lib/offers";
 import { getSettings, logActivity, prisma } from "@/lib/db";
@@ -177,13 +178,18 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
     const status = oneOf(str(form, "status"), BOOKING_STATUSES, "PENDING") as BookingStatus;
     if (!artist && needsAct(status, true)) throw new FormError(`Choose an act to make it ${BOOKING_STATUS_LABELS[status]}, or leave it Pending or On hold.`);
     const schedule = buildSchedule(e.date, { arrive, setStart: start, setEnd: TIME.test(end) ? end : null }, e.timezone);
+    // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
+    const gate = await signupGate(user, [artistId], confirmed(form));
+    let clash: FormState | null = null;
     if (artistId && !confirmed(form) && LIVE_STATUSES.includes(status)) {
       const warnings = await findClashes(
         { agencyId: user.agencyId, artistId, venueId: e.venueId, timezone: e.timezone, ...schedule },
         settings.changeoverMinutes,
       );
-      if (warnings.length) return { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Add anyway" } };
+      if (warnings.length) clash = { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Add anyway" } };
     }
+    const hold = mergeHolds(gate.hold, clash);
+    if (hold) return hold;
     // The booking fee is charged once per event, so it goes on the first gig only.
     const eventHasFee = !!(await prisma.booking.findFirst({
       where: { eventId, status: { not: "CANCELLED" }, bookingFeeMinor: { gt: 0 } },
@@ -214,6 +220,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       notifyClientOnArrival: false,
     });
     await logActivity(user, "BOOKING", b.id, "added to event", e.name);
+    await logBookedAnyway(user, [b.id], gate.overridden);
     if (status === "AWAITING") await sendOffers([b.id]);
     else if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([b.id]);
     revalidatePath("/", "layout");

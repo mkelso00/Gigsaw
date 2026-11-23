@@ -11,7 +11,8 @@ import { prisma } from "@/lib/db";
 import { formatDay } from "@/lib/enquiries";
 import { FREED_ACTION } from "@/lib/lapsed-leads";
 import { formatMoney } from "@/lib/money";
-import { linePlace, proposalInclude, proposalUrl, readyToSend } from "@/lib/proposal-server";
+import { linePlace, proposalActsNotSignedUp, proposalInclude, proposalUrl, readyToSend } from "@/lib/proposal-server";
+import { bookAnywayTitle, bookingRefusal } from "@/lib/book-signed-up";
 import { BALANCE_OPTION_STAFF, balancePlan, chosenOption, payChoices, proposalDeposit } from "@/lib/proposal-pay";
 import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, proposalRef, proposalTotals } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
@@ -49,6 +50,13 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const m = (x: number) => formatMoney(x, q.currency);
   const when = (d: Date) => formatDateTime(d, q.timezone);
   const notReady = canSend(q) ? readyToSend(q, today) : null;
+  // Acts on it who haven't signed up to Gigsaw yet (src/lib/book-signed-up.ts): staff can't send it, an admin is asked.
+  const notSigned = await proposalActsNotSignedUp(q);
+  const notSignedNote = !notSigned.length
+    ? null
+    : user.role === "ADMIN"
+      ? `${bookAnywayTitle(notSigned.map((b) => b.name))}. Approve them on their page first, or send it anyway: you'll be asked to check.`
+      : notSigned.map((b) => bookingRefusal(b.name)).join(" ");
   // A wedding: the deposit is the share plus VAT, and the couple choose how to pay the balance (src/lib/proposal-pay.ts).
   const choices = payChoices(q);
   const chosen = status === "ACCEPTED" ? chosenOption(q) : null;
@@ -297,6 +305,11 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
                   <input name="to" type="email" required defaultValue={q.sentTo || q.contact?.email || ""} className="input" />
                 </label>
                 {notReady && <p className="text-xs text-amber-800">{notReady}</p>}
+                {canSend(q) && notSignedNote && (
+                  <p className="text-xs text-amber-800" data-testid="proposal-not-signed-up">
+                    {notSignedNote}
+                  </p>
+                )}
                 <SubmitButton className={`btn w-full ${canSend(q) ? "btn-primary" : ""}`} pendingText="Sending…">
                   {canSend(q) ? "Send proposal" : "Send it again"}
                 </SubmitButton>

@@ -15,6 +15,7 @@ import { onConfirmed } from "@/lib/confirmations";
 import { offerResetFor } from "@/lib/offer-links";
 import { sendOffers } from "@/lib/offers";
 import { findClashes } from "@/lib/clash-check";
+import { logBookedAnyway, mergeHolds, signupGate } from "@/lib/book-signed-up-server";
 import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { formatMoney, toMinor } from "@/lib/money";
@@ -61,10 +62,13 @@ export async function createBooking(_: FormState, form: FormData): Promise<FormS
   const result = await handleForm(async () => {
     const settings = await getSettings(user.agencyId);
     const data = await parseBookingForm(form, settings, user.agencyId, { requireVenue: true });
-    const hold = await clashCheck(user, form, data, settings.changeoverMinutes);
+    // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
+    const gate = await signupGate(user, [data.artistId], confirmed(form));
+    const hold = mergeHolds(gate.hold, await clashCheck(user, form, data, settings.changeoverMinutes));
     if (hold) return hold;
     const booking = await createBookingWithReference(user.agencyId, { ...data, createdById: user.id, agentId: data.agentId ?? user.id });
     await logActivity(user, "BOOKING", booking.id, "created", booking.reference);
+    await logBookedAnyway(user, [booking.id], gate.overridden);
     if (booking.status === "AWAITING") await offerAndLog(user, booking.id);
     id = booking.id;
   });
@@ -81,7 +85,9 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const settings = await getSettings(user.agencyId);
     // A gig that has a venue can't lose it; an older one saved without can still be edited.
     const data = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId, requireVenue: !!old.venueId });
-    const hold = await clashCheck(user, form, data, settings.changeoverMinutes, bookingId);
+    // Only a different act is checked for signing up: the act already on the booking stays, whatever else changes.
+    const gate = data.artistId && data.artistId !== old.artistId ? await signupGate(user, [data.artistId], confirmed(form)) : { hold: null, overridden: [] };
+    const hold = mergeHolds(gate.hold, await clashCheck(user, form, data, settings.changeoverMinutes, bookingId));
     const alsoChange = await venueChangeFor(old, data, form);
     // Copying to other bookings always asks first. One box covers that and any double booking warning,
     // because a single "Save anyway" answers both.
@@ -95,6 +101,7 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     // Also takes it out of the old act's calendars when the act changed.
     queueCalendarSync(bookingId);
     await logActivity(user, "BOOKING", bookingId, "updated");
+    await logBookedAnyway(user, [bookingId], gate.overridden);
     // The other bookings at the venue. This one isn't among them (it's told below), so each act hears once per booking.
     if (alsoChange) await applyVenuePlan(user, bookingId, alsoChange.plan, alsoChange.opts);
     if (data.status === "CONFIRMED" && old.status !== "CONFIRMED") await onConfirmed(bookingId);
@@ -391,7 +398,7 @@ export async function deleteCheckIn(checkInId: string) {
   revalidatePath("/", "layout");
 }
 
-export type CopyResult = { ok: boolean; message: string; ids: string[] };
+export type CopyResult = { ok: boolean; message: string; ids: string[]; confirm?: NonNullable<FormState>["confirm"] };
 
 /**
  * Copy a booking to other dates: same venue, times, money, act and details, as new gigs with
@@ -399,19 +406,30 @@ export type CopyResult = { ok: boolean; message: string; ids: string[] };
  * (the act gets one message listing all the offers) or Confirmed. Up to MAX_COPY_DATES at once,
  * saved together in one transaction (copyBookingToDates).
  */
-export async function copyBooking(bookingId: string, dates: string[], status: string, keepAct: boolean): Promise<CopyResult> {
+export async function copyBooking(bookingId: string, dates: string[], status: string, keepAct: boolean, anyway = false): Promise<CopyResult> {
   const user = await requireStaff();
   const b = await ownBooking(user, bookingId);
   const unique = cleanDates(dates);
   if (!unique.length) return { ok: false, message: "Pick at least one date.", ids: [] };
   if (unique.length > MAX_COPY_DATES) return { ok: false, message: `That's a lot of dates: copy up to ${MAX_COPY_DATES} at once.`, ids: [] };
   const artistId = keepAct ? b.artistId : null;
+  // Copies that keep the act are new bookings for it: an act who hasn't signed up yet is refused, or for an admin
+  // "Book anyway" (`anyway`, src/lib/book-signed-up.ts). Copies without the act are always fine.
+  let gate: Awaited<ReturnType<typeof signupGate>>;
+  try {
+    gate = await signupGate(user, [artistId], anyway);
+  } catch (e) {
+    if (e instanceof FormError) return { ok: false, message: e.message, ids: [] };
+    throw e;
+  }
+  if (gate.hold?.confirm) return { ok: false, message: gate.hold.confirm.title, ids: [], confirm: gate.hold.confirm };
   const wanted = oneOf(status, ["PENDING", "AWAITING", "CONFIRMED"] as const, "PENDING");
   // No act: the copies are Pending whatever was chosen.
   const finalStatus = artistId ? wanted : "PENDING";
   const settings = await getSettings(user.agencyId);
   const { ids, clashes } = await copyBookingToDates(user, b, unique, { status: finalStatus, artistId, settings });
   await logActivity(user, "BOOKING", bookingId, "copied", `${ids.length} date${ids.length === 1 ? "" : "s"}`);
+  await logBookedAnyway(user, ids, gate.overridden);
   if (finalStatus === "AWAITING") await sendOffers(ids);
   if (finalStatus === "CONFIRMED") await notifyArtistsOfNewGigs(ids);
   revalidatePath("/", "layout");

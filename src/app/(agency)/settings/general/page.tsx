@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { saveSettings } from "@/actions/settings";
 import { INVOICE_MODES, INVOICE_MODE_LABELS } from "@/lib/act-invoices";
 import { ActionForm } from "@/components/forms";
-import { SettingsCard, SettingsPage, SettingsSection } from "@/components/settings-ui";
+import { SettingsCard, SettingsPage, SettingsSection, SettingsToggle } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { CURRENCIES, TIMEZONES } from "@/lib/constants";
@@ -55,6 +55,19 @@ export default async function GeneralSettings() {
                 ))}
               </select>
             </Field>
+          </SettingsCard>
+        </SettingsSection>
+        <SettingsSection
+          title="Booking acts"
+          description="Keep everyone on Gigsaw: an act can only be booked once they've signed up, so they get their gigs, reminders and pay in one place."
+        >
+          <SettingsCard>
+            <SettingsToggle
+              name="bookOnlySignedUp"
+              defaultChecked={settings.bookOnlySignedUp}
+              label="Only book acts who've signed up to Gigsaw"
+              hint="A solo act has signed up once they've made their login. A band has once the person its invoices go to has. An admin can approve an act on its page to be booked before then, or book one anyway each time. Everyone else is asked to send the act their sign-up link."
+            />
           </SettingsCard>
         </SettingsSection>
         <SettingsSection

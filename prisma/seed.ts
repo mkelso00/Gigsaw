@@ -45,6 +45,9 @@ async function main() {
       agencyAddress: "12 Example Street\nManchester M1 1AA",
       // Each act's invoice is made as soon as its gig is over. Harbour Music (below) signs off its weeks instead.
       actInvoiceMode: "AUTO",
+      // Only acts who've signed up can be booked, as for the businesses already on Gigsaw. The sample acts are
+      // approved to be booked before signing up (src/lib/demo.ts); tests/e2e/book-signed-up.spec.ts makes one that isn't.
+      bookOnlySignedUp: true,
     },
   });
   const admin = await prisma.user.create({

@@ -24,6 +24,9 @@ import { formatDate, formatMinutes, localDateKey, localTime } from "@/lib/time";
 import { SIGNUP_BADGE, SIGNUP_LABEL, loginStatus, signupLabel, signupStatus } from "@/lib/act-signup";
 import { leadOf, needsLead } from "@/lib/payee";
 import { loadPayActs } from "@/lib/payee-server";
+import { setBookBeforeSignup, sendActSignupLink } from "@/actions/act-signup";
+import { canBookAct } from "@/lib/book-signed-up";
+import { loadBookableActs } from "@/lib/book-signed-up-server";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -43,6 +46,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
       where: { id, agencyId: user.agencyId },
       include: {
         agent: { select: { name: true } },
+        bookBeforeSignupBy: { select: { name: true } },
         members: { include: { person: { include: { login: { select: { id: true, passwordHash: true } } } } }, orderBy: { person: { firstName: "asc" } } },
         partActs: { include: { child: { select: { id: true, name: true, colour: true, phone: true } } } },
         partOf: { include: { parent: { select: { id: true, name: true, colour: true } } } },
@@ -112,6 +116,12 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
   const calendarLine = artist.login ? staffCalendarLine(artist.login.calendarConnections) : null;
 
   const signup = signupStatus(artist);
+  // Signed up for booking: a band's lead, or a solo act's login (src/lib/book-signed-up.ts). Shown whether or not the
+  // business only books acts who've signed up, so the sign-up link is always one tap away.
+  const bookable = (await loadBookableActs(user.agencyId, [artist.id])).get(artist.id);
+  const forBooking = bookable ? canBookAct({ ...bookable, bookBeforeSignupAt: null }) : null;
+  const approved = !!artist.bookBeforeSignupAt;
+  const isAdmin = user.role === "ADMIN";
   return (
     <div>
       {/* Signed up to the act app yet (src/lib/act-signup.ts). */}
@@ -123,6 +133,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             </span>
             {artist.name}
             <span className={`badge text-sm font-medium ${SIGNUP_BADGE[signup]}`}>{signupLabel(artist)}</span>
+            {approved && forBooking && !forBooking.ok && <span className="badge bg-violet-50 text-sm font-medium text-violet-800">Approved to book</span>}
           </span>
         }
         subtitle={[artist.genre, artist.agent && `Agent: ${artist.agent.name}`, artist.email, artist.phone].filter(Boolean).join(" · ")}
@@ -145,6 +156,49 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
             Choose now
           </a>
         </p>
+      )}
+
+      {forBooking && (!forBooking.ok || approved) && (
+        <section className="card card-pad mb-6" data-testid="book-signup">
+          <h2 className="section-title">Signing up to Gigsaw</h2>
+          {forBooking.ok ? (
+            <p className="mt-1 text-sm text-ink-600">{artist.name} has signed up, so the approval below is no longer needed.</p>
+          ) : (
+            <p className="mt-1 text-sm text-ink-600">
+              {artist.name} hasn&apos;t signed up to Gigsaw yet. {forBooking.why}{" "}
+              {settings.bookOnlySignedUp
+                ? approved
+                  ? "They're approved, so they can be booked meanwhile."
+                  : "They can't be booked until they do, unless an admin approves them."
+                : ""}
+            </p>
+          )}
+          {approved && (
+            <p className="mt-2 text-sm text-ink-600">
+              Approved to book before signing up
+              {artist.bookBeforeSignupBy ? ` by ${artist.bookBeforeSignupBy.name}` : ""} on {formatDate(artist.bookBeforeSignupAt!, settings.defaultTimezone)}.
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap items-start gap-3">
+            {!forBooking.ok && (
+              <ActionForm action={sendActSignupLink.bind(null, artist.id)} className="space-y-2">
+                <SubmitButton className="btn btn-primary" pendingText="Sending…">
+                  Send sign-up link
+                </SubmitButton>
+              </ActionForm>
+            )}
+            {isAdmin && (approved || !forBooking.ok) && (
+              <ActionForm action={setBookBeforeSignup.bind(null, artist.id, !approved)} className="space-y-2">
+                <SubmitButton className="btn" pendingText="Saving…">
+                  {approved ? "Take back approval" : "Approve to book before signing up"}
+                </SubmitButton>
+              </ActionForm>
+            )}
+          </div>
+          {!isAdmin && !forBooking.ok && !approved && settings.bookOnlySignedUp && (
+            <p className="hint mt-2">An admin can approve them to be booked before they sign up.</p>
+          )}
+        </section>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -346,7 +400,7 @@ export default async function ArtistPage({ params }: { params: Promise<{ id: str
                 ? `Signed up as ${artist.login.email}. Set a new password below if they've forgotten it.`
                 : artist.login
                   ? `Set-up link sent to ${artist.login.email}. They haven't made a password yet. You can set one below.`
-                : "Give the artist a login so they can see their bookings and check in on arrival from their phone."}
+                  : "Give the artist a login so they can see their bookings and check in on arrival from their phone."}
             </p>
             {artist.login?.passwordHash && (
               <p className="mt-1 text-sm text-ink-500">

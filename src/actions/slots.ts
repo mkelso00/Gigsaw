@@ -11,6 +11,8 @@ import { clashDates } from "@/lib/copy-booking";
 import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, int, oneOf, optStr, str, type FormState } from "@/lib/forms";
 import { findClashes } from "@/lib/clash-check";
+import { blockedActs, bookAnywayBox, logBookedAnyway, mergeHolds, signupGate } from "@/lib/book-signed-up-server";
+import { bookingRefusal } from "@/lib/book-signed-up";
 import { defaultBookingFee, defaultVat, minorToInput, toMinor } from "@/lib/money";
 import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { offerResetFor } from "@/lib/offer-links";
@@ -391,20 +393,19 @@ export async function assignSlot(slotId: string, date: string, _: FormState, for
     if (!artistId) throw new FormError("Choose an act");
     // "Offer" asks the act to accept; "Confirm" books them straight in.
     const status = str(form, "mode") === "confirm" ? "CONFIRMED" : "AWAITING";
+    // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
+    const gate = await signupGate(user, [artistId], confirmed(form));
     if (!confirmed(form)) {
       const warnings = await slotClashes(user, slot, date, artistId);
-      if (warnings.length) {
-        return {
-          confirm: {
-            title: "Hold on: this artist may not be free",
-            items: warnings.map((w) => w.text),
-            button: "Book anyway",
-          },
-        };
-      }
+      const hold = mergeHolds(
+        gate.hold,
+        warnings.length ? { confirm: { title: "Hold on: this artist may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } } : null,
+      );
+      if (hold) return hold;
     }
     const id = await bookSlot(user, slot, date, artistId, status);
     if (!id) throw new FormError("This slot already has an act for that date");
+    await logBookedAnyway(user, [id], gate.overridden);
     if (status === "AWAITING") await sendOffers([id]);
     else if (str(form, "notify") === "on") await notifyArtistsOfNewGigs([id]);
     revalidatePath("/", "layout");
@@ -438,9 +439,22 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
       prisma.artist.findMany({ where: { agencyId: user.agencyId, id: { in: slots.flatMap((s) => (s.artistId ? [s.artistId] : [])) } } }),
     ]);
     const ctx: BookingContext = { settings, artists: new Map(artists.map((a) => [a.id, a])) };
+    // Regulars who haven't signed up to Gigsaw yet (src/lib/book-signed-up.ts): an admin is asked first and can book
+    // them anyway; anyone else books the rest, and those slots are left without an act, saying why.
+    const blocked =
+      mode === "pending"
+        ? []
+        : await blockedActs(
+            user.agencyId,
+            artists.map((a) => a.id),
+          );
+    const admin = user.role === "ADMIN";
+    if (blocked.length && admin && !confirmed(form)) return bookAnywayBox(blocked);
+    const notBooked = new Set(admin ? [] : blocked.map((b) => b.id));
     const today = localDateKey(new Date(), settings.defaultTimezone);
     const created: string[] = [];
     const skipped: string[] = [];
+    const unsigned: string[] = [];
     for (let w = 0; w < weeks; w++) {
       const monday = dateInWeek(weekStart, 1 + w * 7);
       for (const slot of slots) {
@@ -453,6 +467,10 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
         }
         // Already has an act on that date: nothing to do (and its own gig isn't a clash).
         if ((await slotBookingOn(slot, date))?.artistId) continue;
+        if (notBooked.has(slot.artistId!)) {
+          unsigned.push(`${slot.venue.name} ${date} ${slot.startTime}`);
+          continue;
+        }
         // Never quietly double-book a regular: leave the slot for a person to decide.
         const warnings = await slotClashes(user, slot, date, slot.artistId!, ctx);
         if (warnings.length) {
@@ -461,6 +479,12 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
         }
         const id = await bookSlot(user, slot, date, slot.artistId!, mode === "offer" ? "AWAITING" : "CONFIRMED", ctx);
         if (id) created.push(id);
+        if (id)
+          await logBookedAnyway(
+            user,
+            [id],
+            blocked.filter((b) => b.id === slot.artistId),
+          );
       }
     }
     revalidatePath("/", "layout");
@@ -473,6 +497,11 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
     const left = skipped.length
       ? ` ${skipped.length} left without an act because the regular act is busy elsewhere or away then: ${skipped.slice(0, 5).join("; ")}${skipped.length > 5 ? "…" : ""}.`
       : "";
+    // Staff who aren't admins: the regulars who haven't signed up are named, each with what to do.
+    const names = blocked.filter((b) => notBooked.has(b.id)).map((b) => b.name);
+    const notSigned = unsigned.length
+      ? ` ${unsigned.length} left without an act: ${unsigned.slice(0, 5).join("; ")}${unsigned.length > 5 ? "…" : ""}. ${names.map(bookingRefusal).join(" ")}`
+      : "";
     if (mode === "pending")
       return {
         ok: `Added ${created.length} booking${created.length === 1 ? "" : "s"} to the calendar ${span}, Pending with no act. Dates already in the calendar were left alone.`,
@@ -480,12 +509,12 @@ export async function bookRegulars(_: FormState, form: FormData): Promise<FormSt
     if (mode === "offer") {
       const people = await sendOffers(created);
       return {
-        ok: `Offered ${created.length} booking${created.length === 1 ? "" : "s"} ${span}${people ? `: ${people} ${people === 1 ? "person was" : "people were"} sent their offers` : ""}.${left}`,
+        ok: `Offered ${created.length} booking${created.length === 1 ? "" : "s"} ${span}${people ? `: ${people} ${people === 1 ? "person was" : "people were"} sent their offers` : ""}.${left}${notSigned}`,
       };
     }
     const told = str(form, "notify") === "on" ? await notifyArtistsOfNewGigs(created) : 0;
     return {
-      ok: `Booked ${created.length} booking${created.length === 1 ? "" : "s"} ${span}.${told ? ` ${told} act${told === 1 ? "" : "s"} sent a list of their new bookings.` : ""}${left}`,
+      ok: `Booked ${created.length} booking${created.length === 1 ? "" : "s"} ${span}.${told ? ` ${told} act${told === 1 ? "" : "s"} sent a list of their new bookings.` : ""}${left}${notSigned}`,
     };
   });
 }
@@ -559,6 +588,10 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
     const firstDates = slotDays.map((d) => nextWeekday(date, d)).filter((d) => !fields.endsOn || d <= fields.endsOn);
     const checkDates = weekly ? firstDates : dates;
 
+    // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
+    // Asked in the same box as any double booking below, so one "Book anyway" answers both.
+    const gate = await signupGate(user, [artist?.id], confirmed(form));
+    let clash: FormState | null = null;
     if (artist && !confirmed(form) && LIVE_STATUSES.includes(status as BookingStatus) && checkDates.length > 1) {
       const busy = await clashDates(
         { agencyId: user.agencyId, artistId: artist.id, venueId: venue?.id ?? null, timezone: tz },
@@ -567,7 +600,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         settings.changeoverMinutes,
       );
       if (busy.length) {
-        return {
+        clash = {
           confirm: {
             title: `Hold on: ${artist.name} may not be free on ${busy.length} of the ${checkDates.length} dates`,
             items: [...busy.slice(0, 10), ...(busy.length > 10 ? [`and ${busy.length - 10} more`] : [])],
@@ -581,9 +614,11 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         settings.changeoverMinutes,
       );
       if (warnings.length) {
-        return { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } };
+        clash = { confirm: { title: "Hold on: this act may not be free", items: warnings.map((w) => w.text), button: "Book anyway" } };
       }
     }
+    const hold = mergeHolds(gate.hold, clash);
+    if (hold) return hold;
 
     if (dates.length > 1) {
       // Every week: real bookings on each date, made together like copies (one transaction).
@@ -615,6 +650,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
         "BOOKING",
         made.map((m, i) => ({ entityId: m.id, action: "added (quick booking, every week)", detail: `${venue?.name ?? "no venue"} ${dates[i]}` })),
       );
+      await logBookedAnyway(user, ids, gate.overridden);
       const offered = status === "AWAITING" ? await sendOffers(ids) : 0;
       if (status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs(ids);
       revalidatePath("/", "layout");
@@ -651,6 +687,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       }
       const days = slotDays.map((d) => WEEKDAYS[d - 1][2]).join(", ");
       await logActivity(user, "VENUE", venue.id, "added weekly slots", `${days} ${fields.startTime}–${fields.endTime} from ${date}`);
+      await logBookedAnyway(user, ids, gate.overridden);
       const offered = ids.length && status === "AWAITING" ? await sendOffers(ids) : 0;
       if (ids.length && status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs(ids);
       revalidatePath("/", "layout");
@@ -687,6 +724,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       vatPct: defaultVat(settings),
     });
     await logActivity(user, "BOOKING", booking.id, "added (quick booking)", `${venue?.name ?? "no venue"} ${date}`);
+    await logBookedAnyway(user, [booking.id], gate.overridden);
     const ref = booking.reference;
     const offered = status === "AWAITING" ? await sendOffers([booking.id]) : 0;
     if (status !== "AWAITING" && str(form, "notify") === "on") await notifyArtistsOfNewGigs([booking.id]);

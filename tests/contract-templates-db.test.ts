@@ -39,7 +39,7 @@ const form = (fields: Record<string, string | string[]>) => {
 describeDb("contract types (database)", () => {
   let prisma: Db["prisma"];
   let agencyId = "";
-  let user: { id: string; agencyId: string; email: string };
+  let user: { id: string; agencyId: string; email: string; role: string };
   const others: string[] = [];
   let n = 0;
   const ids = { wedding: "", corporate: "", small: "", standard: "" };
@@ -48,7 +48,7 @@ describeDb("contract types (database)", () => {
     ({ prisma } = await import("@/lib/db"));
     const t = await createTestAgency(prisma, "ctypes", { agencyName: "Suave Test Music", defaultTimezone: "Europe/London" });
     agencyId = t.agency.id;
-    user = { id: t.admin.id, agencyId, email: t.admin.email };
+    user = { id: t.admin.id, agencyId, email: t.admin.email, role: "ADMIN" };
     state.user = { ...t.user, role: "ADMIN" };
     const { addContractTemplate } = await import("@/lib/contract-templates-server");
     // The first one added is the default, until another is made the default.

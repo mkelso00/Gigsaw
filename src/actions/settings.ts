@@ -151,7 +151,15 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       if (!image) throw new FormError("That signature didn't come through. Please draw it again.");
       data.signatureImage = image;
     }
-    Object.assign(data, toggle("overdueAlerts"), toggle("clientArrivalMessages"), toggle("weeklyReminders"), toggle("dayReminders"), toggle("eventEmails"));
+    Object.assign(
+      data,
+      toggle("overdueAlerts"),
+      toggle("clientArrivalMessages"),
+      toggle("weeklyReminders"),
+      toggle("dayReminders"),
+      toggle("eventEmails"),
+      toggle("bookOnlySignedUp"),
+    );
 
     await prisma.settings.upsert({ where: { agencyId: user.agencyId }, create: { agencyId: user.agencyId }, update: data });
     await logActivity(user, "SETTINGS", user.agencyId, "updated settings");

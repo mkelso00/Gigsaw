@@ -96,7 +96,31 @@ export function CopyBooking({
               <h2 className="text-lg font-semibold tracking-tight">Copy this booking</h2>
               <p className="text-sm text-ink-500">Pick the dates. Same venue, times, money and details; no payments or check-ins.</p>
             </div>
-            {result ? (
+            {result?.confirm ? (
+              // An act who hasn't signed up to Gigsaw yet: an admin can copy with them anyway (src/lib/book-signed-up.ts).
+              <div className="space-y-4 p-5">
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
+                  <div className="font-semibold">{result.confirm.title}</div>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {result.confirm.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button className="btn" onClick={() => setResult(null)}>
+                    Back
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    disabled={pending}
+                    onClick={() => start(async () => setResult(await copyBooking(bookingId, [...picked], status, keepAct, true)))}
+                  >
+                    {pending ? "Copying…" : (result.confirm.button ?? "Book anyway")}
+                  </button>
+                </div>
+              </div>
+            ) : result ? (
               <div className="space-y-4 p-5">
                 <p className={`rounded-xl px-4 py-3 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{result.message}</p>
                 {result.ok && result.ids.length === 1 ? (

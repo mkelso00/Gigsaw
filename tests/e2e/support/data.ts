@@ -42,10 +42,14 @@ export async function seededAgency() {
   return { agencyId: admin.agencyId, adminId: admin.id };
 }
 
-/** A new act of our own, so no other booking can clash with it. */
-export async function createAct(name: string) {
-  const { agencyId } = await seededAgency();
-  return db().artist.create({ data: { agencyId, name, genre: "Test act", colour: "#2563eb" } });
+/**
+ * A new act of our own, so no other booking can clash with it. The seeded business only books acts who've signed
+ * up to Gigsaw (src/lib/book-signed-up.ts), so it's approved to be booked before signing up unless `approved` is false.
+ */
+export async function createAct(name: string, opts: { approved?: boolean } = {}) {
+  const { agencyId, adminId } = await seededAgency();
+  const approval = opts.approved === false ? {} : { bookBeforeSignupAt: new Date(), bookBeforeSignupById: adminId };
+  return db().artist.create({ data: { agencyId, name, genre: "Test act", colour: "#2563eb", ...approval } });
 }
 
 /** A venue with a position, so a check-in there can be verified. Defaults to central Manchester. */

@@ -24,7 +24,8 @@ export function BookingForm({
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   booking?: Booking;
-  artists: Option[];
+  // `detail`: "Not signed up" or "Approved" (src/lib/book-signed-up.ts).
+  artists: (Option & { detail?: string })[];
   venues: (Option & { city: string })[];
   promoters: (Option & { company: string })[];
   agents: Option[];

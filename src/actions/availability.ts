@@ -9,7 +9,8 @@ import { createBookingWithReference, isReferenceClash } from "@/lib/bookings";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { EVENT_TYPES, LIVE_STATUSES } from "@/lib/constants";
 import { getSettings, logActivity, prisma } from "@/lib/db";
-import { FormError, handleForm, oneOf, optStr, str, type FormState } from "@/lib/forms";
+import { FormError, confirmed, handleForm, oneOf, optStr, str, type FormState } from "@/lib/forms";
+import { logBookedAnyway, signupGate } from "@/lib/book-signed-up-server";
 import { defaultBookingFee, defaultVat, toMinor } from "@/lib/money";
 import { offerResetFor } from "@/lib/offer-links";
 import { actIdsFor, ownActIds } from "@/lib/people";
@@ -240,7 +241,7 @@ export async function setRequestClosed(requestId: string, closed: boolean) {
  * act, the act is put on that gig; otherwise a new Pending booking is made with the request's
  * date, times, place and the act's fee. Either way it opens the booking.
  */
-export async function bookFromReply(replyId: string, _: FormState): Promise<FormState> {
+export async function bookFromReply(replyId: string, _: FormState, form?: FormData): Promise<FormState> {
   const user = await requireStaff();
   let id = "";
   const result = await handleForm(async () => {
@@ -260,6 +261,9 @@ export async function bookFromReply(replyId: string, _: FormState): Promise<Form
     const onGig = !!gig && !gig.artistId && gig.status !== "CANCELLED";
     if (!onGig && !req.startTime) throw new FormError("This request has no times. Use Full form to book them with times.");
     const startTime = req.startTime ?? "";
+    // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
+    const gate = await signupGate(user, [reply.artistId], !!form && confirmed(form));
+    if (gate.hold) return gate.hold;
     const settings = await getSettings(user.agencyId);
     // Claim the answer first, so a double tap makes one booking: the claim holds the answer until
     // the booking is saved, and the second tap then finds it already booked and just opens it.
@@ -326,9 +330,10 @@ export async function bookFromReply(replyId: string, _: FormState): Promise<Form
     if (saved.made) {
       if (onGig) await logActivity(user, "BOOKING", id, "act added from Who's free", reply.artist.name);
       else await logActivity(user, "BOOKING", id, "added from Who's free", `${reply.artist.name} said they're free`);
+      await logBookedAnyway(user, [id], gate.overridden);
     }
   });
-  if (result?.error) return result;
+  if (result?.error || result?.confirm) return result;
   revalidatePath("/", "layout");
   redirect(`/bookings/${id}`);
 }

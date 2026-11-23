@@ -57,7 +57,10 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
   ]);
   // "Details missing": no bank details or address yet from whoever the act's invoices go to (src/lib/payee.ts).
   // "No lead chosen": a band of two or more people with nobody chosen to get its invoices.
-  const pay = await loadPayActs(user.agencyId, all.map((a) => a.id));
+  const pay = await loadPayActs(
+    user.agencyId,
+    all.map((a) => a.id),
+  );
   const payees = new Map([...pay].map(([id, act]) => [id, payeeFor(act)]));
   const missing = (a: { id: string }) => {
     const p = payees.get(a.id);
@@ -86,9 +89,15 @@ export default async function ArtistsPage({ searchParams }: { searchParams: Prom
               : sp.show === "notsigned"
                 ? all.filter((a) => !signedUp(a))
                 : all;
+  // With "Approved to book" beside it for an act an admin let be booked before signing up (src/lib/book-signed-up.ts).
   const signupBadge = (a: (typeof all)[number]) => {
     const s = signupStatus(a);
-    return <span className={`badge ${SIGNUP_BADGE[s]}`}>{signupLabel(a)}</span>;
+    return (
+      <>
+        <span className={`badge ${SIGNUP_BADGE[s]}`}>{signupLabel(a)}</span>
+        {a.bookBeforeSignupAt && s !== "SIGNED_UP" && <span className="badge bg-violet-50 text-violet-800">Approved to book</span>}
+      </>
+    );
   };
   const missingBadge = <span className="badge bg-amber-50 text-amber-800">Details missing</span>;
   const noLeadBadge = <span className="badge bg-amber-50 text-amber-800">No lead chosen</span>;

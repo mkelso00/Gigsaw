@@ -13,6 +13,8 @@ import { payNoteText } from "@/lib/proposal-pay";
 import { canEdit, proposalRef } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 import { VENUE_ORDER } from "@/lib/venue-order";
+import { withNote } from "@/lib/book-signed-up";
+import { pickerNotes } from "@/lib/book-signed-up-server";
 
 export const metadata: Metadata = { title: "Edit proposal" };
 export const dynamic = "force-dynamic";
@@ -20,12 +22,13 @@ export const dynamic = "force-dynamic";
 export default async function EditProposalPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const [q, settings, acts, venues, contractTypes] = await Promise.all([
+  const [q, settings, acts, venues, contractTypes, notes] = await Promise.all([
     prisma.quote.findFirst({ where: { id, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } }, contact: { select: { name: true } } } }),
     getSettings(user.agencyId),
     prisma.artist.findMany({ where: { agencyId: user.agencyId }, orderBy: { name: "asc" }, select: { id: true, name: true, genre: true } }),
     prisma.venue.findMany({ where: { agencyId: user.agencyId }, orderBy: VENUE_ORDER, select: { id: true, name: true, city: true } }),
     contractTemplatesFor(user.agencyId),
+    pickerNotes(user.agencyId),
   ]);
   if (!q) notFound();
   // Once sent, a proposal is changed by making a new version (from its page).
@@ -54,7 +57,7 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
         defaultDate={q.lines[0]?.date || localDateKey(new Date(), q.timezone)}
         defaultFee={fee ? minorToInput(fee, cur) : ""}
         defaultVat={defaultVat(settings) ? String(defaultVat(settings)) : ""}
-        acts={acts.map((a) => ({ id: a.id, name: a.name, detail: a.genre || undefined }))}
+        acts={acts.map((a) => ({ id: a.id, name: a.name, detail: withNote(a.genre, notes.get(a.id)) }))}
         venues={venues.map((v) => ({ id: v.id, name: v.name, detail: v.city || undefined }))}
         eventTypes={EVENT_TYPES.map((t) => ({ value: t, label: eventTypeLabel(t) }))}
         contractTypes={contractTypes.map((t) => ({ id: t.id, name: t.name, terms: t.terms }))}

@@ -7,6 +7,7 @@ import { eventFormOptions } from "@/lib/event-options";
 import { daysBetween } from "@/lib/event-plan";
 import { eventInclude, eventMessageLog, eventTotals, securedAtFor } from "@/lib/events";
 import { localDateKey } from "@/lib/time";
+import { pickerNotes } from "@/lib/book-signed-up-server";
 
 /** Everything the wedding or event page shows, loaded in one place so the sections only render. */
 export async function loadEventPage(agencyId: string, id: string) {
@@ -45,12 +46,14 @@ export async function loadEventPage(agencyId: string, id: string) {
   const contractSigned = !!proposal || (contractState(contract.current) === "SIGNED" && !contract.changes.length);
 
   const gateAt = gates.get(id) ?? null;
+  // "Not signed up" or "Approved" beside acts in Add an act, while the business only books acts who've signed up.
+  const notes = await pickerNotes(agencyId);
 
   return {
     event: e,
     settings,
     options,
-    acts,
+    acts: acts.map((a) => ({ ...a, note: notes.get(a.id) })),
     tasks,
     sent,
     checked,

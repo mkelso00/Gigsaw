@@ -12,7 +12,7 @@ import { termsText } from "@/lib/contract-templates";
 import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { logActivity, prisma } from "@/lib/db";
 import { isRealDate } from "@/lib/enquiries";
-import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
+import { FormError, confirmed, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
 import {
   acceptProposal,
@@ -22,6 +22,7 @@ import {
   declineProposal,
   depositLinkFor,
   newProposalVersion,
+  ProposalConfirm,
   ProposalError,
   publishProposal,
   sendProposal,
@@ -41,6 +42,8 @@ async function proposalForm(fn: () => Promise<FormState | void>): Promise<FormSt
       return await fn();
     } catch (e) {
       if (e instanceof ProposalError) throw new FormError(e.message);
+      // Acts who haven't signed up to Gigsaw yet: an admin is asked first (src/lib/book-signed-up.ts).
+      if (e instanceof ProposalConfirm) return { confirm: e.confirm };
       throw e;
     }
   });
@@ -133,7 +136,7 @@ export async function saveProposal(proposalId: string, _: FormState, form: FormD
 export async function sendProposalNow(proposalId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireStaff();
   return proposalForm(async () => {
-    const r = await sendProposal(user, proposalId, str(form, "to"));
+    const r = await sendProposal(user, proposalId, str(form, "to"), { anyway: confirmed(form) });
     await logActivity(
       user,
       "QUOTE",
@@ -147,10 +150,10 @@ export async function sendProposalNow(proposalId: string, _: FormState, form: Fo
 }
 
 /** Give the proposal its customer link without emailing it, for staff to send themselves. */
-export async function getProposalLink(proposalId: string, _: FormState): Promise<FormState> {
+export async function getProposalLink(proposalId: string, _: FormState, form?: FormData): Promise<FormState> {
   const user = await requireStaff();
   return proposalForm(async () => {
-    const q = await publishProposal(user, proposalId);
+    const q = await publishProposal(user, proposalId, { anyway: !!form && confirmed(form) });
     await logActivity(user, "QUOTE", proposalId, `made a link for proposal ${proposalRef(q)}`);
     revalidatePath("/", "layout");
     return { ok: "Your link is ready. Copy it and send it to the customer." };

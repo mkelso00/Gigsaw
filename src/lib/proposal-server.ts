@@ -6,7 +6,7 @@ import { cardPaymentsReady, ensurePayLink, payUrl } from "./card-payments";
 import { onConfirmed } from "./confirmations";
 import { pickContract } from "./contract-templates";
 import { contractTemplatesFor } from "./contract-templates-server";
-import { getSettings, prisma } from "./db";
+import { getSettings, logActivity, prisma } from "./db";
 import { enquiryTitle, firstName, formatDay } from "./enquiries";
 import { defaultTasks } from "./event-plan";
 import { freeLapsedLeadQuietly } from "./lapsed-leads";
@@ -48,6 +48,8 @@ import { buildSchedule } from "./schedule";
 import { recordHeld, secureEvent } from "./secure-event";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 import { log } from "@/server/log";
+import { blockedActs, signupGate, type GateUser } from "./book-signed-up-server";
+import type { FormState } from "./forms";
 
 // Proposals, server side: starting one, new versions, sending it, and the customer's answer. The
 // customer's Accept is one transaction that claims the proposal (only a proposal still out with them can
@@ -56,6 +58,49 @@ import { log } from "@/server/log";
 // that made the claim.
 
 export class ProposalError extends Error {}
+
+/** Sending would book acts who haven't signed up to Gigsaw yet: an admin is asked "Send anyway?" first. */
+export class ProposalConfirm extends Error {
+  constructor(readonly confirm: NonNullable<NonNullable<FormState>["confirm"]>) {
+    super(confirm.title);
+  }
+}
+
+/**
+ * A proposal's acts are booked when the customer accepts it, so sending it for the first time (by email or as a
+ * link) is when acts who haven't signed up to Gigsaw are stopped (src/lib/book-signed-up.ts). Staff who aren't
+ * admins are refused (a FormError); an admin is asked, and `anyway` is their "Send anyway". Returns the acts sent
+ * that way, for the log.
+ */
+async function signupGateToSend(user: GateUser, q: FullProposal, anyway: boolean) {
+  const { hold, overridden } = await signupGate(
+    user,
+    q.lines.map((l) => l.artistId),
+    anyway,
+  );
+  if (hold?.confirm) {
+    throw new ProposalConfirm({
+      ...hold.confirm,
+      items: [
+        ...hold.confirm.items.slice(0, -1),
+        "The customer can accept the proposal straight away, which books the acts on it.",
+        hold.confirm.items.at(-1)!,
+      ],
+      button: "Send anyway",
+    });
+  }
+  return overridden;
+}
+
+/** The acts on a draft proposal that couldn't be booked yet, to show beside Send. None once it's been sent. */
+export async function proposalActsNotSignedUp(q: FullProposal) {
+  return canSend(q)
+    ? blockedActs(
+        q.agencyId,
+        q.lines.map((l) => l.artistId),
+      )
+    : [];
+}
 
 export const proposalInclude = {
   lines: {
@@ -306,12 +351,13 @@ function headline(q: FullProposal) {
  * Make a draft proposal live without emailing it: it gets its customer link, which staff copy and
  * send themselves (WhatsApp, a text, their own email). Same checks and claim as the first send.
  */
-export async function publishProposal(user: { agencyId: string }, proposalId: string) {
+export async function publishProposal(user: GateUser, proposalId: string, opts: { anyway?: boolean } = {}) {
   const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: proposalInclude });
   if (!q) throw new ProposalError("Proposal not found");
   if (!canSend(q)) throw new ProposalError("This proposal already has its link.");
   const problem = readyToSend(q, todayIn(q.timezone));
   if (problem) throw new ProposalError(problem);
+  const overridden = await signupGateToSend(user, q, !!opts.anyway);
   await fillTerms(q);
   const token = newProposalToken();
   const claimed = await prisma.quote.updateMany({
@@ -328,10 +374,16 @@ export async function publishProposal(user: { agencyId: string }, proposalId: st
     },
   });
   if (claimed.count !== 1) throw new ProposalError("This proposal has just been sent.");
+  await logSentAnyway(user, q, overridden);
   return q;
 }
 
-export async function sendProposal(user: { id: string; agencyId: string; email: string }, proposalId: string, to: string) {
+/** Note on the proposal that an admin sent it with acts who hadn't signed up to Gigsaw. */
+async function logSentAnyway(user: GateUser, q: FullProposal, overridden: { name: string }[]) {
+  if (overridden.length) await logActivity(user, "QUOTE", q.id, "sent with acts who haven't signed up to Gigsaw", overridden.map((b) => b.name).join(", "));
+}
+
+export async function sendProposal(user: GateUser & { email: string }, proposalId: string, to: string, opts: { anyway?: boolean } = {}) {
   const q = await prisma.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: proposalInclude });
   if (!q) throw new ProposalError("Proposal not found");
   const today = todayIn(q.timezone);
@@ -341,6 +393,8 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
   if (!isEmail(email)) throw new ProposalError("Enter the customer's email address");
   const problem = readyToSend(q, today);
   if (problem) throw new ProposalError(problem);
+  // Only the first send: sending the same proposal again changes nobody's booking.
+  const overridden = first ? await signupGateToSend(user, q, !!opts.anyway) : [];
   if (first) await fillTerms(q);
 
   let token = q.token;
@@ -360,6 +414,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
       },
     });
     if (claimed.count !== 1) throw new ProposalError("This proposal has just been sent.");
+    await logSentAnyway(user, q, overridden);
   } else {
     const claimed = await prisma.quote.updateMany({
       where: { id: q.id, status: { in: OPEN_STATUSES }, supersededById: null },

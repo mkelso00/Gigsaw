@@ -79,7 +79,7 @@ export function ActsSection({
                 <option value="">No act yet (add later)</option>
                 {acts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.note ? `${a.name} (${a.note})` : a.name}
                   </option>
                 ))}
               </select>
