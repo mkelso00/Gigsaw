@@ -124,13 +124,15 @@ test("an expired proposal cancels the lead's Enquiry booking, and the Proposals 
   await page.goto(`/bookings/${enquiryGig.id}`);
   await expect(page.getByText("Cancelled · Proposal expired, no reply")).toBeVisible();
 
-  // The Proposals tab's status filter uses the same words.
+  // The Proposals tab's stage tabs use the same words.
   await page.goto(`/enquiries?view=quotes&status=EXPIRED&q=${encodeURIComponent(name)}`);
   const filters = page.getByRole("button", { name: /Filters/ });
   await hydrated(filters);
   await filters.click();
-  await expect(page.getByRole("combobox", { name: "Status" })).toHaveValue("EXPIRED");
-  await expect(page.getByRole("combobox", { name: "Status" }).locator("option:checked")).toHaveText("Expired: no reply");
+  await expect(page.getByRole("navigation", { name: "Proposals by stage" }).getByRole("link", { name: /^Expired: no reply \d+$/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(page.getByRole("link", { name: new RegExp(name) }).getByText("Expired: no reply")).toBeVisible();
   await fitsThePhone(page);
 });
