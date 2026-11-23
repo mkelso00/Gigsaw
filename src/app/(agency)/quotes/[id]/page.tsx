@@ -12,6 +12,7 @@ import { formatDay } from "@/lib/enquiries";
 import { FREED_ACTION } from "@/lib/lapsed-leads";
 import { formatMoney } from "@/lib/money";
 import { linePlace, proposalInclude, proposalUrl, readyToSend } from "@/lib/proposal-server";
+import { BALANCE_OPTION_STAFF, balancePlan, chosenOption, payChoices, proposalDeposit } from "@/lib/proposal-pay";
 import { canEdit, canNewVersion, canResend, canSend, canWithdraw, effectiveStatus, lineTimes, proposalRef, proposalTotals } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 
@@ -48,6 +49,9 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
   const m = (x: number) => formatMoney(x, q.currency);
   const when = (d: Date) => formatDateTime(d, q.timezone);
   const notReady = canSend(q) ? readyToSend(q, today) : null;
+  // A wedding: the deposit is the share plus VAT, and the couple choose how to pay the balance (src/lib/proposal-pay.ts).
+  const choices = payChoices(q);
+  const chosen = status === "ACCEPTED" ? chosenOption(q) : null;
   const latest = versions[0];
   // The lead's Enquiry booking or wedding, cancelled when this lapsed (src/lib/lapsed-leads.ts).
   const freed = status === "DECLINED" || status === "EXPIRED" ? activity.find((a) => a.action === FREED_ACTION) : undefined;
@@ -159,7 +163,11 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
             undefined
           }
         />
-        <Stat label="Deposit" value={q.depositMinor ? m(q.depositMinor) : "None"} hint={q.depositDue ? `Due by ${formatDay(q.depositDue)}` : undefined} />
+        <Stat
+          label="Deposit"
+          value={proposalDeposit(q) ? m(proposalDeposit(q)) : "None"}
+          hint={[choices.length ? "Your share plus VAT" : "", q.depositDue ? `Due by ${formatDay(q.depositDue)}` : ""].filter(Boolean).join(" · ") || undefined}
+        />
         <Stat label="Acts are paid" value={m(t.costMinor)} hint={t.costMissing ? "Some fees not set yet" : "Staff only"} />
         <Stat tone="dark" label="We make" value={m(t.agencyMinor)} hint={t.bookingFeeMinor ? `booking fee ${m(t.bookingFeeMinor)}` : undefined} />
       </div>
@@ -242,6 +250,29 @@ export default async function ProposalPage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="space-y-6">
+          {choices.length > 0 && (
+            <section className="card card-pad" data-testid="staff-pay-options">
+              <h2 className="section-title mb-3">How the couple pay the balance</h2>
+              <ul className="space-y-2 text-sm">
+                {choices.map((o) => {
+                  const p = balancePlan(q, o);
+                  return (
+                    <li key={o} className={`rounded-xl border p-3 ${chosen === o ? "border-emerald-300 bg-emerald-50" : "border-ink-200"}`}>
+                      <div className="flex justify-between gap-3 font-medium">
+                        <span>{BALANCE_OPTION_STAFF[o].label}</span>
+                        <span className="tabular-nums">{m(p.balanceMinor)}</span>
+                      </div>
+                      <div className="text-xs text-ink-500 tabular-nums">
+                        {m(p.totalMinor)} in all
+                        {chosen === o ? " · Their choice" : ""}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              {status === "ACCEPTED" && !chosen && <p className="mt-2 text-xs text-ink-500">Accepted before couples chose how to pay.</p>}
+            </section>
+          )}
           <section className="card card-pad">
             <div className="flex items-center justify-between gap-3">
               <h2 className="section-title">Status</h2>

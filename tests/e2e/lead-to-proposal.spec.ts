@@ -57,6 +57,16 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
   await editor.getByLabel("Arrive, line 1").fill("17:30");
   await editor.getByLabel("Price, line 1").fill("1500");
   await editor.getByLabel("Act's fee, line 1").fill("1100");
+  await editor.getByLabel("VAT, line 1").fill("20");
+  // A wedding: the deposit is the business's share plus VAT, and the couple choose how to pay the balance.
+  await expect(editor.getByTestId("proposal-deposit")).toHaveText("£480.00");
+  const cashBox = editor.getByRole("checkbox", { name: /Offer: Cash balance \(no VAT\)/ });
+  const transferBox = editor.getByRole("checkbox", { name: /Offer: Bank transfer balance \(\+20% VAT\)/ });
+  await expect(cashBox).toBeChecked();
+  await expect(transferBox).toBeChecked();
+  await expect(editor.getByTestId("pay-options")).toContainText("Balance £1,320.00, £1,800.00 in all");
+  // Offer only the bank transfer balance here (the cash one is the couple's choice in proposal-pay.spec.ts).
+  await cashBox.uncheck();
   // A wedding proposal is the couple's contract, so it needs terms.
   await editor.getByLabel("Terms").fill("1. The deposit secures your date.\n2. The balance is due 3 months before the wedding.");
   await save.click();
@@ -83,11 +93,20 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
     await hydrated(sign);
     await expect(c.getByLabel("Your full name")).toHaveValue(leadName);
     await expect(c.getByTestId("proposal-terms")).toContainText("The balance is due 3 months before the wedding.");
+    // The deposit leads, then the one way to pay the balance offered: no choice to make, so no radio buttons.
+    await expect(c.getByTestId("customer-deposit")).toHaveText("£480.00");
+    await expect(c.getByTestId("balance-TRANSFER")).toHaveText("£1,320.00");
+    await expect(c.getByTestId("balance-CASH")).toHaveCount(0);
+    await expect(c.getByRole("radio")).toHaveCount(0);
+    await expect(c.getByText("Act's fee")).toHaveCount(0);
+    await expect(c.getByTestId("pay-promise")).toHaveText("I'll pay the deposit of £480.00 now, and the balance of £1,320.00 by bank transfer");
     await drawSignature(c);
     await expect(c.getByText("Signature added.")).toBeVisible();
     await c.getByRole("checkbox", { name: /I accept this proposal/ }).check();
     await sign.click();
-    await expectAfterSave(c, c.getByText("Thank you, you're booked"), 15_000);
+    // Held for them until the deposit is in.
+    await expectAfterSave(c, c.getByText("Thanks for accepting"), 15_000);
+    await expect(c.getByText(/The next step is your deposit of £480\.00/)).toBeVisible();
   } finally {
     await customer.close();
   }

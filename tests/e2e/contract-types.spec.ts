@@ -87,11 +87,14 @@ test("contract types made in Settings fill a proposal's terms, and the customer 
   await contract.selectOption({ label: second });
   await expect(terms).toHaveValue(secondTerms);
 
-  // A line to send: a date, a start time and a price.
+  // A line to send: a date, a start time, a price and (a wedding's deposit and balance come from it) the act's fee.
   await editor.getByRole("button", { name: "+ Add a line" }).click();
   await editor.getByLabel("Date, line 1").fill(someFutureDay());
   await editor.getByLabel("Start, line 1").fill("19:00");
   await editor.getByLabel("Price, line 1").fill("800");
+  await editor.getByLabel("Act's fee, line 1").fill("500");
+  // Bank transfer balance only, so it doesn't depend on an address for cash payments in Settings.
+  await editor.getByRole("checkbox", { name: /Offer: Cash balance/ }).uncheck();
   await save.click();
 
   // The proposal's page shows the wording and where it came from; get the customer's link.

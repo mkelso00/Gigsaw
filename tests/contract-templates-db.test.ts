@@ -176,7 +176,15 @@ describeDb("contract types (database)", () => {
       saveProposal(
         q.id,
         undefined,
-        form({ title: q.title, eventType: "WEDDING", lines, contractTemplateId: ids.small, terms: "Small event terms, changed for this one." }),
+        // A wedding offers at least one way to pay the balance (src/lib/proposal-pay.ts).
+        form({
+          title: q.title,
+          eventType: "WEDDING",
+          lines,
+          payOptions: "TRANSFER",
+          contractTemplateId: ids.small,
+          terms: "Small event terms, changed for this one.",
+        }),
       ),
     ).rejects.toThrow(`REDIRECT /quotes/${q.id}`);
     expect(await prisma.quote.findUniqueOrThrow({ where: { id: q.id } })).toMatchObject({
@@ -189,7 +197,7 @@ describeDb("contract types (database)", () => {
     others.push(stranger.agency.id);
     const theirs = await prisma.contractTemplate.create({ data: { agencyId: stranger.agency.id, name: "Theirs", terms: "Not yours." } });
     await expect(
-      saveProposal(q.id, undefined, form({ title: q.title, eventType: "WEDDING", lines, contractTemplateId: theirs.id, terms: "" })),
+      saveProposal(q.id, undefined, form({ title: q.title, eventType: "WEDDING", lines, payOptions: "TRANSFER", contractTemplateId: theirs.id, terms: "" })),
     ).rejects.toThrow("REDIRECT");
     const blank = await prisma.quote.findFirstOrThrow({ where: { id: q.id }, include: proposalInclude });
     expect(blank.contractTemplateId).toBeNull();

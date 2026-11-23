@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/auth";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, str, type FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
-import { DIRECT_NOTE, directSplit, isDirectPlan, isPayPlan, PAY_PLAN_LABELS } from "@/lib/pay-plan";
+import { DIRECT_NOTE, directSplit, isDirectPlan, isPayPlan, PAY_PLAN_LABELS, vatOnShareFor } from "@/lib/pay-plan";
 
 // A wedding or event's "How the couple pays" (src/lib/pay-plan.ts), and marking an act's part paid
 // when the couple paid them straight (cash on the day or bank transfer).
@@ -21,7 +21,11 @@ export async function setPayPlan(eventId: string, _: FormState, form: FormData):
     const e = await prisma.event.findFirst({ where: { id: eventId, agencyId: user.agencyId }, select: { id: true, payPlan: true } });
     if (!e) throw new FormError("Not found");
     if (e.payPlan === plan) return { ok: "Saved." };
-    await prisma.event.update({ where: { id: e.id }, data: { payPlan: plan } });
+    // A cash balance carries no VAT on the acts' fees; every other plan has VAT on the whole sale, as before.
+    await prisma.$transaction([
+      prisma.event.update({ where: { id: e.id }, data: { payPlan: plan } }),
+      prisma.booking.updateMany({ where: { eventId: e.id, agencyId: user.agencyId }, data: { vatOnShare: vatOnShareFor(plan) } }),
+    ]);
     await logActivity(user, "EVENT", e.id, "changed how the couple pays", PAY_PLAN_LABELS[plan]);
     revalidatePath(`/events/${e.id}`);
     return { ok: "Saved." };

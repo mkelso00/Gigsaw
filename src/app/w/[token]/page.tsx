@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { submitPlanner } from "@/actions/events";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { prisma } from "@/lib/db";
-import { parseExtraFields, planFieldsFor } from "@/lib/event-plan";
+import { balanceDueDate, parseExtraFields, planFieldsFor } from "@/lib/event-plan";
+import { cashAddressLine } from "@/lib/proposal-pay";
 import { cardPaymentsReady } from "@/lib/card-payments";
 import { eventTotals } from "@/lib/events";
 import { formatMoney } from "@/lib/money";
@@ -52,7 +53,15 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
   // Card payment: the deposit link while the deposit is owed, then the balance link, when they've been made and cards are on.
   const ready = await cardPaymentsReady(e.agency);
   const link = (kind: string) => e.payLinks.find((l) => l.kind === kind);
-  const payLink = ready ? (depositLeft > 0 && link("DEPOSIT")) || link("BALANCE") || link("DEPOSIT") || null : null;
+  // A balance paid in cash (BALANCE_CASH) isn't paid by card: only the deposit is.
+  const cash = e.payPlan === "BALANCE_CASH";
+  const payLink = !ready
+    ? null
+    : cash
+      ? (depositLeft > 0 && link("DEPOSIT")) || null
+      : (depositLeft > 0 && link("DEPOSIT")) || link("BALANCE") || link("DEPOSIT") || null;
+  const cashAddress = cashAddressLine(e.agency.settings?.cashAddress);
+  const balanceBy = formatDate(new Date(`${balanceDueDate(e.date)}T12:00:00Z`), "UTC");
 
   // Paying the acts direct (Event.payPlan): the deposit to us, each act's fee straight to them. Bank details
   // are the ones the act (or its lead) gave for their pay, shown only here and only for a bank transfer.
@@ -119,6 +128,12 @@ export default async function PlannerPage({ params }: { params: Promise<{ token:
               <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 Your deposit of {m(depositDue)} is due{depositBy ? ` by ${depositBy}` : " now"}
                 {money.deposits > 0 ? ` (${m(depositLeft)} still to pay)` : ""}.
+              </p>
+            )}
+            {cash && money.outstanding - depositLeft > 0 && (
+              <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-800" data-testid="cash-balance">
+                Your balance of {m(money.outstanding - depositLeft)} is paid to us in cash, with no VAT, by {balanceBy}.
+                {cashAddress ? ` Please bring it to ${cashAddress}.` : " We'll send you the address to bring it to."}
               </p>
             )}
             {money.outstanding === 0 && <p className="mt-3 text-sm font-medium text-emerald-700">All paid. Thank you!</p>}

@@ -123,6 +123,9 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
       data.defaultVatPct = vat;
     }
     if (has("invoiceTerms")) data.invoiceTerms = str(form, "invoiceTerms");
+    // Weddings: where a cash balance is brought, and the note under the ways to pay on every wedding proposal.
+    if (has("cashAddress")) data.cashAddress = str(form, "cashAddress").replace(/\r\n?/g, "\n").slice(0, 300);
+    if (has("payNote")) data.payNote = str(form, "payNote").replace(/\r\n?/g, "\n").slice(0, 2000);
     if (has("selfBillingAgreementText")) data.selfBillingAgreementText = str(form, "selfBillingAgreementText").replace(/\r\n?/g, "\n").slice(0, 2000);
     // The agency's signature: a new drawing replaces the old one, an empty box keeps it, and Remove clears it.
     if (has("signatureName")) data.signatureName = str(form, "signatureName").slice(0, 120);

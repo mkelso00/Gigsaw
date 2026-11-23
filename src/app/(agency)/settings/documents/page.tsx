@@ -10,6 +10,7 @@ import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { shadowedEventTypes } from "@/lib/contract-templates";
 import { contractTemplatesFor, type ContractTemplateRow } from "@/lib/contract-templates-server";
 import { getSettings } from "@/lib/db";
+import { DEFAULT_PAY_NOTE } from "@/lib/proposal-pay";
 import { DEFAULT_SELF_BILLING_TEXT } from "@/lib/self-billing";
 
 export const metadata: Metadata = { title: "Contracts and invoices" };
@@ -87,6 +88,33 @@ export default async function DocumentSettings() {
                 }
               />
             </div>
+          </SettingsCard>
+        </SettingsSection>
+        <SettingsSection
+          id="wedding-payments"
+          title="How couples pay"
+          description="Every wedding proposal asks for a deposit of your share plus VAT, which secures the date. The couple then choose to pay the balance in cash with no VAT, or by bank transfer with VAT added. This note goes under the ways to pay on every wedding proposal, and you can change it on any one proposal."
+        >
+          <SettingsCard pad className="space-y-5">
+            <Field
+              label="Address for cash payments"
+              hint="Where couples bring a balance paid in cash. Shown on the proposal, the couple's page and the balance emails."
+            >
+              <textarea
+                name="cashAddress"
+                rows={3}
+                maxLength={300}
+                defaultValue={settings.cashAddress}
+                placeholder={"e.g. 63 Boverton Road\nLlantwit Major\nCF61 1YA"}
+                className="input"
+              />
+            </Field>
+            <Field
+              label="Note under the ways to pay"
+              hint="Leave it blank for the wording shown. {business} is your business name and {cashAddress} the address above."
+            >
+              <textarea name="payNote" rows={5} maxLength={2000} defaultValue={settings.payNote} placeholder={DEFAULT_PAY_NOTE} className="input" />
+            </Field>
           </SettingsCard>
         </SettingsSection>
         <SettingsSection title="Invoices and statements" description="Printed at the bottom of every invoice and venue statement.">

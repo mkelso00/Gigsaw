@@ -3,7 +3,7 @@ import { queueCalendarSync } from "./calendar-sync/queue";
 import { onConfirmed } from "./confirmations";
 import { contractUrl } from "./contracts";
 import { prisma } from "./db";
-import { eventTotals } from "./events";
+import { cashHow, eventTotals } from "./events";
 import { messageFor } from "./message-templates";
 import { sendEmail } from "./messaging";
 import { formatMoney, paymentTotals } from "./money";
@@ -269,6 +269,8 @@ async function tellCoupleBooked(eventId: string, opts: { signed: boolean }) {
         : balanceDue > today
           ? `The balance of ${m(t.outstanding)} is due by ${dayOf(balanceDue)}, three months before your wedding. We'll send you a reminder.`
           : `The balance of ${m(t.outstanding)} is due now, as your wedding is less than three months away.`;
+  // A balance paid in cash with no VAT (BALANCE_CASH): where to bring it.
+  const cash = e.payPlan === "BALANCE_CASH" && t.outstanding > 0 ? ` ${cashHow(e.agency.settings?.cashAddress)}.` : "";
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
@@ -299,12 +301,17 @@ async function tellCoupleBooked(eventId: string, opts: { signed: boolean }) {
         ["Total", m(t.total)],
         ["Paid so far", m(t.received)],
         ...(t.outstanding > 0 && !direct
-          ? ([["Balance", `${m(t.outstanding)}, ${balanceDue > today ? `due by ${dayOf(balanceDue)}` : "due now"}`]] as [string, string][])
+          ? ([
+              [
+                "Balance",
+                `${m(t.outstanding)}, ${balanceDue > today ? `due by ${dayOf(balanceDue)}` : "due now"}${cash ? `\n${cashHow(e.agency.settings?.cashAddress)}` : ""}`,
+              ],
+            ] as [string, string][])
           : []),
       ],
       rowsTitle: "Your booking",
       cta: opts.signed && contract ? { label: "See your signed copy", url: contractUrl(contract.token) } : undefined,
-      outro: `What happens next: ${balance} Nearer the day we'll ask you for your running order and a few details through your wedding planner, so everyone knows exactly what you'd like. Any questions, just reply to this email to reach ${who}.`,
+      outro: `What happens next: ${balance}${cash} Nearer the day we'll ask you for your running order and a few details through your wedding planner, so everyone knows exactly what you'd like. Any questions, just reply to this email to reach ${who}.`,
     },
   });
   return true;

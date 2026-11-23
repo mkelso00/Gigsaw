@@ -37,6 +37,11 @@ export type DealInput = {
   vatPct: number;
   /** Charged to the venue or client on top of the performance fee, kept in full by the agency. */
   bookingFeeMinor?: number;
+  /**
+   * VAT on the business's share only (what it keeps, booking fee included), not on the act's fee: the customer
+   * pays the act direct (a wedding's deposit pay plan, src/lib/pay-plan.ts), so that part carries no VAT.
+   */
+  vatOnShare?: boolean;
 };
 
 export type DealBreakdown = {
@@ -44,7 +49,7 @@ export type DealBreakdown = {
   grossMinor: number;
   /** The booking fee on top, all the agency's. */
   bookingFeeMinor: number;
-  /** VAT on the performance fee and the booking fee. */
+  /** VAT on the performance fee and the booking fee (or on the business's share only, with vatOnShare). */
   vatMinor: number;
   /** What the venue or client pays in all: performance fee, booking fee and VAT. */
   totalDueMinor: number;
@@ -58,7 +63,6 @@ export type DealBreakdown = {
 export function dealBreakdown(d: DealInput): DealBreakdown {
   const gross = d.feeMinor;
   const fee = d.bookingFeeMinor ?? 0;
-  const vat = Math.round(((gross + fee) * d.vatPct) / 100);
   let agency: number;
   let artist: number;
   switch (d.dealType) {
@@ -78,6 +82,8 @@ export function dealBreakdown(d: DealInput): DealBreakdown {
       artist = gross - agency;
     }
   }
+  const vatable = d.vatOnShare ? Math.max(0, agency) + fee : gross + fee;
+  const vat = Math.round((vatable * d.vatPct) / 100);
   return { grossMinor: gross, bookingFeeMinor: fee, vatMinor: vat, totalDueMinor: gross + fee + vat, agencyMinor: agency + fee, artistMinor: artist };
 }
 

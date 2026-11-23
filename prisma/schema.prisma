@@ -143,6 +143,10 @@ model Settings {
   // The self-billing agreement acts tick when they give their pay details. Blank: Gigsaw's own wording
   // (src/lib/self-billing.ts). {business} is the business's name.
   selfBillingAgreementText String @default("")
+  // The short note under the ways to pay on every wedding proposal. Blank: Gigsaw's own (src/lib/proposal-pay.ts).
+  payNote               String  @default("")
+  // Where couples deliver a wedding balance paid in cash: on the proposal, the couple's page and the balance emails.
+  cashAddress           String  @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
   weeklyReminders       Boolean @default(true)
   weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
@@ -436,6 +440,9 @@ model Booking {
   commissionPct   Float     @default(15)
   vatPct          Float     @default(0)
   bookingFeeMinor Int       @default(0) // charged to the venue or client on top, all ours; acts never see it
+  // VAT on the business's share only (its margin and booking fee), not on the act's fee: a wedding whose balance (the
+  // acts' fees) is paid in cash with no VAT (Event.payPlan BALANCE_CASH, src/lib/pay-plan.ts).
+  vatOnShare      Boolean   @default(false)
   // Archived: tidied away out of every list, but kept (and still counted for billing if it happened).
   archivedAt      DateTime?
   depositMinor    Int       @default(0)
@@ -838,7 +845,7 @@ model Event {
   venueText          String            @default("") // a venue not on file, e.g. a marquee at a farm
   agentId            String?
   status             String            @default("ACTIVE") // ACTIVE | CANCELLED
-  // How the customer pays: FULL (all to the business) | DEPOSIT_CASH | DEPOSIT_TRANSFER (src/lib/pay-plan.ts).
+  // How the customer pays: FULL (all to the business) | BALANCE_CASH | DEPOSIT_CASH | DEPOSIT_TRANSFER (src/lib/pay-plan.ts).
   payPlan            String            @default("FULL")
   // The plan changed (planner or staff) and the acts haven't been told yet; what they were last sent.
   planChangedAt      DateTime?
@@ -1187,6 +1194,13 @@ model Quote {
   contractTemplateId String?
   contractTemplate   ContractTemplate? @relation(fields: [contractTemplateId], references: [id], onDelete: SetNull)
   terms              String            @default("")
+  // Weddings: the ways the couple can pay the balance that this proposal offers (CASH | TRANSFER,
+  // src/lib/proposal-pay.ts), and the one they chose when they signed. Empty: not a wedding, or sent before couples
+  // chose, and paid as before (the proposal's own deposit, VAT on everything).
+  payOptions         String[]          @default([])
+  payPlan            String?
+  // The short note under the ways to pay. Blank: the one in Settings (Settings.payNote).
+  payNote            String            @default("")
 
   // The customer's private link, made when this version is first sent. It stops opening at tokenExpiresAt.
   token           String?   @unique

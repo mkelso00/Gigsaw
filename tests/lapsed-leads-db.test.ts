@@ -275,11 +275,13 @@ describeDb("a lapsed proposal frees its lead's date (database)", () => {
     const token = randomBytes(24).toString("base64url");
     await prisma.quote.update({ where: { id: v2.id }, data: { status: "SENT", sentAt: new Date(), token, tokenExpiresAt: new Date("2031-01-01T00:00:00Z") } });
 
-    const done = await acceptProposal(token, { ...answer, note: "" });
+    // Version 2 offers the couple the usual choice of how to pay the balance, so they pick one.
+    expect(v2.payOptions).toEqual(["CASH", "TRANSFER"]);
+    const done = await acceptProposal(token, { ...answer, note: "", payPlan: "TRANSFER" });
     expect(done).not.toBeNull();
-    // A new wedding with new bookings; the cancelled one and its gig stay as they were.
+    // A new wedding with new bookings, held until its deposit (the share plus VAT) is in; the cancelled one and its gig stay as they were.
     expect(done!.eventId).not.toBe(event!.id);
-    expect(done!.bookings.map((b) => b.status)).toEqual(["CONFIRMED"]);
+    expect(done!.bookings.map((b) => b.status)).toEqual(["HOLD"]);
     expect((await prisma.event.findUniqueOrThrow({ where: { id: done!.eventId } })).status).toBe("ACTIVE");
     expect((await prisma.booking.findUniqueOrThrow({ where: { id: held.id } })).status).toBe("CANCELLED");
     expect((await prisma.enquiry.findUniqueOrThrow({ where: { id: enquiry.id } })).eventId).toBe(done!.eventId);

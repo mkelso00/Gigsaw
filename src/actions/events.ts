@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff, type AgencyUser } from "@/lib/auth";
 import { createBookingWithReference, needsAct } from "@/lib/bookings";
+import { vatOnShareFor } from "@/lib/pay-plan";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { findClashes } from "@/lib/clash-check";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, LIVE_STATUSES, type BookingStatus } from "@/lib/constants";
@@ -203,6 +204,8 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       currency,
       feeMinor: sale,
       vatPct: Number(str(form, "vatPct")) || 0,
+      // A wedding paying its balance in cash has no VAT on the acts' fees (src/lib/pay-plan.ts).
+      vatOnShare: vatOnShareFor(e.payPlan),
       ...(cost != null ? { dealType: "BUY_SELL", artistFeeMinor: cost } : {}),
       commissionPct: artist?.defaultCommission ?? settings.defaultCommission,
       bookingFeeMinor: defaultBookingFee(settings, { eventType: e.type, eventHasFee }),

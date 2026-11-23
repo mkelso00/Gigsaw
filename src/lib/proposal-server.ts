@@ -20,7 +20,6 @@ import {
   canResend,
   canSend,
   eventKindFor,
-  holdsUntilDeposit,
   lineFee,
   lineTimes,
   lineTitle,
@@ -32,6 +31,19 @@ import {
   tokenExpiry,
   tokenOpens,
 } from "./proposals";
+import {
+  balanceDueFor,
+  balancePlan,
+  balanceTitle,
+  chosenOption,
+  defaultPayOptions,
+  holdsUntilDeposit,
+  payChoices,
+  payProblem,
+  pickOption,
+  PLAN_FOR,
+  proposalDeposit,
+} from "./proposal-pay";
 import { buildSchedule } from "./schedule";
 import { recordHeld, secureEvent } from "./secure-event";
 import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
@@ -125,6 +137,8 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
           validUntil: addDaysToKey(today, 14),
           contractTemplateId: contract?.id ?? null,
           terms: contract?.terms ?? "",
+          // A wedding's couple choose how to pay the balance: cash (no VAT) or bank transfer (src/lib/proposal-pay.ts).
+          payOptions: defaultPayOptions(eventType),
           lines: { create: lines },
         },
       });
@@ -168,6 +182,9 @@ export async function newProposalVersion(user: { id: string; agencyId: string },
         message: q.message,
         contractTemplateId: q.contractTemplateId,
         terms: q.terms,
+        // One sent before couples chose gets the usual choices now.
+        payOptions: q.payOptions.length ? q.payOptions : defaultPayOptions(q.eventType),
+        payNote: q.payNote,
         lines: {
           create: q.lines.map((l) => ({
             sort: l.sort,
@@ -236,7 +253,49 @@ export function readyToSend(q: FullProposal, today: string): string | null {
     return "Add the terms the couple agree to first: choose a contract with terms, or add your contracts in Settings, Contracts and invoices. The couple agree to them when they sign.";
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
   if (q.depositMinor > t.totalMinor) return "The deposit is more than the total";
+  const pay = payProblem(q);
+  if (pay) return pay;
+  if (payChoices(q).includes("CASH") && !q.agency.settings?.cashAddress.trim())
+    return "Add your address for cash payments in Settings, Contracts and invoices, so the couple know where to bring the balance. Or offer only the bank transfer balance.";
   return null;
+}
+
+/**
+ * The customer's money as email rows. A wedding the couple choose on: the deposit, then each way to pay the
+ * balance offered (or just the one they chose). Anything else: the booking fee, VAT, total and deposit, as before.
+ */
+function moneyRows(q: FullProposal, opts: { chosen?: boolean } = {}): [string, string][] {
+  const m = (x: number) => formatMoney(x, q.currency);
+  const choices = payChoices(q);
+  if (choices.length) {
+    const chosen = opts.chosen ? chosenOption(q) : null;
+    const plans = (chosen ? [chosen] : choices).map((o) => balancePlan(q, o));
+    const due = balanceDueFor(q.lines);
+    const by = due && due > todayIn(q.timezone) ? `, due by ${formatDay(due)}` : ", due now";
+    const address = q.agency.settings?.cashAddress.trim().replace(/\s*\n\s*/g, ", ");
+    return [
+      ["Your deposit, including VAT", `${m(plans[0].depositMinor)}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`],
+      ...plans.map(
+        (p) =>
+          [
+            balanceTitle(p.option, p.vatPct),
+            `${m(p.balanceMinor)}${by}${p.option === "CASH" && address ? `\nDelivered to ${address}` : ""}\nTotal ${m(p.totalMinor)}`,
+          ] as [string, string],
+      ),
+    ];
+  }
+  const t = proposalTotals(q.lines, q.bookingFeeMinor);
+  return [
+    ...(t.bookingFeeMinor ? ([["Booking fee", m(t.bookingFeeMinor)]] as [string, string][]) : []),
+    ...(t.vatMinor ? ([["VAT", m(t.vatMinor)]] as [string, string][]) : []),
+    ["Total", m(t.totalMinor)],
+    ...(q.depositMinor ? ([["Deposit", `${m(q.depositMinor)}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`]] as [string, string][]) : []),
+  ];
+}
+
+/** The amount an email leads with: a wedding's deposit when the couple choose how to pay the balance, else the total. */
+function headline(q: FullProposal) {
+  return payChoices(q).length ? proposalDeposit(q) : proposalTotals(q.lines, q.bookingFeeMinor).totalMinor;
 }
 
 /**
@@ -312,6 +371,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
   const brand = brandOf(q);
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
+  const choose = payChoices(q).length > 0;
   const firstDate = q.lines.map((l) => l.date).sort()[0];
   const name = q.contact && q.contact.email.toLowerCase() === email ? firstName(q.contact.name) : "";
   const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { email: true, name: true } }) : null;
@@ -319,7 +379,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
     first_name: name,
     event: q.title,
     date: formatDay(firstDate),
-    total: m(t.totalMinor),
+    total: m(headline(q)),
     valid_until: q.validUntil ? formatDay(q.validUntil) : "",
     business: brand,
   });
@@ -331,7 +391,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
     subject: w.subject ?? `Your proposal from ${brand}: ${q.title}`,
     email: {
       brand,
-      preheader: `${m(t.totalMinor)} for ${q.title}`,
+      preheader: choose ? `A deposit of ${m(headline(q))} secures your date for ${q.title}` : `${m(t.totalMinor)} for ${q.title}`,
       title: q.version > 1 ? "Your updated proposal" : "Your proposal",
       intro:
         w.intro ??
@@ -340,15 +400,13 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
       rows: [
         ...q.lines.map(
           (l, i) =>
-            [lineTitle(l), `${formatDay(l.date)}, ${lineTimes(l).toLowerCase()}${linePlace(l) ? `\n${linePlace(l)}` : ""}\n${m(t.lines[i].grossMinor)}`] as [
-              string,
-              string,
-            ],
+            [
+              lineTitle(l),
+              // A wedding the couple choose on leads with its deposit and balance, not each act's price.
+              `${formatDay(l.date)}, ${lineTimes(l).toLowerCase()}${linePlace(l) ? `\n${linePlace(l)}` : ""}${choose ? "" : `\n${m(t.lines[i].grossMinor)}`}`,
+            ] as [string, string],
         ),
-        ...(t.bookingFeeMinor ? ([["Booking fee", m(t.bookingFeeMinor)]] as [string, string][]) : []),
-        ...(t.vatMinor ? ([["VAT", m(t.vatMinor)]] as [string, string][]) : []),
-        ["Total", m(t.totalMinor)],
-        ...(q.depositMinor ? ([["Deposit", `${m(q.depositMinor)}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`]] as [string, string][]) : []),
+        ...moneyRows(q),
         ...(q.validUntil ? ([["Valid until", formatDay(q.validUntil)]] as [string, string][]) : []),
       ],
       cta: { label: "See your proposal", url: proposalUrl(token!) },
@@ -358,7 +416,7 @@ export async function sendProposal(user: { id: string; agencyId: string; email: 
   return { proposal: q, resent: !first, sent: status === "SENT" || status === "NOT_SENT" };
 }
 
-export type ProposalAnswer = { name: string; note: string; ip: string; agent: string; signature?: string };
+export type ProposalAnswer = { name: string; note: string; ip: string; agent: string; signature?: string; payPlan?: string | null };
 
 /**
  * The customer accepts. In one transaction: claim the proposal (only one still out with them, not
@@ -376,6 +434,10 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
   if (problem) throw new ProposalError(problem);
   if (!q.lines.length) throw new ProposalError("This proposal has nothing on it. Please contact us.");
   const settings = q.agency.settings ?? (await getSettings(q.agencyId));
+  // A wedding's couple choose how to pay the balance (src/lib/proposal-pay.ts).
+  const choice = pickOption(q, answer.payPlan);
+  if (payChoices(q).length && !choice) throw new ProposalError("Choose how you'd like to pay the balance");
+  const pay = choice ? balancePlan(q, choice) : null;
 
   // Booking numbers are taken inside the transaction; if someone else takes the same one at that
   // moment, the whole thing (claim included) rolls back and runs again.
@@ -393,6 +455,7 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
             answerIp: answer.ip,
             answerAgent: answer.agent,
             answerSignature: answer.signature ?? "",
+            payPlan: choice,
           },
         });
         if (claimed.count !== 1) return null;
@@ -419,6 +482,7 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
                 agentId: existing.agentId ?? q.agentId,
                 autoEmails: true,
                 contractTemplateId: q.contractTemplateId,
+                ...(choice ? { payPlan: PLAN_FOR[choice] } : {}),
               },
             })
           : await tx.event.create({
@@ -436,15 +500,21 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
                 agentId: q.agentId,
                 notes: `Booked from proposal ${ref}, accepted by ${answer.name}.`,
                 plannerToken: randomBytes(18).toString("base64url"),
+                ...(choice ? { payPlan: PLAN_FOR[choice] } : {}),
                 tasks: { create: defaultTasks(kind, date) },
               },
             });
 
+        // Any gig already on the wedding pays the same way: VAT on the share only with a cash balance.
+        if (existing && choice) await tx.booking.updateMany({ where: { eventId: event.id }, data: { vatOnShare: choice === "CASH" } });
         const totals = proposalTotals(q.lines, q.bookingFeeMinor);
-        const deposits = spreadDeposit(
-          q.depositMinor,
-          totals.lines.map((d) => d.totalDueMinor),
-        );
+        // The couple's choice: each gig's deposit is its share plus VAT. Otherwise the proposal's deposit, shared out.
+        const deposits = pay
+          ? pay.lineDeposits
+          : spreadDeposit(
+              q.depositMinor,
+              totals.lines.map((d) => d.totalDueMinor),
+            );
         const highest = await highestReference(q.agencyId, tx);
         // A wedding with a deposit is only booked once the deposit is in (the couple's terms): until then its
         // gigs are on Hold, the date kept for them, and the acts aren't told (src/lib/secure-event.ts).
@@ -476,6 +546,7 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
               artistFeeMinor: l.costMinor,
               commissionPct: l.artist?.defaultCommission ?? settings.defaultCommission,
               vatPct: l.vatPct,
+              vatOnShare: choice === "CASH",
               bookingFeeMinor: lineFee(i, q.bookingFeeMinor),
               depositMinor: deposits[i],
               depositDueDate: deposits[i] && q.depositDue ? zonedToUtc(q.depositDue, "23:59", tz) : null,
@@ -510,7 +581,14 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
         }
         await tx.activity.createMany({
           data: [
-            { agencyId: q.agencyId, entity: "QUOTE", entityId: q.id, action: `customer accepted proposal ${ref}`, detail: answer.name, createdAt: now },
+            {
+              agencyId: q.agencyId,
+              entity: "QUOTE",
+              entityId: q.id,
+              action: `customer accepted proposal ${ref}`,
+              detail: choice ? `${answer.name}, balance ${choice === "CASH" ? "in cash" : "by bank transfer"}` : answer.name,
+              createdAt: now,
+            },
             {
               agencyId: q.agencyId,
               entity: "EVENT",
@@ -570,8 +648,9 @@ export async function declineProposal(token: string, answer: ProposalAnswer) {
 
 /** The deposit's "Pay now" link for the event, when card payments are set up and there's a deposit. */
 export async function depositLinkFor(proposalId: string) {
-  const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: { agency: true } });
-  if (!q?.eventId || q.depositMinor <= 0 || !(await cardPaymentsReady(q.agency))) return null;
+  const q = await prisma.quote.findUnique({ where: { id: proposalId }, include: { agency: true, lines: true } });
+  // The deposit the couple were asked for (each booking carries its part, and the link adds them up).
+  if (!q?.eventId || proposalDeposit(q) <= 0 || !(await cardPaymentsReady(q.agency))) return null;
   return ensurePayLink(q.agencyId, { eventId: q.eventId }, "DEPOSIT");
 }
 
@@ -657,12 +736,13 @@ async function tellCustomerHeld(q: FullProposal) {
   const m = (x: number) => formatMoney(x, q.currency);
   const firstDate = q.lines.map((l) => l.date).sort()[0];
   const name = firstName(q.answerName || q.contact?.name || "");
-  const deposit = m(q.depositMinor);
+  const deposit = m(proposalDeposit(q));
+  const chosen = chosenOption(q);
   const w = messageFor(q.agency.settings?.messageTemplates, "QUOTE_ACCEPTED_HELD", {
     first_name: name,
     event: q.title,
     date: formatDay(firstDate),
-    total: m(t.totalMinor),
+    total: m(chosen ? balancePlan(q, chosen).totalMinor : t.totalMinor),
     deposit,
     business: brand,
   });
@@ -688,8 +768,12 @@ async function tellCustomerHeld(q: FullProposal) {
         ...q.lines.map(
           (l) => [lineTitle(l), `${formatDay(l.date)}, ${lineTimes(l).toLowerCase()}${linePlace(l) ? `\n${linePlace(l)}` : ""}`] as [string, string],
         ),
-        ["Total", m(t.totalMinor)],
-        ["Deposit to pay", `${deposit}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`],
+        ...(chosen
+          ? moneyRows(q, { chosen: true })
+          : ([
+              ["Total", m(t.totalMinor)],
+              ["Deposit to pay", `${deposit}${q.depositDue ? `, due by ${formatDay(q.depositDue)}` : ""}`],
+            ] as [string, string][])),
       ],
       cta: link ? { label: `Pay your deposit of ${deposit}`, url: payUrl(link.token) } : undefined,
       outro: link
@@ -749,7 +833,7 @@ export async function sendProposalChase(q: FullProposal, day: ChaseDay) {
     first_name: name,
     event: q.title,
     date: formatDay(firstDate),
-    total: m(t.totalMinor),
+    total: m(headline(q)),
     valid_until: valid,
     business: brand,
   });
@@ -771,11 +855,7 @@ export async function sendProposalChase(q: FullProposal, day: ChaseDay) {
         (day === 3
           ? `${hi}, just checking you've seen your proposal for ${q.title} on ${formatDay(firstDate)}. You can read it and sign it online in a minute, and it works on your phone.`
           : `${hi}, a gentle reminder that your proposal for ${q.title} on ${formatDay(firstDate)} is still waiting for you.${valid ? ` It's valid until ${valid}.` : ""} If you'd like to go ahead, you can sign it online in a minute.`),
-      rows: [
-        ["Total", m(t.totalMinor)],
-        ...(q.depositMinor ? ([["Deposit", m(q.depositMinor)]] as [string, string][]) : []),
-        ...(valid ? ([["Valid until", valid]] as [string, string][]) : []),
-      ],
+      rows: [...moneyRows(q), ...(valid ? ([["Valid until", valid]] as [string, string][]) : [])],
       cta: { label: "See your proposal", url: proposalUrl(q.token) },
       outro: `Want to change something, or have a question? Just reply to this email to reach ${agent?.name ?? brand}. We're happy to help.`,
     },
@@ -839,6 +919,8 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
   if (!w.on) return;
   const t = proposalTotals(q.lines, q.bookingFeeMinor);
   const m = (x: number) => formatMoney(x, q.currency);
+  const chosen = accepted ? chosenOption(q) : null;
+  const plan = chosen ? balancePlan(q, chosen) : null;
   const subject = w.subject ?? `Proposal ${accepted ? "accepted" : "declined"}: ${q.title} (${proposalRef(q)})`;
   const url = accepted && q.eventId ? `${appUrl()}/events/${q.eventId}` : `${appUrl()}/quotes/${q.id}`;
   const agent = q.agentId ? await prisma.user.findUnique({ where: { id: q.agentId }, select: { id: true, email: true, notifyPrefs: true } }) : null;
@@ -864,13 +946,19 @@ async function tellTeam(q: FullProposal, answer: "ACCEPTED" | "DECLINED") {
         intro:
           w.intro ??
           (held
-            ? `${who} has accepted the proposal for ${q.title}. It's signed, and the wedding and its bookings are made and on hold until the deposit of ${m(q.depositMinor)} is in. The couple have been asked to pay it. Once it's in, the bookings are confirmed${q.tellActs ? " and the acts are told" : ". The acts won't be emailed, so tell them yourself then"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
+            ? `${who} has accepted the proposal for ${q.title}. It's signed, and the wedding and its bookings are made and on hold until the deposit of ${m(proposalDeposit(q))} is in. The couple have been asked to pay it. Once it's in, the bookings are confirmed${q.tellActs ? " and the acts are told" : ". The acts won't be emailed, so tell them yourself then"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
             : accepted
               ? `${who} has accepted the proposal for ${q.title}. It's signed and locked in: the wedding or event and its bookings are made${q.tellActs ? ", and the acts have been told" : ". The acts haven't been emailed, so tell them yourself"}.${pending ? ` ${pending} line${pending === 1 ? " still needs" : "s still need"} an act.` : ""}`
               : `${who} has declined the proposal for ${q.title}.`),
         rows: [
           ["Proposal", proposalRef(q)],
-          ["Total", m(t.totalMinor)],
+          ["Total", m(plan ? plan.totalMinor : t.totalMinor)],
+          ...(plan
+            ? ([
+                ["Deposit", m(plan.depositMinor)],
+                ["Balance", `${m(plan.balanceMinor)} ${chosen === "CASH" ? "in cash, no VAT" : "by bank transfer, with VAT"}`],
+              ] as [string, string][])
+            : []),
           ["We make", m(t.agencyMinor)],
           ...(q.answerNote ? ([[accepted ? "Their message" : "Their reason", q.answerNote]] as [string, string][]) : []),
         ],

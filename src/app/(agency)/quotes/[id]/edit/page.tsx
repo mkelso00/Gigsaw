@@ -9,6 +9,7 @@ import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { contractTemplatesFor } from "@/lib/contract-templates-server";
 import { getSettings, prisma } from "@/lib/db";
 import { defaultBookingFee, defaultVat, minorToInput } from "@/lib/money";
+import { payNoteText } from "@/lib/proposal-pay";
 import { canEdit, proposalRef } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 import { VENUE_ORDER } from "@/lib/venue-order";
@@ -68,7 +69,10 @@ export default async function EditProposalPage({ params }: { params: Promise<{ i
           message: q.message,
           contractTemplateId: q.contractTemplateId ?? "",
           terms: q.terms,
+          payOptions: q.payOptions,
+          payNote: q.payNote,
         }}
+        payNotePlaceholder={payNoteText(settings.payNote, { business: settings.agencyName, cashAddress: settings.cashAddress })}
         lines={q.lines.map((l) => ({
           artistId: l.artistId ?? "",
           description: l.description,

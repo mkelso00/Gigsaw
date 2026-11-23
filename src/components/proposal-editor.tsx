@@ -5,6 +5,7 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import type { FormState } from "@/lib/forms";
 import { formatMoney } from "@/lib/money";
+import { BALANCE_OPTION_STAFF, BALANCE_OPTIONS, balancePlan, type BalanceOption } from "@/lib/proposal-pay";
 import { draftMoney, MAX_LINES, proposalTotals, type ProposalLineDraft } from "@/lib/proposals";
 
 // The proposal editor: the lines (act, what they do, when, where, price and the act's fee), the
@@ -25,6 +26,10 @@ export type ProposalEditorValues = {
   /** The contract type picked, or "" for none. */
   contractTemplateId: string;
   terms: string;
+  /** A wedding's ways to pay the balance offered (src/lib/proposal-pay.ts). */
+  payOptions: string[];
+  /** This proposal's own note under the ways to pay ("" for the one in Settings). */
+  payNote: string;
 };
 
 /** A contract type to choose from, with its wording (Settings, Contracts and invoices). */
@@ -45,6 +50,7 @@ export function ProposalEditor({
   defaultFee,
   defaultVat = "",
   contractTypes = [],
+  payNotePlaceholder = "",
 }: {
   action: (state: FormState, form: FormData) => Promise<FormState>;
   values: ProposalEditorValues;
@@ -60,10 +66,20 @@ export function ProposalEditor({
   defaultVat?: string;
   /** The business's contract types, for the Contract select. */
   contractTypes?: ContractTypeOption[];
+  /** The note from Settings, shown in the empty note box. */
+  payNotePlaceholder?: string;
 }) {
   const [lines, setLines] = useState<Line[]>(() => start.map((l) => ({ ...l, key: newKey() })));
   const [fee, setFee] = useState(values.bookingFee);
   const [deposit, setDeposit] = useState(values.deposit);
+  const [eventType, setEventType] = useState(values.eventType);
+  const wedding = eventType === "WEDDING";
+  // A wedding offers both ways to pay the balance unless staff untick one.
+  const [offer, setOffer] = useState<BalanceOption[]>(() => {
+    const saved = BALANCE_OPTIONS.filter((o) => values.payOptions.includes(o));
+    return saved.length ? saved : [...BALANCE_OPTIONS];
+  });
+  const toggleOffer = (o: BalanceOption, on: boolean) => setOffer((xs) => BALANCE_OPTIONS.filter((x) => (x === o ? on : xs.includes(x))));
   const m = (x: number) => formatMoney(x, currency);
 
   const money = (s: string) => draftMoney({ sale: s, cost: "", vatPct: "" }, currency).saleMinor;
@@ -76,6 +92,12 @@ export function ProposalEditor({
     [lines, fee, currency],
   ); // eslint-disable-line react-hooks/exhaustive-deps
   const depositMinor = money(deposit);
+  // What a wedding asks for: the deposit (the share plus VAT) and each way to pay the balance.
+  const plans = useMemo(() => {
+    const draft = { bookingFeeMinor: money(fee), lines: lines.map((l) => draftMoney(l, currency)) };
+    return BALANCE_OPTIONS.map((o) => balancePlan(draft, o));
+  }, [lines, fee, currency]); // eslint-disable-line react-hooks/exhaustive-deps
+  const feesMissing = lines.some((l) => !l.cost.trim());
   const termsBox = useRef<HTMLTextAreaElement>(null);
   /**
    * Picking a contract puts its wording in the Terms box, which stays an ordinary text box staff can change for
@@ -134,7 +156,7 @@ export function ProposalEditor({
         </label>
         <label className="block">
           <span className="label">Type of event</span>
-          <select name="eventType" defaultValue={values.eventType} className="input">
+          <select name="eventType" defaultValue={values.eventType} onChange={(e) => setEventType(e.target.value)} className="input">
             {eventTypes.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
@@ -288,6 +310,7 @@ export function ProposalEditor({
                       className="input"
                       aria-label={`Price, line ${i + 1}`}
                     />
+                    <span className="hint block">What the couple pays for this act, before VAT.</span>
                   </label>
                   <label className="block lg:col-span-2">
                     <span className="label">Act&apos;s fee (staff only)</span>
@@ -299,6 +322,9 @@ export function ProposalEditor({
                       className="input"
                       aria-label={`Act's fee, line ${i + 1}`}
                     />
+                    <span className="hint block">
+                      What the band gets. Never shown as a fee.{wedding ? " On a wedding it's the balance the couple pay." : ""}
+                    </span>
                   </label>
                   <label className="block">
                     <span className="label">VAT %</span>
@@ -337,7 +363,7 @@ export function ProposalEditor({
             <span className="label">Booking fee ({currency})</span>
             <input name="bookingFee" value={fee} onChange={(e) => setFee(e.target.value)} inputMode="decimal" placeholder="0.00" className="input" />
             <span className="hint block">
-              From Settings, all yours.{" "}
+              An extra fee on top. Leave at 0 unless you charge one separately.{" "}
               {fee !== defaultFee && (
                 <button type="button" className="link" onClick={() => setFee(defaultFee)}>
                   Use {defaultFee ? m(money(defaultFee)) : "none"}
@@ -346,13 +372,24 @@ export function ProposalEditor({
             </span>
           </label>
           <div />
-          <label className="block">
-            <span className="label">Deposit ({currency})</span>
-            <input name="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value)} inputMode="decimal" placeholder="0.00" className="input" />
-            {totals.totalMinor > 0 && depositMinor > 0 && (
-              <span className="hint block">{Math.round((depositMinor / totals.totalMinor) * 100)}% of the total</span>
-            )}
-          </label>
+          {wedding ? (
+            <div className="block">
+              <span className="label">Deposit</span>
+              <div className="input flex items-center bg-ink-50 tabular-nums" data-testid="proposal-deposit">
+                {m(plans[0].depositMinor)}
+              </div>
+              <span className="hint block">Your share (price less the act&apos;s fee, plus any booking fee), plus VAT. It secures the date.</span>
+            </div>
+          ) : (
+            <label className="block">
+              <span className="label">Deposit ({currency})</span>
+              <input name="deposit" value={deposit} onChange={(e) => setDeposit(e.target.value)} inputMode="decimal" placeholder="0.00" className="input" />
+              <span className="hint block">
+                Leave blank for no deposit.
+                {totals.totalMinor > 0 && depositMinor > 0 ? ` ${Math.round((depositMinor / totals.totalMinor) * 100)}% of the total.` : ""}
+              </span>
+            </label>
+          )}
           <label className="block">
             <span className="label">Deposit due by</span>
             <input name="depositDue" type="date" defaultValue={values.depositDue} className="input" />
@@ -369,6 +406,40 @@ export function ProposalEditor({
               <span className="hint block">Untick to tell them yourself. The bookings are still made.</span>
             </span>
           </label>
+          {wedding && (
+            <fieldset className="sm:col-span-2" data-testid="pay-options">
+              <legend className="label">Ways the couple can pay the balance</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {BALANCE_OPTIONS.map((o, i) => (
+                  <label
+                    key={o}
+                    className="flex items-start gap-2 rounded-xl border border-ink-200 p-3 text-sm has-[:checked]:border-ink-950 has-[:checked]:bg-ink-50"
+                  >
+                    <input
+                      type="checkbox"
+                      name="payOptions"
+                      value={o}
+                      checked={offer.includes(o)}
+                      onChange={(e) => toggleOffer(o, e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Offer: {BALANCE_OPTION_STAFF[o].label}
+                      <span className="hint block">
+                        {BALANCE_OPTION_STAFF[o].hint} Balance {m(plans[i].balanceMinor)}, {m(plans[i].totalMinor)} in all.
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {feesMissing && <p className="mt-1.5 text-xs text-amber-800">Put in each act&apos;s fee: the deposit and the balance are worked out from it.</p>}
+              <label className="mt-3 block">
+                <span className="label">Note under the ways to pay</span>
+                <textarea name="payNote" rows={3} maxLength={2000} defaultValue={values.payNote} placeholder={payNotePlaceholder} className="input" />
+                <span className="hint block">Leave it blank for the note in Settings, Contracts and invoices.</span>
+              </label>
+            </fieldset>
+          )}
           <label className="block sm:col-span-2">
             <span className="label">A note to the customer</span>
             <textarea
@@ -428,7 +499,12 @@ export function ProposalEditor({
               <Row k="Acts" v={m(totals.saleMinor)} />
               {totals.bookingFeeMinor > 0 && <Row k="Booking fee" v={m(totals.bookingFeeMinor)} />}
               {totals.vatMinor > 0 && <Row k="VAT" v={m(totals.vatMinor)} />}
-              {depositMinor > 0 && <Row k="Deposit" v={m(depositMinor)} />}
+              {!wedding && depositMinor > 0 && <Row k="Deposit" v={m(depositMinor)} />}
+              {wedding && <Row k="Deposit, with VAT" v={m(plans[0].depositMinor)} />}
+              {wedding &&
+                BALANCE_OPTIONS.filter((o) => offer.includes(o)).map((o) => (
+                  <Row key={o} k={o === "CASH" ? "Balance in cash" : "Balance by transfer"} v={m(plans[BALANCE_OPTIONS.indexOf(o)].balanceMinor)} />
+                ))}
             </dl>
           </div>
           <div className="card p-5">

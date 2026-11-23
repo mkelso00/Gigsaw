@@ -26,6 +26,7 @@ import {
   publishProposal,
   sendProposal,
 } from "@/lib/proposal-server";
+import { parsePayOptions } from "@/lib/proposal-pay";
 import { canWithdraw, looksLikeProposalToken, parseAmount, parseProposalLines, proposalRef, proposalTotals } from "@/lib/proposals";
 import { localDateKey } from "@/lib/time";
 import { log } from "@/server/log";
@@ -83,7 +84,10 @@ export async function saveProposal(proposalId: string, _: FormState, form: FormD
     if (!title) throw new FormError("Give the proposal a name, like Hannah and Sam's wedding");
     const eventType = oneOf(str(form, "eventType"), EVENT_TYPES, "WEDDING");
     const bookingFeeMinor = parseAmount(str(form, "bookingFee"), q.currency, "booking fee") ?? 0;
-    const depositMinor = parseAmount(str(form, "deposit"), q.currency, "deposit") ?? 0;
+    // A wedding's couple choose how to pay the balance, and its deposit is always the business's share plus VAT
+    // (src/lib/proposal-pay.ts), so a typed deposit is only for anything else.
+    const payOptions = parsePayOptions(form.getAll("payOptions"), eventType);
+    const depositMinor = payOptions.length ? 0 : (parseAmount(str(form, "deposit"), q.currency, "deposit") ?? 0);
     const today = localDateKey(new Date(), q.timezone);
     const depositDue = str(form, "depositDue");
     if (depositDue && !isRealDate(depositDue)) throw new FormError("Check the deposit due date");
@@ -104,7 +108,9 @@ export async function saveProposal(proposalId: string, _: FormState, form: FormD
           eventType,
           bookingFeeMinor,
           depositMinor,
-          depositDue: depositMinor > 0 && depositDue ? depositDue : null,
+          depositDue: (depositMinor > 0 || payOptions.length > 0) && depositDue ? depositDue : null,
+          payOptions,
+          payNote: str(form, "payNote").slice(0, 2000),
           validUntil: validUntil || null,
           tellActs: form.get("tellActs") === "on",
           message: str(form, "message").slice(0, 3000),
@@ -219,7 +225,7 @@ export async function acceptProposalAnswer(token: string, _: FormState, form: Fo
     const signature = checkSignature(str(form, "signature"));
     if (!signature) throw new FormError("Draw your signature in the box");
     if (form.get("agree") !== "on") throw new FormError("Tick the box to say you accept the proposal");
-    const done = await acceptProposal(token, { name, signature, ...(await answerFrom(form, "note")) });
+    const done = await acceptProposal(token, { name, signature, payPlan: str(form, "payPlan") || null, ...(await answerFrom(form, "note")) });
     // A second tap (or another device) finds it already accepted: nothing more happens.
     if (!done) return;
     try {

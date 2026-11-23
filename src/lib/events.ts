@@ -26,6 +26,7 @@ import { actName } from "./constants";
 import { messageFor } from "./message-templates";
 import { recipientsForGigs } from "./people";
 import { claimedReminders, claimReminder } from "./reminders";
+import { cashAddressLine } from "./proposal-pay";
 import { formatDate, localDateKey, localTime } from "./time";
 
 export { JOURNEY_LIVE, missedAtLaunch } from "./event-plan";
@@ -195,6 +196,13 @@ const firstOf = (name: string) => name.trim().split(/\s+/)[0] ?? "";
 const dayText = (key: string) => formatDate(new Date(`${key}T12:00:00Z`), "UTC");
 const todayOf = (e: { timezone: string }) => localDateKey(new Date(), e.timezone);
 const theCustomer = (e: FullEvent) => (isWedding(e) ? "the couple" : "the customer");
+/** The balance is paid to the business in cash, with no VAT (src/lib/pay-plan.ts BALANCE_CASH). */
+const cashBalance = (e: FullEvent) => e.payPlan === "BALANCE_CASH";
+/** How a cash balance reaches the business, for the customer's emails. */
+export function cashHow(address: string | null | undefined) {
+  const where = cashAddressLine(address);
+  return where ? `In cash, with no VAT, brought to ${where}` : "In cash, with no VAT. We'll send you the address to bring it to";
+}
 const moneyOf = (e: FullEvent) => {
   const currency = eventTotals(e.bookings).currency;
   return (x: number) => formatMoney(x, currency);
@@ -230,7 +238,10 @@ function paymentSummary(e: FullEvent): [string, string][] {
     const usLeft = directTotals(live(e)).usLeft;
     rows.push([`Deposit to ${brandOf(e)}`, usLeft > 0 ? `${m(usLeft)}, due ${due > todayOf(e) ? `by ${dueText}` : "now"}` : "Paid, thank you"]);
     rows.push(["The acts", e.payPlan === "DEPOSIT_CASH" ? "Paid in cash on the day" : "Paid by bank transfer, straight to them"]);
-  } else if (t.outstanding > 0) rows.push(["Balance due", dueText]);
+  } else if (t.outstanding > 0) {
+    rows.push(["Balance due", dueText]);
+    if (cashBalance(e)) rows.push(["How to pay the balance", cashHow(e.agency.settings?.cashAddress)]);
+  }
   return rows;
 }
 
@@ -315,11 +326,15 @@ async function sendBalanceReminder(e: FullEvent) {
         ["Left to pay", m(t.outstanding)],
       ];
   rows.push(["Due", later ? dayText(due) : "Now"]);
-  const acts = !direct
-    ? ""
-    : e.payPlan === "DEPOSIT_CASH"
-      ? " The rest is paid in cash to each act on the day."
-      : " The rest goes straight to each act by bank transfer: their details are on your page.";
+  const cash = cashBalance(e);
+  if (cash) rows.push(["How to pay", cashHow(e.agency.settings?.cashAddress)]);
+  const acts = cash
+    ? " As agreed, it's paid to us in cash with no VAT added, and we pass it to your musicians in full."
+    : !direct
+      ? ""
+      : e.payPlan === "DEPOSIT_CASH"
+        ? " The rest is paid in cash to each act on the day."
+        : " The rest goes straight to each act by bank transfer: their details are on your page.";
   await sendEmail({
     kind: "EVENT",
     agencyId: e.agencyId,
@@ -336,7 +351,7 @@ async function sendBalanceReminder(e: FullEvent) {
         }.${acts}`,
       rows,
       cta: e.plannerToken ? { label: "See your page", url: plannerUrl(e.plannerToken) } : undefined,
-      outro: "Reply to this email if you'd like our bank details again or have any questions.",
+      outro: cash ? "Reply to this email if you have any questions." : "Reply to this email if you'd like our bank details again or have any questions.",
     },
   });
   return true;
@@ -494,7 +509,9 @@ async function sendWeekToGo(e: FullEvent) {
   const actsLeft = isDirectPlan(e.payPlan) ? directTotals(live(e)).actLeft : 0;
   const outro =
     owed > 0
-      ? `One small thing: there's ${moneyOf(e)(owed)} still to pay us. Reply to this email if you'd like our bank details again.`
+      ? cashBalance(e)
+        ? `One small thing: there's ${moneyOf(e)(owed)} still to pay us. ${cashHow(e.agency.settings?.cashAddress)}.`
+        : `One small thing: there's ${moneyOf(e)(owed)} still to pay us. Reply to this email if you'd like our bank details again.`
       : actsLeft > 0
         ? e.payPlan === "DEPOSIT_CASH"
           ? "Just remember the cash for the acts on the day: your page has the details."
