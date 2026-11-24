@@ -43,13 +43,13 @@ test("edit one booking and copy the new start time and travel to the venue's oth
   const panel = page.getByRole("region", { name: `Also change other bookings at ${venue.name}` });
   await expect(panel.getByRole("radio", { name: /Only this booking/ })).toBeChecked();
   await expect(panel.getByText(`All upcoming bookings at ${venue.name}`).locator("..")).toContainText("3 more bookings");
-  await expect(panel.getByText(`Upcoming Wednesdays at ${venue.name}`).locator("..")).toContainText("2 more bookings");
+  await expect(panel.getByText("All upcoming Wednesdays, any time").locator("..")).toContainText("2 more bookings");
 
   // The quick New booking pop-up is in the page too, so look only inside this form.
   const form = page.locator("form").filter({ has: save });
   await form.getByLabel("Start", { exact: true }).fill("21:15");
   await form.getByLabel("Travel", { exact: true }).fill("Park in the yard behind the pub");
-  await panel.getByRole("radio", { name: /Upcoming Wednesdays/ }).check();
+  await panel.getByRole("radio", { name: /All upcoming Wednesdays, any time/ }).check();
   await save.click();
 
   // Asked first, with the count and what changes.

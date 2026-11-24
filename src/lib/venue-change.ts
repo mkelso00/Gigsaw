@@ -14,7 +14,9 @@ import { localDateKey, localTime } from "./time";
 // itinerary notes, money notes, and the sale and cost where that's safe (see moneyFits). The act, date,
 // status and venue of the other bookings never change.
 
-export const VENUE_SCOPES = ["ONE", "ALL", "WEEKDAY"] as const;
+// SLOT: the venue's other gigs at the same start time as this one (e.g. only the 5pm sets, not the 9pm ones);
+// WEEKDAY_SLOT: the same, on the same day of the week.
+export const VENUE_SCOPES = ["ONE", "WEEKDAY_SLOT", "SLOT", "WEEKDAY", "ALL"] as const;
 export type VenueScope = (typeof VENUE_SCOPES)[number];
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -110,7 +112,10 @@ export function changedForVenue(old: Booking, data: Parsed): VenueChange {
   return change;
 }
 
-type Source = Pick<Booking, "id" | "agencyId" | "venueId" | "arriveBy" | "timezone">;
+type Source = Pick<Booking, "id" | "agencyId" | "venueId" | "arriveBy" | "setStart" | "timezone">;
+
+/** A gig's start time on the clock, in its own time zone, e.g. "17:00": what makes it the same slot. */
+const startClock = (b: { setStart: Date; timezone: string }) => localTime(b.setStart, b.timezone);
 
 /**
  * The venue's other bookings a change would reach: upcoming (not started yet), not archived, cancelled
@@ -132,6 +137,9 @@ export async function venueTargets(source: Source, scope: VenueScope, now = new 
   });
   if (scope === "ALL") return all;
   const day = weekdayOf(source);
+  const start = startClock(source);
+  if (scope === "SLOT") return all.filter((b) => startClock(b) === start);
+  if (scope === "WEEKDAY_SLOT") return all.filter((b) => weekdayOf(b) === day && startClock(b) === start);
   return all.filter((b) => weekdayOf(b) === day);
 }
 
@@ -139,7 +147,15 @@ export async function venueTargets(source: Source, scope: VenueScope, now = new 
 export async function venueScopeCounts(source: Source, now = new Date()) {
   const all = await venueTargets(source, "ALL", now);
   const day = weekdayOf(source);
-  return { all: all.length, weekday: all.filter((b) => weekdayOf(b) === day).length, weekdayName: WEEKDAY_NAMES[day] };
+  const start = startClock(source);
+  return {
+    all: all.length,
+    weekday: all.filter((b) => weekdayOf(b) === day).length,
+    slot: all.filter((b) => startClock(b) === start).length,
+    weekdaySlot: all.filter((b) => weekdayOf(b) === day && startClock(b) === start).length,
+    weekdayName: WEEKDAY_NAMES[day],
+    startTime: start,
+  };
 }
 
 type Target = Awaited<ReturnType<typeof venueTargets>>[number];
@@ -216,12 +232,21 @@ export function joinWords(words: string[]) {
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "47 upcoming bookings at The Swan" or "12 upcoming Wednesdays at The Swan". */
-export function scopeWords(n: number, scope: VenueScope, venueName: string, weekday: string) {
-  return `${n} upcoming ${scope === "WEEKDAY" ? weekday : "booking"}${n === 1 ? "" : "s"} at ${venueName}`;
+export function scopeWords(n: number, scope: VenueScope, venueName: string, weekday: string, startTime = "") {
+  return `${n} upcoming ${scopeNoun(scope, weekday, startTime, n)} at ${venueName}`;
+}
+
+/** "booking(s)", "Wednesday(s)", "17:00 gig(s)", "Wednesday 17:00 gig(s)". */
+function scopeNoun(scope: VenueScope, weekday: string, startTime: string, n: number) {
+  const s = n === 1 ? "" : "s";
+  if (scope === "WEEKDAY") return `${weekday}${s}`;
+  if (scope === "SLOT") return `${startTime} gig${s}`;
+  if (scope === "WEEKDAY_SLOT") return `${weekday} ${startTime} gig${s}`;
+  return `booking${s}`;
 }
 
 /** The question asked before copying, in the app's confirm box ("Save anyway" style). */
-export function venueConfirm(plan: VenuePlan, opts: { scope: VenueScope; venueName: string; weekday: string; notify: boolean }) {
+export function venueConfirm(plan: VenuePlan, opts: { scope: VenueScope; venueName: string; weekday: string; startTime?: string; notify: boolean }) {
   const n = plan.rows.length;
   const what = joinWords(plan.change.labels);
   const items = [`Each booking keeps its own date, act and status. This booking is saved too, so ${plural(n + 1, "booking")} change in all.`];
@@ -241,7 +266,7 @@ export function venueConfirm(plan: VenuePlan, opts: { scope: VenueScope; venueNa
   if (plan.moneyKept)
     items.push(`Sale and cost stay as they are on ${plural(plan.moneyKept, "booking")} with payments logged, another currency or a bigger deposit.`);
   return {
-    title: `Change ${what} on ${n} other upcoming ${opts.scope === "WEEKDAY" ? opts.weekday : "booking"}${n === 1 ? "" : "s"} at ${opts.venueName}?`,
+    title: `Change ${what} on ${n} other upcoming ${scopeNoun(opts.scope, opts.weekday, opts.startTime ?? "", n)} at ${opts.venueName}?`,
     items,
     button: `Change ${plural(n + 1, "booking")}`,
   };

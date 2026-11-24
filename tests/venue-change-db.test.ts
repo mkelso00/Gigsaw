@@ -112,12 +112,18 @@ describeDb("copying a booking's changes to the venue's other bookings (database)
   };
 
   /** What updateBooking does: save this booking, then copy the change to the others. */
-  const save = async (b: Awaited<ReturnType<typeof gig>>, changes: Record<string, string>, scope: "ALL" | "WEEKDAY", notify = true) => {
+  const save = async (
+    b: Awaited<ReturnType<typeof gig>>,
+    changes: Record<string, string>,
+    scope: "ALL" | "WEEKDAY" | "SLOT" | "WEEKDAY_SLOT",
+    notify = true,
+  ) => {
     const settings = await prisma.settings.findUniqueOrThrow({ where: { agencyId: t.agency.id } });
     const data = await parseBookingForm(formFor(b, changes), settings, t.agency.id);
     const plan = await vc.planVenueChange(b, data, scope);
+    // The start time before this save: which slot "the same time" means.
     await prisma.booking.update({ where: { id: b.id }, data });
-    const opts = { scope, venueName: "The Swan", weekday: vc.weekdayName(b), notify };
+    const opts = { scope, venueName: "The Swan", weekday: vc.weekdayName(b), startTime: localTime(b.setStart, TZ), notify };
     const res = await vc.applyVenuePlan(t.user as never, b.id, plan, opts);
     return { plan, res, confirm: vc.venueConfirm(plan, opts) };
   };
@@ -189,6 +195,32 @@ describeDb("copying a booking's changes to the venue's other bookings (database)
     expect(vc.changedForVenue(source, data).labels).toEqual([]);
   });
 
+  it("with two sets a night (5 till 7 and 9 till 11), changing the 5pm gig's times reaches only the 5pm gigs", async () => {
+    const early = { arrive: "16:30", setStart: "17:00", setEnd: "19:00" };
+    const late = { arrive: "20:30", setStart: "21:00", setEnd: "23:00" };
+    const source = await gig(wedBst, {}, early);
+    const sameNightLate = await gig(wedBst, {}, late);
+    const nextWedEarly = await gig(wedBst2, {}, early);
+    const nextWedLate = await gig(wedBst2, {}, late);
+    const thuEarly = await gig(thuBst, {}, early);
+
+    expect(await vc.venueScopeCounts(source)).toMatchObject({ all: 4, weekday: 3, slot: 2, weekdaySlot: 1, startTime: "17:00" });
+    expect((await vc.venueTargets(source, "SLOT")).map((b) => b.id).sort()).toEqual([nextWedEarly.id, thuEarly.id].sort());
+    expect((await vc.venueTargets(source, "WEEKDAY_SLOT")).map((b) => b.id)).toEqual([nextWedEarly.id]);
+
+    const { confirm } = await save(source, { setStartTime: "17:30", setEndTime: "19:30" }, "SLOT");
+    expect(confirm.title).toBe("Change start time and finish time on 2 other upcoming 17:00 gigs at The Swan?");
+    for (const b of [nextWedEarly, thuEarly]) {
+      const after = await reload(b.id);
+      expect([clock(after.setStart), clock(after.setEnd)]).toEqual(["17:30", "19:30"]);
+    }
+    // The 9pm sets are left exactly as they were.
+    for (const b of [sameNightLate, nextWedLate]) {
+      const after = await reload(b.id);
+      expect([clock(after.setStart), clock(after.setEnd)]).toEqual(["21:00", "23:00"]);
+    }
+  });
+
   it("reaches all upcoming bookings or only the same weekday, skipping past, cancelled, settled, archived, other venues and other agencies", async () => {
     const source = await gig(wedGmt);
     const wed = await gig(wedBst);
@@ -207,7 +239,7 @@ describeDb("copying a booking's changes to the venue's other bookings (database)
       }),
     ]);
 
-    expect(await vc.venueScopeCounts(source)).toEqual({ all: 3, weekday: 2, weekdayName: "Wednesday" });
+    expect(await vc.venueScopeCounts(source)).toEqual({ all: 3, weekday: 2, slot: 3, weekdaySlot: 2, weekdayName: "Wednesday", startTime: "20:00" });
     expect((await vc.venueTargets(source, "ALL")).map((b) => b.id).sort()).toEqual([wed.id, wed2.id, thu.id].sort());
     expect((await vc.venueTargets(source, "WEEKDAY")).map((b) => b.id).sort()).toEqual([wed.id, wed2.id].sort());
 

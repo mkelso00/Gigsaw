@@ -1,16 +1,28 @@
 import Link from "next/link";
 
-export type AlsoChange = { venueId: string; venueName: string; weekdayName: string; all: number; weekday: number };
+export type AlsoChange = {
+  venueId: string;
+  venueName: string;
+  weekdayName: string;
+  all: number;
+  weekday: number;
+  slot: number;
+  weekdaySlot: number;
+  startTime: string;
+};
 
 /**
  * At the foot of a booking's edit form: copy this save's changes to the venue's other upcoming bookings
  * (actions/bookings.ts, lib/venue-change.ts). Saving with anything but "Only this booking" asks first.
  */
-export function AlsoChangePanel({ venueId, venueName, weekdayName, all, weekday }: AlsoChange) {
+export function AlsoChangePanel({ venueId, venueName, weekdayName, all, weekday, slot, weekdaySlot, startTime }: AlsoChange) {
+  // The same-time choices first: a venue with two sets a night (e.g. 5pm and 9pm) changes only the one it means.
   const options = [
     { value: "ONE", label: "Only this booking", count: null },
-    { value: "ALL", label: `All upcoming bookings at ${venueName}`, count: all },
-    { value: "WEEKDAY", label: `Upcoming ${weekdayName}s at ${venueName}`, count: weekday },
+    { value: "WEEKDAY_SLOT", label: `Upcoming ${weekdayName}s starting at ${startTime}`, count: weekdaySlot },
+    { value: "SLOT", label: `Every upcoming gig starting at ${startTime}`, count: slot },
+    { value: "WEEKDAY", label: `All upcoming ${weekdayName}s, any time`, count: weekday },
+    { value: "ALL", label: `All upcoming bookings at ${venueName}, any time`, count: all },
   ];
   return (
     <section className="card card-pad space-y-4" aria-labelledby="also-change-title">
@@ -23,7 +35,7 @@ export function AlsoChangePanel({ venueId, venueName, weekdayName, all, weekday 
           and archived bookings are left alone.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {options.map((o) => (
           <label
             key={o.value}

@@ -20,7 +20,7 @@ import { logBookedAnyway, mergeHolds, signupGate } from "@/lib/book-signed-up-se
 import { getSettings, logActivities, logActivity, prisma } from "@/lib/db";
 import { FormError, confirmed, handleForm, oneOf, required, str, type FormState } from "@/lib/forms";
 import { formatMoney, toMinor } from "@/lib/money";
-import { localDateKey, zonedToUtc } from "@/lib/time";
+import { localDateKey, localTime, zonedToUtc } from "@/lib/time";
 import { applyVenuePlan, planVenueChange, VENUE_SCOPES, venueConfirm, weekdayName } from "@/lib/venue-change";
 import { cleanDates, copyBookingToDates } from "@/lib/copy-booking";
 import { MAX_COPY_DATES } from "@/lib/constants";
@@ -157,8 +157,11 @@ async function venueChangeFor(
         : "None of your changes can go to other bookings: only times, itinerary, notes, sale and cost can. Choose Only this booking to save it.",
     );
   }
-  if (!plan.rows.length) throw new FormError(`There are no other upcoming bookings at ${venueName} to change. Choose Only this booking to save it.`);
-  return { plan, opts: { scope, venueName, weekday: weekdayName(old), notify: str(form, "notifyArtist") === "on" } };
+  if (!plan.rows.length) throw new FormError(`There are no other upcoming bookings like this at ${venueName} to change. Choose Only this booking to save it.`);
+  return {
+    plan,
+    opts: { scope, venueName, weekday: weekdayName(old), startTime: localTime(old.setStart, old.timezone), notify: str(form, "notifyArtist") === "on" },
+  };
 }
 
 /** Change a gig's status from its page. Awaiting confirmation sends the act the offer. */
