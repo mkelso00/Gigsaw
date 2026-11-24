@@ -70,7 +70,8 @@ test("an act's invoice is made when they leave the venue, the agency pays it and
     const pay = group.getByRole("button", { name: "Mark paid" });
     await hydrated(pay);
     await pay.click();
-    await expect(staffPage.getByRole("status")).toContainText("1 invoice marked paid (£615.00)", { timeout: 20_000 });
+    // The outcome, not the "marked paid" note, which a page reload after saving can clear before it's seen.
+    await expect.poll(async () => (await db().actInvoice.findUniqueOrThrow({ where: { id: invoice.id } })).status, { timeout: 20_000 }).toBe("PAID");
   } finally {
     await staff.close();
   }
