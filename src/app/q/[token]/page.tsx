@@ -28,6 +28,8 @@ import {
 import { answerProblem, effectiveStatus, lineTimes, looksLikeProposalToken, proposalRef, proposalTotals, tokenOpens } from "@/lib/proposals";
 import { formatDateTime, localDateKey } from "@/lib/time";
 import { RenderStamp } from "@/components/render-stamp";
+import { BrandMark } from "@/components/brand-mark";
+import { publicLogoUrl } from "@/lib/public-logo";
 
 // The customer's proposal: a private link (no login), made for their phone. It shows what's proposed,
 // when and where, and what they pay (the acts' prices, the booking fee and VAT), never what the
@@ -44,7 +46,7 @@ export default async function CustomerProposalPage({ params }: { params: Promise
   if (!q || q.agency.status !== "ACTIVE") notFound();
   const settings = q.agency.settings;
   const brand = settings?.agencyName || q.agency.name;
-  const logo = readEnquiryConfig(settings?.enquiryForm).logoUrl;
+  const logo = await publicLogoUrl(q.agencyId, settings?.enquiryForm);
   const contactLine = settings?.agencyEmail ? ` at ${settings.agencyEmail}` : "";
 
   const shell = (children: React.ReactNode) => (
@@ -52,13 +54,7 @@ export default async function CustomerProposalPage({ params }: { params: Promise
       <RenderStamp at={crypto.randomUUID()} />
       <div className="mx-auto max-w-xl">
         <header className="mb-6 flex items-center gap-3">
-          {logo ? (
-            // A logo on the business's own site, of any size: an img keeps it simple.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo} alt={brand} className="h-10 max-w-[160px] object-contain" />
-          ) : (
-            <span className="text-[15px] font-semibold tracking-tight">{brand}</span>
-          )}
+          <BrandMark src={logo} name={brand} />
         </header>
         {children}
         <p className="mt-8 text-center text-xs text-ink-400">

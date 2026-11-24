@@ -87,6 +87,10 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
     const c = await customer.newPage();
     await c.goto(customerLink);
     await expect(c.getByRole("heading", { name: "Sign and approve your proposal" })).toBeVisible();
+    // The header never shows a broken image: the business's logo, or its name.
+    const headerImg = c.locator("header img");
+    if (await headerImg.count()) expect(await headerImg.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+    else await expect(c.locator("header")).not.toBeEmpty();
     // The opening message thanks them, by first name.
     await expect(c.getByTestId("proposal-welcome")).toContainText(`Hi ${leadName.split(" ")[0]},`);
     await expect(c.getByTestId("proposal-welcome")).toContainText("Thank you so much for thinking of");

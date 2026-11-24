@@ -11,6 +11,8 @@ import { DEFAULT_INTRO, DEFAULT_THANKS, ENQUIRY_EVENT_TYPES, formStamp, LIMITS, 
 import { enquirySecret } from "@/lib/enquiry-server";
 import { messageFor } from "@/lib/message-templates";
 import { localDateKey } from "@/lib/time";
+import { BrandMark } from "@/components/brand-mark";
+import { publicLogoUrl } from "@/lib/public-logo";
 
 // The enquiry form a business puts on its own website, as a link or in a frame (?embed=1). No login.
 // Framing is allowed for this page only (next.config.ts). It never shows prices or anything private.
@@ -43,6 +45,7 @@ export default async function EnquirePage({
   const embed = sp.embed === "1";
   const brand = settings.agencyName || settings.agency.name;
   const config = readEnquiryConfig(settings.enquiryForm);
+  const logo = await publicLogoUrl(settings.agencyId, settings.enquiryForm);
   const on = config.fields;
 
   const shell = (children: React.ReactNode, sent = false) => (
@@ -51,10 +54,8 @@ export default async function EnquirePage({
       {embed && <style>{"html,body{min-height:0!important;background:transparent!important}"}</style>}
       <div data-enquiry-root className={`mx-auto max-w-2xl text-ink-950 ${embed ? "px-1 py-2" : "px-4 pt-8 pb-14 sm:pt-14"}`}>
         <header className="mb-6 flex items-center gap-3">
-          {config.logoUrl ? (
-            // A logo on the business's own site, of any size: an img keeps it simple.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={config.logoUrl} alt={brand} className="h-12 max-w-[180px] object-contain" />
+          {logo ? (
+            <BrandMark src={logo} name={brand} className="h-12 max-w-[180px] object-contain" />
           ) : (
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-sm font-bold text-white">
               {brand
@@ -65,7 +66,7 @@ export default async function EnquirePage({
                 .toUpperCase()}
             </span>
           )}
-          {!config.logoUrl && <span className="text-[15px] font-semibold tracking-tight">{brand}</span>}
+          {!logo && <span className="text-[15px] font-semibold tracking-tight">{brand}</span>}
         </header>
         {children}
       </div>
