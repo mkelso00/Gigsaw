@@ -20,6 +20,7 @@ import {
   holdsUntilDeposit,
   payChoices,
   payNoteText,
+  proposalWelcomeText,
   payPromise,
   proposalDeposit,
   type BalancePlan,
@@ -220,7 +221,16 @@ export default async function CustomerProposalPage({ params }: { params: Promise
         </div>
       )}
 
-      {q.message && status !== "ACCEPTED" && (
+      {status !== "ACCEPTED" && !problem && (
+        <section className="card card-pad mb-4 text-[15px] whitespace-pre-line text-ink-800" data-testid="proposal-welcome">
+          <p className="mb-2">{firstName ? `Hi ${firstName},` : "Hello,"}</p>
+          <p>{proposalWelcomeText(settings?.proposalWelcome ?? "", { business: brand, eventType: q.eventType })}</p>
+          {/* This proposal's own note, written by staff. */}
+          {q.message && <p className="mt-3">{q.message}</p>}
+          <p className="mt-3">{brand}</p>
+        </section>
+      )}
+      {q.message && status !== "ACCEPTED" && problem && (
         <section className="card card-pad mb-4 text-[15px] whitespace-pre-line text-ink-800">
           {firstName && <p className="mb-2">Hi {firstName},</p>}
           {q.message}

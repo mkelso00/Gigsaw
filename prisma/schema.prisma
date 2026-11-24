@@ -148,6 +148,8 @@ model Settings {
   selfBillingAgreementText String @default("")
   // The short note under the ways to pay on every wedding proposal. Blank: Gigsaw's own (src/lib/proposal-pay.ts).
   payNote               String  @default("")
+  // The opening message at the top of every proposal ("Thank you for thinking of us…"). Blank: the default wording.
+  proposalWelcome       String  @default("")
   // Where couples deliver a wedding balance paid in cash: on the proposal, the couple's page and the balance emails.
   cashAddress           String  @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.

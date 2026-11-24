@@ -126,3 +126,16 @@ describe("how the couple pay a wedding proposal", () => {
     expect(balanceDueFor([{ date: "2027-08-14" }, { date: "2027-08-13" }])).toBe("2027-05-13");
   });
 });
+
+describe("the opening message on proposals", () => {
+  it("thanks them by business and occasion, or uses the business's own wording", async () => {
+    const { proposalWelcomeText } = await import("@/lib/proposal-pay");
+    expect(proposalWelcomeText("", { business: "Suave Weddings", eventType: "WEDDING" })).toMatch(
+      /^Thank you so much for thinking of Suave Weddings for your wedding\./,
+    );
+    expect(proposalWelcomeText("", { business: "Suave", eventType: "PRIVATE_PARTY" })).toContain("for your party");
+    expect(proposalWelcomeText("Thanks for asking {business} about {occasion}!", { business: "Suave", eventType: "CORPORATE" })).toBe(
+      "Thanks for asking Suave about your event!",
+    );
+  });
+});

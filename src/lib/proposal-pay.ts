@@ -194,3 +194,17 @@ export function payProblem(q: PayQuote): string | null {
 export function payPromise(p: BalancePlan, money: (x: number) => string) {
   return `I'll pay the deposit of ${money(p.depositMinor)} now, and the balance of ${money(p.balanceMinor)} ${p.option === "CASH" ? "in cash, with no VAT" : "by bank transfer"}`;
 }
+
+/**
+ * The opening message at the top of every proposal, when the business hasn't written its own (Settings, Contracts
+ * and invoices). {business} is the business's name and {occasion} "your wedding" or "your event".
+ */
+export const DEFAULT_PROPOSAL_WELCOME =
+  "Thank you so much for thinking of {business} for {occasion}. We'd love to be part of it.\n\nWe've put everything together for you below: who'll be playing, when, and the price. Have a read through, and if you have any questions at all, just reply to our email or give us a call. When you're happy, sign at the bottom and we'll take it from there.";
+
+/** The opening message with the business's name and the occasion put in. */
+export function proposalWelcomeText(text: string, o: { business: string; eventType: string }) {
+  const occasion =
+    o.eventType === "WEDDING" ? "your wedding" : o.eventType === "CORPORATE" ? "your event" : o.eventType === "PRIVATE_PARTY" ? "your party" : "your event";
+  return (text.trim() || DEFAULT_PROPOSAL_WELCOME).replaceAll("{business}", o.business).replaceAll("{occasion}", occasion);
+}

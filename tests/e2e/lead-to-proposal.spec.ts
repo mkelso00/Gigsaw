@@ -87,6 +87,9 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
     const c = await customer.newPage();
     await c.goto(customerLink);
     await expect(c.getByRole("heading", { name: "Sign and approve your proposal" })).toBeVisible();
+    // The opening message thanks them, by first name.
+    await expect(c.getByTestId("proposal-welcome")).toContainText(`Hi ${leadName.split(" ")[0]},`);
+    await expect(c.getByTestId("proposal-welcome")).toContainText("Thank you so much for thinking of");
     await expect(c.getByText(act.name)).toBeVisible();
     await expect(c.getByText("Evening band")).toBeVisible();
     const sign = c.getByRole("button", { name: "Sign and approve" });

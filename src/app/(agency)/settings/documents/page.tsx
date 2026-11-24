@@ -10,7 +10,7 @@ import { EVENT_TYPES, eventTypeLabel } from "@/lib/constants";
 import { shadowedEventTypes } from "@/lib/contract-templates";
 import { contractTemplatesFor, type ContractTemplateRow } from "@/lib/contract-templates-server";
 import { getSettings } from "@/lib/db";
-import { DEFAULT_PAY_NOTE } from "@/lib/proposal-pay";
+import { DEFAULT_PAY_NOTE, DEFAULT_PROPOSAL_WELCOME } from "@/lib/proposal-pay";
 import { DEFAULT_SELF_BILLING_TEXT } from "@/lib/self-billing";
 
 export const metadata: Metadata = { title: "Contracts and invoices" };
@@ -88,6 +88,27 @@ export default async function DocumentSettings() {
                 }
               />
             </div>
+          </SettingsCard>
+        </SettingsSection>
+        <SettingsSection
+          id="proposal-welcome"
+          title="Opening message on proposals"
+          description="The first thing a customer reads on every proposal, after 'Hi' and their first name. Anything you write on one proposal's note goes underneath it."
+        >
+          <SettingsCard pad>
+            <Field
+              label="Opening message"
+              hint="Leave it blank for the wording shown. {business} is your business name and {occasion} is 'your wedding', 'your party' or 'your event'."
+            >
+              <textarea
+                name="proposalWelcome"
+                rows={6}
+                maxLength={2000}
+                defaultValue={settings.proposalWelcome}
+                placeholder={DEFAULT_PROPOSAL_WELCOME}
+                className="input"
+              />
+            </Field>
           </SettingsCard>
         </SettingsSection>
         <SettingsSection
