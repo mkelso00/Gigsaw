@@ -17,6 +17,7 @@ import { BILLING_MODES } from "@/lib/monthly-billing";
 import { ownContractTemplateId } from "@/lib/contract-templates-server";
 import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, int, normaliseTags, num, oneOf, optStr, required, str, type FormState } from "@/lib/forms";
+import { personName } from "@/lib/person-name";
 import { isValidTimeZone } from "@/lib/time";
 
 // Every lookup below includes the user's agencyId, so one agency can never read or change
@@ -265,6 +266,66 @@ export async function deleteContactNote(noteId: string) {
   revalidatePath(`/contacts/${n.contactId}`);
 }
 
+// ---------- The client's lead contact (src/lib/client-recipient.ts) ----------
+
+/** The "Lead contact for bookings" select: one of the people at this venue or company, or nobody. */
+async function leadFrom(user: AgencyUser, form: FormData, at: { venueId: string } | { companyId: string }) {
+  const id = str(form, "leadContactId");
+  if (!id) return null;
+  const person = await prisma.person.findFirst({ where: { id, agencyId: user.agencyId, ...at } });
+  if (!person) throw new FormError("That person isn't here any more. Reload the page.");
+  return person;
+}
+
+/** "Lead contact for bookings" on a venue's page: who its gigs' client messages go to, unless a booking names someone. */
+export async function setVenueLeadContact(venueId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const venue = await prisma.venue.findFirst({ where: { id: venueId, agencyId: user.agencyId } });
+    if (!venue) throw new FormError("Venue not found");
+    const lead = await leadFrom(user, form, { venueId });
+    if ((lead?.id ?? null) === venue.leadContactId) return { ok: "Saved." };
+    await prisma.venue.update({ where: { id: venueId }, data: { leadContactId: lead?.id ?? null } });
+    await logActivity(
+      user,
+      "VENUE",
+      venueId,
+      lead ? "chose the lead contact for bookings" : "cleared the lead contact for bookings",
+      lead ? personName(lead) : "",
+    );
+    revalidatePath(`/venues/${venueId}`);
+    return { ok: lead ? `Saved. ${personName(lead)} gets the client's messages for bookings here.` : "Saved. There's no lead contact here now." };
+  });
+}
+
+/**
+ * On a company's page: its lead contact for bookings, and "Send day-to-day emails to this company's own email"
+ * (Contact.notifyOwner). Off, with no lead contact, its arrival notes and confirmations aren't sent at all.
+ */
+export async function setCompanyLeadContact(contactId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const c = await ownContact(user, contactId);
+    const lead = await leadFrom(user, form, { companyId: contactId });
+    const notifyOwner = form.get("notifyOwner") === "on";
+    await prisma.contact.update({ where: { id: contactId }, data: { leadContactId: lead?.id ?? null, notifyOwner } });
+    if ((lead?.id ?? null) !== c.leadContactId) {
+      await logActivity(
+        user,
+        "CONTACT",
+        contactId,
+        lead ? "chose the lead contact for bookings" : "cleared the lead contact for bookings",
+        lead ? personName(lead) : "",
+      );
+    }
+    if (notifyOwner !== c.notifyOwner) {
+      await logActivity(user, "CONTACT", contactId, notifyOwner ? "day-to-day emails to its own email on" : "day-to-day emails to its own email off");
+    }
+    revalidatePath(`/contacts/${contactId}`);
+    return { ok: "Saved." };
+  });
+}
+
 // ---------- Venues ----------
 
 function venueData(form: FormData) {
@@ -385,6 +446,11 @@ export async function companyToVenue(contactId: string) {
     (await prisma.venue.findFirst({ where: { agencyId: user.agencyId, name: { equals: name, mode: "insensitive" } } })) ??
     (await prisma.venue.create({ data: { agencyId: user.agencyId, name, address: c.address, importRef: c.importRef } }));
   await prisma.person.updateMany({ where: { agencyId: user.agencyId, companyId: c.id }, data: { companyId: null, venueId: venue.id } });
+  // Its lead contact moved with its people: they're the venue's now (unless it already has one).
+  if (c.leadContactId) {
+    await prisma.venue.updateMany({ where: { id: venue.id, leadContactId: null }, data: { leadContactId: c.leadContactId } });
+    await prisma.contact.update({ where: { id: c.id }, data: { leadContactId: null } });
+  }
   // Keep the company if it's who pays for any bookings; otherwise it's no longer needed.
   // Archived bookings count (archivedAt: undefined): deleting the company would clear who paid for them.
   const used = await prisma.booking.count({ where: { promoterId: c.id, archivedAt: undefined } });
@@ -412,6 +478,8 @@ export async function venueToCompany(venueId: string) {
       company: v.name,
       address: [v.address, v.city].filter(Boolean).join(", "),
       importRef: v.importRef,
+      // Its people move to the company, its lead contact with them.
+      leadContactId: v.leadContactId,
     },
   });
   await prisma.person.updateMany({ where: { agencyId: user.agencyId, venueId: v.id }, data: { venueId: null, companyId: company.id } });

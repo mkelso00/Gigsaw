@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { deleteVenue, updateVenue, venueToCompany } from "@/actions/crm";
+import { deleteVenue, setVenueLeadContact, updateVenue, venueToCompany } from "@/actions/crm";
 import { VenueForm } from "@/components/crm-forms";
-import { ConfirmButton, ServerForm } from "@/components/forms";
+import { ActionForm, ConfirmButton, ServerForm, SubmitButton } from "@/components/forms";
 import { ScheduleEditor } from "@/components/schedule-editor";
 import { VenueShareCard } from "@/components/venue-share-card";
 import { personName } from "@/lib/person-name";
@@ -121,6 +121,7 @@ export default async function VenuePage({ params, searchParams }: { params: Prom
                         {personName(p)}
                       </Link>
                       {p.jobTitle && <span className="text-ink-500"> · {p.jobTitle}</span>}
+                      {p.id === venue.leadContactId && <span className="badge ml-2 bg-volt-100 text-ink-950">Lead contact</span>}
                       {p.email && <div className="truncate text-xs text-ink-500">{p.email}</div>}
                     </div>
                     {p.phone && (
@@ -133,6 +134,31 @@ export default async function VenuePage({ params, searchParams }: { params: Prom
               </ul>
             ) : (
               <p className="mt-1 text-sm text-ink-500">The manager and anyone else you deal with here. Add them so their number is one tap away.</p>
+            )}
+            {venue.people.length > 0 && (
+              <ActionForm
+                action={setVenueLeadContact.bind(null, venue.id)}
+                className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink-100 pt-3 [&_[role=status]]:w-full"
+              >
+                <label className="min-w-0 flex-1 basis-48">
+                  <span className="label">Lead contact for bookings</span>
+                  {/* Keyed so it shows the saved choice after the page refreshes (the form resets once saved). */}
+                  <select key={venue.leadContactId ?? ""} name="leadContactId" defaultValue={venue.leadContactId ?? ""} className="input">
+                    <option value="">Nobody: messages go to who pays</option>
+                    {venue.people.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {personName(p)}
+                        {p.jobTitle ? `, ${p.jobTitle}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <SubmitButton className="btn">Save</SubmitButton>
+                <p className="hint w-full">
+                  Who deals with the bookings here. Arrival notes, confirmations, contracts and PO requests for gigs here go to them, not the owners, unless a
+                  booking names someone else.
+                </p>
+              </ActionForm>
             )}
           </section>
           <VenueShareCard venueId={venue.id} url={venue.shareToken ? `${appUrl()}/v/${venue.shareToken}` : null} />

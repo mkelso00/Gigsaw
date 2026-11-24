@@ -161,7 +161,8 @@ export async function sendBillToXero(billId: string, _: FormState): Promise<Form
     const contact = await poRecipient(user.agencyId, v);
     const sent = await sendInvoiceToXero({
       contactName: g.payer ? g.payer.company || g.payer.name : (g.venues[0]?.name ?? v.name),
-      contactEmail: contact?.email || g.payer?.email || null,
+      // The Xero contact is the company, so it keeps the company's own email; the lead contact is only who we write to.
+      contactEmail: g.payer?.email || contact?.email || null,
       poNumber: v.bill.poNumber || null,
       monthLabel: monthLabel(v.month),
       currency: v.currency,

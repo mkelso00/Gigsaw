@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { companyToVenue } from "@/actions/crm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addContactNote, deleteContactNote } from "@/actions/crm";
+import { addContactNote, deleteContactNote, setCompanyLeadContact } from "@/actions/crm";
 import { makeProposal } from "@/actions/proposals";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { ProposalList, proposalRowSelect } from "@/components/proposal-list";
@@ -17,6 +17,72 @@ import { BILLING_MODE_LABELS, billingModeOf } from "@/lib/monthly-billing";
 import { formatDate, formatDateTime, localDateKey } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Contact" };
+
+/**
+ * Who hears about this company's gigs (src/lib/client-recipient.ts): its lead contact for bookings, and whether
+ * day-to-day emails may go to the company's own email when there's no lead contact.
+ */
+function CompanyMessages({
+  contact,
+}: {
+  contact: {
+    id: string;
+    name: string;
+    company: string;
+    email: string;
+    leadContactId: string | null;
+    notifyOwner: boolean;
+    people: { id: string; firstName: string; surname: string; alias: string; jobTitle: string }[];
+  };
+}) {
+  const name = contact.company || contact.name;
+  const lead = contact.people.find((p) => p.id === contact.leadContactId);
+  return (
+    <section className="card card-pad" id="client-messages">
+      <h2 className="section-title">Who hears about gigs</h2>
+      <p className="mt-1 text-sm text-ink-500" data-testid="company-messages">
+        {lead
+          ? `${personName(lead)} gets the arrival notes, confirmations, contracts and PO requests for ${name}'s bookings, unless the venue or the booking names someone else.`
+          : contact.notifyOwner
+            ? `With no lead contact, messages go to ${name}'s own email${contact.email ? ` (${contact.email})` : ""}, unless the venue or the booking names someone.`
+            : `With no lead contact, arrival notes and confirmations for ${name} aren't sent at all. Invoices and PO requests still go to its own email${contact.email ? ` (${contact.email})` : ""}, as business documents.`}
+      </p>
+      <ActionForm action={setCompanyLeadContact.bind(null, contact.id)} className="mt-3 space-y-3 [&_[role=status]]:w-full">
+        <label className="block">
+          <span className="label">Lead contact for bookings</span>
+          {/* Keyed so it shows the saved choice after the page refreshes (the form resets once saved). */}
+          <select key={contact.leadContactId ?? ""} name="leadContactId" defaultValue={contact.leadContactId ?? ""} className="input">
+            <option value="">Nobody</option>
+            {contact.people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {personName(p)}
+                {p.jobTitle ? `, ${p.jobTitle}` : ""}
+              </option>
+            ))}
+          </select>
+          {!contact.people.length && <span className="hint block">Add the people who deal with the bookings above, then choose one here.</span>}
+        </label>
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            key={String(contact.notifyOwner)}
+            type="checkbox"
+            name="notifyOwner"
+            defaultChecked={contact.notifyOwner}
+            className="mt-0.5 h-4 w-4 accent-ink-950"
+          />
+          <span>
+            <span className="block text-sm font-medium">Send day-to-day emails to this company&apos;s own email</span>
+            <span className="block text-xs text-ink-500">
+              Turn off when the owners don&apos;t want the nitty gritty. Arrival notes and confirmations then go only to a lead contact, and aren&apos;t sent
+              without one.
+            </span>
+          </span>
+        </label>
+        <SubmitButton className="btn">Save</SubmitButton>
+      </ActionForm>
+    </section>
+  );
+}
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
@@ -154,6 +220,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                         {personName(p)}
                       </Link>
                       {p.jobTitle && <span className="text-ink-500"> · {p.jobTitle}</span>}
+                      {p.id === contact.leadContactId && <span className="badge ml-2 bg-volt-100 text-ink-950">Lead contact</span>}
                     </span>
                     <span className="text-xs text-ink-500">{[p.phone, p.email].filter(Boolean).join(" · ")}</span>
                   </li>
@@ -163,6 +230,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               <p className="mt-1 text-sm text-ink-500">Nobody linked yet. People whose company is {contact.company || contact.name} appear here.</p>
             )}
           </section>
+          {contact.type !== "CLIENT" && <CompanyMessages contact={contact} />}
           {proposals.length > 0 && (
             <section>
               <h2 className="section-title mb-3">Proposals</h2>

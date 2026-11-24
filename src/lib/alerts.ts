@@ -1,5 +1,6 @@
 import "server-only";
 import { arrivalFor } from "./bookings";
+import { clientPartyInclude, clientRecipient } from "./client-recipient";
 import { ON_STATUSES } from "./constants";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendSms } from "./messaging";
@@ -10,7 +11,7 @@ import { formatDate, formatMinutes, localTime } from "./time";
 // Arrival messages:
 //  - Overdue alert: once per gig, to the booking's agent and the agency's on-call contact,
 //    when the call time (plus grace) passes with no arrival.
-//  - Client arrival note: once per gig, to the booking's promoter/client when the artist arrives.
+//  - Client arrival note: once per gig, to the client's lead contact (or the payer) when the artist arrives.
 // Demo bookings never send anything. Each message is "claimed" with a conditional update first,
 // so two servers (or two runs) can never send the same alert twice.
 
@@ -83,22 +84,27 @@ export async function runOverdueCheck(now = new Date()) {
   return { checked: candidates.length, alerted: sent };
 }
 
-/** Tell the client the artist has arrived. Called after an ARRIVED check-in. */
+/**
+ * Tell the client the artist has arrived. Called after an ARRIVED check-in. It goes to the client's lead contact (the
+ * booking's, the venue's, then the company's), else the payer, as src/lib/client-recipient.ts decides; a company that
+ * doesn't want day-to-day emails at its own address and has no lead contact isn't sent one.
+ */
 export async function notifyClientOfArrival(bookingId: string) {
   const b = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { artist: true, venue: true, promoter: true, agency: { include: { settings: true } } },
+    include: { artist: true, ...clientPartyInclude, agency: { include: { settings: true } } },
   });
-  if (!b || !b.artist || b.demo || !b.notifyClientOnArrival || !b.promoter || !b.agency.settings?.clientArrivalMessages) return false;
+  if (!b || !b.artist || b.demo || !b.notifyClientOnArrival || !b.agency.settings?.clientArrivalMessages) return false;
   // Couples aren't told when an act arrives: not for a wedding, or any booking inside a wedding or event.
   if (b.eventId || b.eventType === "WEDDING") return false;
-  if (!b.promoter.email && !b.promoter.phone) return false;
+  const to = clientRecipient(b, "DAY_TO_DAY");
+  if (!to.email && !to.phone) return false;
   const claim = await prisma.booking.updateMany({ where: { id: b.id, clientNotifiedAt: null }, data: { clientNotifiedAt: new Date() } });
   if (claim.count !== 1) return false;
 
   const agencyName = b.agency.settings.agencyName || b.agency.name;
   const where = b.venue?.name ?? "the venue";
-  const first = b.promoter.name.split(" ")[0];
+  const first = to.firstName;
   const arrived = await prisma.checkIn.findFirst({ where: { bookingId: b.id, kind: "ARRIVED" }, orderBy: { at: "asc" } });
   const base = { kind: "CLIENT_ARRIVAL" as const, agencyId: b.agencyId, bookingId: b.id };
   const t = messageFor(b.agency.settings.messageTemplates, "ARRIVED", {
@@ -110,10 +116,10 @@ export async function notifyClientOfArrival(bookingId: string) {
     business: agencyName,
   });
   if (!t.on) return false;
-  if (b.promoter.email) {
+  if (to.email) {
     await sendEmail({
       ...base,
-      to: b.promoter.email,
+      to: to.email,
       replyTo: b.agency.settings.agencyEmail,
       subject: t.subject ?? `${b.artist.name} has arrived`,
       email: {
@@ -130,10 +136,10 @@ export async function notifyClientOfArrival(bookingId: string) {
       },
     });
   }
-  if (b.promoter.phone) {
+  if (to.phone) {
     await sendSms({
       ...base,
-      to: b.promoter.phone,
+      to: to.phone,
       text: t.text ?? `${b.artist.name} has arrived at ${where} and is setting up. On stage ${localTime(b.setStart, b.timezone)}. ${agencyName}`,
     });
   }

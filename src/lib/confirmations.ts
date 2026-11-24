@@ -1,4 +1,5 @@
 import "server-only";
+import { clientRecipient, leadPersonSelect } from "./client-recipient";
 import { prisma } from "./db";
 import { appUrl, sendEmail, sendPush, sendSms } from "./messaging";
 import { dealBreakdown, formatMoney } from "./money";
@@ -11,15 +12,17 @@ import { formatDate, localTime } from "./time";
 //  - the act is told it's booked and in their calendar, with their own fee
 //  - for weddings and private events, the customer is told the act is confirmed
 //    (Settings decides: weddings and private events only, every booking, or never).
-// A bar gig's venue is never told: that's just for the agency's records.
+// By default a bar gig's venue is never told: that's just for the agency's records. When Settings says every booking,
+// a venue gig's confirmation goes to the client's lead contact, as src/lib/client-recipient.ts decides.
 
 export async function onConfirmed(bookingId: string) {
   const b = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
       artist: { select: { name: true } },
-      venue: { select: { name: true, city: true, address: true } },
-      promoter: true,
+      venue: { select: { name: true, city: true, address: true, leadContact: { select: leadPersonSelect } } },
+      promoter: { include: { leadContact: { select: leadPersonSelect } } },
+      clientContact: { select: leadPersonSelect },
       event: { select: { name: true, venueText: true } },
       agent: { select: { email: true, name: true } },
       agency: { include: { settings: true } },
@@ -92,21 +95,23 @@ export async function onConfirmed(bookingId: string) {
   if (mode === "OFF" || (mode === "EVENTS" && !isEvent) || b.customerToldAt) return;
   // Part of a wedding or event: the customer booked it as one, so they hear once, when every act in it is confirmed.
   if (b.eventId) return tellCustomerEventConfirmed(b.eventId);
-  if (!b.promoter?.email) return;
+  // The customer, or for a venue gig the client's lead contact (never a company that asked not to get these at its own email).
+  const to = clientRecipient(b, "DAY_TO_DAY");
+  if (!to.email) return;
   const occasion = b.event?.name ?? (b.eventType === "WEDDING" ? "your wedding" : "your event");
-  const c = messageFor(templates, "CUSTOMER_CONFIRMED", { ...gigVars, event: occasion, first_name: b.promoter.name.split(" ")[0] });
+  const c = messageFor(templates, "CUSTOMER_CONFIRMED", { ...gigVars, event: occasion, first_name: to.firstName });
   if (!c.on) return;
   await sendEmail({
     kind: "EVENT",
     agencyId: b.agencyId,
     bookingId: b.id,
-    to: b.promoter.email,
+    to: to.email,
     replyTo,
     subject: c.subject ?? `Confirmed: ${b.artist.name} for ${occasion}`,
     email: {
       brand: agencyName,
       title: `${b.artist.name} is confirmed`,
-      intro: c.intro ?? `Hi ${b.promoter.name.split(" ")[0]}, good news: ${b.artist.name} is confirmed for ${occasion}. Everything's booked in.`,
+      intro: c.intro ?? `Hi ${to.firstName}, good news: ${b.artist.name} is confirmed for ${occasion}. Everything's booked in.`,
       rows: [
         ["Date", formatDate(b.arriveBy, b.timezone)],
         ["Where", where],

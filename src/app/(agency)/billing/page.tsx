@@ -20,7 +20,7 @@ import { actName } from "@/lib/constants";
 import { getSettings } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { BILL_STEP_LABELS, BILL_STEPS, readMonth, summarise, summaryLine, type BillStep } from "@/lib/monthly-billing";
-import { monthlyBills, poRecipient, type BillView } from "@/lib/monthly-billing-server";
+import { monthlyBills, poRecipient, type BillView, type PoRecipient } from "@/lib/monthly-billing-server";
 import { formatDate, localDateKey } from "@/lib/time";
 import { OpenFromHash } from "./_open-from-hash";
 
@@ -172,7 +172,7 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
         <ul className="space-y-3">
           {listed.map((v) => (
             <li key={v.id}>
-              <BillCard v={v} isAdmin={isAdmin} tz={tz} recipient={recipients.get(v.id)?.email ?? ""} xeroOn={xeroOn} />
+              <BillCard v={v} isAdmin={isAdmin} tz={tz} recipient={recipients.get(v.id) ?? null} xeroOn={xeroOn} />
             </li>
           ))}
         </ul>
@@ -181,7 +181,7 @@ export default async function MonthlyBillingPage({ searchParams }: { searchParam
   );
 }
 
-function BillCard({ v, isAdmin, tz, recipient, xeroOn }: { v: BillView; isAdmin: boolean; tz: string; recipient: string; xeroOn: boolean }) {
+function BillCard({ v, isAdmin, tz, recipient, xeroOn }: { v: BillView; isAdmin: boolean; tz: string; recipient: PoRecipient | null; xeroOn: boolean }) {
   const m = (x: number) => formatMoney(x, v.currency);
   const g = v.group;
   const b = v.bill;
@@ -381,11 +381,16 @@ function BillCard({ v, isAdmin, tz, recipient, xeroOn }: { v: BillView; isAdmin:
                         <input
                           name="to"
                           type="email"
-                          defaultValue={recipient}
+                          defaultValue={recipient?.email ?? ""}
                           placeholder="accounts@company.co.uk"
                           className="input"
                           aria-label="Email the PO request to"
                         />
+                        {(recipient?.label || recipient?.hint) && (
+                          <span className="hint block" data-testid="po-recipient">
+                            {[recipient.label, recipient.hint].filter(Boolean).join(". ")}
+                          </span>
+                        )}
                       </label>
                       <div className="flex flex-wrap gap-2">
                         <SubmitButton name="mode" value="send" className="btn btn-sm btn-primary" pendingText="Sending…">

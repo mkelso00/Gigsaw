@@ -2,6 +2,7 @@ import "server-only";
 import type { MonthlyBill, Prisma } from "@prisma/client";
 import { log } from "@/server/log";
 import { monthLabel, monthSearchWindow, shiftMonth } from "./billing";
+import { clientRecipient, leadPersonSelect } from "./client-recipient";
 import { COUNTABLE } from "./count-statuses";
 import { actName } from "./constants";
 import { prisma } from "./db";
@@ -201,15 +202,39 @@ export async function billForVenueMonth(agencyId: string, venueId: string, month
 // Asking for a PO
 // ---------------------------------------------------------------------------------------------------------
 
-/** Who to email for a PO: the paying company's email, else someone at the company, else someone at the venue. */
-export async function poRecipient(agencyId: string, v: Pick<BillView, "bill" | "group">) {
-  const payer = v.group?.payer ?? v.bill.contact;
-  if (payer?.email) return { email: payer.email, firstName: payer.name.trim().split(/\s+/)[0] ?? "" };
+export type PoRecipient = { email: string; firstName: string; label: string; hint: string };
+
+/**
+ * Who to email for a PO: the client's lead contact (src/lib/client-recipient.ts: the one chosen on every gig on the
+ * bill, else the venue's, else the company's), else the paying company's own email (even when it has asked not to get
+ * day-to-day emails: a PO request is a business document), else someone at the company, else someone at the venue.
+ */
+export async function poRecipient(agencyId: string, v: Pick<BillView, "bill" | "group">): Promise<PoRecipient | null> {
+  const payerRef = v.group?.payer ?? v.bill.contact;
   const venueIds = v.group?.venues.map((x) => x.id) ?? (v.bill.venueId ? [v.bill.venueId] : []);
+  const gigIds = v.group?.lines.map((l) => l.gig.id) ?? [];
+  const lead = { select: leadPersonSelect };
+  const [payer, venues, gigs] = await Promise.all([
+    payerRef ? prisma.contact.findFirst({ where: { id: payerRef.id, agencyId }, include: { leadContact: lead } }) : null,
+    venueIds.length ? prisma.venue.findMany({ where: { agencyId, id: { in: venueIds } }, select: { name: true, leadContact: lead } }) : [],
+    gigIds.length ? prisma.booking.findMany({ where: { agencyId, id: { in: gigIds } }, select: { clientContact: lead } }) : [],
+  ]);
+  // One person chosen on every gig on the bill deals with them; so does a lead contact shared by every venue on it.
+  const only = <T extends { id: string }>(xs: (T | null)[]) => (xs.length && xs.every((x) => x && x.id === xs[0]?.id) ? xs[0] : null);
+  const venueLead = only(venues.map((x) => x.leadContact));
+  const r = clientRecipient(
+    {
+      clientContact: only(gigs.map((g) => g.clientContact)),
+      venue: venueLead ? { name: venues.map((x) => x.name).join(" and "), leadContact: venueLead } : null,
+      promoter: payer,
+    },
+    "DOCUMENT",
+  );
+  if (r.email) return { email: r.email, firstName: r.firstName, label: r.label, hint: r.hint };
   const someone = (where: Prisma.PersonWhereInput) =>
     prisma.person.findFirst({ where: { agencyId, email: { not: "" }, ...where }, orderBy: { createdAt: "asc" }, select: { email: true, firstName: true } });
   const person = (payer ? await someone({ companyId: payer.id }) : null) ?? (venueIds.length ? await someone({ venueId: { in: venueIds } }) : null);
-  return person ? { email: person.email, firstName: person.firstName } : null;
+  return person ? { email: person.email, firstName: person.firstName, label: "", hint: "" } : null;
 }
 
 /**

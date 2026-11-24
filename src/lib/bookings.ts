@@ -2,8 +2,11 @@ import "server-only";
 import type { Prisma, Settings } from "@prisma/client";
 import { punctuality, summariseArrival, type ArrivalSummary } from "./arrival";
 import { BOOKING_STATUSES, DEAL_TYPES, CURRENCIES, EVENT_TYPES, BOOKING_STATUS_LABELS, NEEDS_ACT } from "./constants";
-import { prisma } from "./db";
+import { NEW_CONTACT } from "./client-recipient";
+import { logActivity, prisma } from "./db";
 import { FormError, int, num, oneOf, optStr, normaliseTags, required, str } from "./forms";
+import { isEmail } from "./messaging";
+import { personName } from "./person-name";
 import { toMinor } from "./money";
 import { queueCalendarSync } from "./calendar-sync/queue";
 import { buildSchedule } from "./schedule";
@@ -168,6 +171,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
   if (agentId && !(await prisma.user.findFirst({ where: { id: agentId, agencyId, role: { in: ["ADMIN", "AGENT"] } }, select: { id: true } }))) {
     throw new FormError("That agent is not part of your agency");
   }
+  const lead = await parseClientContact(form, agencyId);
 
   const timezone = venue?.timezone ?? (str(form, "timezone") || settings.defaultTimezone);
   if (!isValidTimeZone(timezone)) throw new FormError("Unknown time zone");
@@ -220,6 +224,7 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
     venueId: venue?.id ?? null,
     promoterId,
     agentId,
+    ...lead,
     eventName: str(form, "eventName"),
     eventType: oneOf(str(form, "eventType"), EVENT_TYPES, "GIG"),
     status,
@@ -248,6 +253,45 @@ export async function parseBookingForm(form: FormData, settings: Settings, agenc
     tags: normaliseTags(str(form, "tags")),
     notifyClientOnArrival: str(form, "notifyClientOnArrival") === "on",
   };
+}
+
+export type NewClientContact = { firstName: string; surname: string; email: string; phone: string };
+
+/**
+ * "Client's lead contact" on the booking form (src/components/client-lead-picker.tsx): someone already here, nobody
+ * (empty: automatic, the venue's or company's lead contact), or someone new, who is only added once the booking saves
+ * (see addClientContact), so a "Hold on" before saving never adds them twice. Nothing changes when the form lacks it.
+ * `newClientContact` is only there when someone new is asked for, so the rest can go straight into a booking.
+ */
+async function parseClientContact(form: FormData, agencyId: string): Promise<{ clientContactId?: string | null; newClientContact?: NewClientContact }> {
+  if (!form.has("clientContactId")) return {};
+  const value = str(form, "clientContactId");
+  if (!value) return { clientContactId: null };
+  if (value === NEW_CONTACT) {
+    const name = str(form, "newContactName").replace(/\s+/g, " ").trim();
+    if (!name) throw new FormError("Put in the name of the client's lead contact, or choose someone");
+    const email = str(form, "newContactEmail").toLowerCase();
+    if (email && !isEmail(email)) throw new FormError("Check the lead contact's email address");
+    const [firstName, ...rest] = name.split(" ");
+    return { clientContactId: null, newClientContact: { firstName, surname: rest.join(" "), email, phone: str(form, "newContactPhone") } };
+  }
+  const person = await prisma.person.findFirst({ where: { id: value, agencyId }, select: { id: true } });
+  if (!person) throw new FormError("That lead contact has been deleted. Choose someone else.");
+  return { clientContactId: person.id };
+}
+
+/**
+ * Add the "Someone new" lead contact from the booking form, at the booking's venue (or, without one, the paying company
+ * unless it's a private customer), and return their id.
+ */
+export async function addClientContact(user: { id: string; agencyId: string }, p: NewClientContact, at: { venueId: string | null; promoterId: string | null }) {
+  const company =
+    !at.venueId && at.promoterId
+      ? await prisma.contact.findFirst({ where: { id: at.promoterId, agencyId: user.agencyId, type: { not: "CLIENT" } }, select: { id: true } })
+      : null;
+  const person = await prisma.person.create({ data: { ...p, agencyId: user.agencyId, venueId: at.venueId, companyId: company?.id ?? null } });
+  await logActivity(user, "PERSON", person.id, "added person", personName(person));
+  return person.id;
 }
 
 /** Punctuality for each of the agency's artists over their gigs between `from` and now. */

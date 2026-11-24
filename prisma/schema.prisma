@@ -356,6 +356,13 @@ model Contact {
   // How this company is billed each month (Money, Monthly billing): COMBINED (one bill for all its
   // venues) | PER_VENUE (one bill for each venue).
   billing            String            @default("COMBINED")
+  // The person at this company who deals with its bookings: its gigs' client messages go to them when neither the
+  // booking nor the venue names someone (src/lib/client-recipient.ts).
+  leadContactId      String?
+  leadContact        Person?           @relation("CompanyLeadContact", fields: [leadContactId], references: [id], onDelete: SetNull)
+  // "Send day-to-day emails to this company's own email". Off: with no lead contact, arrival notes and confirmations
+  // aren't sent to it at all (the owners don't want the nitty gritty); invoices and PO requests still go to it.
+  notifyOwner        Boolean           @default(true)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   demo               Boolean           @default(false) // sample data, removable from Settings
@@ -364,7 +371,7 @@ model Contact {
   monthlyBills MonthlyBill[]
   slots        VenueSlot[]
   bookings     Booking[]
-  people       Person[]
+  people       Person[]          @relation("PersonCompany")
   events       Event[]
   enquiries    Enquiry[]
   quotes       Quote[]
@@ -405,12 +412,16 @@ model Venue {
   priority   Boolean  @default(false)
   timezone   String   @default("Europe/London")
   notes      String   @default("")
+  // The venue's usual lead contact for bookings, one of its people: who its gigs' client messages go to
+  // (src/lib/client-recipient.ts), unless a booking names its own.
+  leadContactId String?
+  leadContact   Person?  @relation("VenueLeadContact", fields: [leadContactId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   demo       Boolean  @default(false) // sample data, removable from Settings
 
   slots        VenueSlot[]
   bookings     Booking[]
-  people       Person[]
+  people       Person[]              @relation("PersonVenue")
   events       Event[]
   availability AvailabilityRequest[]
   quoteLines   QuoteLine[]
@@ -442,6 +453,11 @@ model Booking {
   agent       User?    @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
   createdById String?
   createdBy   User?    @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  // The client's lead contact for this booking: the person at the venue or the paying company who deals with it, so the
+  // client's messages go to them rather than the owner (src/lib/client-recipient.ts). Null: the venue's lead contact,
+  // then the company's, then the payer's own email.
+  clientContactId String?
+  clientContact   Person?  @relation("BookingClientContact", fields: [clientContactId], references: [id], onDelete: SetNull)
 
   // All times are stored in UTC. They are entered and shown in the venue's time zone.
   timezone     String    @default("Europe/London")
@@ -532,6 +548,8 @@ model Booking {
   // The venue's and the payer's pages (newest first), and clearing the link when one is deleted.
   @@index([venueId, setStart])
   @@index([promoterId, setStart])
+  // Clearing the lead contact when the person is deleted.
+  @@index([clientContactId])
   // Scans across every business by call time: the every-minute overdue check (runOverdueCheck)
   // and the month's billable gigs (usageForMonth with no agency). A partial index for the overdue
   // check isn't worth it: overdueAlertSentAt is only set once an alert goes, so nearly every row
@@ -800,9 +818,9 @@ model Person {
   address            String          @default("")
   notes              String          @default("")
   venueId            String?
-  venue              Venue?          @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  venue              Venue?          @relation("PersonVenue", fields: [venueId], references: [id], onDelete: SetNull)
   companyId          String?
-  company            Contact?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company            Contact?        @relation("PersonCompany", fields: [companyId], references: [id], onDelete: SetNull)
   jobTitle           String          @default("") // their role at the venue or company, e.g. "General manager"
   calendarToken      String          @unique @default(cuid())
   demo               Boolean         @default(false)
@@ -824,6 +842,10 @@ model Person {
   standIns           BookingLineup[]
   login              User?           @relation("PersonLogin")
   leadOf             Artist[]        @relation("ActLead")
+  // Where they're the client's lead contact (src/lib/client-recipient.ts).
+  leadForBookings    Booking[]       @relation("BookingClientContact")
+  leadForVenues      Venue[]         @relation("VenueLeadContact")
+  leadForCompanies   Contact[]       @relation("CompanyLeadContact")
 
   @@index([agencyId, importRef])
   @@index([agencyId])

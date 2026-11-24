@@ -105,6 +105,17 @@ export function Combobox({
     return () => form.removeEventListener("reset", onReset);
   }, [defaultValue, byId, onChange]);
 
+  // Tell the form when the choice changes, as a <select> would, so other fields can follow it (e.g. the client's lead
+  // contact follows the venue and who pays). Not on the first render: nothing has changed yet.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    hiddenRef.current?.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [value]);
+
   // Keep the highlighted option in view while arrowing through a long list.
   useEffect(() => {
     if (open) listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });

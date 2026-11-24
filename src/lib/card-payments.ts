@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { clientRecipient, leadPersonSelect } from "./client-recipient";
 import { prisma } from "./db";
 import { appUrl, sendEmail } from "./messaging";
 import { dealBreakdown, formatMoney, paymentTotals } from "./money";
@@ -77,8 +78,9 @@ const payLinkInclude = {
   booking: {
     include: {
       ...gigInclude,
-      venue: { select: { name: true, city: true } },
-      promoter: true,
+      venue: { select: { name: true, city: true, leadContact: { select: leadPersonSelect } } },
+      promoter: { include: { leadContact: { select: leadPersonSelect } } },
+      clientContact: { select: leadPersonSelect },
     },
   },
   event: {
@@ -95,6 +97,11 @@ const payLinkInclude = {
   },
 } satisfies Prisma.PayLinkInclude;
 type FullPayLink = Prisma.PayLinkGetPayload<{ include: typeof payLinkInclude }>;
+
+function payerOf(b: NonNullable<FullPayLink["booking"]>) {
+  const r = clientRecipient(b, "DOCUMENT");
+  return r.source === "NONE" ? null : { name: r.name, email: r.email };
+}
 
 /**
  * Everything a pay link shows the venue or customer, worked out afresh: the invoice lines (what
@@ -129,7 +136,8 @@ function payTarget(link: FullPayLink) {
       dueMinor: amountDue(kind, gigs),
       depositMinor: b.depositMinor,
       gigs,
-      payer: b.promoter ? { name: b.promoter.name, email: b.promoter.email } : null,
+      // Who the link goes to and pays: the client's lead contact, else the payer (src/lib/client-recipient.ts).
+      payer: payerOf(b),
       agentId: b.agentId,
       open: live && !b.archivedAt && b.status !== "CANCELLED",
       staffUrl: `${appUrl()}/bookings/${b.id}`,

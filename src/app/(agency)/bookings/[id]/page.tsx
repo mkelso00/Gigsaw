@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireStaff();
   const { id } = await params;
-  const { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival } =
+  const { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival, client } =
     await loadBookingPage(user.agencyId, id);
 
   return (
@@ -41,7 +41,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           <ArrivalPanel booking={booking} arrival={arrival} settings={settings} />
           <CheckInsSection booking={booking} now={now} zone={zone} />
           <ScheduleSection booking={booking} zone={zone} />
-          <DetailsSection booking={booking} />
+          <DetailsSection booking={booking} client={client} />
           <PaymentsSection booking={booking} now={now} />
         </div>
 
@@ -59,7 +59,14 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
                 id={contractTarget.id}
                 status={contract}
                 timeZone={booking.timezone}
-                signer={booking.promoter ? { name: booking.promoter.name, email: booking.promoter.email } : null}
+                // The whole wedding's or event's contract goes to its customer; a gig's to the client's lead contact.
+                signer={
+                  booking.event
+                    ? booking.promoter && { name: booking.promoter.name, email: booking.promoter.email }
+                    : client.documents.source === "NONE"
+                      ? null
+                      : { name: client.documents.name, email: client.documents.email }
+                }
                 previewHref={booking.event ? `/print/events/${booking.event.id}/contract` : `/print/bookings/${booking.id}/contract`}
                 partOf={booking.event ? { href: `/events/${booking.event.id}`, name: booking.event.name } : undefined}
                 agencySigned={!!settings.signatureImage}
@@ -94,7 +101,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               currency={booking.currency}
               ready={await cardPaymentsReady(user.agency!)}
               isAdmin={user.role === "ADMIN"}
-              email={booking.promoter?.email ?? ""}
+              email={client.documents.email}
               timezone={settings.defaultTimezone}
             />
           )}

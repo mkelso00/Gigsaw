@@ -1,5 +1,6 @@
 import type { Booking, Settings } from "@prisma/client";
 import { AlsoChangePanel, type AlsoChange } from "@/components/also-change-panel";
+import { ClientLeadPicker, type LeadOption, type LeadPayer } from "@/components/client-lead-picker";
 import { Combobox } from "@/components/combobox";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
@@ -17,6 +18,7 @@ export function BookingForm({
   artists,
   venues,
   promoters,
+  people,
   agents,
   settings,
   defaults = {},
@@ -26,8 +28,10 @@ export function BookingForm({
   booking?: Booking;
   // `detail`: "Not signed up" or "Approved" (src/lib/book-signed-up.ts).
   artists: (Option & { detail?: string })[];
-  venues: (Option & { city: string })[];
-  promoters: (Option & { company: string })[];
+  venues: (Option & { city: string; leadContactId: string | null })[];
+  promoters: (Option & Omit<LeadPayer, "id" | "name">)[];
+  /** The people at venues and companies, for the client's lead contact. */
+  people: LeadOption[];
   agents: Option[];
   settings: Settings;
   /** Starting values for a new booking, e.g. from the calendar or an act who said they're free. */
@@ -132,6 +136,21 @@ export function BookingForm({
               placeholder="Type a company or customer"
             />
           </Field>
+          <Field
+            label="Client's lead contact"
+            htmlFor="bf-client-lead"
+            className="sm:col-span-2"
+            hint={
+              <>
+                Who deals with this booking for the client, so arrival notes, confirmations and contracts go to them, not the owners.{" "}
+                <a href="/people/new" target="_blank" className="underline">
+                  Add a person
+                </a>
+              </>
+            }
+          >
+            <ClientLeadPicker people={people} venues={venues} payers={promoters} defaultValue={booking?.clientContactId ?? ""} inEvent={!!booking?.eventId} />
+          </Field>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-ink-200 p-4 hover:border-ink-300">
           <input
@@ -143,7 +162,7 @@ export function BookingForm({
           <span>
             <span className="block text-sm font-medium">Tell the client when the act arrives</span>
             <span className="block text-xs text-ink-500">
-              Sends them a short email and text when the artist checks in. Good for weddings and private events.
+              Sends the client&apos;s lead contact (or the client) a short email and text when the artist checks in. Couples at weddings aren&apos;t sent one.
             </span>
           </span>
         </label>

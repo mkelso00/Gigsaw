@@ -1,4 +1,5 @@
 import "server-only";
+import { clientPartyInclude, clientRecipient } from "./client-recipient";
 import { prisma } from "./db";
 import { eventTotals } from "./events";
 import { messageFor } from "./message-templates";
@@ -15,12 +16,15 @@ export async function sendPaymentReceipt(o: { bookingId?: string; eventId?: stri
   const b = o.bookingId
     ? await prisma.booking.findUnique({
         where: { id: o.bookingId },
-        include: { promoter: true, artist: { select: { name: true } }, venue: { select: { name: true } } },
+        include: { ...clientPartyInclude, artist: { select: { name: true } } },
       })
     : null;
   const eventId = o.eventId ?? b?.eventId ?? null;
   if (eventId) return eventReceipt(eventId, o.amountMinor, o.paidTo);
-  if (!b || b.demo || b.promoter?.type !== "CLIENT" || !b.promoter.email) return false;
+  if (!b || b.demo || b.promoter?.type !== "CLIENT") return false;
+  // The customer, unless the booking names its own lead contact (src/lib/client-recipient.ts).
+  const to = clientRecipient(b, "DOCUMENT");
+  if (!to.email) return false;
   const s = await prisma.settings.findUnique({ where: { agencyId: b.agencyId }, include: { agency: { select: { name: true } } } });
   const d = dealBreakdown(b);
   const paid = paymentTotals(await prisma.payment.findMany({ where: { bookingId: b.id } })).receivedMinor;
@@ -28,8 +32,8 @@ export async function sendPaymentReceipt(o: { bookingId?: string; eventId?: stri
   return send({
     agencyId: b.agencyId,
     bookingId: b.id,
-    to: b.promoter.email,
-    name: b.promoter.name,
+    to: to.email,
+    name: to.name,
     brand: s?.agencyName || s?.agency.name || "",
     replyTo: s?.agencyEmail,
     templates: s?.messageTemplates,

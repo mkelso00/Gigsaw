@@ -71,6 +71,8 @@ export async function copyBookingToDates(
       artistId: opts.artistId,
       venueId: b.venueId,
       promoterId: b.promoterId,
+      // The copy keeps the client's lead contact (empty: the venue's, as for the original).
+      clientContactId: b.clientContactId,
       agentId: b.agentId,
       createdById: user.id,
       status: opts.status,

@@ -109,6 +109,15 @@ export async function updatePerson(personId: string, _: FormState, form: FormDat
       prisma.personAct.deleteMany({ where: { personId, artistId: { notIn: kept } } }),
       // Someone who leaves a band no longer gets its invoices.
       prisma.artist.updateMany({ where: { agencyId: user.agencyId, leadPersonId: personId, id: { notIn: kept } }, data: { leadPersonId: null } }),
+      // Nor is someone who leaves a venue or company still its lead contact for bookings (bookings that name them keep them).
+      prisma.venue.updateMany({
+        where: { agencyId: user.agencyId, leadContactId: personId, ...(company.venueId ? { id: { not: company.venueId } } : {}) },
+        data: { leadContactId: null },
+      }),
+      prisma.contact.updateMany({
+        where: { agencyId: user.agencyId, leadContactId: personId, ...(company.companyId ? { id: { not: company.companyId } } : {}) },
+        data: { leadContactId: null },
+      }),
       ...acts.rows.map((r) =>
         prisma.personAct.upsert({
           where: { personId_artistId: { personId, artistId: r.artistId } },

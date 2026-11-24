@@ -4,6 +4,7 @@ import { arrivalFor } from "@/lib/bookings";
 import { replyCounts } from "@/lib/availability";
 import { awayBetween } from "@/lib/away";
 import { buildChecklist } from "@/lib/checklist";
+import { clientRecipient, leadPersonSelect } from "@/lib/client-recipient";
 import { contractState } from "@/lib/contract-doc";
 import { contractStatusFor, contractSubject, type ContractTarget } from "@/lib/contracts";
 import { linkedActIds } from "@/lib/people";
@@ -19,10 +20,12 @@ export async function loadBookingPage(agencyId: string, id: string) {
       where: { id, agencyId },
       include: {
         artist: true,
-        venue: true,
-        promoter: true,
+        venue: { include: { leadContact: { select: leadPersonSelect } } },
+        promoter: { include: { leadContact: { select: leadPersonSelect } } },
+        clientContact: { select: { ...leadPersonSelect, venueId: true, companyId: true } },
         event: { select: { id: true, name: true } },
         agent: { select: { name: true } },
+        createdBy: { select: { name: true } },
         payments: { orderBy: { paidAt: "asc" } },
         payLinks: true,
         checkIns: { orderBy: { at: "asc" }, include: { user: { select: { name: true } } } },
@@ -97,8 +100,10 @@ export async function loadBookingPage(agencyId: string, id: string) {
   );
   const arrival = arrivalFor(booking, settings, now);
   const zone = zoneLabel(booking.arriveBy, tz);
+  // Who the client's messages go to (src/lib/client-recipient.ts): day to day, and for documents (contract, pay links).
+  const client = { dayToDay: clientRecipient(booking, "DAY_TO_DAY"), documents: clientRecipient(booking, "DOCUMENT") };
 
-  return { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival };
+  return { booking, settings, now, zone, activity, asked, askedCounts, contractTarget, contract, contractType, deal, totals, checklist, arrival, client };
 }
 
 export type BookingPageData = Awaited<ReturnType<typeof loadBookingPage>>;

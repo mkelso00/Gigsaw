@@ -8,7 +8,8 @@ import { syncActInvoicePaid } from "@/lib/act-invoices";
 import { notifyClientOfArrival } from "@/lib/alerts";
 import { notifyArtistIfChanged, notifyArtistsOfNewGigs, snapshotOf } from "@/lib/notify";
 import { requireAdmin, requireStaff, type AgencyUser } from "@/lib/auth";
-import { createBookingWithReference, needsAct, parseBookingForm } from "@/lib/bookings";
+import { addClientContact, createBookingWithReference, needsAct, parseBookingForm } from "@/lib/bookings";
+import { personName } from "@/lib/person-name";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABELS, CHECK_IN_KINDS, LIVE_STATUSES, PAYMENT_KINDS, type BookingStatus } from "@/lib/constants";
 import { onConfirmed } from "@/lib/confirmations";
@@ -61,11 +62,12 @@ export async function createBooking(_: FormState, form: FormData): Promise<FormS
   let id = "";
   const result = await handleForm(async () => {
     const settings = await getSettings(user.agencyId);
-    const data = await parseBookingForm(form, settings, user.agencyId, { requireVenue: true });
+    const { newClientContact, ...data } = await parseBookingForm(form, settings, user.agencyId, { requireVenue: true });
     // An act who hasn't signed up to Gigsaw yet: refused, or for an admin "Book anyway" (src/lib/book-signed-up.ts).
     const gate = await signupGate(user, [data.artistId], confirmed(form));
     const hold = mergeHolds(gate.hold, await clashCheck(user, form, data, settings.changeoverMinutes));
     if (hold) return hold;
+    if (newClientContact) data.clientContactId = await addClientContact(user, newClientContact, data);
     const booking = await createBookingWithReference(user.agencyId, { ...data, createdById: user.id, agentId: data.agentId ?? user.id });
     await logActivity(user, "BOOKING", booking.id, "created", booking.reference);
     await logBookedAnyway(user, [booking.id], gate.overridden);
@@ -84,7 +86,7 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
     const before = snapshotOf(old);
     const settings = await getSettings(user.agencyId);
     // A gig that has a venue can't lose it; an older one saved without can still be edited.
-    const data = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId, requireVenue: !!old.venueId });
+    const { newClientContact, ...data } = await parseBookingForm(form, settings, user.agencyId, { inEvent: !!old.eventId, requireVenue: !!old.venueId });
     // Only a different act is checked for signing up: the act already on the booking stays, whatever else changes.
     const gate = data.artistId && data.artistId !== old.artistId ? await signupGate(user, [data.artistId], confirmed(form)) : { hold: null, overridden: [] };
     const hold = mergeHolds(gate.hold, await clashCheck(user, form, data, settings.changeoverMinutes, bookingId));
@@ -96,11 +98,22 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
       return { confirm: { ...ask, items: [...(hold?.confirm?.items ?? []), ...ask.items] } };
     }
     if (hold) return hold;
+    if (newClientContact) data.clientContactId = await addClientContact(user, newClientContact, data);
     // A different act or a cancellation ends the old offer link.
     await prisma.booking.update({ where: { id: bookingId }, data: { ...data, ...offerResetFor(old, data) } });
     // Also takes it out of the old act's calendars when the act changed.
     queueCalendarSync(bookingId);
     await logActivity(user, "BOOKING", bookingId, "updated");
+    if (data.clientContactId !== undefined && data.clientContactId !== old.clientContactId) {
+      const lead = data.clientContactId ? await prisma.person.findUnique({ where: { id: data.clientContactId } }) : null;
+      await logActivity(
+        user,
+        "BOOKING",
+        bookingId,
+        lead ? "chose the client's lead contact" : "cleared the client's lead contact",
+        lead ? personName(lead) : "",
+      );
+    }
     await logBookedAnyway(user, [bookingId], gate.overridden);
     // The other bookings at the venue. This one isn't among them (it's told below), so each act hears once per booking.
     if (alsoChange) await applyVenuePlan(user, bookingId, alsoChange.plan, alsoChange.opts);
@@ -124,7 +137,11 @@ export async function updateBooking(bookingId: string, _: FormState, form: FormD
  * "Also change other bookings at <venue>" on the edit form: what copying this save would do, or null for
  * only this booking. Refuses when there's nothing to copy or no venue to copy within.
  */
-async function venueChangeFor(old: Awaited<ReturnType<typeof ownBooking>>, data: Awaited<ReturnType<typeof parseBookingForm>>, form: FormData) {
+async function venueChangeFor(
+  old: Awaited<ReturnType<typeof ownBooking>>,
+  data: Omit<Awaited<ReturnType<typeof parseBookingForm>>, "newClientContact">,
+  form: FormData,
+) {
   const scope = oneOf(str(form, "alsoChange"), VENUE_SCOPES, "ONE");
   if (scope === "ONE") return null;
   const venueName = old.venue?.name;

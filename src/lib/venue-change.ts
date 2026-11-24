@@ -48,7 +48,7 @@ const TIME_FIELDS = [
 ] as const;
 type TimeField = (typeof TIME_FIELDS)[number][0];
 
-type Parsed = Awaited<ReturnType<typeof parseBookingForm>>;
+type Parsed = Omit<Awaited<ReturnType<typeof parseBookingForm>>, "newClientContact">;
 
 /** What this save changed that can go to other bookings. A time of null means it was cleared. */
 export type VenueChange = {
