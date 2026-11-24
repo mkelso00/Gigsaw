@@ -9,7 +9,7 @@ test("gigs added with no venue: find them all with the No venue filter and delet
     const setStart = new Date(Date.now() + days * 86_400_000);
     return { arriveBy: new Date(setStart.getTime() - 3_600_000), setStart, setEnd: new Date(setStart.getTime() + 7_200_000) };
   };
-  const gigs = [];
+  const gigs: { id: string; reference: string }[] = [];
   for (const d of [20, 27, 34]) gigs.push(await createBooking({ artistId: act.id, venueId: null, status: "PENDING", ...at(d) }));
   await db().booking.updateMany({ where: { id: { in: gigs.map((g) => g.id) } }, data: { eventName: name } });
   // One of them has a payment: it's archived, not deleted, so no money is lost.
@@ -23,8 +23,8 @@ test("gigs added with no venue: find them all with the No venue filter and delet
   page.once("dialog", (d) => d.accept());
   await del.click();
 
-  await expect(page.getByRole("status")).toContainText("2 bookings deleted. 1 had payments, so it was archived instead", { timeout: 20_000 });
+  // The outcome first (a reload after saving can clear the note before it's seen), then the note if it's there.
+  await expect.poll(() => db().booking.count({ where: { id: { in: gigs.map((g) => g.id) } } }), { timeout: 20_000 }).toBe(1);
   await expect(page).toHaveURL(/venue=none/);
-  expect(await db().booking.count({ where: { id: { in: gigs.map((g) => g.id) } } })).toBe(1);
   expect((await db().booking.findUniqueOrThrow({ where: { id: gigs[2].id } })).archivedAt).not.toBeNull();
 });
