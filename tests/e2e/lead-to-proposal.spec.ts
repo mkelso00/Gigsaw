@@ -126,10 +126,10 @@ test("a lead added by hand becomes a signed proposal and a locked-in wedding", a
   // The checklist ticked "Proposal or contract signed" by itself.
   await expect(page.getByRole("button", { name: 'Mark "Proposal or contract signed" as not done' })).toBeVisible();
 
-  // The lead has moved to Dealt with.
+  // The lead has moved to Proposal made.
   await follow(page, page.getByRole("link", { name: "Leads & proposals" }), page.getByRole("heading", { level: 1, name: "Inbound leads" }));
   const dealt = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: leadName }) });
-  await follow(page, page.getByRole("link", { name: /^Dealt with/ }), dealt);
+  await follow(page, page.getByRole("link", { name: /^Proposal made/ }), dealt);
   await expect(page).toHaveURL(/view=done/);
-  await expect(dealt.getByText("Dealt with", { exact: true })).toBeVisible();
+  await expect(dealt.getByText("Proposal made", { exact: true })).toBeVisible();
 });

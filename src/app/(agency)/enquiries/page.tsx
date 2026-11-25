@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { deleteEnquiry, setEnquiryStatus } from "@/actions/enquiries";
+import { deleteEnquiry, setEnquiryStatus, setLeadAside } from "@/actions/enquiries";
+import { CLOSE_REASONS } from "@/lib/lapsed-leads";
 import { makeProposal } from "@/actions/proposals";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { FilterPanel } from "@/components/header-actions";
@@ -16,7 +17,9 @@ import { formatDateTime, localDateKey } from "@/lib/time";
 export const metadata: Metadata = { title: "Inbound leads" };
 export const dynamic = "force-dynamic";
 
-const VIEWS = { new: "New", done: "Dealt with", all: "All leads", quotes: "Proposals" } as const;
+// A lead's stages: New → Contacted (spoken to, no proposal yet) → Dealt with (a proposal made), or Not going ahead.
+const VIEWS = { new: "New", contacted: "Contacted", done: "Proposal made", closed: "Not going ahead", all: "All leads", quotes: "Proposals" } as const;
+const STATUS_OF: Partial<Record<keyof typeof VIEWS, string>> = { new: "NEW", contacted: "CONTACTED", done: "DONE", closed: "CLOSED" };
 
 /** The Proposals tabs: every stage a proposal can be at. */
 const PROPOSAL_TABS: Record<string, string> = {
@@ -34,13 +37,13 @@ type View = keyof typeof VIEWS;
 export default async function EnquiriesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireStaff();
   const sp = await searchParams;
-  const view: View = sp.view === "done" || sp.view === "all" || sp.view === "quotes" ? sp.view : "new";
+  const view: View = sp.view && sp.view in VIEWS ? (sp.view as View) : "new";
   const settings = await getSettings(user.agencyId);
   const tz = settings.defaultTimezone;
   const today = localDateKey(new Date(), tz);
 
   const where: Prisma.EnquiryWhereInput = { agencyId: user.agencyId };
-  if (view !== "all") where.status = view === "new" ? "NEW" : "DONE";
+  if (STATUS_OF[view]) where.status = STATUS_OF[view];
   if (sp.type && ENQUIRY_EVENT_TYPES.some((t) => t.value === sp.type)) where.eventType = sp.type;
   if (sp.q) {
     where.OR = ["name", "email", "phone", "venue", "message", "budget"].map((k) => ({ [k]: { contains: sp.q, mode: "insensitive" } }));
@@ -119,7 +122,14 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
     prisma.quote.count({ where: { agencyId: user.agencyId, supersededById: null, status: { in: OPEN_STATUSES }, ...live } }),
   ]);
   const count = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
-  const tabCount: Record<View, number> = { new: count("NEW"), done: count("DONE"), all: count("NEW") + count("DONE"), quotes: openProposals };
+  const tabCount: Record<View, number> = {
+    new: count("NEW"),
+    contacted: count("CONTACTED"),
+    done: count("DONE"),
+    closed: count("CLOSED"),
+    all: counts.reduce((t, c) => t + c._count, 0),
+    quotes: openProposals,
+  };
   const link = (v: View) =>
     `/enquiries?${new URLSearchParams({ ...(v !== "new" ? { view: v } : {}), ...(sp.type && v !== "quotes" ? { type: sp.type } : {}), ...(sp.q ? { q: sp.q } : {}) })}`;
   // Waiting for the customer, then drafts, then the rest.
@@ -133,7 +143,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
         subtitle={
           view === "quotes"
             ? "Every proposal, newest first. The customer signs and approves it online, and it becomes a booked wedding or event."
-            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Turn a lead into a proposal and it moves to Dealt with."
+            : "From the enquiry form on your website, or added by hand when they come by email or phone. Each one adds the customer, a note of what they asked and an Enquiry booking (or a wedding). Call or email them and press Customer contacted. Turn it into a proposal and it moves to Proposal made; if they don't want one, press Not going ahead."
         }
         actions={
           <>
@@ -285,8 +295,12 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                       <h2 className="text-base font-semibold text-ink-950">{e.name}</h2>
                       {e.status === "NEW" ? (
                         <span className="badge bg-amber-100 text-amber-900">New</span>
+                      ) : e.status === "CONTACTED" ? (
+                        <span className="badge bg-sky-50 text-sky-800">Contacted</span>
+                      ) : e.status === "CLOSED" ? (
+                        <span className="badge bg-ink-100 text-ink-500">Not going ahead</span>
                       ) : (
-                        <span className="badge bg-ink-100 text-ink-600">Dealt with</span>
+                        <span className="badge bg-ink-100 text-ink-600">Proposal made</span>
                       )}
                       {e.eventType && <span className="badge bg-ink-100 text-ink-700">{enquiryTypeLabel(e.eventType)}</span>}
                       {e.channel !== "WEBSITE" && <span className="badge bg-ink-100 text-ink-700">{channelLabel(e.channel)}</span>}
@@ -325,6 +339,12 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                   </dl>
                 )}
                 {e.message && <p className="mt-4 rounded-lg bg-ink-50 p-3 text-sm whitespace-pre-line text-ink-800">{e.message}</p>}
+                {e.status === "CLOSED" && e.closedReason && (
+                  <p className="mt-3 text-sm text-ink-600">
+                    <span className="font-medium">Not going ahead:</span> {e.closedReason}
+                  </p>
+                )}
+                {e.contactedAt && e.status !== "NEW" && <p className="mt-2 text-xs text-ink-500">Contacted {formatDateTime(e.contactedAt, tz)}</p>}
 
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
                   {proposal ? (
@@ -357,11 +377,47 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
                   )}
                   {!e.booking && !e.event && <span className="text-xs text-ink-500">No date given, so no booking was made.</span>}
                   <span className="ml-auto flex flex-wrap gap-2">
-                    <ServerForm action={setEnquiryStatus.bind(null, e.id, e.status === "NEW" ? "DONE" : "NEW")}>
-                      <button className={`btn btn-sm ${e.status === "NEW" ? "btn-primary" : ""}`}>
-                        {e.status === "NEW" ? "Mark dealt with" : "Back to new"}
-                      </button>
-                    </ServerForm>
+                    {e.status === "NEW" && (
+                      <ServerForm action={setEnquiryStatus.bind(null, e.id, "CONTACTED")}>
+                        <button className="btn btn-sm btn-primary">Customer contacted</button>
+                      </ServerForm>
+                    )}
+                    {(e.status === "NEW" || e.status === "CONTACTED") && (
+                      <details className="relative">
+                        <summary className="btn btn-sm list-none">Not going ahead</summary>
+                        <ActionForm
+                          action={setLeadAside.bind(null, e.id)}
+                          className="absolute right-0 z-20 mt-1 w-72 space-y-3 rounded-xl border border-ink-200 bg-white p-3 shadow-lg"
+                        >
+                          <label className="block">
+                            <span className="label">Why?</span>
+                            <select name="reason" required defaultValue="" className="input">
+                              <option value="" disabled>
+                                Choose…
+                              </option>
+                              {CLOSE_REASONS.map((r) => (
+                                <option key={r}>{r}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="label">A note (optional)</span>
+                            <input name="note" maxLength={300} className="input" />
+                          </label>
+                          <p className="text-xs text-ink-500">
+                            It moves to Not going ahead, and any date it holds is freed. A proposal still being drafted or sent is withdrawn.
+                          </p>
+                          <SubmitButton className="btn btn-sm btn-primary w-full" pendingText="Saving…">
+                            Set it aside
+                          </SubmitButton>
+                        </ActionForm>
+                      </details>
+                    )}
+                    {e.status !== "NEW" && (
+                      <ServerForm action={setEnquiryStatus.bind(null, e.id, "NEW")}>
+                        <button className="btn btn-sm">Back to new</button>
+                      </ServerForm>
+                    )}
                     <ServerForm action={deleteEnquiry.bind(null, e.id)}>
                       <ConfirmButton
                         className="btn btn-sm btn-danger"

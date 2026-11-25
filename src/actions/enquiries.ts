@@ -19,6 +19,7 @@ import {
   type EnquiryConfig,
 } from "@/lib/enquiries";
 import { replyToCustomer, recordEnquiry } from "@/lib/enquiry-server";
+import { CLOSE_REASONS, closeLead } from "@/lib/lapsed-leads";
 import { receiveWebsiteEnquiry } from "@/lib/enquiry-intake";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { localDateKey } from "@/lib/time";
@@ -116,14 +117,46 @@ export async function saveEnquiryForm(_: FormState, form: FormData): Promise<For
   });
 }
 
-/** Mark an enquiry dealt with, or back to new. */
-export async function setEnquiryStatus(id: string, status: "NEW" | "DONE") {
+/** Move a lead along: contacted (spoken to, no proposal yet), dealt with, or back to new. */
+export async function setEnquiryStatus(id: string, status: "NEW" | "CONTACTED" | "DONE") {
   const user = await requireStaff();
   const e = await prisma.enquiry.findFirst({ where: { id, agencyId: user.agencyId } });
   if (!e) return;
-  await prisma.enquiry.update({ where: { id }, data: { status, doneAt: status === "DONE" ? new Date() : null } });
-  await logActivity(user, "ENQUIRY", id, status === "DONE" ? "marked an enquiry dealt with" : "moved an enquiry back to new", e.name);
+  await prisma.enquiry.update({
+    where: { id },
+    data: {
+      status,
+      doneAt: status === "DONE" ? new Date() : null,
+      ...(status === "CONTACTED" ? { contactedAt: e.contactedAt ?? new Date() } : {}),
+      ...(status === "NEW" ? { closedReason: "" } : {}),
+    },
+  });
+  const action = status === "DONE" ? "marked an enquiry dealt with" : status === "CONTACTED" ? "contacted the customer" : "moved an enquiry back to new";
+  await logActivity(user, "ENQUIRY", id, action, e.name);
   revalidatePath("/", "layout");
+}
+
+/** "Not going ahead": the lead is set aside with a reason, and the dates it holds are freed (src/lib/lapsed-leads.ts closeLead). */
+export async function setLeadAside(id: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const pick = str(form, "reason");
+    const note = str(form, "note").slice(0, 300);
+    if (!(CLOSE_REASONS as readonly string[]).includes(pick)) throw new FormError("Choose why it isn't going ahead");
+    const reason = pick === "Other" ? note || "Other" : note ? `${pick}: ${note}` : pick;
+    const r = await closeLead(user.agencyId, id, reason);
+    if (!r.ok) throw new FormError(r.why);
+    await logActivity(user, "ENQUIRY", id, "set a lead aside", reason);
+    revalidatePath("/", "layout");
+    const freed = [...r.cancelled, ...(r.eventCancelled ? ["the wedding"] : [])];
+    return {
+      ok: [
+        "Moved to Not going ahead.",
+        freed.length ? ` Its date is freed (${freed.join(", ")} cancelled).` : "",
+        r.withdrawn.length ? ` Proposal ${r.withdrawn.join(", ")} withdrawn.` : "",
+      ].join(""),
+    };
+  });
 }
 
 /**

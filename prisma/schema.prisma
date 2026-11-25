@@ -96,98 +96,98 @@ model BillingStatement {
 }
 
 model Settings {
-  agencyId              String  @id
-  agency                Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  agencyName            String  @default("My Agency")
-  agencyEmail           String  @default("")
-  agencyAddress         String  @default("")
+  agencyId                 String  @id
+  agency                   Agency  @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  agencyName               String  @default("My Agency")
+  agencyEmail              String  @default("")
+  agencyAddress            String  @default("")
   // Who acts call about a gig (e.g. the business's bookings manager), shown on every gig in the act app,
   // calendar and day sheet in place of the promoter. Empty: the promoter shows as before.
-  actContactName        String  @default("")
-  actContactPhone       String  @default("")
+  actContactName           String  @default("")
+  actContactPhone          String  @default("")
   // How emails from this business look: colours, website, phone and the enquiry reply's "What happens next"
   // (src/lib/email-design.ts). The logo is kept separately, in BrandLogo.
-  emailDesign           Json    @default("{}")
-  defaultTimezone       String  @default("Europe/London")
-  defaultCurrency       String  @default("GBP")
-  defaultCommission     Float   @default(15)
+  emailDesign              Json    @default("{}")
+  defaultTimezone          String  @default("Europe/London")
+  defaultCurrency          String  @default("GBP")
+  defaultCommission        Float   @default(15)
   // Minutes after the call time before an arrival counts as late.
-  lateGraceMinutes      Int     @default(5)
+  lateGraceMinutes         Int     @default(5)
   // Minutes an artist needs to pack down and get going between two gigs, on top of travel.
-  changeoverMinutes     Int     @default(15)
+  changeoverMinutes        Int     @default(15)
   // How close (in metres) a check-in must be to the venue to count as "on site".
-  geofenceMetres        Int     @default(500)
+  geofenceMetres           Int     @default(500)
   // Arrival alerts. The booking's agent (or as alertRouting says) is alerted; these add an on-call contact.
-  overdueAlerts         Boolean @default(true)
-  alertEmail            String  @default("")
-  alertPhone            String  @default("")
+  overdueAlerts            Boolean @default(true)
+  alertEmail               String  @default("")
+  alertPhone               String  @default("")
   // Tell the client (the booking's promoter or client contact) when the artist arrives.
-  clientArrivalMessages Boolean @default(true)
+  clientArrivalMessages    Boolean @default(true)
   // Weddings and events: automatic emails to the customer and the acts, and a review link for the thank-you.
-  eventEmails           Boolean @default(true)
+  eventEmails              Boolean @default(true)
   // The business's own wedding/event plan fields, e.g. [{ id, label: "Ceremony time" }] (src/lib/event-plan.ts).
-  planExtraFields       Json    @default("[]")
+  planExtraFields          Json    @default("[]")
   // Tell the customer when an act is confirmed: EVENTS (weddings and private events) | ALL | OFF
-  customerConfirmations String  @default("EVENTS")
-  reviewLink            String  @default("")
+  customerConfirmations    String  @default("EVENTS")
+  reviewLink               String  @default("")
   // A booking fee added to what the client pays, kept in full by the agency (no act's share).
   // 0 means no default fee. Added to: EVENTS (weddings and private events, once per event) | ALL
-  bookingFeeMinor       Int     @default(0)
-  bookingFeeFor         String  @default("EVENTS")
+  bookingFeeMinor          Int     @default(0)
+  bookingFeeFor            String  @default("EVENTS")
   // VAT % put on the sale of every new booking, where it can still be changed. 0 means no VAT.
-  defaultVatPct         Float   @default(20)
+  defaultVatPct            Float   @default(20)
   // Only book acts who've signed up to Gigsaw (src/lib/book-signed-up.ts): a band's lead, or a solo act's login, has
   // made a password. An admin can approve an act to be booked before then, or book one anyway. New businesses start off.
-  bookOnlySignedUp      Boolean @default(false)
+  bookOnlySignedUp         Boolean @default(false)
   // Automatic messages: switched off or reworded, by message, e.g. { "OFFER": { "subject": "…" } }.
-  messageTemplates      Json    @default("{}")
+  messageTemplates         Json    @default("{}")
   // Secret for the private link new acts use to join (/join/<token>). Null means no link yet.
-  joinToken             String? @unique
+  joinToken                String? @unique
   // The self-billing agreement acts tick when they give their pay details. Blank: Gigsaw's own wording
   // (src/lib/self-billing.ts). {business} is the business's name.
-  selfBillingAgreementText String @default("")
+  selfBillingAgreementText String  @default("")
   // The short note under the ways to pay on every wedding proposal. Blank: Gigsaw's own (src/lib/proposal-pay.ts).
-  payNote               String  @default("")
+  payNote                  String  @default("")
   // The opening message at the top of every proposal ("Thank you for thinking of us…"). Blank: the default wording.
-  proposalWelcome       String  @default("")
+  proposalWelcome          String  @default("")
   // Where couples deliver a wedding balance paid in cash: on the proposal, the couple's page and the balance emails.
-  cashAddress           String  @default("")
+  cashAddress              String  @default("")
   // Reminders to artists: a weekly list of next week's gigs, and a nudge on the day.
-  weeklyReminders       Boolean @default(true)
-  weeklyReminderDay     Int     @default(7) // 1 = Monday ... 7 = Sunday
-  weeklyReminderTime    String  @default("18:00") // agency's local time
-  dayReminders          Boolean @default(true)
-  dayReminderTime       String  @default("12:00") // venue's local time
-  invoiceTerms          String  @default("Payment due within 14 days of invoice date.")
+  weeklyReminders          Boolean @default(true)
+  weeklyReminderDay        Int     @default(7) // 1 = Monday ... 7 = Sunday
+  weeklyReminderTime       String  @default("18:00") // agency's local time
+  dayReminders             Boolean @default(true)
+  dayReminderTime          String  @default("12:00") // venue's local time
+  invoiceTerms             String  @default("Payment due within 14 days of invoice date.")
   // The single contract wording from before contract types (ContractTemplate). Copied into a "Standard
   // contract" by the 20261219000000_contract_types migration; kept, but nothing reads it any more.
-  contractTerms         String  @default("")
+  contractTerms            String  @default("")
   // The agency's own signature on contracts: a drawn PNG (data URL), and who signs and as what.
-  signatureImage        String  @default("")
-  signatureName         String  @default("")
-  signatureRole         String  @default("")
+  signatureImage           String  @default("")
+  signatureName            String  @default("")
+  signatureRole            String  @default("")
   // The enquiry form for the business's own website (/enquire/<enquirySlug>). Off until switched on.
-  enquiryOn             Boolean @default(false)
-  enquirySlug           String? @unique
+  enquiryOn                Boolean @default(false)
+  enquirySlug              String? @unique
   // Which fields show, the thank-you message, who hears about new enquiries and the logo (src/lib/enquiries.ts).
-  enquiryForm           Json    @default("{}")
+  enquiryForm              Json    @default("{}")
   // Where the weekly pay run's records go (the week's invoices and payment list), and who hears it's ready to
   // check. Empty: the records go to the business email, and the Monday reminder to each admin.
-  accountsEmail         String  @default("")
+  accountsEmail            String  @default("")
   // Shared inboxes for team alerts: one for weddings and events (e.g. events@…), one for venue gigs (e.g. gigs@…).
-  eventsEmail           String  @default("")
-  gigsEmail             String  @default("")
+  eventsEmail              String  @default("")
+  gigsEmail                String  @default("")
   // Where each team alert goes, by context: the lead agent, the shared inbox, both or nobody (src/lib/team-alert-routing.ts),
   // e.g. { "ACCEPTED": { "EVENTS": "INBOX", "GIGS": "AGENT" } }. A cell not set follows the defaults: businesses from
   // before this setting (stored as {}) keep the lead agent for everything; new ones start with "_defaults": "SHARED",
   // which sends wedding and event alerts to the events inbox once it's set.
-  alertRouting          Json    @default("{\"_defaults\":\"SHARED\"}")
+  alertRouting             Json    @default("{\"_defaults\":\"SHARED\"}")
   // The weekly pay run's bank file: a bank's preset or the business's own layout (src/lib/bank-file.ts), e.g.
   // { "preset": "MONZO" } or { "preset": "CUSTOM", "custom": { "columns": [...], "header": true, ... } }.
-  bankFile              Json    @default("{}")
+  bankFile                 Json    @default("{}")
   // When acts' self-billing invoices are made: SIGN_OFF (an admin signs off the week's gigs in the weekly pay run,
   // and that makes them) | AUTO (each one as soon as its gig is over). See src/lib/act-invoices.ts.
-  actInvoiceMode        String  @default("SIGN_OFF")
+  actInvoiceMode           String  @default("SIGN_OFF")
 }
 
 model User {
@@ -285,28 +285,28 @@ model Artist {
   demo              Boolean  @default(false) // sample data, removable from Settings
 
   // Profile, filled in by the act when they join or by the agency.
-  actType            String    @default("") // SOLO | DUO | BAND | DJ | OTHER
-  town               String    @default("")
-  photoUrl           String    @default("")
-  videoUrl           String    @default("")
-  instagram          String    @default("")
-  website            String    @default("")
-  setList            String    @default("")
-  usualFeeMinor      Int? // what they usually charge, a guide for the agency
+  actType               String    @default("") // SOLO | DUO | BAND | DJ | OTHER
+  town                  String    @default("")
+  photoUrl              String    @default("")
+  videoUrl              String    @default("")
+  instagram             String    @default("")
+  website               String    @default("")
+  setList               String    @default("")
+  usualFeeMinor         Int? // what they usually charge, a guide for the agency
   // Bank details for paying the act. Agency only.
-  bankAccountName    String    @default("")
-  bankSortCode       String    @default("")
-  bankAccountNumber  String    @default("")
-  vatRegistered      Boolean   @default(false)
-  vatNumber          String    @default("")
+  bankAccountName       String    @default("")
+  bankSortCode          String    @default("")
+  bankAccountNumber     String    @default("")
+  vatRegistered         Boolean   @default(false)
+  vatNumber             String    @default("")
   // Postal address, for the self-billing invoices Gigsaw makes for the act. Filled in by the act or the agency.
-  address            String    @default("")
+  address               String    @default("")
   // National Insurance number, kept for the agency's records only: never shown to venues, customers or other acts.
-  niNumber           String    @default("")
+  niNumber              String    @default("")
   // When the act last finished the details the agency asks for (bank, address, NI), so staff can see who's ready to be paid.
   // Since people have their own pay details (see Person), these are only used for an act with nobody on file, or one
   // whose details from before couldn't be moved to a person yet (src/lib/payee.ts).
-  detailsCompletedAt DateTime?
+  detailsCompletedAt    DateTime?
   // The self-billing agreement (HMRC VAT Notice 700/62): when the act last agreed, from their app, that the agency makes
   // out their invoices, and the exact wording they agreed to. Asked again after 12 months (src/lib/self-billing.ts).
   // Only the act can agree: staff see it but never set it.
@@ -314,13 +314,13 @@ model Artist {
   selfBillingAgreedText String    @default("")
   // The person a band's self-billing invoices are made out to and paid to ("Invoices go to"). Chosen by staff; an act
   // with only one person doesn't need one (that person is the payee).
-  leadPersonId       String?
-  leadPerson         Person?   @relation("ActLead", fields: [leadPersonId], references: [id], onDelete: SetNull)
+  leadPersonId          String?
+  leadPerson            Person?   @relation("ActLead", fields: [leadPersonId], references: [id], onDelete: SetNull)
   // "Approved to book before signing up": an admin let this act be booked although it hasn't signed up to Gigsaw yet
   // (Settings.bookOnlySignedUp, src/lib/book-signed-up.ts). When, and by whom. Null: not approved.
-  bookBeforeSignupAt   DateTime?
-  bookBeforeSignupById String?
-  bookBeforeSignupBy   User?     @relation("ArtistBookBeforeSignup", fields: [bookBeforeSignupById], references: [id], onDelete: SetNull)
+  bookBeforeSignupAt    DateTime?
+  bookBeforeSignupById  String?
+  bookBeforeSignupBy    User?     @relation("ArtistBookBeforeSignup", fields: [bookBeforeSignupById], references: [id], onDelete: SetNull)
 
   login    User?                  @relation("ArtistLogin")
   slots    VenueSlot[]
@@ -373,7 +373,7 @@ model Contact {
   monthlyBills MonthlyBill[]
   slots        VenueSlot[]
   bookings     Booking[]
-  people       Person[]          @relation("PersonCompany")
+  people       Person[]      @relation("PersonCompany")
   events       Event[]
   enquiries    Enquiry[]
   quotes       Quote[]
@@ -395,31 +395,31 @@ model ContactNote {
 }
 
 model Venue {
-  id         String   @id @default(cuid())
-  agencyId   String
-  agency     Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  agencyId      String
+  agency        Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
-  importRef  String?
-  name       String
-  address    String   @default("")
-  city       String   @default("")
-  country    String   @default("")
-  capacity   Int?
-  latitude   Float?
-  longitude  Float?
+  importRef     String?
+  name          String
+  address       String   @default("")
+  city          String   @default("")
+  country       String   @default("")
+  capacity      Int?
+  latitude      Float?
+  longitude     Float?
   // Secret for the venue's read-only page (/v/<token>). Null means no link has been made.
-  shareToken String?  @unique
-  colour     String   @default("") // calendar colour; blank means pick one automatically
+  shareToken    String?  @unique
+  colour        String   @default("") // calendar colour; blank means pick one automatically
   // A priority venue is listed first wherever venues are picked (calendar filter, booking forms).
-  priority   Boolean  @default(false)
-  timezone   String   @default("Europe/London")
-  notes      String   @default("")
+  priority      Boolean  @default(false)
+  timezone      String   @default("Europe/London")
+  notes         String   @default("")
   // The venue's usual lead contact for bookings, one of its people: who its gigs' client messages go to
   // (src/lib/client-recipient.ts), unless a booking names its own.
   leadContactId String?
   leadContact   Person?  @relation("VenueLeadContact", fields: [leadContactId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now())
-  demo       Boolean  @default(false) // sample data, removable from Settings
+  createdAt     DateTime @default(now())
+  demo          Boolean  @default(false) // sample data, removable from Settings
 
   slots        VenueSlot[]
   bookings     Booking[]
@@ -434,27 +434,27 @@ model Venue {
 }
 
 model Booking {
-  id          String   @id @default(cuid())
-  agencyId    String
-  agency      Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  reference   String
-  eventName   String   @default("")
+  id              String   @id @default(cuid())
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  reference       String
+  eventName       String   @default("")
   // ENQUIRY | PENDING (being set up, maybe no act yet) | AWAITING (offered to the act) |
   // HOLD | CONFIRMED (the act has accepted: the gig is on) | SETTLED | CANCELLED
-  status      String   @default("PENDING")
-  dealType    String   @default("BUY_SELL") // BUY_SELL (sale and cost, the normal case) | STANDARD_COMMISSION | VERSUS | PLUS | FLAT
-  eventType   String   @default("GIG") // GIG | FESTIVAL | CLUB_NIGHT | WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
+  status          String   @default("PENDING")
+  dealType        String   @default("BUY_SELL") // BUY_SELL (sale and cost, the normal case) | STANDARD_COMMISSION | VERSUS | PLUS | FLAT
+  eventType       String   @default("GIG") // GIG | FESTIVAL | CLUB_NIGHT | WEDDING | CORPORATE | PRIVATE_PARTY | OTHER
   // The act. Empty while the gig is being set up ("Needs an act").
-  artistId    String?
-  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: Restrict)
-  venueId     String?
-  venue       Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
-  promoterId  String?
-  promoter    Contact? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
-  agentId     String?
-  agent       User?    @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
-  createdById String?
-  createdBy   User?    @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  artistId        String?
+  artist          Artist?  @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  venueId         String?
+  venue           Venue?   @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  promoterId      String?
+  promoter        Contact? @relation(fields: [promoterId], references: [id], onDelete: SetNull)
+  agentId         String?
+  agent           User?    @relation("BookingAgent", fields: [agentId], references: [id], onDelete: SetNull)
+  createdById     String?
+  createdBy       User?    @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
   // The client's lead contact for this booking: the person at the venue or the paying company who deals with it, so the
   // client's messages go to them rather than the owner (src/lib/client-recipient.ts). Null: the venue's lead contact,
   // then the company's, then the payer's own email.
@@ -804,50 +804,50 @@ model Reminder {
 // A person: a musician in one or more acts, a venue manager, someone at a promoter, and so on.
 // Their company is either a venue or another company (a contact).
 model Person {
-  id                 String          @id @default(cuid())
-  agencyId           String
-  agency             Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id                    String          @id @default(cuid())
+  agencyId              String
+  agency                Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // The record's id in the system it was imported from, e.g. an Overture contact id, so re-importing updates rather than duplicates.
-  importRef          String?
-  firstName          String
-  surname            String          @default("")
-  alias              String          @default("") // stage or known-as name
-  pronouns           String          @default("")
-  email              String          @default("")
-  phone              String          @default("")
-  social             String          @default("")
-  website            String          @default("")
-  address            String          @default("")
-  notes              String          @default("")
-  venueId            String?
-  venue              Venue?          @relation("PersonVenue", fields: [venueId], references: [id], onDelete: SetNull)
-  companyId          String?
-  company            Contact?        @relation("PersonCompany", fields: [companyId], references: [id], onDelete: SetNull)
-  jobTitle           String          @default("") // their role at the venue or company, e.g. "General manager"
-  calendarToken      String          @unique @default(cuid())
-  demo               Boolean         @default(false)
-  createdAt          DateTime        @default(now())
+  importRef             String?
+  firstName             String
+  surname               String          @default("")
+  alias                 String          @default("") // stage or known-as name
+  pronouns              String          @default("")
+  email                 String          @default("")
+  phone                 String          @default("")
+  social                String          @default("")
+  website               String          @default("")
+  address               String          @default("")
+  notes                 String          @default("")
+  venueId               String?
+  venue                 Venue?          @relation("PersonVenue", fields: [venueId], references: [id], onDelete: SetNull)
+  companyId             String?
+  company               Contact?        @relation("PersonCompany", fields: [companyId], references: [id], onDelete: SetNull)
+  jobTitle              String          @default("") // their role at the venue or company, e.g. "General manager"
+  calendarToken         String          @unique @default(cuid())
+  demo                  Boolean         @default(false)
+  createdAt             DateTime        @default(now())
   // Pay details, for a musician in an act: they fill them in from their own login (Your details), and the act's
   // invoices go to them when they're the act's payee (src/lib/payee.ts). Bank and NI number: the person themself
   // and the agency's admins only. `address` above is their postal address, used on the invoices too.
-  bankAccountName    String          @default("")
-  bankSortCode       String          @default("")
-  bankAccountNumber  String          @default("")
-  vatRegistered      Boolean         @default(false)
-  vatNumber          String          @default("")
-  niNumber           String          @default("")
-  detailsCompletedAt DateTime?
+  bankAccountName       String          @default("")
+  bankSortCode          String          @default("")
+  bankAccountNumber     String          @default("")
+  vatRegistered         Boolean         @default(false)
+  vatNumber             String          @default("")
+  niNumber              String          @default("")
+  detailsCompletedAt    DateTime?
   // The self-billing agreement, as on Artist: when they last agreed from their own login, and the wording agreed to.
   selfBillingAgreedAt   DateTime?
   selfBillingAgreedText String          @default("")
-  acts               PersonAct[]
-  standIns           BookingLineup[]
-  login              User?           @relation("PersonLogin")
-  leadOf             Artist[]        @relation("ActLead")
+  acts                  PersonAct[]
+  standIns              BookingLineup[]
+  login                 User?           @relation("PersonLogin")
+  leadOf                Artist[]        @relation("ActLead")
   // Where they're the client's lead contact (src/lib/client-recipient.ts).
-  leadForBookings    Booking[]       @relation("BookingClientContact")
-  leadForVenues      Venue[]         @relation("VenueLeadContact")
-  leadForCompanies   Contact[]       @relation("CompanyLeadContact")
+  leadForBookings       Booking[]       @relation("BookingClientContact")
+  leadForVenues         Venue[]         @relation("VenueLeadContact")
+  leadForCompanies      Contact[]       @relation("CompanyLeadContact")
 
   @@index([agencyId, importRef])
   @@index([agencyId])
@@ -1033,12 +1033,15 @@ model Contract {
 // Someone filling in the enquiry form on the business's website. It finds or makes the customer,
 // adds an Enquiry booking with no act yet (or a wedding), and waits under Enquiries until dealt with.
 model Enquiry {
-  id        String    @id @default(cuid())
-  agencyId  String
-  agency    Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
-  status    String    @default("NEW") // NEW | DONE (dealt with)
-  createdAt DateTime  @default(now())
-  doneAt    DateTime?
+  id           String    @id @default(cuid())
+  agencyId     String
+  agency       Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  status       String    @default("NEW") // NEW | CONTACTED (spoken to, no proposal yet) | DONE (dealt with: a proposal made) | CLOSED (not going ahead)
+  // When someone first got in touch with the customer, and why the lead isn't going ahead (status CLOSED).
+  contactedAt  DateTime?
+  closedReason String    @default("")
+  createdAt    DateTime  @default(now())
+  doneAt       DateTime?
 
   name      String
   email     String
@@ -1350,58 +1353,58 @@ model CalendarEventLink {
 // pays them), never the sale price. Who it's from, their address, VAT number and bank details are copied in
 // when it's issued, so later changes to the act never rewrite an invoice that's gone out.
 model ActInvoice {
-  id                String    @id @default(cuid())
-  agencyId          String
-  agency            Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  agencyId            String
+  agency              Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // Kept (with the link cleared) if the act or booking is later deleted: the invoice is an accounting record.
-  artistId          String?
-  artist            Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
-  bookingId         String?
-  booking           Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  artistId            String?
+  artist              Artist?   @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  bookingId           String?
+  booking             Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   // The booking's id while this invoice is live (ISSUED or PAID), cleared when it's voided. Unique, so the
   // database itself refuses a second live invoice for one booking, however two servers race.
-  liveBookingId     String?   @unique
+  liveBookingId       String?   @unique
   // Numbered per agency, SB-0001 and up, never reused (a voided number stays voided).
-  seq               Int
-  number            String
-  currency          String
-  netMinor          Int // the act's fee
-  vatPct            Float     @default(0) // only when the act is VAT registered
-  vatMinor          Int       @default(0)
-  totalMinor        Int
-  status            String    @default("ISSUED") // ISSUED | PAID | VOID
-  issuedAt          DateTime  @default(now())
-  paidAt            DateTime?
-  voidedAt          DateTime?
+  seq                 Int
+  number              String
+  currency            String
+  netMinor            Int // the act's fee
+  vatPct              Float     @default(0) // only when the act is VAT registered
+  vatMinor            Int       @default(0)
+  totalMinor          Int
+  status              String    @default("ISSUED") // ISSUED | PAID | VOID
+  issuedAt            DateTime  @default(now())
+  paidAt              DateTime?
+  voidedAt            DateTime?
   // Why it was voided, or what it replaces, e.g. "Replaces SB-0003: the fee changed".
-  note              String    @default("")
+  note                String    @default("")
   // What it was for, as it read when issued.
-  bookingRef        String
-  description       String
-  gigDate           DateTime // the date of the performance (the tax point)
+  bookingRef          String
+  description         String
+  gigDate             DateTime // the date of the performance (the tax point)
   // The act as they were when it was issued. The payee is who it's made out to and paid to: the band's lead person,
   // the one person in a solo act, or the act itself when it has nobody on file (src/lib/payee.ts).
-  actName           String
-  payeeName         String    @default("")
+  actName             String
+  payeeName           String    @default("")
   // The person it's made out to, or null when the act itself is the payee. No foreign key: the invoice is a record,
   // and a deleted person's invoice must never fall back to being shown to the act's own login.
-  payeePersonId     String?
-  actAddress        String    @default("")
-  actVatNumber      String    @default("") // blank unless VAT registered
-  bankAccountName   String    @default("")
-  bankSortCode      String    @default("")
-  bankAccountNumber String    @default("")
+  payeePersonId       String?
+  actAddress          String    @default("")
+  actVatNumber        String    @default("") // blank unless VAT registered
+  bankAccountName     String    @default("")
+  bankSortCode        String    @default("")
+  bankAccountNumber   String    @default("")
   // The date of the payee's self-billing agreement this invoice was made under, or null when there was no current
   // one (it's still made, so pay isn't held up, and staff see "No self-billing agreement").
   selfBillingAgreedAt DateTime?
   // The bill in the agency's Xero for this invoice (src/lib/act-invoices-xero.ts): its InvoiceID, Xero's status
   // for it (DRAFT, AUTHORISED, PAID, VOIDED, DELETED) as last seen, and the payment Gigsaw recorded against it.
-  xeroBillId        String    @default("")
-  xeroBillStatus    String    @default("")
-  xeroPaymentId     String    @default("")
+  xeroBillId          String    @default("")
+  xeroBillStatus      String    @default("")
+  xeroPaymentId       String    @default("")
   // What went wrong last time with Xero, or what needs doing there by hand (e.g. a voided invoice whose bill is paid).
-  xeroProblem       String    @default("")
-  createdAt         DateTime  @default(now())
+  xeroProblem         String    @default("")
+  createdAt           DateTime  @default(now())
 
   @@unique([agencyId, seq])
   @@unique([agencyId, number])
@@ -1509,42 +1512,42 @@ model MonthlyBill {
 // back whether they're paid (src/lib/xero.ts). One per agency. Disconnecting clears the tokens and the
 // organisation but keeps the invoice settings, so connecting again doesn't lose them.
 model XeroConnection {
-  id                   String    @id @default(cuid())
-  agencyId             String    @unique
-  agency               Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id                     String    @id @default(cuid())
+  agencyId               String    @unique
+  agency                 Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   // The organisation invoices go to ("" while not connected), and its short code for links into Xero.
-  tenantId             String    @default("")
-  tenantName           String    @default("")
-  shortCode            String    @default("")
+  tenantId               String    @default("")
+  tenantName             String    @default("")
+  shortCode              String    @default("")
   // Every organisation the admin allowed when connecting, [{ tenantId, tenantName }], to switch between them.
-  tenants              Json      @default("[]")
+  tenants                Json      @default("[]")
   // Sealed with XERO_TOKEN_KEY (or CALENDAR_TOKEN_KEY) by src/server/token-box.ts. Xero gives a new refresh
   // token with every refresh; the newest is kept. Access tokens last 30 minutes.
-  refreshTokenEnc      String    @default("")
-  accessTokenEnc       String    @default("")
-  accessTokenExpiresAt DateTime?
-  connectedById        String?
-  connectedBy          User?     @relation(fields: [connectedById], references: [id], onDelete: SetNull)
-  connectedAt          DateTime?
+  refreshTokenEnc        String    @default("")
+  accessTokenEnc         String    @default("")
+  accessTokenExpiresAt   DateTime?
+  connectedById          String?
+  connectedBy            User?     @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  connectedAt            DateTime?
   // Xero refused the tokens (access removed, or not used for 60 days): an admin has to connect again.
-  needsReconnect       Boolean   @default(false)
-  lastError            String    @default("")
+  needsReconnect         Boolean   @default(false)
+  lastError              String    @default("")
   // Invoice lines go to this sales account, with this tax rate (OUTPUT2: 20% VAT on Income, in a UK organisation).
-  salesAccountCode     String    @default("200")
-  taxType              String    @default("OUTPUT2")
+  salesAccountCode       String    @default("200")
+  taxType                String    @default("OUTPUT2")
   // Days after the invoice date that it's due. Null leaves it to Xero: the contact's or the organisation's terms.
-  dueDays              Int?
+  dueDays                Int?
   // Acts' self-billing invoices go to Xero as bills (src/lib/act-invoices-xero.ts): to this expense account (310 is
   // Cost of Goods Sold, a Direct Costs account, in a new UK organisation), as DRAFT or AUTHORISED bills, and their
   // payments are recorded from this bank account's code. Sent by themselves only when actBillsAuto is on, for invoices
   // made from actBillsAutoFrom (when it was turned on).
-  actFeesAccountCode   String    @default("310")
-  billStatus           String    @default("DRAFT")
-  payFromBankAccountCode String  @default("")
-  actBillsAuto         Boolean   @default(false)
-  actBillsAutoFrom     DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  actFeesAccountCode     String    @default("310")
+  billStatus             String    @default("DRAFT")
+  payFromBankAccountCode String    @default("")
+  actBillsAuto           Boolean   @default(false)
+  actBillsAutoFrom       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([connectedById])
 }

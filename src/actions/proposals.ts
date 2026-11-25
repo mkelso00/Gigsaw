@@ -60,7 +60,10 @@ export async function makeProposal(from: "enquiry" | "contact", id: string, _: F
     const q = await createDraftProposal(user, from === "enquiry" ? { enquiryId: id } : { contactId: id });
     await logActivity(user, "QUOTE", q.id, `started proposal ${proposalRef(q)}`, q.title);
     if (from === "enquiry")
-      await prisma.enquiry.updateMany({ where: { id, agencyId: user.agencyId, status: "NEW" }, data: { status: "DONE", doneAt: new Date() } });
+      await prisma.enquiry.updateMany({
+        where: { id, agencyId: user.agencyId, status: { in: ["NEW", "CONTACTED"] } },
+        data: { status: "DONE", doneAt: new Date() },
+      });
     proposalId = q.id;
   });
   if (res?.error) return res;
@@ -200,8 +203,15 @@ export async function deleteDraftProposal(proposalId: string) {
   if (!q) return;
   await prisma.quote.deleteMany({ where: { id: q.id, agencyId: user.agencyId, status: "DRAFT" } });
   await logActivity(user, "QUOTE", q.id, `deleted the draft of proposal ${proposalRef(q)}`, q.title);
-  if (q.enquiryId && !(await prisma.quote.count({ where: { enquiryId: q.enquiryId, agencyId: user.agencyId } })))
-    await prisma.enquiry.updateMany({ where: { id: q.enquiryId, agencyId: user.agencyId, status: "DONE" }, data: { status: "NEW", doneAt: null } });
+  if (q.enquiryId && !(await prisma.quote.count({ where: { enquiryId: q.enquiryId, agencyId: user.agencyId } }))) {
+    // Back where it was before the proposal: Contacted if the customer had been contacted, else New.
+    const lead = await prisma.enquiry.findFirst({ where: { id: q.enquiryId, agencyId: user.agencyId, status: "DONE" }, select: { contactedAt: true } });
+    if (lead)
+      await prisma.enquiry.updateMany({
+        where: { id: q.enquiryId, agencyId: user.agencyId, status: "DONE" },
+        data: { status: lead.contactedAt ? "CONTACTED" : "NEW", doneAt: null },
+      });
+  }
   revalidatePath("/", "layout");
   redirect(
     q.supersedes ? `/quotes/${q.supersedes.id}` : q.enquiryId ? `/enquiries?view=quotes` : q.contactId ? `/contacts/${q.contactId}` : "/enquiries?view=quotes",
