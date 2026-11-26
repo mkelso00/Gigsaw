@@ -14,6 +14,7 @@ import { userCharge } from "@/lib/seats";
 import { usageForMonth } from "@/lib/usage";
 import { clearStripeKeyCache, STRIPE_KEY_NAMES } from "@/lib/stripe-keys";
 import { sendWelcome } from "@/lib/welcome";
+import { setStaffRole, type StaffRole } from "@/lib/staff-role";
 import { env } from "@/server/env";
 import { log } from "@/server/log";
 
@@ -107,6 +108,19 @@ export async function addAgencyAdmin(agencyId: string, _: FormState, form: FormD
     if (!passwordHash || form.get("welcome")) await sendWelcome({ user, business: agency.name });
     revalidatePath(`/owner/businesses/${agencyId}`);
     return { ok: passwordHash ? `${email} can now sign in as an admin.` : `Welcome email sent to ${email}. They'll set their own password.` };
+  });
+}
+
+/** Make someone in a business an admin or an agent, e.g. so the owner of the business can open Settings. */
+export async function setAgencyUserRole(userId: string, role: StaffRole, _: FormState): Promise<FormState> {
+  await requireOwner();
+  return handleForm(async () => {
+    const u = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { agencyId: true } });
+    if (!u.agencyId) throw new FormError("That login isn't in a business.");
+    const r = await setStaffRole(u.agencyId, userId, role);
+    if ("why" in r) throw new FormError(r.why);
+    revalidatePath(`/owner/businesses/${u.agencyId}`);
+    return { ok: role === "ADMIN" ? `${r.name} is now an admin and can open Settings.` : `${r.name} is now an agent.` };
   });
 }
 

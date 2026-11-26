@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { addAgencyAdmin, resendWelcome, resetUserPassword, setStatementPaid, updateAgency } from "@/actions/owner";
+import { addAgencyAdmin, resendWelcome, resetUserPassword, setAgencyUserRole, setStatementPaid, updateAgency } from "@/actions/owner";
 import { ActionForm, SubmitButton, ServerForm } from "@/components/forms";
 import Link from "next/link";
 import { Icon } from "@/components/icons";
@@ -182,6 +182,11 @@ export default async function OwnerAgencyPage({ params, searchParams }: { params
                     <ServerForm action={resendWelcome.bind(null, u.id)}>
                       <button className="btn btn-sm">Resend welcome</button>
                     </ServerForm>
+                    <ActionForm action={setAgencyUserRole.bind(null, u.id, u.role === "ADMIN" ? "AGENT" : "ADMIN")}>
+                      <SubmitButton className="btn btn-sm" pendingText="Saving…">
+                        {u.role === "ADMIN" ? "Make agent" : "Make admin"}
+                      </SubmitButton>
+                    </ActionForm>
                     <details className="relative">
                       <summary className="btn btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">Set password</summary>
                       <ActionForm

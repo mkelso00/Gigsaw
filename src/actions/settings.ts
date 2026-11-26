@@ -9,6 +9,7 @@ import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { INVOICE_MODES } from "@/lib/act-invoices";
 import { CURRENCIES } from "@/lib/constants";
 import { logActivity, prisma } from "@/lib/db";
+import { setStaffRole, type StaffRole } from "@/lib/staff-role";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
 import { emailConfigured, isEmail, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
@@ -198,6 +199,16 @@ export async function createStaffUser(_: FormState, form: FormData): Promise<For
     revalidatePath("/settings");
     return { ok: welcome ? `Welcome email sent to ${u.email}. They'll set their own password.` : `${u.name} can now sign in.` };
   });
+}
+
+/** Make someone on the team an admin or an agent (Settings, Internal users). Not yourself: another admin does that. */
+export async function changeStaffRole(userId: string, role: StaffRole) {
+  const admin = await requireAdmin();
+  if (userId === admin.id) return;
+  const r = await setStaffRole(admin.agencyId!, userId, role);
+  if ("why" in r) return;
+  await logActivity(admin, "USER", userId, role === "ADMIN" ? "made an admin" : "made an agent", r.name);
+  revalidatePath("/settings");
 }
 
 export async function removeStaffUser(userId: string) {

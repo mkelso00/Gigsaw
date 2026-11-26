@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { createStaffUser, removeStaffUser } from "@/actions/settings";
+import { changeStaffRole, createStaffUser, removeStaffUser } from "@/actions/settings";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
 import { Badge, SettingsCard, SettingsPage, SettingsRow, SettingsSection } from "@/components/settings-ui";
 import { Field } from "@/components/ui";
@@ -47,6 +47,20 @@ export default async function UsersSettings() {
               right={
                 <span className="flex items-center gap-2">
                   <Badge tone={u.role === "ADMIN" ? "green" : "grey"}>{u.role === "ADMIN" ? "Admin" : "Agent"}</Badge>
+                  {u.id !== user.id && !u.isOwner && (
+                    <ServerForm action={changeStaffRole.bind(null, u.id, u.role === "ADMIN" ? "AGENT" : "ADMIN")}>
+                      <ConfirmButton
+                        message={
+                          u.role === "ADMIN"
+                            ? `Make ${u.name} an agent? They'll no longer be able to open Settings or manage users.`
+                            : `Make ${u.name} an admin? They'll be able to change all settings and manage users.`
+                        }
+                        className="btn btn-sm"
+                      >
+                        {u.role === "ADMIN" ? "Make agent" : "Make admin"}
+                      </ConfirmButton>
+                    </ServerForm>
+                  )}
                   {u.id !== user.id && !u.isOwner && (
                     <ServerForm action={removeStaffUser.bind(null, u.id)}>
                       <ConfirmButton message={`Remove ${u.name}'s access?`} className="btn btn-sm">
