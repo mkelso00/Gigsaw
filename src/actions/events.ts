@@ -24,6 +24,7 @@ import { notifyArtistsOfNewGigs } from "@/lib/notify";
 import { isDateKey } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
 import { formatDate } from "@/lib/time";
+import { leadAgentFor, teamMember } from "@/lib/lead-agent";
 
 // Weddings and events: one customer booking with several acts. Every lookup includes the
 // agency, so one agency can never see or change another's events.
@@ -71,6 +72,9 @@ async function eventBasics(user: AgencyUser, form: FormData) {
     await logActivity(user, "CONTACT", c.id, "added private customer", newName);
     customerId = c.id;
   }
+  // The lead agent chosen on the form, if it's someone on the team (blank or gone: left to the caller).
+  const pickedAgent = optStr(form, "agentId");
+  const agentId = pickedAgent ? ((await teamMember(user.agencyId, pickedAgent))?.id ?? null) : null;
   const venueId = optStr(form, "venueId");
   const venue = venueId ? await prisma.venue.findFirst({ where: { id: venueId, agencyId: user.agencyId } }) : null;
   const settings = await getSettings(user.agencyId);
@@ -84,6 +88,7 @@ async function eventBasics(user: AgencyUser, form: FormData) {
     venueId: venue?.id ?? null,
     venueText: venue ? "" : str(form, "venueText"),
     timezone: venue?.timezone ?? settings.defaultTimezone,
+    agentId,
   };
 }
 
@@ -97,7 +102,7 @@ export async function createEvent(_: FormState, form: FormData): Promise<FormSta
       data: {
         ...basics,
         agencyId: user.agencyId,
-        agentId: user.id,
+        agentId: basics.agentId ?? leadAgentFor(user),
         notes: str(form, "notes"),
         plannerToken: randomBytes(18).toString("base64url"),
         tasks: { create: defaultTasks(basics.type, basics.date) },
@@ -115,16 +120,16 @@ export async function updateEvent(eventId: string, _: FormState, form: FormData)
   const user = await requireStaff();
   return handleForm(async () => {
     const before = await ownEvent(user, eventId);
-    const basics = await eventBasics(user, form);
+    const { agentId, ...basics } = await eventBasics(user, form);
     await prisma.event.update({
       where: { id: eventId },
-      data: { ...basics, notes: str(form, "notes"), autoEmails: str(form, "autoEmails") === "on" },
+      data: { ...basics, ...(agentId ? { agentId } : {}), notes: str(form, "notes"), autoEmails: str(form, "autoEmails") === "on" },
     });
-    // Keep the acts' gigs on the event's venue and customer.
+    // Keep the acts' gigs on the event's venue and customer, and with its new lead agent if that changed.
     await prisma.booking.updateMany({
       // Archived gigs too, so they're right if brought back.
       where: { eventId, agencyId: user.agencyId, archivedAt: undefined },
-      data: { venueId: basics.venueId, promoterId: basics.customerId, eventName: basics.name },
+      data: { venueId: basics.venueId, promoterId: basics.customerId, eventName: basics.name, ...(agentId && agentId !== before.agentId ? { agentId } : {}) },
     });
     queueCalendarSync((await prisma.booking.findMany({ where: { eventId, agencyId: user.agencyId }, select: { id: true } })).map((b) => b.id));
     await logActivity(user, "EVENT", eventId, "updated");
@@ -201,7 +206,7 @@ export async function addEventAct(eventId: string, _: FormState, form: FormData)
       artistId,
       venueId: e.venueId,
       promoterId: e.customerId,
-      agentId: artist?.agentId ?? user.id,
+      agentId: e.agentId ?? artist?.agentId ?? leadAgentFor(user),
       createdById: user.id,
       status,
       eventType: e.type,

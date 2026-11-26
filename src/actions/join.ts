@@ -9,6 +9,7 @@ import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { messageFor } from "@/lib/message-templates";
 import { appUrl, isEmail, sendEmail } from "@/lib/messaging";
+import { leadAgentFor } from "@/lib/lead-agent";
 
 // New acts join through the agency's private link (/join/<token>). What they send waits as an
 // application until the agency approves it, which makes the act, its members and their login.
@@ -135,7 +136,7 @@ export async function approveApplication(id: string, _: FormState): Promise<Form
           email: a.email,
           phone: a.phone,
           colour: COLOURS[count % COLOURS.length],
-          agentId: user.id,
+          agentId: leadAgentFor(user),
           actType: a.actType,
           town: a.town,
           photoUrl: a.photoUrl,

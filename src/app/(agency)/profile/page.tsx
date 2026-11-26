@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { logout } from "@/actions/auth";
 import { resetCalendarLink, saveCalendarSync, turnOffCalendarSync } from "@/actions/calendar-sync";
 import { disconnectSignIn } from "@/actions/oauth";
-import { changePassword, saveMyNotifications, updateMyDetails } from "@/actions/settings";
+import { changePassword, saveMyHandOff, saveMyNotifications, updateMyDetails } from "@/actions/settings";
 import { toggleTheme } from "@/actions/theme";
 import { CopyField } from "@/components/client-bits";
 import { ActionForm, ConfirmButton, SubmitButton, ServerForm } from "@/components/forms";
@@ -18,6 +18,7 @@ import { CHANNEL_LABELS, STAFF_ALERTS, wants } from "@/lib/notify-prefs";
 import { configuredProviders, PROVIDER_KEYS, PROVIDERS } from "@/lib/oauth";
 import { signInMethods } from "@/lib/oauth-flow";
 import { feedStatuses, TEAM_FEED_STATUSES } from "@/lib/team-calendar";
+import { prisma } from "@/lib/db";
 import { StaffPushSetup } from "@/components/push-setup";
 
 import { vapidKeys } from "@/lib/push";
@@ -36,6 +37,11 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const feedUrl = user.calendarToken ? `${appUrl()}/api/calendar/team/${user.calendarToken}.ics` : null;
   const links = feedUrl ? calendarLinks(feedUrl, user.calendarScope === "ALL" ? "Gigsaw: all bookings" : "Gigsaw: my bookings") : null;
   const shownStatuses = feedStatuses(user.calendarStatuses);
+  const team = await prisma.user.findMany({
+    where: { agencyId: user.agencyId, role: { in: ["ADMIN", "AGENT"] }, demo: false, id: { not: user.id } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
   return (
     <SettingsPage
       title="Profile"
@@ -60,6 +66,40 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
           </ActionForm>
         </SettingsCard>
       </SettingsSection>
+
+      {team.length > 0 && (
+        <SettingsSection
+          id="lead-agent"
+          title="Who looks after what you book"
+          description="The lead agent looks after a booking and gets its alerts (acts accepting, turning down or running late, customers signing and paying). If you add bookings but someone else runs them day to day, choose them here. You'll still show as Booked by."
+        >
+          <SettingsCard pad>
+            <ActionForm action={saveMyHandOff} className="space-y-4">
+              <Field
+                label="Lead agent on the bookings, weddings, leads and proposals I make"
+                hint="You can still pick someone else on any booking or wedding when you make it."
+              >
+                <select name="handOffToId" defaultValue={user.handOffToId ?? ""} className="input">
+                  <option value="">Me</option>
+                  {team.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <label className="flex items-start gap-2 text-sm text-ink-700">
+                <input type="checkbox" name="moveExisting" className="mt-0.5" />
+                <span>
+                  Also hand over what I&apos;m lead agent on now: upcoming bookings, weddings and events, open proposals, and my acts. Past bookings stay as
+                  they are.
+                </span>
+              </label>
+              <SubmitButton pendingText="Saving…">Save</SubmitButton>
+            </ActionForm>
+          </SettingsCard>
+        </SettingsSection>
+      )}
 
       <SettingsSection
         id="notifications"

@@ -15,6 +15,7 @@ export default async function UsersSettings() {
   const team = await prisma.user.findMany({
     where: { agencyId: user.agencyId, role: { in: ["ADMIN", "AGENT"] }, demo: false },
     orderBy: [{ role: "asc" }, { name: "asc" }],
+    include: { handOffTo: { select: { name: true } } },
   });
   const extra = Math.max(0, team.length - agency.includedUsers);
   return (
@@ -43,7 +44,7 @@ export default async function UsersSettings() {
               key={u.id}
               icon="user"
               title={u.name}
-              sub={`${u.email}${u.phone ? ` · ${u.phone}` : " · no mobile"}`}
+              sub={`${u.email}${u.phone ? ` · ${u.phone}` : " · no mobile"}${u.handOffTo ? ` · ${u.handOffTo.name} is lead agent on what they book` : ""}`}
               right={
                 <span className="flex items-center gap-2">
                   <Badge tone={u.role === "ADMIN" ? "green" : "grey"}>{u.role === "ADMIN" ? "Admin" : "Agent"}</Badge>

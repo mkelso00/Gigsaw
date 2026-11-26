@@ -44,7 +44,7 @@ export function PlanSection({ event: e, extras }: { event: EventView; extras: Pl
 export function EditEventDetails({ event: e, options }: { event: EventView; options: EventPageData["options"] }) {
   return (
     <details className="card">
-      <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Edit date, customer, venue and name</summary>
+      <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Edit date, customer, venue, name and lead agent</summary>
       <div className="border-t border-ink-100 p-5">
         <EventForm
           action={updateEvent.bind(null, e.id)}

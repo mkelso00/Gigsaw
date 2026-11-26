@@ -24,6 +24,7 @@ import { receiveWebsiteEnquiry } from "@/lib/enquiry-intake";
 import { FormError, handleForm, oneOf, str, type FormState } from "@/lib/forms";
 import { localDateKey } from "@/lib/time";
 import { log } from "@/server/log";
+import { leadAgentFor } from "@/lib/lead-agent";
 
 // The enquiry form on a business's own website (/enquire/<slug>), enquiries staff add by hand,
 // and dealing with what comes in.
@@ -49,7 +50,7 @@ export async function addEnquiry(_: FormState, form: FormData): Promise<FormStat
     const settings = await getSettings(user.agencyId);
     const d = parseEnquiry(form, BY_HAND_CONFIG, { today: localDateKey(new Date(), settings.defaultTimezone), acts: [], byHand: true });
     const channel = oneOf(str(form, "channel"), BY_HAND_CHANNELS, "EMAIL");
-    const enquiry = await recordEnquiry({ settings, d, channel, agentId: user.id, addedBy: { id: user.id, name: user.name } });
+    const enquiry = await recordEnquiry({ settings, d, channel, agentId: leadAgentFor(user), addedBy: { id: user.id, name: user.name } });
     if (str(form, "autoReply") === "on" && d.email) {
       after(async () => {
         try {

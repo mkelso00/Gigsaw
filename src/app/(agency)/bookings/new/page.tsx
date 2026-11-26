@@ -38,6 +38,7 @@ export default async function NewBookingPage({ searchParams }: { searchParams: P
             setEndTime: sp.setEndTime,
             eventType: sp.eventType,
             cost: sp.cost,
+            agentId: user.handOffToId ?? undefined,
           }}
         />
       )}

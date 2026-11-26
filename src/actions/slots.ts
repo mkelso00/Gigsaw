@@ -21,6 +21,7 @@ import { WEEKDAYS, dateInWeek, isDateKey, nextWeekday, slotRunsOn, weekStartOf, 
 import { buildSchedule } from "@/lib/schedule";
 import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
 import { minutesBefore } from "@/lib/time";
+import { leadAgentFor } from "@/lib/lead-agent";
 
 const TIME = /^\d{2}:\d{2}$/;
 
@@ -360,7 +361,7 @@ async function bookSlot(
     artistId: artist?.id ?? null,
     venueId: slot.venueId,
     promoterId: slot.promoterId,
-    agentId: artist?.agentId ?? user.id,
+    agentId: artist?.agentId ?? leadAgentFor(user),
     createdById: user.id,
     slotId: slot.id,
     // Gigs made from demo venues or for demo artists are demo data: never billed or messaged.
@@ -629,7 +630,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
           artistId: artist?.id ?? null,
           venueId: venue?.id ?? null,
           promoterId,
-          agentId: artist?.agentId ?? user.id,
+          agentId: artist?.agentId ?? leadAgentFor(user),
           createdById: user.id,
           demo: !!venue?.demo || !!artist?.demo,
           status,
@@ -708,7 +709,7 @@ export async function addRotaGig(_: FormState, form: FormData): Promise<FormStat
       artistId: artist?.id ?? null,
       venueId: venue?.id ?? null,
       promoterId,
-      agentId: artist?.agentId ?? user.id,
+      agentId: artist?.agentId ?? leadAgentFor(user),
       createdById: user.id,
       demo: !!venue?.demo || !!artist?.demo,
       status,

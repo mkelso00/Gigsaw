@@ -3,13 +3,14 @@ import { checkSignature } from "@/lib/contract-doc";
 
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { endOtherSessions, hashPassword, requireAdmin, requireSignedIn, verifyPassword } from "@/lib/auth";
+import { endOtherSessions, hashPassword, requireAdmin, requireSignedIn, requireStaff, verifyPassword } from "@/lib/auth";
 import { removeCalendarsOfLogins } from "@/lib/calendar-sync";
 import { queueCalendarSync } from "@/lib/calendar-sync/queue";
 import { INVOICE_MODES } from "@/lib/act-invoices";
 import { CURRENCIES } from "@/lib/constants";
-import { logActivity, prisma } from "@/lib/db";
+import { getSettings, logActivity, prisma } from "@/lib/db";
 import { setStaffRole, type StaffRole } from "@/lib/staff-role";
+import { handOverWork, teamMember } from "@/lib/lead-agent";
 import { addDemoData, hasDemoData, removeDemoData } from "@/lib/demo";
 import { FormError, handleForm, int, num, oneOf, required, str, type FormState } from "@/lib/forms";
 import { emailConfigured, isEmail, sendEmail, sendSms, smsConfigured } from "@/lib/messaging";
@@ -313,6 +314,37 @@ export async function saveMyNotifications(_: FormState, form: FormData): Promise
     await prisma.user.update({ where: { id: user.id }, data: { notifyPrefs: prefsFromForm(form) } });
     revalidatePath("/profile");
     return { ok: "Saved." };
+  });
+}
+
+/**
+ * "Who looks after what I book" on the Profile page: someone else becomes lead agent on the bookings, weddings,
+ * leads and proposals you make (you stay as "Booked by"), so their alerts go to them. Optionally hands over what
+ * you're lead agent on now (upcoming only).
+ */
+export async function saveMyHandOff(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireStaff();
+  return handleForm(async () => {
+    const picked = str(form, "handOffToId");
+    const to = picked && picked !== user.id ? await teamMember(user.agencyId, picked) : null;
+    if (picked && picked !== user.id && !to) throw new FormError("Choose someone on your team");
+    await prisma.user.update({ where: { id: user.id }, data: { handOffToId: to?.id ?? null } });
+    await logActivity(user, "USER", user.id, to ? "hands their bookings to" : "looks after their own bookings", to?.name ?? "");
+    let moved = "";
+    if (to && form.get("moveExisting")) {
+      const settings = await getSettings(user.agencyId);
+      const n = await handOverWork(user.agencyId, user.id, to.id, settings.defaultTimezone);
+      const parts = [
+        n.bookings && `${n.bookings} upcoming booking${n.bookings === 1 ? "" : "s"}`,
+        n.events && `${n.events} wedding${n.events === 1 ? "" : "s"} or event${n.events === 1 ? "" : "s"}`,
+        n.proposals && `${n.proposals} open proposal${n.proposals === 1 ? "" : "s"}`,
+        n.acts && `${n.acts} act${n.acts === 1 ? "" : "s"}`,
+      ].filter(Boolean);
+      moved = parts.length ? ` Moved to ${to.name}: ${parts.join(", ")}.` : ` You weren't lead agent on anything upcoming.`;
+      if (parts.length) await logActivity(user, "USER", user.id, "handed over their work", `${to.name}: ${parts.join(", ")}`);
+    }
+    revalidatePath("/", "layout");
+    return { ok: (to ? `Saved. ${to.name} is now lead agent on what you book.` : "Saved. You're lead agent on what you book.") + moved };
   });
 }
 

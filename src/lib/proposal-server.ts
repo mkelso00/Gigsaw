@@ -50,6 +50,7 @@ import { addDaysToKey, localDateKey, zonedToUtc } from "./time";
 import { log } from "@/server/log";
 import { blockedActs, signupGate, type GateUser } from "./book-signed-up-server";
 import type { FormState } from "./forms";
+import { leadAgentFor } from "./lead-agent";
 
 // Proposals, server side: starting one, new versions, sending it, and the customer's answer. The
 // customer's Accept is one transaction that claims the proposal (only a proposal still out with them can
@@ -138,7 +139,10 @@ export const linePlace = (l: { venue: { name: string; city: string } | null; pla
  * Start a draft proposal for a customer, from an enquiry (filled in from what they asked for: the
  * date, times, place and any acts they liked) or from the customer's page.
  */
-export async function createDraftProposal(user: { id: string; agencyId: string }, from: { enquiryId?: string | null; contactId?: string | null }) {
+export async function createDraftProposal(
+  user: { id: string; agencyId: string; handOffToId?: string | null },
+  from: { enquiryId?: string | null; contactId?: string | null },
+) {
   const settings = await getSettings(user.agencyId);
   const enquiry = from.enquiryId ? await prisma.enquiry.findFirst({ where: { id: from.enquiryId, agencyId: user.agencyId } }) : null;
   if (from.enquiryId && !enquiry) throw new ProposalError("Enquiry not found");
@@ -172,7 +176,7 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
           number: nextProposalNumber(await highestProposalNumber(user.agencyId)),
           enquiryId: enquiry?.id ?? null,
           contactId: contact.id,
-          agentId: user.id,
+          agentId: leadAgentFor(user),
           createdById: user.id,
           title,
           eventType,
@@ -199,7 +203,7 @@ export async function createDraftProposal(user: { id: string; agencyId: string }
  * replaced: its link can't be accepted any more and says the proposal has been updated. Both happen in
  * one transaction, and only if nobody has accepted the old one in the meantime.
  */
-export async function newProposalVersion(user: { id: string; agencyId: string }, proposalId: string) {
+export async function newProposalVersion(user: { id: string; agencyId: string; handOffToId?: string | null }, proposalId: string) {
   return prisma.$transaction(async (tx) => {
     const q = await tx.quote.findFirst({ where: { id: proposalId, agencyId: user.agencyId }, include: { lines: { orderBy: { sort: "asc" } } } });
     if (!q) throw new ProposalError("Proposal not found");
@@ -213,7 +217,7 @@ export async function newProposalVersion(user: { id: string; agencyId: string },
         version: (top._max.version ?? q.version) + 1,
         enquiryId: q.enquiryId,
         contactId: q.contactId,
-        agentId: q.agentId ?? user.id,
+        agentId: q.agentId ?? leadAgentFor(user),
         createdById: user.id,
         title: q.title,
         eventType: q.eventType,
@@ -589,7 +593,7 @@ export async function acceptProposal(token: string, answer: ProposalAnswer) {
               artistId: l.artistId,
               venueId: l.venueId,
               promoterId: q.contactId,
-              agentId: l.artist?.agentId ?? q.agentId,
+              agentId: q.agentId ?? l.artist?.agentId,
               createdById: q.createdById,
               status,
               eventType: kind,

@@ -14,6 +14,7 @@ type Values = {
   venueText?: string;
   notes?: string;
   autoEmails?: boolean;
+  agentId?: string | null;
 };
 
 const TYPES = [
@@ -29,6 +30,7 @@ export function EventForm({
   values = {},
   customers,
   venues,
+  agents,
   submitLabel,
   editing = false,
 }: {
@@ -36,6 +38,7 @@ export function EventForm({
   values?: Values;
   customers: Option[];
   venues: Option[];
+  agents: Option[];
   submitLabel: string;
   editing?: boolean;
 }) {
@@ -56,6 +59,18 @@ export function EventForm({
       <label>
         <span className="label">Date</span>
         <input name="date" type="date" required defaultValue={values.date} className="input" />
+      </label>
+      <label className="sm:col-span-2">
+        <span className="label">Lead agent</span>
+        <select name="agentId" defaultValue={values.agentId ?? ""} className="input">
+          {!values.agentId && <option value="">Choose…</option>}
+          {agents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-ink-500">Who looks after it and gets its alerts. Its acts&apos; gigs follow.</span>
       </label>
 
       <div className="sm:col-span-2">

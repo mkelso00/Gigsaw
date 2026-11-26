@@ -17,6 +17,7 @@ import { actIdsFor, ownActIds } from "@/lib/people";
 import { isDateKey } from "@/lib/rota";
 import { buildSchedule } from "@/lib/schedule";
 import { addDaysToKey, localDateKey, zonedToUtc } from "@/lib/time";
+import { leadAgentFor } from "@/lib/lead-agent";
 
 // Act availability: blocking out dates an act can't play (by the agency, or by the act in their
 // app), and "Are you free?" requests that acts answer from a private link or their app.
@@ -282,7 +283,7 @@ export async function bookFromReply(replyId: string, _: FormState, form?: FormDa
             where: { id: gig.id, artistId: null, status: { not: "CANCELLED" } },
             data: {
               artistId: reply.artistId,
-              agentId: gig.agentId ?? reply.artist.agentId ?? user.id,
+              agentId: gig.agentId ?? reply.artist.agentId ?? leadAgentFor(user),
               // The fee the act was asked at, unless the gig already has one.
               ...(req.costMinor != null && gig.artistFeeMinor == null ? { dealType: "BUY_SELL", artistFeeMinor: req.costMinor } : {}),
               ...offerResetFor(gig, { artistId: reply.artistId }),
@@ -297,7 +298,7 @@ export async function bookFromReply(replyId: string, _: FormState, form?: FormDa
               ...buildSchedule(req.date, { arrive: req.arriveTime || startTime, setStart: startTime, setEnd: req.endTime || null }, req.timezone),
               artistId: reply.artistId,
               venueId: req.venue?.id ?? null,
-              agentId: reply.artist.agentId ?? user.id,
+              agentId: reply.artist.agentId ?? leadAgentFor(user),
               createdById: user.id,
               status: "PENDING",
               eventType: req.eventType,

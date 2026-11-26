@@ -219,6 +219,10 @@ model User {
   calendarScope    String    @default("MINE") // MINE (bookings where they're lead agent) | ALL
   // Statuses to include, comma separated, e.g. "CONFIRMED,SETTLED". Blank means all (never cancelled or archived).
   calendarStatuses String    @default("")
+  // Who becomes lead agent on what this person makes (bookings, weddings, leads, proposals, approved acts), e.g. an
+  // owner who adds bookings but leaves the day-to-day to the booking coordinator. Null: themselves. Profile page.
+  handOffToId      String?
+  handOffTo        User?     @relation("HandOff", fields: [handOffToId], references: [id], onDelete: SetNull)
 
   sessions            Session[]
   linkedAccounts      LinkedAccount[]
@@ -233,6 +237,7 @@ model User {
   pushSubscriptions   PushSubscription[]
   calendarConnections CalendarConnection[]
   xeroConnections     XeroConnection[]
+  handOffFrom         User[]               @relation("HandOff")
 
   @@index([agencyId]) // the team list, and the agent pickers on most forms
 }

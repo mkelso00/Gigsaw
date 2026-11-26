@@ -4,6 +4,7 @@ import { EventForm } from "@/components/event-form";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { eventFormOptions } from "@/lib/event-options";
+import { leadAgentFor } from "@/lib/lead-agent";
 
 export const metadata: Metadata = { title: "New wedding or event" };
 
@@ -18,7 +19,12 @@ export default async function NewEventPage({ searchParams }: { searchParams: Pro
         subtitle="One booking for the customer. Next you'll add each act (ceremony singer, band, DJ…), each with its own times, sale and cost."
       />
       <div className="card card-pad">
-        <EventForm action={createEvent} values={{ date: sp.date, customerId: sp.customerId }} {...options} submitLabel="Create and add acts" />
+        <EventForm
+          action={createEvent}
+          values={{ date: sp.date, customerId: sp.customerId, agentId: leadAgentFor(user) }}
+          {...options}
+          submitLabel="Create and add acts"
+        />
       </div>
     </div>
   );

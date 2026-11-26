@@ -45,6 +45,8 @@ export function BookingForm({
     setEndTime?: string;
     eventType?: string;
     cost?: string;
+    /** Who's lead agent on a new booking: the person the user hands their bookings to (Profile), if anyone. */
+    agentId?: string;
   };
   /** Editing a booking at a venue: offer to copy the changes to the venue's other upcoming bookings. */
   alsoChange?: AlsoChange;
@@ -90,7 +92,7 @@ export function BookingForm({
             </select>
           </Field>
           <Field label="Lead agent" hint="The internal user looking after it">
-            <select name="agentId" defaultValue={booking?.agentId ?? ""} className="input">
+            <select name="agentId" defaultValue={booking?.agentId ?? defaults.agentId ?? ""} className="input">
               <option value="">Me</option>
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
