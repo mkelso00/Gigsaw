@@ -9,6 +9,7 @@ import { logActivity, prisma } from "@/lib/db";
 import { FormError, handleForm, required, str, type FormState } from "@/lib/forms";
 import { personName } from "@/lib/person-name";
 import { wouldLoop } from "@/lib/people";
+import { joinLoginToPerson } from "@/lib/act-person-link";
 
 // People, following Overture: a person has a company (a venue, or another company such as a
 // promoter or management firm) and can be in any number of acts, each with a job title.
@@ -127,6 +128,8 @@ export async function updatePerson(personId: string, _: FormState, form: FormDat
       ),
     ]);
     await logActivity(user, "PERSON", personId, "updated person");
+    // Signed up through one of their acts but not yet joined to them: join them, so it counts for every act they're in.
+    await joinLoginToPerson(user.agencyId, personId);
     revalidatePath("/", "layout");
     const made = [...(company.created ? [`company ${company.created}`] : []), ...acts.created.map((a) => `act ${a}`)];
     return { ok: `Saved.${made.length ? ` Added ${made.join(", ")}.` : ""}` };
@@ -199,6 +202,8 @@ export async function addActMember(artistId: string, _: FormState, form: FormDat
       update: { jobTitle },
     });
     await logActivity(user, "ARTIST", artistId, "added member", personName(person));
+    // Signed up through one of their acts but not yet joined to their person: join them now, so it counts here too.
+    await joinLoginToPerson(user.agencyId, person.id);
     revalidatePath(`/artists/${artistId}`);
     return { ok: `${personName(person)} is now in ${act.name}.${made ? " Open their name to add their phone, email and app login." : ""}` };
   });

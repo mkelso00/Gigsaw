@@ -1,5 +1,6 @@
 "use server";
 
+import { addPersonToAct, personByEmail } from "@/lib/act-person-link";
 import { linkActLoginQuietly } from "@/lib/login-person";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -109,6 +110,10 @@ export async function createArtist(_: FormState, form: FormData): Promise<FormSt
     const data = await artistData(form, user.agencyId);
     const artist = await prisma.artist.create({ data: { ...data, ...payData(form, user, { ...NO_PAY, phone: data.phone }), agencyId: user.agencyId } });
     await logActivity(user, "ARTIST", artist.id, "added artist", artist.name);
+    // Someone already on file with this email (e.g. a signed-up singer's new solo act): the act goes on their
+    // person, so their sign-up counts for it too.
+    const personId = await personByEmail(user.agencyId, data.email);
+    if (personId && (await addPersonToAct(personId, artist.id))) await logActivity(user, "ARTIST", artist.id, "added member", data.email);
     id = artist.id;
   });
   if (res?.error) return res;

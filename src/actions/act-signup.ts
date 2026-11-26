@@ -1,5 +1,6 @@
 "use server";
 
+import { addPersonToAct, joinLoginToPerson, personByEmail } from "@/lib/act-person-link";
 import { revalidatePath } from "next/cache";
 import { sendClaimLink, CLAIM_HOURS } from "@/lib/act-claim";
 import { requireAdmin, requireStaff } from "@/lib/auth";
@@ -46,6 +47,17 @@ export async function sendActSignupLink(artistId: string, _: FormState): Promise
     // A login with this email that isn't this act's (or its people's) would get a reset link for someone else's account.
     const existing = await userByEmail(email);
     const ours = [act.login?.email, ...act.people.map((p) => p.login?.email)].some((e) => e?.toLowerCase() === email);
+    // Already signed up through another act (e.g. their band): this act goes on to their login, with nothing for them to do.
+    if (existing && !ours && existing.agencyId === user.agencyId && existing.role === "ARTIST") {
+      const personId = await personByEmail(user.agencyId, email);
+      if (personId) {
+        await addPersonToAct(personId, act.id);
+        await joinLoginToPerson(user.agencyId, personId);
+        await logActivity(user, "ARTIST", act.id, "added to their existing login", email);
+        revalidatePath(`/artists/${act.id}`);
+        return { ok: `${email} is already signed up, so ${act.name} has been added to their login. Nothing for them to do.` };
+      }
+    }
     if (existing && !ours) throw new FormError(`${email} is already someone else's Gigsaw login. Give ${to.name} a different email, then send the link.`);
     const sent = await sendClaimLink(email);
     if (sent === "limited") throw new FormError("A link was sent to them a moment ago. Wait a few minutes before sending another.");
