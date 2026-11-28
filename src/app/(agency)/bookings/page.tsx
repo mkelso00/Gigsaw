@@ -42,6 +42,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
     sp.venue && !noVenue ? await prisma.venue.findFirst({ where: { id: sp.venue, agencyId: user.agencyId }, select: { id: true, name: true } }) : null;
   if (venue) where.venueId = venue.id;
   if (noVenue) where.venueId = null;
+  // Bookings with no event name yet (Solo, Duo, Band…), to tick and name together under Change selected bookings.
+  const noName = sp.name === "none";
+  if (noName) where.eventName = "";
   if (when === "upcoming" && !unresolved) where.setStart = { gte: dayAgo };
   if (when === "past") where.setStart = { lt: now };
   if (sp.q) {
@@ -144,7 +147,11 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
           </Link>
         </div>
       )}
-      <FilterPanel active={[sp.q, sp.artist, sp.status, sp.type, noVenue ? "1" : "", sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length}>
+      <FilterPanel
+        active={
+          [sp.q, sp.artist, sp.status, sp.type, noVenue ? "1" : "", noName ? "1" : "", sp.when && sp.when !== "upcoming" ? "1" : ""].filter(Boolean).length
+        }
+      >
         <form className="card mb-4 flex flex-wrap items-end gap-3 p-3">
           {archived && <input type="hidden" name="view" value="archived" />}
           {venue && <input type="hidden" name="venue" value={venue.id} />}
@@ -174,6 +181,13 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
               </select>
             </label>
           )}
+          <label>
+            <span className="label">Event name</span>
+            <select name="name" defaultValue={noName ? "none" : ""} className="input">
+              <option value="">Any</option>
+              <option value="none">No event name</option>
+            </select>
+          </label>
           <label>
             <span className="label">Status</span>
             <select name="status" defaultValue={sp.status ?? ""} className="input">

@@ -138,7 +138,7 @@ export function actFeedEvent(b: ActFeedBooking, opts: ActFeedOptions): IcsEvent 
     uid: `${b.id}@gigsaw`,
     start: b.arriveBy,
     end: b.setEnd ?? new Date(b.setStart.getTime() + 2 * 3_600_000),
-    summary: `${b.status === "HOLD" ? "[HOLD] " : ""}${actName(b)}${b.venue ? ` @ ${b.venue.name}` : ""}`,
+    summary: `${b.status === "HOLD" ? "[HOLD] " : ""}${actName(b)}${b.venue ? ` @ ${b.venue.name}` : ""}${b.eventName?.trim() ? ` · ${b.eventName.trim()}` : ""}`,
     location: venueText(b.venue) || b.event?.venueText || "",
     description: actFeedDescription(b, opts),
     url: actGigUrl(b, opts.baseUrl),

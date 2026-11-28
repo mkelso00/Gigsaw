@@ -114,7 +114,7 @@ export function teamFeedEvent(b: TeamFeedBooking, opts: { baseUrl: string; agenc
     start,
     // A calendar event needs an end after its start, even if the times were entered oddly.
     end: end > start ? end : new Date(start.getTime() + 2 * 3_600_000),
-    summary: `${actName(b)} @ ${where}${tag}`,
+    summary: `${actName(b)} @ ${where}${b.eventName?.trim() && b.eventName.trim() !== where ? ` · ${b.eventName.trim()}` : ""}${tag}`,
     location: venue,
     description: detailText([
       [

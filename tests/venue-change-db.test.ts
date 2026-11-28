@@ -105,6 +105,7 @@ describeDb("copying a booking's changes to the venue's other bookings (database)
       notes: b.notes,
       dealNotes: b.dealNotes,
       tags: b.tags,
+      eventName: b.eventName,
       ...changes,
     };
     for (const [k, v] of Object.entries(fields)) f.set(k, v);
@@ -188,11 +189,20 @@ describeDb("copying a booking's changes to the venue's other bookings (database)
     expect(after.artistFeeMinor).toBe(15000);
   });
 
-  it("finds nothing to copy when only the status or name changed, and doesn't count an untouched textarea as changed", async () => {
+  it("finds nothing to copy when only the status changed, and doesn't count an untouched textarea as changed", async () => {
     const source = await gig(wedGmt, { travel: "Line one\nLine two" });
     const settings = await prisma.settings.findUniqueOrThrow({ where: { agencyId: t.agency.id } });
-    const data = await parseBookingForm(formFor(source, { status: "HOLD", eventName: "Spring" }), settings, t.agency.id);
+    const data = await parseBookingForm(formFor(source, { status: "HOLD", eventName: source.eventName }), settings, t.agency.id);
     expect(vc.changedForVenue(source, data).labels).toEqual([]);
+  });
+
+  it("offers a new event name (e.g. Duo) to the venue's other bookings too", async () => {
+    const source = await gig(wedGmt);
+    const settings = await prisma.settings.findUniqueOrThrow({ where: { agencyId: t.agency.id } });
+    const data = await parseBookingForm(formFor(source, { eventName: "Duo" }), settings, t.agency.id);
+    const change = vc.changedForVenue(source, data);
+    expect(change.labels).toEqual(["event name"]);
+    expect(change.text).toEqual({ eventName: "Duo" });
   });
 
   it("with two sets a night (5 till 7 and 9 till 11), changing the 5pm gig's times reaches only the 5pm gigs", async () => {

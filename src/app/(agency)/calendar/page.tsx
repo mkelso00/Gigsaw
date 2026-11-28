@@ -243,6 +243,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       people: [
         ["Act", actName(b)],
         ["Venue", b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ""}` : "Not set"],
+        ...(b.eventName.trim() ? ([["Event", b.eventName.trim()]] as [string, string][]) : []),
         ...(b.promoter
           ? ([
               [
@@ -524,6 +525,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             {byArtist ? (b.venue?.name ?? "No venue") : actName(b)}
                             {b.venue?.city && !byArtist ? ` · ${b.venue.city}` : ""}
                           </div>
+                          {/* The event name (Solo, Duo, Band…) on its own line, so it's never cut off. */}
+                          {eventTag(b) && <div className="truncate font-semibold">{b.eventName.trim()}</div>}
                           <span className="sr-only">, {statusLabel(b)}</span>
                         </Link>
                       </GigHover>
@@ -609,6 +612,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           {look(b).tone !== "on" && <ArtistDot colour={colourOf(b)} />}{" "}
                           <span className="tabular-nums">{localTime(b.setStart, b.timezone)}</span> <span className="font-semibold">{actName(b)}</span>
                           {b.venue?.name ? `: ${b.venue.name}` : b.event?.name ? `: ${b.event.name}` : ""}
+                          {!b.venue?.name && b.event?.name === b.eventName.trim() ? "" : eventTag(b)}
                           <Moon b={b} />
                           <span className="sr-only">, {statusLabel(b)}</span>
                         </Link>
@@ -629,6 +633,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 const KEY_ON = "linear-gradient(90deg, #2563eb, #7c3aed, #be185d)";
 
 // More gigs than this in a day and the month view shows a summary and "All N gigs" instead of every chip.
+/** The event name (e.g. Solo, Duo, Band, or a festival's name), shown last on each gig after the venue. */
+function eventTag(b: { eventName: string; venue?: { name: string } | null }) {
+  const e = b.eventName.trim();
+  return e && e !== b.venue?.name ? ` · ${e}` : "";
+}
+
 const BUSY_DAY = 4;
 const LEGEND_OPEN = 12;
 
@@ -674,6 +684,7 @@ type DayItem = {
     setStart: Date;
     setEnd: Date | null;
     arriveBy: Date;
+    eventName: string;
     artist: { name: string; colour: string; phone: string } | null;
     venue: { id: string; name: string; city: string; colour: string } | null;
   };
@@ -727,6 +738,7 @@ function DayList({ items, addHref }: { items: DayItem[]; addHref: string }) {
                       {/* Until it's booked the block is in the status colour, so a dot keeps the venue's colour in view. */}
                       {look.tone !== "on" && <ArtistDot colour={colour} />}
                       {b.venue?.name ?? "No venue"}
+                      {eventTag(b)}
                     </div>
                     <div className="mt-0.5 flex items-center gap-2 text-sm">
                       <ArtistDot colour={b.artist?.colour ?? "#a2a199"} />

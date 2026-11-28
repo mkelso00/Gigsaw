@@ -33,6 +33,7 @@ export function weekdayName(b: { arriveBy: Date; timezone: string }) {
 
 /** Itinerary and note fields copied as they are, with how they're named to the user. */
 const TEXT_FIELDS = [
+  ["eventName", "event name"],
   ["travel", "travel"],
   ["accommodation", "accommodation"],
   ["dayContact", "day of show contact"],

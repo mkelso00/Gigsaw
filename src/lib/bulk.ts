@@ -19,6 +19,8 @@ export type BulkChange = {
   fee?: string;
   /** New cost (the act's fee) as typed; makes each gig a sale and cost deal. */
   cost?: string;
+  /** New event name (e.g. Solo, Duo, Trio, Band); "" clears it. Left out: each keeps its own. */
+  eventName?: string;
   notifyArtists: boolean;
 };
 
@@ -26,8 +28,9 @@ export type BulkChange = {
 export async function applyBulkChange(user: AgencyUser, bookingIds: string[], change: BulkChange) {
   const hasTimes = !!change.times && Object.values(change.times).some(Boolean);
   if (hasTimes && change.shiftMinutes) throw new FormError("Either set new times or move times by some minutes, not both");
-  if (!hasTimes && !change.shiftMinutes && !change.fee && !change.cost)
-    throw new FormError("Nothing to change: set new times, a shift, a new sale or a new cost");
+  const hasName = change.eventName !== undefined;
+  if (!hasTimes && !change.shiftMinutes && !change.fee && !change.cost && !hasName)
+    throw new FormError("Nothing to change: set new times, a shift, a new sale, a new cost or an event name");
 
   const bookings = await prisma.booking.findMany({
     where: { id: { in: bookingIds.slice(0, 500) }, agencyId: user.agencyId },
@@ -75,13 +78,20 @@ export async function applyBulkChange(user: AgencyUser, bookingIds: string[], ch
       if (artistFeeMinor < 0) throw new FormError("The cost can't be negative");
       cost = { dealType: "BUY_SELL", artistFeeMinor };
     }
-    const res = await saveAndTell(b, { ...schedule, feeMinor, ...cost }, { agencyId: user.agencyId, notify: change.notifyArtists, changeover, schedule });
+    const name = hasName ? { eventName: change.eventName!.trim().slice(0, 120) } : {};
+    const res = await saveAndTell(
+      b,
+      { ...schedule, feeMinor, ...cost, ...name },
+      { agencyId: user.agencyId, notify: change.notifyArtists, changeover, schedule },
+    );
     await logActivity(
       user,
       "BOOKING",
       b.id,
       "updated with other bookings",
-      [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "sale" : "", change.cost ? "cost" : ""].filter(Boolean).join(" and "),
+      [hasTimes || change.shiftMinutes ? "times" : "", change.fee ? "sale" : "", change.cost ? "cost" : "", hasName ? "event name" : ""]
+        .filter(Boolean)
+        .join(" and "),
     );
     updated++;
     if (res.told) notified++;

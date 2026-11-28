@@ -24,6 +24,8 @@ export async function bulkUpdateBookings(_: FormState, form: FormData): Promise<
       shiftMinutes: int(form, "shiftMinutes") ?? undefined,
       fee: str(form, "fee") || undefined,
       cost: str(form, "cost") || undefined,
+      // Typed: set it. "Clear the event name" ticked: empty it. Neither: each keeps its own.
+      eventName: form.get("clearEventName") ? "" : str(form, "eventName") || undefined,
       notifyArtists: str(form, "notifyArtists") === "on",
     });
     revalidatePath("/", "layout");

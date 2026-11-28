@@ -136,10 +136,15 @@ describe("staff calendar feed", () => {
 
   it("marks gigs that aren't on yet, and copes with no act, no venue and no end", () => {
     const e = teamFeedEvent(booking({ status: "PENDING", artist: null, venue: null, eventName: "Smith wedding", setEnd: null }), opts);
-    expect(e.summary).toBe("Needs an act @ Smith wedding (Pending)");
+    expect(e.summary).toBe("Needs an act @ Smith wedding (Pending)"); // the event name stands in for the venue, once
     expect(e.end.toISOString()).toBe("2026-07-04T20:00:00.000Z"); // two hours after the set starts
     expect(e.location).toBe("");
     expect(teamFeedEvent(booking({ status: "HOLD", venue: null }), opts).summary).toBe("The Velvet Owls @ venue to be confirmed (On hold)");
+  });
+
+  it("puts the event name (e.g. Duo) last, after the venue", () => {
+    const e = teamFeedEvent(booking({ eventName: "Duo" }), opts);
+    expect(e.summary).toMatch(/ @ .+ · Duo$/);
   });
 
   it("says when the venue's times aren't in the agency's time zone", () => {

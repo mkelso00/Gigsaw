@@ -75,6 +75,22 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
               </Field>
             </section>
             <section className="border-t border-ink-100 pt-6">
+              <h2 className="section-title mb-1">Event name</h2>
+              <p className="mb-4 text-sm text-ink-500">
+                Shown last on the calendar, after the venue, and to the act on their gig. For example Solo, Duo, Trio or Band. Empty keeps each booking&apos;s
+                own.
+              </p>
+              <div className="flex flex-wrap items-end gap-4">
+                <Field label="Event name" className="min-w-56 flex-1">
+                  <input name="eventName" maxLength={120} placeholder="e.g. Duo" className="input" />
+                </Field>
+                <label className="flex items-center gap-2 pb-2.5 text-sm text-ink-700">
+                  <input type="checkbox" name="clearEventName" />
+                  Clear the event name instead
+                </label>
+              </div>
+            </section>
+            <section className="border-t border-ink-100 pt-6">
               <h2 className="section-title mb-1">New money</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Sale for each booking" hint="What the venue or customer pays, before VAT. Empty keeps each booking's sale.">
@@ -110,7 +126,8 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
                     <StatusBadge status={b.status} />
                   </div>
                   <div className="mt-1 text-xs text-ink-500">
-                    {formatDate(b.arriveBy, b.timezone)} · {b.venue?.name ?? "No venue"} · {localTime(b.setStart, b.timezone)}
+                    {formatDate(b.arriveBy, b.timezone)} · {b.venue?.name ?? "No venue"}
+                    {b.eventName ? ` · ${b.eventName}` : ""} · {localTime(b.setStart, b.timezone)}
                     {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""} · {formatMoney(b.feeMinor, b.currency)}
                   </div>
                 </li>

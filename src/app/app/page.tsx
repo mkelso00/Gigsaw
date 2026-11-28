@@ -172,7 +172,10 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
                 <div key={b.id} className="rounded-2xl border border-volt-400/40 bg-ink-900 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-lg font-semibold">{b.venue?.name ?? "Venue to be confirmed"}</div>
+                      <div className="truncate text-lg font-semibold">
+                        {b.venue?.name ?? "Venue to be confirmed"}
+                        {b.eventName ? <span className="font-normal text-ink-400"> · {b.eventName}</span> : null}
+                      </div>
                       <div className="text-sm text-ink-400">
                         {formatDate(b.arriveBy, b.timezone)} · on {localTime(b.setStart, b.timezone)}
                         {b.setEnd ? `–${localTime(b.setEnd, b.timezone)}` : ""}
@@ -195,7 +198,10 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
               <span className="text-xs font-medium tracking-wide text-volt-400 uppercase">Next booking{manyActs ? ` · ${actName(next.b)}` : ""}</span>
               <ArrivalBadge state={next.a.state} />
             </div>
-            <div className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">{next.b.venue?.name ?? "Venue to be confirmed"}</div>
+            <div className="mt-3 text-[28px] leading-tight font-semibold tracking-tight">
+              {next.b.venue?.name ?? "Venue to be confirmed"}
+              {next.b.eventName ? <span className="font-normal text-ink-400"> · {next.b.eventName}</span> : null}
+            </div>
             <div className="mt-1 text-ink-400">
               {formatDate(next.b.arriveBy, next.b.timezone)}
               {next.b.venue?.city ? ` · ${next.b.venue.city}` : ""}
@@ -232,7 +238,10 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
               <li key={b.id}>
                 <Link href={`/app/gigs/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-white/[0.03]">
                   <div className="min-w-0">
-                    <div className="truncate font-medium">{b.venue?.name ?? "Venue to be confirmed"}</div>
+                    <div className="truncate font-medium">
+                      {b.venue?.name ?? "Venue to be confirmed"}
+                      {b.eventName ? <span className="font-normal text-ink-400"> · {b.eventName}</span> : null}
+                    </div>
                     <div className="text-xs text-ink-400">
                       {manyActs ? `${actName(b)} · ` : ""}
                       {formatDate(b.arriveBy, b.timezone)} · arrive by {localTime(b.arriveBy, b.timezone)}
@@ -322,6 +331,7 @@ export default async function ArtistHome({ searchParams }: { searchParams: Promi
                   <div className="min-w-0">
                     <div className="truncate font-medium">
                       {b.venue?.name ?? "No venue"}
+                      {b.eventName ? <span className="font-normal text-ink-400"> · {b.eventName}</span> : null}
                       {manyActs ? <span className="font-normal text-ink-400"> · {actName(b)}</span> : null}
                     </div>
                     <div className="text-xs text-ink-400">{formatDate(b.arriveBy, b.timezone)}</div>
